@@ -5,9 +5,9 @@
 indah is a Python UI framework for ephemeral cloud notebooks (Colab, Runpod):
 reactive, single-port, no Node required at install or runtime.
 
-Status: early planning. `0.0.1` is a name-reservation placeholder; there is no
-working framework code yet. Trust the code over any doc where they disagree, and
-fix the doc.
+Status: early development. Slice 1 (single-port ASGI app + SSE transport, a live
+counter demo) is implemented; the reactive component API (Slice 2, ADR-0003) is
+not built yet. Trust the code over any doc where they disagree, and fix the doc.
 
 Layout:
 
