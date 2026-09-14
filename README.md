@@ -44,15 +44,20 @@ flowchart LR
 One port, standard HTTP plus Server-Sent Events, so it works through the network
 proxies of Colab and Runpod without a tunnel or a local JavaScript toolchain.
 
-## Try the placeholder
+## Try the Slice 1 demo
 
-```bash
-pip install indah        # reserves the name; no framework yet
-python -c "import indah; print(indah.__version__)"
+Slice 1 is the transport skeleton: a single-port ASGI app that pushes state to the
+browser over SSE. Launch the built-in live-counter demo:
+
+```python
+import indah
+
+indah.launch()  # prints the URL; in Colab/Runpod it embeds the app inline
 ```
 
-There is no public API yet. The first working slice ("a live pixel through the
-proxy") is described in [`docs/SLICES.md`](docs/SLICES.md).
+Click Increment and the number updates live over SSE, with no WebSocket and no
+Node. The reactive component API (write your own UI in Python) is the next slice;
+see [`docs/SLICES.md`](docs/SLICES.md).
 
 ## Planning and design
 

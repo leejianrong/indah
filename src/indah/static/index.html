@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>indah</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #1a1a2e;
+        --muted: #6b7280;
+        --bg: #f7f7fb;
+        --card: #ffffff;
+        --accent: #5b5bd6;
+        --ok: #16a34a;
+        --border: #e5e7eb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fg: #e6e6f0;
+          --muted: #9ca3af;
+          --bg: #14141f;
+          --card: #1e1e2e;
+          --accent: #8b8bf0;
+          --ok: #4ade80;
+          --border: #2c2c3c;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color: var(--fg);
+        background: var(--bg);
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 2rem 2.25rem;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+        text-align: center;
+        min-width: 260px;
+      }
+      h1 { margin: 0 0 0.25rem; font-size: 1.1rem; letter-spacing: 0.02em; }
+      .sub { color: var(--muted); font-size: 0.8rem; margin-bottom: 1.5rem; }
+      #counter {
+        font-size: 3.5rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        margin: 0.5rem 0 1.25rem;
+      }
+      button {
+        font: inherit;
+        font-weight: 600;
+        color: #fff;
+        background: var(--accent);
+        border: 0;
+        border-radius: 10px;
+        padding: 0.6rem 1.4rem;
+        cursor: pointer;
+        transition: transform 0.05s ease, opacity 0.15s ease;
+      }
+      button:hover { opacity: 0.92; }
+      button:active { transform: translateY(1px); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .status {
+        margin-top: 1.25rem;
+        font-size: 0.75rem;
+        color: var(--muted);
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+        justify-content: center;
+      }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+      .dot.live { background: var(--ok); }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>indah</h1>
+      <div class="sub">Slice 1 · SSE transport over one port</div>
+      <div id="counter">–</div>
+      <button id="inc" disabled>Increment</button>
+      <div class="status"><span class="dot" id="dot"></span><span id="state">connecting…</span></div>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+        var PROTOCOL_VERSION = 0;
+
+        // Resolve API URLs relative to the current document so the app works
+        // behind Colab/Runpod proxy base paths (ADR-0001).
+        function apiUrl(path) {
+          var base = location.href.split("#")[0].split("?")[0];
+          if (!base.endsWith("/")) base += "/";
+          return new URL(path, base).toString();
+        }
+
+        var counterEl = document.getElementById("counter");
+        var incBtn = document.getElementById("inc");
+        var dot = document.getElementById("dot");
+        var stateEl = document.getElementById("state");
+
+        function setStatus(live, text) {
+          dot.classList.toggle("live", !!live);
+          stateEl.textContent = text;
+          incBtn.disabled = !live;
+        }
+
+        function applyMessage(msg) {
+          if (!msg || msg.v !== PROTOCOL_VERSION) {
+            setStatus(false, "protocol mismatch — reload");
+            return;
+          }
+          if (msg.type === "init") {
+            for (var id in msg.nodes) {
+              var el = document.getElementById(id);
+              if (el) el.textContent = msg.nodes[id];
+            }
+          } else if (msg.type === "patch") {
+            var target = document.getElementById(msg.target);
+            if (target) target.textContent = msg.value;
+          }
+          // "ping" is a heartbeat; nothing to render.
+        }
+
+        var source = new EventSource(apiUrl("api/stream"));
+        source.onopen = function () { setStatus(true, "live"); };
+        source.onmessage = function (e) {
+          setStatus(true, "live");
+          try { applyMessage(JSON.parse(e.data)); } catch (err) { /* ignore */ }
+        };
+        source.onerror = function () { setStatus(false, "reconnecting…"); };
+
+        incBtn.addEventListener("click", function () {
+          fetch(apiUrl("api/event"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ component: "counter", event: "increment" }),
+          }).catch(function () { /* ignore; SSE reflects state */ });
+        });
+      })();
+    </script>
+  </body>
+</html>
