@@ -26,9 +26,10 @@ Layout:
   ~20-line app; `docs/DEV-DOCKER.md` the Docker/Traefik flow
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
 - `docs/` PLAN, SLICES, QUESTIONS, RELEASING, `protocol.md` (the public wire
-  contract), and `docs/adr/` for decisions (the user-facing docs site will be
-  Zensical, FastAPI-style; see ADR-0007)
-- `.github/workflows/` CI and PyPI publish
+  contract), and `docs/adr/` for decisions (engineering docs, not the published site)
+- `website/` the user-facing docs site (Zensical -> GitHub Pages, ADR-0007); its
+  own `docs/` source tree, separate from the engineering `docs/` above
+- `.github/workflows/` CI, docs (Pages), and PyPI publish
 
 ## Why
 
@@ -49,6 +50,8 @@ Toolchain is `uv` (not plain pip/venv). Common commands (see `make help`):
 - Full tests: `uv run pytest`
 - Rebuild the Svelte shell after editing `frontend/`: `make frontend` (needs Node;
   commit the regenerated `src/indah/static/index.html` or CI's stale check fails)
+- Docs site: `make docs` (build) / `make docs-serve` (preview); needs `--extra docs`
+  (Zensical). CI build-checks it on every PR and deploys to Pages on merge.
 - Build the wheel: `uv build`
 - Install the pre-push hook once: `make hooks`
 
