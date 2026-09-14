@@ -8,9 +8,12 @@ Colab or Runpod cell. It keeps Streamlit's zero-config, single-port startup, add
 the async performance of a real full-stack app, and ships its frontend pre-built
 so there is no Node, npm, or bun anywhere at install or runtime.
 
-> **Status: early planning.** `indah` is not usable yet. This repository currently
-> holds the plan and a `0.0.x` placeholder that reserves the name on PyPI. If you
-> want to follow along, start with [`docs/PLAN.md`](docs/PLAN.md).
+> **Status: early development.** The core works end to end from a clone: the
+> reactive core, the SSE transport, async token streaming, the starter component
+> set, and a custom-component seam. It is not on PyPI yet, so install from source
+> for now (`uv sync --extra dev`, then `make demo`). Start with
+> [`docs/PLAN.md`](docs/PLAN.md) for the plan and [`docs/SLICES.md`](docs/SLICES.md)
+> for what is built.
 
 ## Why another one
 
@@ -80,6 +83,42 @@ page = Column(
 The frontend is a pre-built Svelte shell bundled in the wheel; no Node runs at
 install or runtime. See [`docs/SLICES.md`](docs/SLICES.md) for what's next.
 
+### Components
+
+The starter set covers a typical AI demo (input, run, streamed output):
+
+| Component | Use |
+|-----------|-----|
+| `Text` | a label bound to a signal, computed, or string |
+| `Button` | an `on_click` handler (sync or `async def`) |
+| `Slider` / `TextInput` / `Select` | inputs two-way bound to a signal |
+| `Image` / `Plot` / `DataFrame` | display a URL/bytes, a Matplotlib figure, or a table |
+| `StreamText` | a container that grows token by token over SSE |
+| `Column` | a vertical layout container |
+
+Need something the set does not cover? Register a custom component against the
+public JSON protocol, no framework fork and no Node build:
+
+```python
+import indah
+
+indah.register_component(
+    "colorpicker",
+    render={
+        "tag": "input",
+        "attrs": {"type": "color"},
+        "bind": {"value": "value"},  # element value <- signal
+        "on": {"input": {"event": "input", "prop": "value"}},  # UI change -> signal
+    },
+)
+
+colour = indah.Signal("#ff8800")
+picker = indah.custom("colorpicker", value=colour)  # two-way, like a built-in
+```
+
+The pre-built shell renders it from that declarative spec at runtime. The protocol
+is a documented, versioned public contract: see [`docs/protocol.md`](docs/protocol.md).
+
 Or just run the built-in demo from a clone:
 
 ```bash
@@ -98,6 +137,7 @@ Traefik proxy)? `make demo-traefik` — see [`docs/DEV-DOCKER.md`](docs/DEV-DOCK
 | [`docs/PLAN.md`](docs/PLAN.md) | Problem, solution, scope, requirements, architecture |
 | [`docs/SLICES.md`](docs/SLICES.md) | Vertical build increments with test plans |
 | [`docs/QUESTIONS.md`](docs/QUESTIONS.md) | Decision register |
+| [`docs/protocol.md`](docs/protocol.md) | The JSON UI protocol (public contract) |
 | [`docs/adr/`](docs/adr/) | Architecture Decision Records |
 
 ## Development

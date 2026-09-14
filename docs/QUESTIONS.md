@@ -39,6 +39,7 @@ None — the grill round is closed.
 | Q-agent | Agent-facing control surface? | DEFERRED | Not needed for v0 | n/a |
 | Q-auth | Auth / multi-tenant hosting? | DECIDED | Auth via BYO ASGI seams (ADR-0008); multi-tenant hosting still deferred post-v0 | ADR-0008 |
 | Q-escape-tooling | Full escape-hatch tooling (scaffold, typed client, HMR)? | DEFERRED | Post-v0; only the protocol seam now | ADR-0005 |
+| Q-custom | How does register_component() add a type without runtime Node? | DECIDED | A validated declarative render spec the pre-built shell interprets at runtime; travels on the wire as the `_spec` prop, keyed off the protocol | ADR-0012 |
 | Q-market | Component marketplace / plugin distribution? | DEFERRED | Post-v0 | n/a |
 | Q-persist | Persistent state / database integration? | DEFERRED | User code owns durable data | n/a |
 
@@ -52,7 +53,7 @@ None — the grill round is closed.
 | State and storage | Q-state, Q-persist, F8 |
 | Graduation (prototype to production) | F5, F6, F7, F8 |
 | Concurrency and conflict | Q-concur |
-| Interfaces and contracts | Q-iface, F1, F4 |
+| Interfaces and contracts | Q-iface, F1, F4, Q-custom |
 | Failure behaviour | Q-fail |
 | External dependencies | Q-deps |
 | Runtime and deployment | Q-run, F1 |

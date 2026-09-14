@@ -185,38 +185,64 @@ smoke check rides along with the R2 notebook check.)
 
 ---
 
-## V4: Packaging and the component starter set
+## V4: Packaging and the component starter set — DONE
 
 **Delivers:** R4 (fully), R5 (remaining), R6, R7
 
-**Build plan**
+> **As built.** The starter set is complete: `Select` (a `<select>` two-way bound
+> to a `Signal[str]`), `Image` (a URL / `data:` URI / raw PNG bytes), `Plot` (a
+> Matplotlib `Figure`, duck-typed on `savefig` and rasterised to a PNG `data:` URI,
+> so it reuses the `image` renderer with no browser-side plotting), and `DataFrame`
+> (a pandas frame duck-typed via `to_dict(orient="split")`, a `{columns,rows}`
+> dict, or a list of record dicts). Neither pandas nor matplotlib is a hard
+> dependency — each is duck-typed only if you pass it, keeping R4's dependency
+> story clean. `TextInput` shipped in V3 and was left as-is.
+>
+> `register_component()` (ADR-0012) is the R7 seam. Because the shell ships
+> pre-built (ADR-0004) and R4 forbids runtime Node, a custom type cannot ship new
+> Svelte code; instead it ships a validated, declarative **render spec** the
+> shell's generic renderer interprets at runtime. The spec travels on the wire as
+> the reserved `_spec` prop (so it is part of the public protocol), and
+> `custom(type, **props)` builds value-bearing instances that round-trip like a
+> built-in. The worked example is a `colorpicker`. The protocol is documented as a
+> public contract in `docs/protocol.md` (R6).
+
+**Build plan (as built)**
 
 1. CI builds the Svelte shell and bundles the assets into the wheel; a check fails
-   the build if committed assets are stale (ADR-0004).
-2. Complete the starter components: TextInput, Select, Image, Plot/DataFrame
-   display.
-3. Document the JSON protocol and ship `register_component()` with one worked
-   custom component (ADR-0005).
-4. `pip install indah` from a built wheel in a clean env; confirm no Node/npm is
-   invoked at install or runtime.
+   the build if committed assets are stale (ADR-0004). (In place since V2.5.)
+2. Completed the starter components: Select, Image, Plot, DataFrame (TextInput
+   shipped in V3). Each is added to `components.py` and `frontend/src/Node.svelte`,
+   with the shell rebuilt via `make frontend`.
+3. Documented the JSON protocol (`docs/protocol.md`) and shipped
+   `register_component()` + `custom()` with a worked custom component and a generic
+   `Custom.svelte` renderer (ADR-0005, ADR-0012).
+4. Built the wheel and `pip install`ed it into a fresh venv with `node`/`npm`/
+   `npx`/`bun`/`yarn`/`pnpm` tripwires first on `PATH`; confirmed zero invocations
+   at install and at runtime, and that the app served the pre-built shell.
 
-**Demo:** From a fresh Colab runtime, `pip install indah`, write a ~20-line app
-using the starter components plus one registered custom component, and it runs —
-no Node anywhere in the process trace.
+**Demo (as built):** `make demo` now shows, below the streaming box, a `Select` that
+switches a reactive `DataFrame` and a registered colour picker (a custom component)
+two-way bound to a signal. `examples/starter_components.py` is the ~20-line app used
+for the clean-env check.
 
 **Rests on assumptions:** protocol is stable enough to document (ADR-0005).
 
-### Test plan
+### Test plan (as built)
 
 #### End-to-end
-- A clean-env `pip install` + example app renders all starter components; a
-  process trace shows zero Node/npm invocations.
-- A registered custom component renders and responds to events.
+- The registered custom component (the demo's colour picker) ships its render spec
+  in the init tree and round-trips an input event over a real launched server. The
+  full clean-env `pip install` proof is a manual step (tripwire venv, above); its
+  invariants are pinned by the packaging unit test.
 
 #### Integration
-- Each starter component round-trips its value (set from Python → shown; changed
-  in UI → readable in Python).
-- The stale-asset CI check fails when the shell source changes without a rebuild.
+- Each value-bearing component round-trips (set from Python → snapshot/patch;
+  changed in UI → readable in Python): Select and the custom colorpicker both ways,
+  Image and DataFrame in the display direction. The stale-asset check runs in CI.
 
 #### Unit
-- `register_component()` rejects a type that violates the protocol schema.
+- `register_component()` rejects a disallowed tag, a built-in type collision, an
+  empty type, and a malformed spec. The pre-built shell ships in the package and
+  runtime deps stay Python-only. Select/Image/Plot/DataFrame serialise and
+  round-trip their values.
