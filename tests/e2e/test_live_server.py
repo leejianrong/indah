@@ -24,26 +24,34 @@ async def _next_data(lines, timeout: float = 5.0) -> dict:
 
 
 @pytest.mark.e2e
-async def test_live_counter_round_trip_over_real_tcp():
+async def test_two_slider_demo_patches_only_the_label_over_real_tcp():
     handle = launch(block=False, open_inline=False)
     try:
         async with httpx.AsyncClient(base_url=handle.url, timeout=10.0) as client:
-            health = await client.get("/health")
-            assert health.status_code == 200
+            assert (await client.get("/health")).status_code == 200
 
             async with client.stream("GET", "/api/stream") as response:
                 lines = response.aiter_lines()
 
                 init = await _next_data(lines)
                 assert init["type"] == "init"
-                assert init["nodes"]["counter"] == "0"
+                root = init["root"]
+                assert root["type"] == "column"
+                # column -> [slider a (n1), slider b (n2), text (n3)]
+                assert root["children"][2]["props"]["text"] == "a + b = 5"
 
                 posted = await client.post(
-                    "/api/event", json={"component": "counter", "event": "increment"}
+                    "/api/event",
+                    json={"component": "n1", "event": "input", "payload": {"value": 8}},
                 )
                 assert posted.status_code == 200
 
                 patch = await _next_data(lines)
-                assert patch == {"v": 0, "type": "patch", "target": "counter", "value": "1"}
+                assert patch["type"] == "patch"
+                changes = patch["changes"]
+                targets = {c["target"] for c in changes}
+                assert "n2" not in targets  # the other slider is never touched
+                label = next(c for c in changes if c["target"] == "n3")
+                assert label["props"] == {"text": "a + b = 11"}
     finally:
         handle.stop()

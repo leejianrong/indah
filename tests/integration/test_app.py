@@ -18,12 +18,13 @@ def _client(app) -> httpx.AsyncClient:
 
 
 @pytest.mark.integration
-async def test_index_serves_the_shell():
+async def test_index_serves_the_generic_renderer():
     async with _client(create_app()) as client:
         resp = await client.get("/")
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "EventSource" in resp.text
+    assert "applyMessage" in resp.text  # generic renderer marker
 
 
 @pytest.mark.integration
@@ -37,7 +38,7 @@ async def test_health_ok():
 @pytest.mark.integration
 async def test_event_with_bad_schema_is_rejected_422():
     async with _client(create_app()) as client:
-        resp = await client.post("/api/event", json={"event": "increment"})  # missing component
+        resp = await client.post("/api/event", json={"event": "input"})  # missing component
     assert resp.status_code == 422
     assert resp.json()["error"] == "validation"
 
@@ -54,17 +55,21 @@ async def test_invalid_json_is_rejected_400():
 
 
 @pytest.mark.integration
-async def test_unknown_event_is_rejected_400():
+async def test_unknown_component_is_rejected_400():
     async with _client(create_app()) as client:
-        resp = await client.post("/api/event", json={"component": "nope", "event": "click"})
+        resp = await client.post("/api/event", json={"component": "nope", "event": "input"})
     assert resp.status_code == 400
 
 
 @pytest.mark.integration
-async def test_increment_event_updates_server_state():
+async def test_slider_event_updates_session_state():
     app = create_app()
     async with _client(app) as client:
-        resp = await client.post("/api/event", json={"component": "counter", "event": "increment"})
+        resp = await client.post(
+            "/api/event", json={"component": "n1", "event": "input", "payload": {"value": 9}}
+        )
     assert resp.status_code == 200
-    assert app.state.counter == 1
-    assert app.state.nodes["counter"] == "1"
+    # The label (n3) is a + b = 9 + 3 = 12 in the demo's fresh state.
+    root = app.state.session.snapshot()
+    label = root["children"][2]
+    assert label["props"]["text"] == "a + b = 12"

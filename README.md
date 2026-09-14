@@ -44,10 +44,9 @@ flowchart LR
 One port, standard HTTP plus Server-Sent Events, so it works through the network
 proxies of Colab and Runpod without a tunnel or a local JavaScript toolchain.
 
-## Try the Slice 1 demo
+## Try it
 
-Slice 1 is the transport skeleton: a single-port ASGI app that pushes state to the
-browser over SSE. Launch the built-in live-counter demo:
+Launch the built-in demo: two sliders and a label computed from both.
 
 ```python
 import indah
@@ -55,9 +54,31 @@ import indah
 indah.launch()  # prints the URL; in Colab/Runpod it embeds the app inline
 ```
 
-Click Increment and the number updates live over SSE, with no WebSocket and no
-Node. The reactive component API (write your own UI in Python) is the next slice;
-see [`docs/SLICES.md`](docs/SLICES.md).
+Drag a slider and the label updates live over SSE, with no WebSocket and no Node.
+Only the components that actually depend on the changed value are patched, with no
+full-script rerun.
+
+Under the hood it uses the reactive core (this is roughly what the built-in demo
+does):
+
+```python
+from indah import Signal, computed, Column, Slider, Text, Session
+
+a, b = Signal(2), Signal(3)
+total = computed(lambda: f"a + b = {a.value + b.value}")
+
+page = Column(
+    children=[
+        Slider(a, min=0, max=10, label="a"),
+        Slider(b, min=0, max=10, label="b"),
+        Text(total),
+    ]
+)
+# indah.launch(indah.create_app(session=Session(page)))
+```
+
+The current renderer is a generic vanilla-JS shell; a Svelte shell replaces it
+next, targeting the same protocol. See [`docs/SLICES.md`](docs/SLICES.md).
 
 ## Planning and design
 
