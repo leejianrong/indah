@@ -1,0 +1,15 @@
+# The indah demo as a container. Works standalone: `docker compose up --build`
+# serves it on http://localhost:8000 (override the host port with INDAH_HOST_PORT
+# if 8000 is taken). To route it through a machine-wide Traefik proxy at
+# http://indah.localhost/ instead, copy docker-compose.override.yml.example to
+# docker-compose.override.yml (see docs/DEV-DOCKER.md). The override only adds a
+# second way in; this file always works on its own, including in CI.
+services:
+  indah:
+    build: .
+    image: indah-demo
+    environment:
+      INDAH_HOST: "0.0.0.0"
+      INDAH_PORT: "8000"
+    ports:
+      - "${INDAH_HOST_PORT:-8000}:8000"
