@@ -77,8 +77,14 @@ page = Column(
 # indah.launch(indah.create_app(session=Session(page)))
 ```
 
-The current renderer is a generic vanilla-JS shell; a Svelte shell replaces it
-next, targeting the same protocol. See [`docs/SLICES.md`](docs/SLICES.md).
+The frontend is a pre-built Svelte shell bundled in the wheel; no Node runs at
+install or runtime. See [`docs/SLICES.md`](docs/SLICES.md) for what's next.
+
+Or just run the built-in demo from a clone:
+
+```bash
+make demo   # prints a URL; binds the first free port from 8000
+```
 
 ## Planning and design
 

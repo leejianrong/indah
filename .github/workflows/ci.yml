@@ -42,6 +42,30 @@ jobs:
       - name: Unit + integration tests
         run: uv run pytest -m "unit or integration" -q
 
+  # Rebuild the Svelte shell and fail if the committed bundle is stale (ADR-0004).
+  # This is the only job that needs Node; installing/running indah never does.
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: frontend
+      - name: Build the shell
+        run: npm run build
+        working-directory: frontend
+      - name: Check the committed shell is up to date
+        run: |
+          if ! diff -q frontend/dist/index.html src/indah/static/index.html; then
+            echo "::error::src/indah/static/index.html is stale; run 'make frontend' and commit the result."
+            exit 1
+          fi
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -57,7 +81,3 @@ jobs:
         with:
           name: dist
           path: dist/
-
-  # Heavy layer (browser / real launched app) is added with Slice 1, when
-  # there is a stack to boot. Tracked in SLICES.md V1. Placeholder job keeps
-  # the required-check name stable once branch protection is on.

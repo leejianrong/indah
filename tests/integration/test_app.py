@@ -23,8 +23,8 @@ async def test_index_serves_the_generic_renderer():
         resp = await client.get("/")
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
-    assert "EventSource" in resp.text
-    assert "applyMessage" in resp.text  # generic renderer marker
+    assert "EventSource" in resp.text  # the shell opens the SSE stream
+    assert "api/stream" in resp.text  # ...against the protocol endpoints
 
 
 @pytest.mark.integration

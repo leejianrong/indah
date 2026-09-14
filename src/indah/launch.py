@@ -81,7 +81,8 @@ def launch(
         time.sleep(0.05)
 
     url = public_url(port, environment, host=host)
-    print(f"indah is running at {url}")
+    # flush so the URL shows immediately even when stdout is a pipe (e.g. make demo).
+    print(f"indah is running at {url}", flush=True)
 
     notebook = _in_notebook()
     if notebook and open_inline:

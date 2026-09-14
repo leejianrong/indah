@@ -89,32 +89,36 @@ slider patches the label (and that slider's own value), never the other slider.
 
 ---
 
-## V2.5: Svelte shell (replaces the vanilla renderer)
+## V2.5: Svelte shell (replaces the vanilla renderer) — DONE
 
 **Delivers:** R4 (frontend build path), part of R5
 
-**Build plan**
+**Build plan (as built)**
 
-1. Set up the Svelte project and a CI build that emits static assets.
-2. Reimplement the generic renderer in Svelte against the existing JSON protocol
-   (no protocol change), applying patches by node id (ADR-0004).
-3. Bundle the built assets into the wheel; swap `static/index.html` for the built
-   shell. Add a protocol-version-mismatch refusal with a clear message.
+1. `frontend/`: a Svelte 5 + Vite project using `vite-plugin-singlefile`, so the
+   whole shell (JS + CSS) inlines into one `index.html` — no external asset
+   requests to break behind proxy base paths (ADR-0001, ADR-0004).
+2. Reimplemented the generic renderer in Svelte against the existing JSON protocol
+   (no protocol change): `App.svelte` manages the SSE connection and a flat
+   id->props store; recursive `Node.svelte` renders by type and applies patches;
+   a protocol-version mismatch shows a clear message.
+3. `make frontend` builds and copies the bundle to `src/indah/static/index.html`
+   (committed, so `pip install` needs no Node). CI rebuilds and fails on a stale
+   bundle.
+4. `python -m indah` / `make demo` runs the built-in demo on the first free port.
 
-**Demo:** The same two-slider app, now rendered by the Svelte shell, still with
-zero runtime Node.
+**Demo:** The two-slider app rendered by the Svelte shell; verified end to end
+against a real launched server (init tree + minimal patches over SSE).
 
-**Rests on assumptions:** the JSON protocol is stable enough to target (it is, as
-of V2).
-
-### Test plan
+### Test plan (as built)
 
 #### End-to-end
-- The two-slider app renders and updates identically under the Svelte shell.
-- A mismatched `protocol_version` makes the shell refuse to render.
+- The full app is driven against a real server: init tree, and a slider event
+  patches the label (and that slider) but never the other slider.
 
 #### Integration
-- The built assets ship in the wheel; no Node is invoked at install or runtime.
+- The served index is the Svelte shell (opens the SSE stream against the protocol
+  endpoints); the built shell ships in the wheel; no Node at install or runtime.
 
 ---
 

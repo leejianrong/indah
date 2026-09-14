@@ -5,15 +5,18 @@
 indah is a Python UI framework for ephemeral cloud notebooks (Colab, Runpod):
 reactive, single-port, no Node required at install or runtime.
 
-Status: early development. Slices 1-2 are implemented: single-port ASGI app + SSE
-transport (ADR-0002), and the reactive core (signals/computeds/effects, ADR-0003)
-driving a component tree (Text, Button, Slider, Column) over a generic vanilla-JS
-renderer. Next: the Svelte shell (V2.5, ADR-0004) and async/streaming (V3). Trust
-the code over any doc where they disagree, and fix the doc.
+Status: early development. Slices 1-2.5 are implemented: single-port ASGI app +
+SSE transport (ADR-0002), the reactive core (signals/computeds/effects, ADR-0003)
+driving a component tree (Text, Button, Slider, Column), and a pre-built Svelte
+shell (ADR-0004). Next: async/streaming (V3). Trust the code over any doc where
+they disagree, and fix the doc.
 
 Layout:
 
-- `src/indah/` package (src layout, hatchling build)
+- `src/indah/` package (src layout, hatchling build); the built shell is bundled
+  at `src/indah/static/index.html`
+- `frontend/` Svelte source for the shell (build-time only; not shipped, not
+  needed to install or run indah)
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
 - `docs/` PLAN, SLICES, QUESTIONS, RELEASING, and `docs/adr/` for decisions
   (the user-facing docs site will be Zensical, FastAPI-style; see ADR-0007)
@@ -31,9 +34,12 @@ and 0003 on the reactive model before touching those areas).
 Toolchain is `uv` (not plain pip/venv). Common commands (see `make help`):
 
 - Setup: `uv sync --extra dev`
+- Try the demo: `make demo` (prints a URL; binds the first free port from 8000)
 - Fast gate (run before pushing): `make check` (ruff + `pytest -m "unit or integration"`)
 - Full tests: `uv run pytest`
-- Build: `uv build`
+- Rebuild the Svelte shell after editing `frontend/`: `make frontend` (needs Node;
+  commit the regenerated `src/indah/static/index.html` or CI's stale check fails)
+- Build the wheel: `uv build`
 - Install the pre-push hook once: `make hooks`
 
 Conventions:

@@ -1,13 +1,19 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup hooks fmt lint test test-fast test-e2e build check clean
+.PHONY: help demo setup hooks frontend fmt lint test test-fast test-e2e build check clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
+demo: ## Run the built-in demo app (prints a URL; Ctrl+C to stop)
+	uv run python -m indah
+
 setup: ## Install dev dependencies into a local venv
 	uv sync --extra dev
+
+frontend: ## Rebuild the Svelte shell into the package (needs Node)
+	cd frontend && npm ci && npm run build:indah
 
 hooks: ## Install the git pre-push hook
 	git config core.hooksPath .githooks
