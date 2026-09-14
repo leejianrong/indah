@@ -238,6 +238,12 @@ for the clean-env check.
   bun/yarn/pnpm/vite/svelte/esbuild tripwires first on `PATH`, assert zero
   invocations at install and runtime); its invariants are pinned by the packaging
   unit test.
+- **(post-MVP hardening)** `tests/e2e/test_browser.py` renders the shell in a real
+  headless Chromium (Playwright) and asserts the DOM patches through the SSE
+  round-trip: the init tree renders, a slider and a select patch the live DOM, and
+  the registered colorpicker round-trips a value. This is the only layer that
+  exercises the V4 shell additions (the generic `Custom.svelte` renderer, Select,
+  DataFrame) in a real DOM; it runs in a dedicated `browser-e2e` CI job.
 
 #### Integration
 - Each value-bearing component round-trips (set from Python → snapshot/patch;

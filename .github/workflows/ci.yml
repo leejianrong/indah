@@ -66,6 +66,22 @@ jobs:
             exit 1
           fi
 
+  # Heavy layer: renders the pre-built shell in a real Chromium and asserts the
+  # DOM patches through the SSE round-trip. Kept off the fast gate; the only job
+  # besides `frontend` that pulls a browser (indah itself still needs no Node).
+  browser-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --extra dev --extra e2e
+      - name: Install Chromium for Playwright
+        run: uv run playwright install --with-deps chromium
+      - name: End-to-end tests (real browser)
+        run: uv run pytest -m e2e -q
+
   build:
     runs-on: ubuntu-latest
     steps:
