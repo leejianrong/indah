@@ -1,6 +1,6 @@
 // Wire-protocol constants and helpers shared by the shell.
 
-export const PROTOCOL_VERSION = 0;
+export const PROTOCOL_VERSION = 1;
 
 // Resolve API URLs relative to the current document so the shell works behind
 // Colab/Runpod proxy base paths (ADR-0001).

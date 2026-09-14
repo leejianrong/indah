@@ -1,8 +1,10 @@
 <script>
   import { onMount } from "svelte";
   import { apiUrl, PROTOCOL_VERSION } from "./api.js";
-  import { structure, nodeProps, status } from "./stores.js";
+  import { structure, nodeProps, status, toast } from "./stores.js";
   import Node from "./Node.svelte";
+
+  let toastTimer;
 
   // Split an init tree into a skeleton (structure) plus a flat id->props map.
   function splitTree(node, map) {
@@ -12,6 +14,12 @@
       type: node.type,
       children: (node.children || []).map((child) => splitTree(child, map)),
     };
+  }
+
+  function showToast(message) {
+    toast.set(message);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.set(null), 6000);
   }
 
   function applyMessage(msg) {
@@ -26,14 +34,28 @@
     } else if (msg.type === "patch") {
       nodeProps.update((map) => {
         for (const change of msg.changes || []) {
-          map.set(change.target, { ...(map.get(change.target) || {}), ...change.props });
+          const cur = map.get(change.target) || {};
+          if (change.append) {
+            // Concatenate a streamed delta onto the existing prop value.
+            const next = { ...cur };
+            for (const [key, delta] of Object.entries(change.append)) {
+              next[key] = (next[key] ?? "") + delta;
+            }
+            map.set(change.target, next);
+          } else {
+            map.set(change.target, { ...cur, ...(change.props || {}) });
+          }
         }
         return new Map(map);
       });
+    } else if (msg.type === "error") {
+      showToast(msg.message || "Something went wrong");
     }
   }
 
   onMount(() => {
+    // EventSource resends Last-Event-Id on reconnect natively; the server replays
+    // the missed messages, so a dropped stream resumes without extra client code.
     const source = new EventSource(apiUrl("api/stream"));
     source.onopen = () => status.set({ live: true, text: "live" });
     source.onmessage = (event) => {
@@ -45,7 +67,10 @@
       }
     };
     source.onerror = () => status.update((s) => ({ ...s, live: false, text: "reconnecting…" }));
-    return () => source.close();
+    return () => {
+      clearTimeout(toastTimer);
+      source.close();
+    };
   });
 </script>
 
@@ -59,3 +84,7 @@
     <span>{$status.text}</span>
   </div>
 </main>
+
+{#if $toast}
+  <button type="button" class="toast" onclick={() => toast.set(null)}>{$toast}</button>
+{/if}

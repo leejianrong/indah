@@ -17,6 +17,22 @@
   <div class="text">{props.text ?? ""}</div>
 {:else if node.type === "button"}
   <button onclick={() => postEvent(node.id, "click")}>{props.label ?? ""}</button>
+{:else if node.type === "textinput"}
+  <div class="field">
+    {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
+    <input
+      id={`${node.id}-input`}
+      type="text"
+      placeholder={props.placeholder ?? ""}
+      value={props.value ?? ""}
+      oninput={(e) => postEvent(node.id, "input", { value: e.currentTarget.value })}
+    />
+  </div>
+{:else if node.type === "streamtext"}
+  <div class="field">
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    <div class="streamtext">{props.text ?? ""}</div>
+  </div>
 {:else if node.type === "slider"}
   <div class="field">
     <label for={`${node.id}-input`}>{props.label ?? ""}</label>

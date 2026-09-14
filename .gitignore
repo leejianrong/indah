@@ -30,3 +30,6 @@ docker-compose.override.yml
 
 # Frontend build (node is build-time only; keep it out of the repo root)
 node_modules/
+
+# Jupyter notebook checkpoints (created by running examples)
+.ipynb_checkpoints/

@@ -8,3 +8,6 @@ export const structure = writable(null);
 export const nodeProps = writable(new Map());
 
 export const status = writable({ live: false, text: "connecting…" });
+
+// A transient error message shown as a toast when a handler fails server-side.
+export const toast = writable(null);

@@ -13,6 +13,7 @@
         --card: #ffffff;
         --accent: #5b5bd6;
         --ok: #16a34a;
+        --err: #dc2626;
         --border: #e5e7eb;
       }
       @media (prefers-color-scheme: dark) {
@@ -23,6 +24,7 @@
           --card: #1e1e2e;
           --accent: #8b8bf0;
           --ok: #4ade80;
+          --err: #f87171;
           --border: #2c2c3c;
         }
       }
@@ -48,9 +50,32 @@
       h1 { margin: 0 0 1.25rem; font-size: 1.05rem; letter-spacing: 0.02em; }
       .column { display: flex; flex-direction: column; gap: 1rem; }
       .field { display: flex; flex-direction: column; gap: 0.3rem; }
-      .field label { font-size: 0.8rem; color: var(--muted); }
+      .field label, .stream-label { font-size: 0.8rem; color: var(--muted); }
       input[type="range"] { width: 100%; accent-color: var(--accent); }
+      input[type="text"] {
+        font: inherit;
+        width: 100%;
+        padding: 0.5rem 0.7rem;
+        color: var(--fg);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
       .text { font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .streamtext {
+        min-height: 3.5rem;
+        padding: 0.7rem 0.9rem;
+        font-size: 0.95rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--fg);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .streamtext:empty::after { content: "…"; color: var(--muted); }
       button {
         font: inherit;
         font-weight: 600;
@@ -72,6 +97,20 @@
       }
       .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
       .dot.live { background: var(--ok); }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 1.5rem;
+        transform: translateX(-50%);
+        max-width: min(520px, 92vw);
+        padding: 0.7rem 1rem;
+        font-size: 0.85rem;
+        color: #fff;
+        background: var(--err);
+        border-radius: 10px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
