@@ -45,42 +45,76 @@ fallback is Cloudflared or long-polling, decided here before building further.
 
 ---
 
-## V2: Reactive core with granular patches
+## V2: Reactive core with granular patches — DONE
 
 **Delivers:** R1, R5 (starter inputs)
 
-**Build plan**
+> **Resequenced:** the Svelte shell (originally step 5) moved to its own slice
+> (V2.5). Building the shell against a still-moving protocol was the wrong order;
+> V2 nails the reactive contract behind a generic **vanilla-JS** renderer, then
+> V2.5 swaps in Svelte behind the same stable protocol boundary (ADR-0004 allows
+> this). We also replaced the planned "tree diff engine" with **fine-grained
+> reactivity**: effects tied to signals emit patches for exactly the dependent
+> nodes, so no whole-tree diff is needed — a strictly better realisation of R1.
 
-1. Implement signals + the dependency graph mapping signals → node IDs
+**Build plan (as built)**
+
+1. `reactive.py`: signals, computeds, effects, batching, a FIFO scheduler
    (ADR-0003).
-2. Pydantic component models with stable server-assigned node IDs; serialize the
-   tree to JSON carrying `protocol_version` (ADR-0005).
-3. Diff engine: on signal mutation, compute the minimal patch set by node ID.
-4. Wire three components — Text, Button, Slider — to signals via the V1 transport.
-5. Replace the throwaway shell with the Svelte shell that renders the JSON tree
-   and applies patches by node ID (ADR-0004).
+2. `components.py`: Text, Button, Slider, Column; each serialises to a JSON node
+   with a stable id; the tree carries `protocol_version` (ADR-0005).
+3. `session.py`: assigns ids, snapshots the tree for `init`, wires one effect per
+   reactive prop so a signal change emits a minimal patch, dispatches events.
+4. Generic vanilla-JS renderer in `static/index.html`: renders the JSON tree and
+   applies patches by node id, with a protocol-version check.
 
 **Demo:** A two-slider form where a computed label depends on both; dragging one
-slider updates only the label node (verifiable in devtools: no other node
-re-renders, no script rerun).
+slider patches the label (and that slider's own value), never the other slider.
 
-**Rests on assumptions:** ADR-0003 patch correctness. If the diff is wrong the UI
-corrupts silently — hence the heavy unit + e2e coverage below.
+### Test plan (as built)
+
+#### End-to-end
+- Dragging slider A patches the dependent label with the right value and never
+  touches the unrelated slider B (real server + real SSE).
+
+#### Integration
+- A signal change emits patches for exactly its dependent nodes; the unrelated
+  slider is never patched; a no-op set emits nothing.
+- The label (bound to a computed over two signals) updates when either changes.
+
+#### Unit
+- Signal write reruns only effects that read it; a computed notifies only when its
+  result changes; batch coalesces; a signal→computed→effect chain sees fresh
+  values.
+
+---
+
+## V2.5: Svelte shell (replaces the vanilla renderer)
+
+**Delivers:** R4 (frontend build path), part of R5
+
+**Build plan**
+
+1. Set up the Svelte project and a CI build that emits static assets.
+2. Reimplement the generic renderer in Svelte against the existing JSON protocol
+   (no protocol change), applying patches by node id (ADR-0004).
+3. Bundle the built assets into the wheel; swap `static/index.html` for the built
+   shell. Add a protocol-version-mismatch refusal with a clear message.
+
+**Demo:** The same two-slider app, now rendered by the Svelte shell, still with
+zero runtime Node.
+
+**Rests on assumptions:** the JSON protocol is stable enough to target (it is, as
+of V2).
 
 ### Test plan
 
 #### End-to-end
-- Dragging slider A updates the dependent label and nothing else in the DOM.
-- A mismatched `protocol_version` makes the shell refuse to render and shows a
-  clear message.
+- The two-slider app renders and updates identically under the Svelte shell.
+- A mismatched `protocol_version` makes the shell refuse to render.
 
 #### Integration
-- Mutating a signal produces a patch set touching exactly the dependent node IDs.
-- A component bound to two signals updates when either changes.
-
-#### Unit
-- Signal write → dependency graph yields the correct dependent set.
-- Diff of two UI trees produces the minimal patch list (add/remove/update).
+- The built assets ship in the wheel; no Node is invoked at install or runtime.
 
 ---
 

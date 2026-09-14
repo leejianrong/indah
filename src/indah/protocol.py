@@ -4,10 +4,12 @@ Slice 1 has only the three message types needed for a live counter. The protocol
 is versioned from v0 so the shell can reject a mismatched backend, and it is
 designed to be a public contract (ADR-0005), not a private detail.
 
+A node is {"id","type","props":{...},"children":[node,...]}.
+
 Server -> client (over SSE):
-  init  {"v":0,"type":"init","nodes":{"<id>":"<text>"}}   full state on connect
-  patch {"v":0,"type":"patch","target":"<id>","value":"<text>"}
-  ping  {"v":0,"type":"ping"}                             heartbeat
+  init  {"v":0,"type":"init","root":<node>}                 full tree on connect
+  patch {"v":0,"type":"patch","changes":[{"target":"<id>","props":{...}}]}
+  ping  {"v":0,"type":"ping"}                               heartbeat
 
 Client -> server (HTTP POST /api/event):
   {"component":"<id>","event":"<name>","payload":{...}}
@@ -22,12 +24,12 @@ from pydantic import BaseModel, Field
 PROTOCOL_VERSION = 0
 
 
-def init_message(nodes: dict[str, str]) -> dict[str, Any]:
-    return {"v": PROTOCOL_VERSION, "type": "init", "nodes": nodes}
+def init_message(root: dict[str, Any]) -> dict[str, Any]:
+    return {"v": PROTOCOL_VERSION, "type": "init", "root": root}
 
 
-def patch_message(target: str, value: str) -> dict[str, Any]:
-    return {"v": PROTOCOL_VERSION, "type": "patch", "target": target, "value": value}
+def patch_message(changes: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"v": PROTOCOL_VERSION, "type": "patch", "changes": changes}
 
 
 def ping_message() -> dict[str, Any]:

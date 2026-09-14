@@ -1,9 +1,9 @@
 """The single ASGI app: static shell + SSE stream + event endpoint on one port.
 
-This is the Slice 1 skeleton (see docs/SLICES.md V1). It wires the transport
-(ADR-0002) end to end with a hardcoded counter, before the reactive core
-(ADR-0003) exists. Everything is served from one Starlette app so it survives the
-Colab and Runpod single-port proxies (ADR-0001).
+Slice 2 wires the reactive core (ADR-0003) to the transport (ADR-0002): the app
+builds a component tree bound to signals, ships it as an ``init`` snapshot, and
+broadcasts minimal patches when a client event mutates a signal. Everything is
+served from one Starlette app to survive the Colab/Runpod proxies (ADR-0001).
 """
 
 from __future__ import annotations
@@ -20,7 +20,10 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.routing import Route
 
+from .components import Column, Slider, Text
 from .protocol import EventIn, init_message, patch_message, ping_message
+from .reactive import Signal, computed
+from .session import Session
 from .transport import Hub
 
 DEFAULT_HEARTBEAT_SECONDS = 15.0
@@ -33,7 +36,31 @@ _SSE_HEADERS = {
 }
 
 
-def create_app(*, heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS) -> Starlette:
+def build_demo_session() -> Session:
+    """The built-in Slice 2 demo: two sliders and a label computed from both.
+
+    Dragging a slider mutates only its signal; the computed label recomputes and
+    only the label node is patched.
+    """
+    a: Signal[float] = Signal(2)
+    b: Signal[float] = Signal(3)
+    total = computed(lambda: f"a + b = {a.value + b.value}")
+
+    root = Column(
+        children=[
+            Slider(a, min=0, max=10, step=1, label="a"),
+            Slider(b, min=0, max=10, step=1, label="b"),
+            Text(total),
+        ]
+    )
+    return Session(root)
+
+
+def create_app(
+    *,
+    session: Session | None = None,
+    heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
+) -> Starlette:
     app = Starlette(
         routes=[
             Route("/", _index, methods=["GET"]),
@@ -44,9 +71,7 @@ def create_app(*, heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS) -> Starl
     )
     app.state.hub = Hub()
     app.state.heartbeat_seconds = heartbeat_seconds
-    # Slice 1 demo state: a single counter node. Replaced by the reactive core.
-    app.state.counter = 0
-    app.state.nodes = {"counter": "0"}
+    app.state.session = build_demo_session() if session is None else session
     return app
 
 
@@ -60,16 +85,16 @@ async def _health(request: Request) -> JSONResponse:
 
 async def sse_events(
     queue: asyncio.Queue[dict[str, Any]],
-    nodes: dict[str, str],
+    init_payload: dict[str, Any],
     heartbeat_seconds: float,
 ) -> AsyncIterator[str]:
-    """Yield SSE-framed strings: an ``init`` snapshot, then messages from ``queue``.
+    """Yield SSE-framed strings: the ``init`` payload, then messages from ``queue``.
 
     Emits a ``ping`` whenever ``heartbeat_seconds`` elapses with no message, so the
     connection survives idle-timeout proxies (ADR-0002). Framing is separated from
     the HTTP handler so it can be tested without a server.
     """
-    yield _sse(init_message(dict(nodes)))
+    yield _sse(init_payload)
     while True:
         try:
             message = await asyncio.wait_for(queue.get(), timeout=heartbeat_seconds)
@@ -82,10 +107,11 @@ async def _stream(request: Request) -> StreamingResponse:
     app = request.app
     hub: Hub = app.state.hub
     queue = hub.subscribe()
+    init_payload = init_message(app.state.session.snapshot())
 
     async def event_source():
         try:
-            async for chunk in sse_events(queue, app.state.nodes, app.state.heartbeat_seconds):
+            async for chunk in sse_events(queue, init_payload, app.state.heartbeat_seconds):
                 yield chunk
         finally:
             hub.unsubscribe(queue)
@@ -106,27 +132,13 @@ async def _event(request: Request) -> JSONResponse:
             {"ok": False, "error": "validation", "detail": exc.errors()}, status_code=422
         )
 
-    patches = _handle_event(request.app, event)
-    if patches is None:
+    changes = request.app.state.session.dispatch(event.component, event.event, event.payload)
+    if changes is None:
         return JSONResponse({"ok": False, "error": "unknown event"}, status_code=400)
 
-    for patch in patches:
-        await request.app.state.hub.broadcast(patch)
+    if changes:
+        await request.app.state.hub.broadcast(patch_message(changes))
     return JSONResponse({"ok": True})
-
-
-def _handle_event(app: Starlette, event: EventIn) -> list[dict[str, Any]] | None:
-    """Apply a UI event to the demo state, returning the patches to broadcast.
-
-    Returns ``None`` for an event the app does not know how to handle. Replaced
-    by the reactive core in Slice 2 (ADR-0003).
-    """
-    if event.component == "counter" and event.event == "increment":
-        app.state.counter += 1
-        value = str(app.state.counter)
-        app.state.nodes["counter"] = value
-        return [patch_message("counter", value)]
-    return None
 
 
 def _sse(message: dict[str, Any]) -> str:
