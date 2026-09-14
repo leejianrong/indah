@@ -17,6 +17,7 @@ Layout:
   at `src/indah/static/index.html`
 - `frontend/` Svelte source for the shell (build-time only; not shipped, not
   needed to install or run indah)
+- `examples/demo.ipynb` the notebook demo; `docs/DEV-DOCKER.md` the Docker/Traefik flow
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
 - `docs/` PLAN, SLICES, QUESTIONS, RELEASING, and `docs/adr/` for decisions
   (the user-facing docs site will be Zensical, FastAPI-style; see ADR-0007)
@@ -34,7 +35,9 @@ and 0003 on the reactive model before touching those areas).
 Toolchain is `uv` (not plain pip/venv). Common commands (see `make help`):
 
 - Setup: `uv sync --extra dev`
-- Try the demo: `make demo` (prints a URL; binds the first free port from 8000)
+- Try the demo: `make demo` (prints a URL; binds the first free port from 8000);
+  `make demo-notebook` (inline in JupyterLab); `make demo-docker` (Docker, free
+  port); `make demo-traefik` (Docker via a machine-wide Traefik at indah.localhost)
 - Fast gate (run before pushing): `make check` (ruff + `pytest -m "unit or integration"`)
 - Full tests: `uv run pytest`
 - Rebuild the Svelte shell after editing `frontend/`: `make frontend` (needs Node;
