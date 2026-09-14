@@ -233,8 +233,11 @@ for the clean-env check.
 #### End-to-end
 - The registered custom component (the demo's colour picker) ships its render spec
   in the init tree and round-trips an input event over a real launched server. The
-  full clean-env `pip install` proof is a manual step (tripwire venv, above); its
-  invariants are pinned by the packaging unit test.
+  full clean-env `pip install` proof is reproducible as `make cleanroom`
+  (`scripts/cleanroom.sh`: install the wheel in a throwaway venv with node/npm/npx/
+  bun/yarn/pnpm/vite/svelte/esbuild tripwires first on `PATH`, assert zero
+  invocations at install and runtime); its invariants are pinned by the packaging
+  unit test.
 
 #### Integration
 - Each value-bearing component round-trips (set from Python → snapshot/patch;

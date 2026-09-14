@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "indah"
-version = "0.0.1"
+version = "0.1.0rc1"
 description = "A Python UI framework for ephemeral cloud notebooks (Colab, Runpod). Reactive, single-port, no Node required."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Jian Lee", email = "leejianrong2@gmail.com" }]
 keywords = ["ui", "framework", "colab", "runpod", "notebook", "reactive", "gradio", "streamlit"]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
