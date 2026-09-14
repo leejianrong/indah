@@ -8,12 +8,14 @@ host port that shifts when other local apps are running.
 ## Quick standalone (no Traefik)
 
 ```bash
-make demo-docker          # docker compose up --build
-# -> http://localhost:8000  (set INDAH_HOST_PORT=8600 etc. if 8000 is taken)
+make demo-docker          # prints the URL it picked, e.g. http://localhost:54961/
 ```
 
-`docker-compose.yml` works on its own and is what CI and a fresh clone get. It
-publishes the container's port 8000 directly on the host.
+`make demo-docker` picks a **free host port automatically** (so it never collides
+with another local app already on 8000) and runs the base `docker-compose.yml`
+only, so it needs no Traefik. `docker-compose.yml` is also what CI and a fresh
+clone get; run it directly with `INDAH_HOST_PORT=<port> docker compose up --build`
+to choose the port yourself.
 
 ## Stable hostname via a machine-wide Traefik proxy
 
@@ -53,13 +55,15 @@ networks:
 Then, in this repo, opt the demo in:
 
 ```bash
-cp docker-compose.override.yml.example docker-compose.override.yml   # gitignored
-make demo-docker
+make demo-traefik
 # -> http://indah.localhost/     (in a browser)
 ```
 
-The override adds the Traefik route on top; the direct host port stays published,
-so both `http://indah.localhost/` and `http://localhost:8000` work at once.
+`make demo-traefik` checks the `proxy` network exists, copies
+`docker-compose.override.yml.example` to `docker-compose.override.yml` (gitignored)
+if you haven't, picks a free host port for the direct publish, and brings the
+stack up. Both `http://indah.localhost/` (via Traefik) and the printed
+`http://localhost:<port>/` work at once.
 
 ### Notes
 

@@ -83,11 +83,13 @@ install or runtime. See [`docs/SLICES.md`](docs/SLICES.md) for what's next.
 Or just run the built-in demo from a clone:
 
 ```bash
-make demo   # prints a URL; binds the first free port from 8000
+make demo            # prints a URL; binds the first free port from 8000
+make demo-notebook   # try indah inline in a local JupyterLab notebook
+make demo-docker     # run it in Docker on an auto-picked free port
 ```
 
-Prefer Docker with a stable `http://indah.localhost/` hostname? See
-[`docs/DEV-DOCKER.md`](docs/DEV-DOCKER.md) (`make demo-docker`).
+Prefer Docker with a stable `http://indah.localhost/` hostname (via a machine-wide
+Traefik proxy)? `make demo-traefik` — see [`docs/DEV-DOCKER.md`](docs/DEV-DOCKER.md).
 
 ## Planning and design
 
