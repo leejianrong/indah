@@ -90,3 +90,45 @@ async def test_streaming_demo_streams_tokens_incrementally_and_stays_responsive(
                 assert slider_patched  # the rest of the UI stayed live while streaming
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+async def test_registered_custom_component_renders_and_responds():
+    """A registered custom component (the demo's colour picker) ships its render
+    spec in the init tree and round-trips an event over the real server (R7)."""
+    handle = launch(block=False, open_inline=False)
+    try:
+        async with httpx.AsyncClient(base_url=handle.url, timeout=15.0) as client:
+            async with client.stream("GET", "/api/stream") as response:
+                lines = response.aiter_lines()
+                init = await _next_data(lines)
+                picker = _find(init["root"], "colorpicker")
+                # It rendered: the node carries its declarative render spec.
+                assert picker is not None
+                assert picker["props"]["_spec"]["tag"] == "input"
+
+                # It responds: an input event patches the picker's bound value back.
+                await client.post(
+                    "/api/event",
+                    json={
+                        "component": picker["id"],
+                        "event": "input",
+                        "payload": {"value": "#00ff00"},
+                    },
+                )
+                patched = None
+                for _ in range(20):
+                    msg = await _next_data(lines)
+                    if msg["type"] != "patch":
+                        continue
+                    for change in msg["changes"]:
+                        if (
+                            change["target"] == picker["id"]
+                            and change.get("props", {}).get("value") == "#00ff00"
+                        ):
+                            patched = change
+                    if patched:
+                        break
+                assert patched is not None  # the custom event round-tripped
+    finally:
+        handle.stop()

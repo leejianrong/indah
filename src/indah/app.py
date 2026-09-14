@@ -23,7 +23,17 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.routing import Route
 
-from .components import Button, Column, Slider, StreamText, Text, TextInput
+from .components import (
+    Button,
+    Column,
+    DataFrame,
+    Select,
+    Slider,
+    StreamText,
+    Text,
+    TextInput,
+)
+from .custom import custom, register_component
 from .protocol import EventIn, init_message, patch_message, ping_message
 from .reactive import Signal, computed
 from .session import Session
@@ -57,12 +67,33 @@ async def mock_llm(prompt: str) -> AsyncIterator[str]:
         yield word + " "
 
 
+# A couple of tiny datasets the demo's Select switches between, to show a
+# DataFrame re-rendering reactively.
+_DATASETS: dict[str, dict[str, Any]] = {
+    "squares": {"columns": ["n", "n^2"], "rows": [[n, n * n] for n in range(1, 6)]},
+    "primes": {"columns": ["i", "prime"], "rows": [[1, 2], [2, 3], [3, 5], [4, 7], [5, 11]]},
+}
+
+# One worked custom component (ADR-0012): a native colour picker the shell renders
+# from its declarative spec, with no shell rebuild. Registered once at import.
+register_component(
+    "colorpicker",
+    render={
+        "tag": "input",
+        "attrs": {"type": "color"},
+        "bind": {"value": "value"},
+        "on": {"input": {"event": "input", "prop": "value"}},
+    },
+)
+
+
 def build_demo_session() -> Session:
-    """The built-in Slice 3 demo: a prompt box streams a mock LLM into a StreamText.
+    """The built-in demo: async streaming plus the V4 starter + custom components.
 
     Clicking Generate runs an async handler that streams tokens into the output
-    while the slider below stays fully responsive -- proving async work does not
-    freeze the UI (R3).
+    while the rest of the page stays fully responsive -- proving async work does not
+    freeze the UI (R3). Below it, a Select switches a reactive DataFrame, and a
+    registered colour picker (a custom component, ADR-0012) two-way binds a signal.
     """
     prompt: Signal[str] = Signal("")
     stream = StreamText(label="Response")
@@ -72,6 +103,11 @@ def build_demo_session() -> Session:
         async for token in mock_llm(prompt.value):
             stream.feed(token)
 
+    dataset: Signal[str] = Signal("squares")
+    table = computed(lambda: _DATASETS[dataset.value])
+
+    accent: Signal[str] = Signal("#5b5bd6")
+
     a: Signal[float] = Signal(3)
     doubled = computed(
         lambda: f"the slider stays live during streaming: 2 x {a.value} = {2 * a.value}"
@@ -79,10 +115,18 @@ def build_demo_session() -> Session:
 
     root = Column(
         children=[
-            Text("indah: async token streaming"),
+            Text("indah: starter components + async streaming"),
             TextInput(prompt, placeholder="Ask the mock LLM something...", label="Prompt"),
             Button("Generate", on_click=on_generate),
             stream,
+            Select(
+                dataset,
+                options=[("squares", "Squares"), ("primes", "Primes")],
+                label="Dataset",
+            ),
+            DataFrame(table, label="Data"),
+            custom("colorpicker", value=accent),  # a worked custom component
+            Text(lambda: f"accent = {accent.value}"),
             Slider(a, min=0, max=10, step=1, label="a"),
             Text(doubled),
         ]

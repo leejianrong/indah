@@ -12,7 +12,9 @@ plain async generator the caller wraps (ADR-0009).
 
 from __future__ import annotations
 
+import base64
 import inspect
+import io
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -166,6 +168,177 @@ class TextInput(Component):
             self._value.set(str(payload["value"]))
             return True
         return False
+
+
+def _normalise_option(option: Any) -> dict[str, str]:
+    """Accept ``"a"`` or ``("value", "Label")`` -> ``{"value","label"}`` (both str).
+
+    HTML ``<select>`` values are strings on the wire, so a Select rounds-trips
+    string values; pass ``(value, label)`` tuples when the shown text differs from
+    the value.
+    """
+    if isinstance(option, (tuple, list)) and len(option) == 2:
+        value, label = option
+        return {"value": str(value), "label": str(label)}
+    return {"value": str(option), "label": str(option)}
+
+
+class Select(Component):
+    """A drop-down two-way bound to a ``Signal[str]`` (R5, value-bearing).
+
+    Set the signal from Python and the selection updates; choose in the UI and the
+    signal is readable in Python (via the ``change`` event).
+    """
+
+    type = "select"
+
+    def __init__(
+        self,
+        value: Signal[str],
+        *,
+        options: list[Any],
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._value = value
+        self._options = [_normalise_option(o) for o in options]
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"options": self._options, "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: self._value.value}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event in ("change", "input") and "value" in payload:
+            self._value.set(str(payload["value"]))
+            return True
+        return False
+
+
+class Image(Component):
+    """An image bound to a source that yields a URL or a ``data:`` URI (R5).
+
+    The source is a signal/string/callable; set it from Python and the shown image
+    updates. Displays only (no UI-change direction); its current value stays
+    readable via the bound signal.
+    """
+
+    type = "image"
+
+    def __init__(self, source: Source, *, alt: str = "") -> None:
+        super().__init__()
+        self._source = source
+        self._alt = alt
+
+    def static_props(self) -> dict[str, Any]:
+        return {"alt": self._alt}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"src": lambda: _image_src(_read(self._source))}
+
+
+def _image_src(value: Any) -> str:
+    """Coerce a source value to something an ``<img src>`` accepts.
+
+    A string (URL or ``data:`` URI) passes through; raw ``bytes`` are encoded as a
+    PNG ``data:`` URI so a caller can hand over image bytes directly.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, (bytes, bytearray)):
+        encoded = base64.b64encode(bytes(value)).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    return str(value)
+
+
+class Plot(Component):
+    """A rendered figure, shown as an image (R5).
+
+    Accepts a Matplotlib ``Figure`` (duck-typed on ``savefig`` -- no hard
+    dependency), raw PNG ``bytes``, or a URL / ``data:`` URI string, in a signal or
+    plain. The figure is rasterised to a PNG ``data:`` URI on the Python side, so
+    nothing extra is needed in the browser and it rounds-trips like an image.
+    """
+
+    type = "image"  # reuses the shell's <img> renderer
+
+    def __init__(self, source: Source, *, alt: str = "plot") -> None:
+        super().__init__()
+        self._source = source
+        self._alt = alt
+
+    def static_props(self) -> dict[str, Any]:
+        return {"alt": self._alt}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"src": lambda: _figure_src(_read(self._source))}
+
+
+def _figure_src(value: Any) -> str:
+    """A Matplotlib ``Figure`` -> PNG ``data:`` URI; otherwise defer to _image_src."""
+    if value is not None and hasattr(value, "savefig"):
+        buffer = io.BytesIO()
+        value.savefig(buffer, format="png", bbox_inches="tight")
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    return _image_src(value)
+
+
+class DataFrame(Component):
+    """A tabular display bound to a source (R5).
+
+    Accepts a pandas ``DataFrame`` (duck-typed -- no hard dependency), a
+    ``{"columns": [...], "rows": [[...], ...]}`` dict, or a list of row dicts, in a
+    signal or plain. Set it from Python and the rendered table updates.
+    """
+
+    type = "dataframe"
+
+    def __init__(self, source: Source, *, label: str = "") -> None:
+        super().__init__()
+        self._source = source
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"data": lambda: _to_table(_read(self._source))}
+
+
+def _json_safe(value: Any) -> Any:
+    """Coerce a cell value to something JSON can carry (e.g. a numpy scalar)."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if hasattr(value, "item"):  # numpy / pandas scalar
+        try:
+            return value.item()
+        except (ValueError, TypeError):
+            pass
+    return str(value)
+
+
+def _to_table(source: Any) -> dict[str, Any]:
+    """Normalise a table-ish value to ``{"columns": [...], "rows": [[...], ...]}``."""
+    if source is None:
+        return {"columns": [], "rows": []}
+    # pandas DataFrame (duck-typed): to_dict(orient="split") -> {columns, data}.
+    if hasattr(source, "columns") and hasattr(source, "to_dict"):
+        split = source.to_dict(orient="split")
+        columns = [str(c) for c in split.get("columns", [])]
+        rows = [[_json_safe(v) for v in row] for row in split.get("data", [])]
+        return {"columns": columns, "rows": rows}
+    if isinstance(source, dict) and "columns" in source and "rows" in source:
+        columns = [str(c) for c in source["columns"]]
+        rows = [[_json_safe(v) for v in row] for row in source["rows"]]
+        return {"columns": columns, "rows": rows}
+    if isinstance(source, (list, tuple)) and source and isinstance(source[0], dict):
+        columns = list(source[0].keys())
+        rows = [[_json_safe(row.get(c)) for c in columns] for row in source]
+        return {"columns": [str(c) for c in columns], "rows": rows}
+    raise TypeError(f"DataFrame cannot render a {type(source).__name__}")
 
 
 class StreamText(Component):
