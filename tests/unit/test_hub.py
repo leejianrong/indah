@@ -11,10 +11,11 @@ async def test_broadcast_reaches_all_subscribers():
     a = hub.subscribe()
     b = hub.subscribe()
 
-    await hub.broadcast({"hello": "world"})
+    offset = await hub.broadcast({"hello": "world"})
 
-    assert a.get_nowait() == {"hello": "world"}
-    assert b.get_nowait() == {"hello": "world"}
+    # Queue items are (offset, message) tuples so the stream can emit an SSE id.
+    assert a.get_nowait() == (offset, {"hello": "world"})
+    assert b.get_nowait() == (offset, {"hello": "world"})
 
 
 @pytest.mark.unit
@@ -39,4 +40,13 @@ async def test_full_queue_subscriber_is_dropped_not_blocking():
     await asyncio.wait_for(hub.broadcast({"n": 2}), timeout=1.0)
 
     assert hub.subscriber_count == 0
-    assert q.get_nowait() == {"n": 1}
+    assert q.get_nowait() == (1, {"n": 1})
+
+
+@pytest.mark.unit
+def test_publish_assigns_increasing_offsets():
+    hub = Hub()
+    assert hub.current_offset == 0
+    assert hub.publish({"a": 1}) == 1
+    assert hub.publish({"a": 2}) == 2
+    assert hub.current_offset == 2

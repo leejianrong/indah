@@ -40,18 +40,19 @@ def test_slider_event_patches_dependents_only_never_the_other_slider():
     session, _, _ = _demo()
     # n1 is slider "a". Changing it touches the computed label (n3) and slider a's
     # own value (n1, which genuinely depends on signal a) -- but never slider b (n2).
-    changes = session.dispatch("n1", "input", {"value": 8})
+    result = session.dispatch("n1", "input", {"value": 8})
 
-    targets = {c["target"] for c in changes}
+    targets = {c["target"] for c in result.changes}
+    assert result.coro is None  # a plain sync handler
     assert "n2" not in targets  # the unrelated slider is untouched: fine-grained
-    assert _props_for(changes, "n3") == {"text": "11"}  # 8 + 3
+    assert _props_for(result.changes, "n3") == {"text": "11"}  # 8 + 3
 
 
 @pytest.mark.integration
 def test_label_updates_when_either_signal_changes():
     session, _, _ = _demo()
-    assert _props_for(session.dispatch("n1", "input", {"value": 0}), "n3") == {"text": "3"}
-    assert _props_for(session.dispatch("n2", "input", {"value": 0}), "n3") == {"text": "0"}
+    assert _props_for(session.dispatch("n1", "input", {"value": 0}).changes, "n3") == {"text": "3"}
+    assert _props_for(session.dispatch("n2", "input", {"value": 0}).changes, "n3") == {"text": "0"}
 
 
 @pytest.mark.integration
@@ -64,5 +65,5 @@ def test_unknown_component_returns_none():
 def test_no_op_change_produces_no_patches():
     session, _, _ = _demo()
     # Setting slider a to its current value (2) changes nothing downstream.
-    changes = session.dispatch("n1", "input", {"value": 2})
-    assert changes == []
+    result = session.dispatch("n1", "input", {"value": 2})
+    assert result.changes == []

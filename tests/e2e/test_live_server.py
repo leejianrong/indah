@@ -23,11 +23,21 @@ async def _next_data(lines, timeout: float = 5.0) -> dict:
             return json.loads(line[len("data:") :].strip())
 
 
+def _find(node: dict, node_type: str) -> dict | None:
+    if node.get("type") == node_type:
+        return node
+    for child in node.get("children", []):
+        found = _find(child, node_type)
+        if found is not None:
+            return found
+    return None
+
+
 @pytest.mark.e2e
-async def test_two_slider_demo_patches_only_the_label_over_real_tcp():
+async def test_streaming_demo_streams_tokens_incrementally_and_stays_responsive():
     handle = launch(block=False, open_inline=False)
     try:
-        async with httpx.AsyncClient(base_url=handle.url, timeout=10.0) as client:
+        async with httpx.AsyncClient(base_url=handle.url, timeout=15.0) as client:
             assert (await client.get("/health")).status_code == 200
 
             async with client.stream("GET", "/api/stream") as response:
@@ -35,23 +45,48 @@ async def test_two_slider_demo_patches_only_the_label_over_real_tcp():
 
                 init = await _next_data(lines)
                 assert init["type"] == "init"
-                root = init["root"]
-                assert root["type"] == "column"
-                # column -> [slider a (n1), slider b (n2), text (n3)]
-                assert root["children"][2]["props"]["text"] == "a + b = 5"
+                stream_node = _find(init["root"], "streamtext")
+                button_node = _find(init["root"], "button")
+                slider_node = _find(init["root"], "slider")
+                assert stream_node is not None and button_node is not None
 
+                # Click Generate: tokens must arrive as several append patches, not
+                # a single final dump.
                 posted = await client.post(
-                    "/api/event",
-                    json={"component": "n1", "event": "input", "payload": {"value": 8}},
+                    "/api/event", json={"component": button_node["id"], "event": "click"}
                 )
                 assert posted.status_code == 200
 
-                patch = await _next_data(lines)
-                assert patch["type"] == "patch"
-                changes = patch["changes"]
-                targets = {c["target"] for c in changes}
-                assert "n2" not in targets  # the other slider is never touched
-                label = next(c for c in changes if c["target"] == "n3")
-                assert label["props"] == {"text": "a + b = 11"}
+                appends = 0
+                streamed = ""
+                slider_patched = False
+                # Read a batch of frames while generation runs; drive a slider event
+                # in the middle to prove the UI stays responsive during streaming.
+                for i in range(40):
+                    msg = await _next_data(lines)
+                    if msg["type"] != "patch":
+                        continue
+                    for change in msg["changes"]:
+                        if change["target"] == stream_node["id"] and "append" in change:
+                            appends += 1
+                            streamed += change["append"]["text"]
+                        if change["target"] == slider_node["id"] and "props" in change:
+                            slider_patched = True
+                    if i == 2:
+                        # An unrelated event mid-stream is accepted and handled.
+                        await client.post(
+                            "/api/event",
+                            json={
+                                "component": slider_node["id"],
+                                "event": "input",
+                                "payload": {"value": 7},
+                            },
+                        )
+                    if appends >= 3 and slider_patched:
+                        break
+
+                assert appends >= 3  # incremental: many small appends, not one dump
+                assert streamed.strip()  # actual text arrived
+                assert slider_patched  # the rest of the UI stayed live while streaming
     finally:
         handle.stop()

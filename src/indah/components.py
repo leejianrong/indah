@@ -6,15 +6,20 @@ the tree for the ``init`` message, and wires an effect per reactive prop so a
 signal change emits a minimal patch for exactly that node.
 
 Domain logic stays out of here: a Button's ``on_click`` is a plain callable the
-caller supplies, and a Slider writes to a plain Signal (ADR-0009).
+caller supplies, a Slider writes to a plain Signal, and a StreamText is fed by a
+plain async generator the caller wraps (ADR-0009).
 """
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .reactive import Computed, Signal
+
+if TYPE_CHECKING:
+    from .session import Session
 
 # A prop value may be static, a signal/computed, or a zero-arg callable.
 Source = Any
@@ -42,8 +47,13 @@ class Component:
         """Prop name -> getter. Getters read signals, so effects can track them."""
         return {}
 
-    def handle(self, event: str, payload: dict[str, Any]) -> bool:
-        """Apply a client event. Return True if handled, False otherwise."""
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        """Apply a client event.
+
+        Return ``False`` if unhandled, ``True`` if handled synchronously, or a
+        coroutine if the handler is async (the session awaits it as a background
+        task so long work never blocks the request or the event loop).
+        """
         return False
 
     def to_json(self) -> dict[str, Any]:
@@ -84,9 +94,11 @@ class Button(Component):
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"label": lambda: str(_read(self._label))}
 
-    def handle(self, event: str, payload: dict[str, Any]) -> bool:
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "click" and self._on_click is not None:
-            self._on_click()
+            result = self._on_click()
+            if inspect.iscoroutine(result):
+                return result  # async handler: the session awaits it in the background
             return True
         return False
 
@@ -116,11 +128,101 @@ class Slider(Component):
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"value": lambda: self._value.value}
 
-    def handle(self, event: str, payload: dict[str, Any]) -> bool:
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "input" and "value" in payload:
             self._value.set(payload["value"])
             return True
         return False
+
+
+class TextInput(Component):
+    """A single-line text box two-way bound to a ``Signal[str]``.
+
+    Needed for the Slice 3 demo's prompt box; part of the R5 starter set (V4).
+    """
+
+    type = "textinput"
+
+    def __init__(
+        self,
+        value: Signal[str],
+        *,
+        placeholder: str = "",
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._value = value
+        self._placeholder = placeholder
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"placeholder": self._placeholder, "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: self._value.value}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "input" and "value" in payload:
+            self._value.set(str(payload["value"]))
+            return True
+        return False
+
+
+class StreamText(Component):
+    """A text container that grows token-by-token over the SSE channel (R5).
+
+    Unlike a signal-bound ``Text``, a StreamText holds a plain accumulating
+    string (not a signal), so:
+
+    - ``snapshot()`` always carries the full text so far -- a fresh connect or a
+      resume that falls back to ``init`` re-renders correctly (ADR-0011);
+    - ``feed(token)`` emits an *append* patch carrying only the delta, so the wire
+      cost is O(token), not O(text) per token.
+
+    Feed it from a plain async generator the caller wraps (ADR-0009)::
+
+        stream = StreamText()
+
+        async def on_generate():
+            stream.reset()
+            async for token in my_llm(prompt.value):
+                stream.feed(token)
+    """
+
+    type = "streamtext"
+
+    def __init__(self, *, label: str = "") -> None:
+        super().__init__()
+        self._text = ""
+        self._label = label
+        self._session: Session | None = None
+
+    def bind(self, session: Session) -> None:
+        """Called by the session during wiring so feed/reset can emit patches."""
+        self._session = session
+
+    @property
+    def text(self) -> str:
+        return self._text
+
+    def static_props(self) -> dict[str, Any]:
+        # Current text (not truly static) so init/resume snapshots are complete.
+        return {"text": self._text, "label": self._label}
+
+    def feed(self, token: str) -> None:
+        """Append a token: grows the text and emits an append patch to clients."""
+        token = str(token)
+        if not token:
+            return
+        self._text += token
+        if self._session is not None:
+            self._session.emit_append(self.id, "text", token)
+
+    def reset(self) -> None:
+        """Clear the accumulated text (e.g. before a new generation)."""
+        self._text = ""
+        if self._session is not None:
+            self._session.emit_props(self.id, {"text": ""})
 
 
 def walk(root: Component):

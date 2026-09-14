@@ -11,10 +11,21 @@ import httpx
 import pytest
 
 from indah.app import create_app
+from indah.components import Column, Slider, Text
+from indah.reactive import Signal, computed
+from indah.session import Session
 
 
 def _client(app) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+
+
+def _slider_app():
+    """A small two-node app (slider a -> computed label) independent of the demo."""
+    a = Signal(2)
+    label = computed(lambda: f"a = {a.value}")
+    root = Column(children=[Slider(a, min=0, max=10, step=1, label="a"), Text(label)])
+    return create_app(session=Session(root))
 
 
 @pytest.mark.integration
@@ -63,13 +74,13 @@ async def test_unknown_component_is_rejected_400():
 
 @pytest.mark.integration
 async def test_slider_event_updates_session_state():
-    app = create_app()
+    app = _slider_app()
     async with _client(app) as client:
         resp = await client.post(
             "/api/event", json={"component": "n1", "event": "input", "payload": {"value": 9}}
         )
     assert resp.status_code == 200
-    # The label (n3) is a + b = 9 + 3 = 12 in the demo's fresh state.
+    # The computed label (n2) tracks slider a (n1).
     root = app.state.session.snapshot()
-    label = root["children"][2]
-    assert label["props"]["text"] == "a + b = 12"
+    label = root["children"][1]
+    assert label["props"]["text"] == "a = 9"

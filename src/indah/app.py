@@ -1,9 +1,12 @@
 """The single ASGI app: static shell + SSE stream + event endpoint on one port.
 
-Slice 2 wires the reactive core (ADR-0003) to the transport (ADR-0002): the app
-builds a component tree bound to signals, ships it as an ``init`` snapshot, and
-broadcasts minimal patches when a client event mutates a signal. Everything is
-served from one Starlette app to survive the Colab/Runpod proxies (ADR-0001).
+Slice 3 adds async work and token streaming (ADR-0011) on top of Slice 2's
+reactive core (ADR-0003) over the SSE transport (ADR-0002). An event may trigger
+an async handler that streams tokens into a ``StreamText`` over the existing SSE
+channel as append patches, and the stream survives a proxy timeout because the
+hub sequences messages and a reconnecting client resumes via ``Last-Event-Id``.
+Everything is served from one Starlette app to survive the Colab/Runpod proxies
+(ADR-0001).
 """
 
 from __future__ import annotations
@@ -20,11 +23,11 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.routing import Route
 
-from .components import Column, Slider, Text
+from .components import Button, Column, Slider, StreamText, Text, TextInput
 from .protocol import EventIn, init_message, patch_message, ping_message
 from .reactive import Signal, computed
 from .session import Session
-from .transport import Hub
+from .transport import Hub, Item
 
 DEFAULT_HEARTBEAT_SECONDS = 15.0
 
@@ -36,21 +39,52 @@ _SSE_HEADERS = {
 }
 
 
-def build_demo_session() -> Session:
-    """The built-in Slice 2 demo: two sliders and a label computed from both.
+async def mock_llm(prompt: str) -> AsyncIterator[str]:
+    """A stand-in LLM: a plain async generator yielding a reply token by token.
 
-    Dragging a slider mutates only its signal; the computed label recomputes and
-    only the label node is patched.
+    It is deliberately an ordinary async generator with no indah imports, so a
+    real model client drops straight in behind the same shape (ADR-0009).
     """
-    a: Signal[float] = Signal(2)
-    b: Signal[float] = Signal(3)
-    total = computed(lambda: f"a + b = {a.value + b.value}")
+    asked = prompt.strip()
+    reply = (
+        "Sure -- "
+        + (f"you asked '{asked}'. " if asked else "")
+        + "here is a streamed reply, arriving token by token so the rest of the "
+        + "page never blocks while it generates."
+    )
+    for word in reply.split(" "):
+        await asyncio.sleep(0.06)
+        yield word + " "
+
+
+def build_demo_session() -> Session:
+    """The built-in Slice 3 demo: a prompt box streams a mock LLM into a StreamText.
+
+    Clicking Generate runs an async handler that streams tokens into the output
+    while the slider below stays fully responsive -- proving async work does not
+    freeze the UI (R3).
+    """
+    prompt: Signal[str] = Signal("")
+    stream = StreamText(label="Response")
+
+    async def on_generate() -> None:
+        stream.reset()
+        async for token in mock_llm(prompt.value):
+            stream.feed(token)
+
+    a: Signal[float] = Signal(3)
+    doubled = computed(
+        lambda: f"the slider stays live during streaming: 2 x {a.value} = {2 * a.value}"
+    )
 
     root = Column(
         children=[
+            Text("indah: async token streaming"),
+            TextInput(prompt, placeholder="Ask the mock LLM something...", label="Prompt"),
+            Button("Generate", on_click=on_generate),
+            stream,
             Slider(a, min=0, max=10, step=1, label="a"),
-            Slider(b, min=0, max=10, step=1, label="b"),
-            Text(total),
+            Text(doubled),
         ]
     )
     return Session(root)
@@ -72,6 +106,8 @@ def create_app(
     app.state.hub = Hub()
     app.state.heartbeat_seconds = heartbeat_seconds
     app.state.session = build_demo_session() if session is None else session
+    # Live (async/streaming) emits reach clients through the hub.
+    app.state.session.bind_hub(app.state.hub)
     return app
 
 
@@ -84,34 +120,73 @@ async def _health(request: Request) -> JSONResponse:
 
 
 async def sse_events(
-    queue: asyncio.Queue[dict[str, Any]],
-    init_payload: dict[str, Any],
+    queue: asyncio.Queue[Item],
+    init_payload: dict[str, Any] | None,
     heartbeat_seconds: float,
+    *,
+    replay: tuple[Item, ...] | list[Item] = (),
+    skip_upto: int = 0,
 ) -> AsyncIterator[str]:
-    """Yield SSE-framed strings: the ``init`` payload, then messages from ``queue``.
+    """Yield SSE-framed strings for one browser connection.
 
-    Emits a ``ping`` whenever ``heartbeat_seconds`` elapses with no message, so the
-    connection survives idle-timeout proxies (ADR-0002). Framing is separated from
-    the HTTP handler so it can be tested without a server.
+    Emits ``init_payload`` first (a fresh connect, or a resume that fell back to a
+    full snapshot), then any ``replay`` messages (a resume from the buffer), then
+    live messages from ``queue``. Live messages with an offset at or below
+    ``skip_upto`` are dropped -- those are already covered by the init snapshot or
+    the replay, so forwarding them would double-apply an append (ADR-0011).
+
+    A ``ping`` is emitted whenever ``heartbeat_seconds`` elapses idle, so the
+    connection survives idle-timeout proxies (ADR-0002). State-bearing messages
+    carry an SSE ``id:`` so a reconnecting client resumes from where it left off;
+    init and ping do not. Framing is separated from the HTTP handler so it can be
+    tested without a server.
     """
-    yield _sse(init_payload)
+    if init_payload is not None:
+        yield _sse(init_payload)
+    for offset, message in replay:
+        yield _sse(message, event_id=offset)
     while True:
         try:
-            message = await asyncio.wait_for(queue.get(), timeout=heartbeat_seconds)
+            offset, message = await asyncio.wait_for(queue.get(), timeout=heartbeat_seconds)
         except (asyncio.TimeoutError, TimeoutError):
-            message = ping_message()
-        yield _sse(message)
+            yield _sse(ping_message())
+            continue
+        if offset <= skip_upto:
+            continue
+        yield _sse(message, event_id=offset)
 
 
 async def _stream(request: Request) -> StreamingResponse:
     app = request.app
     hub: Hub = app.state.hub
+    session: Session = app.state.session
     queue = hub.subscribe()
-    init_payload = init_message(app.state.session.snapshot())
 
-    async def event_source():
+    # Subscribe first, then decide init-vs-resume against the current offset with
+    # no await in between, so nothing published concurrently is missed or applied
+    # twice. skip_upto = the offset the client is caught up to after init/replay;
+    # queued messages already covered by that are dropped.
+    last_event_id = _parse_last_event_id(request)
+    replay = hub.replay_since(last_event_id)
+    if last_event_id is None or replay is None:
+        # Fresh connect, or a buffer gap: send a full snapshot (always correct
+        # because a StreamText snapshot carries its full accumulated text).
+        init_payload: dict[str, Any] | None = init_message(session.snapshot())
+        replay = []
+    else:
+        # A clean resume: the client already has the tree; replay what it missed.
+        init_payload = None
+    skip_upto = hub.current_offset
+
+    async def event_source() -> AsyncIterator[str]:
         try:
-            async for chunk in sse_events(queue, init_payload, app.state.heartbeat_seconds):
+            async for chunk in sse_events(
+                queue,
+                init_payload,
+                app.state.heartbeat_seconds,
+                replay=replay,
+                skip_upto=skip_upto,
+            ):
                 yield chunk
         finally:
             hub.unsubscribe(queue)
@@ -132,17 +207,37 @@ async def _event(request: Request) -> JSONResponse:
             {"ok": False, "error": "validation", "detail": exc.errors()}, status_code=422
         )
 
-    changes = request.app.state.session.dispatch(event.component, event.event, event.payload)
-    if changes is None:
+    hub: Hub = request.app.state.hub
+    session: Session = request.app.state.session
+    result = session.dispatch(event.component, event.event, event.payload)
+    if result is None:
         return JSONResponse({"ok": False, "error": "unknown event"}, status_code=400)
 
-    if changes:
-        await request.app.state.hub.broadcast(patch_message(changes))
+    if result.changes:
+        hub.publish(patch_message(result.changes))
+    if result.coro is not None:
+        # Run the async handler in the background: the POST returns now and the
+        # work streams over SSE, so it never holds the request open past the
+        # proxy timeout, nor blocks the event loop or other sessions (R3).
+        session.spawn(result.coro)
     return JSONResponse({"ok": True})
 
 
-def _sse(message: dict[str, Any]) -> str:
-    return f"data: {json.dumps(message)}\n\n"
+def _parse_last_event_id(request: Request) -> int | None:
+    """The SSE resume offset, from the ``Last-Event-Id`` header (EventSource sets
+    it natively on reconnect) or a ``?lastEventId=`` fallback. Invalid -> None."""
+    raw = request.headers.get("last-event-id") or request.query_params.get("lastEventId")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sse(message: dict[str, Any], event_id: int | None = None) -> str:
+    prefix = f"id: {event_id}\n" if event_id is not None else ""
+    return f"{prefix}data: {json.dumps(message)}\n\n"
 
 
 def _read_static(name: str) -> str:

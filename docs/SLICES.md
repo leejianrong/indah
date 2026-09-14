@@ -122,42 +122,66 @@ against a real launched server (init tree + minimal patches over SSE).
 
 ---
 
-## V3: Async work and LLM token streaming
+## V3: Async work and LLM token streaming - DONE
 
 **Delivers:** R3, R5 (StreamText)
 
-**Build plan**
+> **As built.** The wire protocol went 0 -> 1 (ADR-0011): a patch `change` gained
+> an `append` op alongside `props`, and an `error` message drives the toast. Async
+> handlers are detected as coroutines and run as background tasks, so `POST
+> /api/event` returns immediately and tokens flow over the existing SSE channel -
+> the request is never held open for the generation. Resume rides SSE's native
+> `Last-Event-Id`: the hub sequences state-bearing messages with an offset (the
+> SSE `id:`), buffers recent ones, and replays what a reconnecting client missed,
+> falling back to a full `init` on a buffer gap (always correct because a
+> `StreamText` snapshot carries its full text). Added `TextInput` for the prompt
+> box (part of R5's starter set, brought forward for the demo).
 
-1. Async event handlers: a handler may `await` long work without blocking the
-   server or other sessions.
-2. `StreamText` component fed by an async generator; tokens stream over the
-   existing SSE channel as append patches.
-3. Reconnect/resume logic so a stream survives RunPod's 100s proxy timeout
-   (ADR-0002).
-4. Error path: a handler exception yields a UI toast + a server-side traceback;
-   the rest of the UI stays live.
+**Build plan (as built)**
 
-**Demo:** A prompt box + "Generate" button streams a (mock or real) LLM response
-token-by-token into the UI while the rest of the page stays responsive, and it
-keeps streaming past the 100s mark on RunPod.
+1. Async event handlers: a `Button` `on_click` may be `async def`; it runs in the
+   background so it never blocks the request, the event loop, or other sessions.
+   The reactive core stays synchronous, so no locking is needed (ADR-0011).
+2. `StreamText`: holds a plain accumulating string (so snapshots are complete);
+   `feed(token)` emits an `append` patch carrying only the delta, `reset()` a
+   replace. Fed by a plain async generator the caller wraps (ADR-0009).
+3. Reconnect/resume over `Last-Event-Id`: hub offsets + bounded history +
+   `replay_since`; a `skip_upto` threshold stops an append being double-applied
+   across the reconnect seam (ADR-0011). The 15s heartbeat keeps the connection
+   under RunPod's ~100s cut; if it does drop, resume recovers it.
+4. Error path: a sync or async handler exception is logged with its traceback and
+   pushed as a short `error` toast; the session keeps handling events (Q-fail).
+
+**Demo (as built):** `make demo` opens a prompt box + Generate button that streams
+a mock LLM response token-by-token into a `StreamText`, with a live slider+label
+below to show the rest of the UI stays responsive during generation. The mock LLM
+is a plain async generator (ADR-0009), swappable for a real model.
 
 **Rests on assumptions:** RunPod heartbeat/reconnect is sufficient. If wrong, TCP
-exposure or a WebSocket upgrade is the escalation.
+exposure or a WebSocket upgrade is the escalation. (The 100s survival is proven
+locally by a disconnect + `Last-Event-Id` reconnect; the real-hardware RunPod
+smoke check rides along with the R2 notebook check.)
 
-### Test plan
+### Test plan (as built)
 
 #### End-to-end
-- Clicking Generate renders tokens incrementally (not one final dump); the UI
-  accepts other input meanwhile.
-- A stream on RunPod survives beyond 100s via reconnect without visible breakage.
+- Clicking Generate renders tokens as many append frames (not one final dump), and
+  a slider event mid-stream is accepted and patched - the UI stays live while
+  streaming (tests/e2e/test_live_server.py, real launched server).
 
 #### Integration
-- An async generator handler emits append patches in order over SSE.
-- A raised handler exception produces a toast patch and a logged traceback; the
-  session stays alive.
+- An async handler emits append patches in order over the hub; the POST returns
+  immediately while the work streams in the background.
+- A raised handler exception (sync and async) produces an `error` toast and a
+  logged traceback; the session stays alive and handles the next event.
 
 #### Unit
-- Reconnect logic resumes a stream from the last-acked offset without duplication.
+- `replay_since` resumes from the last-seen offset without duplication, and reports
+  a gap (-> resend init) when messages were evicted.
+- `StreamText.feed` accumulates text and emits append deltas; a snapshot carries
+  the full accumulated text for a resume.
+- SSE framing: state-bearing frames carry an `id:`, init/ping do not, replay
+  precedes live, and a frame at or below `skip_upto` is dropped.
 
 ---
 

@@ -4,16 +4,51 @@ It assigns stable node ids, produces the ``init`` snapshot, wires one effect per
 reactive prop (so a signal change emits a patch for exactly that node), and
 dispatches client events back into the graph.
 
+Slice 3 makes dispatch async-aware (ADR-0011). A handler runs in one of two emit
+modes:
+
+- **sync dispatch** (a slider drag, a synchronous button click): mutations are
+  collected into a coalescing sink and returned to the caller, which broadcasts
+  them as one patch.
+- **live** (an async handler between its awaits, or a StreamText being fed):
+  there is no sink, so each change is published to the hub immediately, in order.
+
+Because the reactive scheduler is synchronous and never awaits mid-flush, the
+event loop only interleaves handlers at quiescent points, so concurrent async
+handlers need no locking. A handler that raises does not take the UI down: the
+traceback is logged and a short toast message is pushed to the client (Q-fail).
+
 Slice 2 keeps a single shared session per app. Per-session isolation for multiple
 concurrent users arrives with the state seam (ADR-0010).
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
+from collections.abc import Coroutine
+from dataclasses import dataclass, field
 from typing import Any
 
-from .components import Component, walk
+from .components import Component, StreamText, walk
+from .protocol import error_message, patch_message
 from .reactive import Computation, batch, effect
+from .transport import Hub
+
+logger = logging.getLogger("indah")
+
+
+@dataclass
+class DispatchResult:
+    """The outcome of a handled event.
+
+    ``changes`` are the patches from synchronous mutations (broadcast by the
+    caller). ``coro`` is set when the handler is async and must be awaited as a
+    background task, so the POST returns immediately and the work streams over SSE.
+    """
+
+    changes: list[dict[str, Any]] = field(default_factory=list)
+    coro: Coroutine[Any, Any, Any] | None = None
 
 
 class Session:
@@ -21,12 +56,17 @@ class Session:
         self.root = root
         self._by_id: dict[str, Component] = {}
         self._effects: list[Computation] = []
-        # When set (during event dispatch), reactive updates collect here as
-        # {node_id: {prop: value}} instead of being ignored.
+        # When set (during sync dispatch), reactive updates collect here as
+        # {node_id: {prop: value}}. When None, updates emit live to the hub.
         self._sink: dict[str, dict[str, Any]] | None = None
+        self._hub: Hub | None = None
+        # Strong refs to running async-handler tasks so they are not GC'd.
+        self._tasks: set[asyncio.Task[Any]] = set()
 
         self._assign_ids()
         self._wire()
+
+    # -- setup ---------------------------------------------------------------
 
     def _assign_ids(self) -> None:
         for index, component in enumerate(walk(self.root)):
@@ -35,6 +75,8 @@ class Session:
 
     def _wire(self) -> None:
         for component in walk(self.root):
+            if isinstance(component, StreamText):
+                component.bind(self)
             for prop_name, getter in component.reactive_props().items():
                 self._effects.append(self._make_effect(component.id, prop_name, getter))
 
@@ -50,33 +92,90 @@ class Session:
 
         return effect(run)
 
+    def bind_hub(self, hub: Hub) -> None:
+        """Attach the hub so live (async/streaming) emits reach clients."""
+        self._hub = hub
+
+    # -- emit paths ----------------------------------------------------------
+
     def _emit(self, node_id: str, prop_name: str, value: Any) -> None:
-        if self._sink is None:
-            return
-        self._sink.setdefault(node_id, {})[prop_name] = value
+        """A reactive effect fired. Collect it (sync dispatch) or send it live."""
+        if self._sink is not None:
+            self._sink.setdefault(node_id, {})[prop_name] = value
+        else:
+            self.emit_props(node_id, {prop_name: value})
+
+    def emit_props(self, node_id: str, props: dict[str, Any]) -> None:
+        """Publish a prop replace/merge for one node immediately (live path)."""
+        if self._hub is not None:
+            self._hub.publish(patch_message([{"target": node_id, "props": props}]))
+
+    def emit_append(self, node_id: str, prop: str, delta: str) -> None:
+        """Publish an append delta for one node immediately (streaming path)."""
+        if self._hub is not None:
+            self._hub.publish(patch_message([{"target": node_id, "append": {prop: delta}}]))
+
+    def _report_error(self, exc: BaseException) -> None:
+        """Log the traceback server-side and push a toast to clients; UI stays live."""
+        logger.exception("indah handler raised", exc_info=exc)
+        if self._hub is not None:
+            self._hub.publish(error_message(f"{type(exc).__name__}: {exc}"))
+
+    # -- wire protocol -------------------------------------------------------
 
     def snapshot(self) -> dict[str, Any]:
         """The full component tree as JSON, for the ``init`` message."""
         return self.root.to_json()
 
-    def dispatch(self, component_id: str, event: str, payload: dict[str, Any]) -> list[dict] | None:
-        """Apply a client event; return the patch changes, or None if unhandled."""
+    def dispatch(
+        self, component_id: str, event: str, payload: dict[str, Any]
+    ) -> DispatchResult | None:
+        """Apply a client event.
+
+        Returns ``None`` if the component/event is unhandled, otherwise a
+        :class:`DispatchResult`. A synchronous handler's mutations come back in
+        ``.changes``; an async handler comes back as ``.coro`` for the caller to
+        spawn. A synchronous handler that raises is reported (toast + log) and
+        returns an empty result so the UI stays live.
+        """
         component = self._by_id.get(component_id)
         if component is None:
             return None
 
         self._sink = {}
-        handled = {"ok": False}
+        outcome: dict[str, Any] = {"ret": False}
 
         def apply() -> None:
-            handled["ok"] = component.handle(event, payload or {})
+            outcome["ret"] = component.handle(event, payload or {})
 
         try:
             batch(apply)
+        except Exception as exc:  # a synchronous handler blew up
+            self._sink = None
+            self._report_error(exc)
+            return DispatchResult()  # handled: UI stays live
         finally:
             collected = self._sink
             self._sink = None
 
-        if not handled["ok"]:
-            return None
-        return [{"target": node_id, "props": props} for node_id, props in collected.items()]
+        ret = outcome["ret"]
+        if ret is False:
+            return None  # unknown event for this component
+
+        changes = [{"target": nid, "props": props} for nid, props in collected.items()]
+        if asyncio.iscoroutine(ret):
+            return DispatchResult(changes=changes, coro=ret)
+        return DispatchResult(changes=changes)
+
+    def spawn(self, coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
+        """Run an async handler in the background; report any exception as a toast."""
+        task = asyncio.create_task(self._run_handler(coro))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return task
+
+    async def _run_handler(self, coro: Coroutine[Any, Any, Any]) -> None:
+        try:
+            await coro
+        except Exception as exc:
+            self._report_error(exc)

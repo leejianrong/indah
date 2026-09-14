@@ -30,12 +30,12 @@ None — the grill round is closed.
 | Q-state | State and storage? | DECIDED | In-process per-session via a pluggable session-store seam; external backend later | ADR-0010 |
 | Q-concur | Concurrency and conflict? | ASSUMED | Isolated per-session state; last-write-wins within a session | PLAN §Assumed defaults |
 | Q-iface | Interfaces and contracts? | ASSUMED | One ASGI app; JSON protocol is the contract; no CLI in v0 | PLAN §Shape (S1), ADR-0001/0005 |
-| Q-fail | Failure behaviour? | ASSUMED | Handler error → UI toast + server traceback; UI stays live | PLAN §Assumed defaults, SLICES V3 |
+| Q-fail | Failure behaviour? | DECIDED | Handler error (sync or async) → UI toast + server traceback; session stays live | ADR-0011, Slice V3 |
 | Q-deps | External dependencies? | ASSUMED | Starlette/Uvicorn/Pydantic/Svelte, all MIT, offline; optional cloudflared | PLAN §Implementation, ADR-0004 |
 | Q-run | Runtime and deployment? | ASSUMED | pip install → launch(); detects Colab/RunPod; Python 3.10+ | PLAN §Shape (S6), ADR-0001 |
 | Q-succ | Measurable success? | ASSUMED | Cold start <3s; interaction <150ms local; incremental streaming; no Node; Colab-without-WS | PLAN §... / SLICES demos |
 | Q-sec | Security and secrets? | ASSUMED | Dev-tool threat model; no auth in v0; don't log payloads by default | PLAN §Assumed defaults |
-| Q-ver | Versioning and migration? | ASSUMED | protocol_version from v0; nothing persisted to migrate | ADR-0005 |
+| Q-ver | Versioning and migration? | ASSUMED | protocol_version bumped v0→v1 for the append op + error message; shell rejects a mismatch; nothing persisted to migrate | ADR-0005, ADR-0011 |
 | Q-agent | Agent-facing control surface? | DEFERRED | Not needed for v0 | n/a |
 | Q-auth | Auth / multi-tenant hosting? | DECIDED | Auth via BYO ASGI seams (ADR-0008); multi-tenant hosting still deferred post-v0 | ADR-0008 |
 | Q-escape-tooling | Full escape-hatch tooling (scaffold, typed client, HMR)? | DEFERRED | Post-v0; only the protocol seam now | ADR-0005 |
