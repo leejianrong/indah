@@ -18,12 +18,16 @@ None — the grill round is closed.
 | F2 | Core programming model? | DECIDED | Reactive signals with granular JSON patches | ADR-0003 |
 | F3 | Framework for the pre-built JS shell? | DECIDED | Svelte, bundled in the wheel | ADR-0004 |
 | F4 | Hand-written-frontend escape hatch in v0? | DECIDED | Defer tooling; make the JSON protocol a versioned public contract + custom-component seam | ADR-0005 |
+| F5 | What does "transition to a real app" mean? | DECIDED | Two exit ramps off the protocol boundary: Composable (primary) + Eject (enabled, not built); north-star priority | ADR-0008 |
+| F6 | Should indah own auth? | DECIDED | No — bring-your-own via standard ASGI middleware seams | ADR-0008 |
+| F7 | Domain logic vs UI coupling? | DECIDED | Core principle: logic in plain functions indah calls, kept separate from UI | ADR-0009 |
+| F8 | State model for external-user production? | DECIDED | Pluggable session-store seam now; only in-memory backend in v0 | ADR-0010 |
 | Q-name | Project name and availability? | DECIDED | "indah"; free on PyPI and npm | ADR-0006 |
 | Q-docs | Documentation tooling and feel? | DECIDED | Zensical site, FastAPI-grade polish; deferred as build until ~Slice 4 | ADR-0007 |
 | Q-user | Primary user and actors? | ASSUMED | AI/ML notebook users first; agents deferred | PLAN §Users |
 | Q-scope | Scope boundary for v0? | ASSUMED | See in/out lists | PLAN §Scope |
 | Q-data | Core data model and identity? | ASSUMED | UI tree of nodes with stable server IDs; named signals; per-session in-memory | PLAN §Shape (S3, S4), ADR-0003 |
-| Q-state | State and storage? | ASSUMED | In-process per-session; no persistence in v0 | PLAN §Assumed defaults |
+| Q-state | State and storage? | DECIDED | In-process per-session via a pluggable session-store seam; external backend later | ADR-0010 |
 | Q-concur | Concurrency and conflict? | ASSUMED | Isolated per-session state; last-write-wins within a session | PLAN §Assumed defaults |
 | Q-iface | Interfaces and contracts? | ASSUMED | One ASGI app; JSON protocol is the contract; no CLI in v0 | PLAN §Shape (S1), ADR-0001/0005 |
 | Q-fail | Failure behaviour? | ASSUMED | Handler error → UI toast + server traceback; UI stays live | PLAN §Assumed defaults, SLICES V3 |
@@ -33,7 +37,7 @@ None — the grill round is closed.
 | Q-sec | Security and secrets? | ASSUMED | Dev-tool threat model; no auth in v0; don't log payloads by default | PLAN §Assumed defaults |
 | Q-ver | Versioning and migration? | ASSUMED | protocol_version from v0; nothing persisted to migrate | ADR-0005 |
 | Q-agent | Agent-facing control surface? | DEFERRED | Not needed for v0 | n/a |
-| Q-auth | Auth / multi-tenant hosting? | DEFERRED | Post-v0; dev tool behind trusted proxy for now | n/a |
+| Q-auth | Auth / multi-tenant hosting? | DECIDED | Auth via BYO ASGI seams (ADR-0008); multi-tenant hosting still deferred post-v0 | ADR-0008 |
 | Q-escape-tooling | Full escape-hatch tooling (scaffold, typed client, HMR)? | DEFERRED | Post-v0; only the protocol seam now | ADR-0005 |
 | Q-market | Component marketplace / plugin distribution? | DEFERRED | Post-v0 | n/a |
 | Q-persist | Persistent state / database integration? | DEFERRED | User code owns durable data | n/a |
@@ -45,7 +49,8 @@ None — the grill round is closed.
 | Primary user and actors | Q-user |
 | Scope boundary | Q-scope |
 | Data model and identity | Q-data, F2 |
-| State and storage | Q-state, Q-persist |
+| State and storage | Q-state, Q-persist, F8 |
+| Graduation (prototype to production) | F5, F6, F7, F8 |
 | Concurrency and conflict | Q-concur |
 | Interfaces and contracts | Q-iface, F1, F4 |
 | Failure behaviour | Q-fail |

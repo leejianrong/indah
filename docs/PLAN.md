@@ -36,15 +36,49 @@ works the same in Colab, on RunPod, and locally.
 
 ## Users and actors
 
-- **Primary: AI/ML researchers, hobbyists, and engineers** running heavy
-  PyTorch/Transformers pipelines in Colab or RunPod who want deploy simplicity
-  plus real async performance.
+The core scenario has two personas with a handoff between them (ADR-0008):
+
+- **Primary: the prototyper** — a junior dev, ML engineer, or data scientist
+  running heavy PyTorch/Transformers pipelines in Colab or RunPod. They wrap a
+  pipeline (RAG chatbot, image bounding-box tool) in a few lines and share a
+  working demo the same day, without touching auth, deployment, or JS.
+- **Secondary: the engineering team** — picks up a validated prototype and turns
+  it into a real app for external users (auth, hosting, custom frontend,
+  multi-user state). They are served by the *graduation path*, not by v0 features.
 - **Secondary: general Python developers** building small internal tools who want
   something less rigid than Gradio.
 - **Deferred: agents / machine callers.** No machine-facing control surface in v0.
 
-When the notebook user's needs conflict with general-purpose polish, the notebook
-user wins — Colab/RunPod compatibility is the north star.
+When the prototyper's needs conflict with general-purpose polish, the prototyper
+wins — Colab/RunPod compatibility is the north star.
+
+### User stories
+
+**Prototyper**
+
+- As an ML engineer, I wrap my RAG pipeline in ~30 lines of indah and `launch()`
+  it in Colab, so I can share a working demo URL with my team the same afternoon.
+- As a data scientist, I build an "upload an image, see bounding boxes" tool
+  without writing any JavaScript or setting up a server.
+
+**Engineering team — Composable path**
+
+- As a backend engineer, I mount the prototype's indah app inside our FastAPI
+  service and put our existing OAuth middleware in front of it, so it sits behind
+  our SSO without rewriting the UI (ADR-0008).
+- As a frontend engineer, I replace one auto-generated component with our
+  design-system Svelte component via the registration seam, while the rest of the
+  app keeps working (ADR-0005).
+- As a backend engineer, I point session state at a shared store so the app
+  survives restarts and runs multiple replicas (ADR-0010).
+
+**Engineering team — Eject path**
+
+- As a backend engineer, because the prototyper kept the RAG logic in plain Python
+  functions indah merely called, I lift those functions straight into our own
+  FastAPI endpoints and drop indah (ADR-0009).
+- As a frontend lead, I generate a Svelte project wired to indah's public JSON
+  protocol as a starting point, then evolve it independently (ADR-0008).
 
 ## Scope
 
@@ -62,17 +96,22 @@ user wins — Colab/RunPod compatibility is the north star.
 - A `launch()` helper that detects Colab/RunPod and prints the correct proxy URL.
 - A versioned JSON UI protocol documented as a public contract (ADR-0005).
 
+The **graduation path** (prototype → production) is a v0 *design constraint*, not
+a v0 feature set: v0 keeps the doors open (public protocol, mountable ASGI app,
+auth/state/logic seams) but builds no production machinery. See ADR-0008/0009/0010.
+
 **Out.**
 
 - WebSockets as the primary transport — Colab's proxy does not support them
   (ADR-0002). Optional upgrade only.
-- Auth, multi-tenant hosting, per-user isolation beyond per-session state objects
-  — this is a dev tool behind a trusted proxy in v0.
-- The full hand-written-frontend escape hatch (scaffolding, typed JS client, HMR)
-  — deferred; only the protocol seam is built now (ADR-0005).
+- A built-in auth system — auth is bring-your-own via standard ASGI seams
+  (ADR-0008); indah owns no security-critical subsystem.
+- Multi-tenant hosting and an external (Redis/DB) state backend — the state seam
+  is designed now, but only the in-memory backend ships in v0 (ADR-0010).
+- Eject codegen (scaffolding a standalone frontend project) — enabled by the
+  public protocol but not built until demand appears (ADR-0008).
 - Component marketplace / plugin distribution.
-- Persistent storage / database integration — the user's own code owns durable
-  data.
+- Persistent application/domain storage — the user's own code owns durable data.
 - Any runtime Node/npm/bun dependency.
 
 ## Requirements
@@ -87,6 +126,7 @@ user wins — Colab/RunPod compatibility is the north star.
 | R5 | A starter component set sufficient for a typical AI demo (input → run → streamed output) | Must-have |
 | R6 | The JSON UI protocol is a versioned, documented public contract | Nice-to-have |
 | R7 | Custom components can be registered without forking the framework | Nice-to-have |
+| R8 | A validated prototype can graduate (mount behind auth, custom frontend per-component, shared state) with no rewrite of its domain logic | North-star |
 
 ## Shape
 
@@ -99,6 +139,8 @@ user wins — Colab/RunPod compatibility is the north star.
 | S5 | Svelte shell: pre-compiled SPA bundled as static assets in the wheel; reads UI JSON and applies patches; no virtual DOM | ADR-0004 |
 | S6 | `launch()`: binds a port, detects Colab (`google.colab`) / RunPod (env), prints the proxy URL, and renders inline via iframe when in a notebook | ADR-0001 |
 | S7 | Custom-component registry: a Python-side registration seam maps a user component type to a shell renderer, keying off the public protocol | ADR-0005 |
+| S8 | Session-store seam: the reactive core reads/writes state through a small interface; only the in-memory backend ships in v0, a shared backend is a later drop-in | ADR-0010 |
+| S9 | Graduation seams: indah is a mountable ASGI sub-app, auth is standard ASGI middleware the user supplies, and domain logic stays in plain functions indah calls | ADR-0008, ADR-0009 |
 
 ## Affordances
 
