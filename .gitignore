@@ -19,6 +19,9 @@ htmlcov/
 .env
 .pypirc
 
+# Local Docker Compose override (personal Traefik routing; see the .example)
+docker-compose.override.yml
+
 # OS / editor
 .DS_Store
 *.swp

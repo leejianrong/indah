@@ -1,0 +1,24 @@
+# Copy to docker-compose.override.yml (gitignored; Compose auto-loads it) to route
+# the demo through a machine-wide Traefik proxy at http://indah.localhost/ instead
+# of juggling host ports. Requires that proxy running with an external `proxy`
+# network -- see docs/DEV-DOCKER.md.
+#
+# Nothing here is required: docker-compose.yml works standalone with no override.
+# This only adds the Traefik route on top; the direct host port stays published
+# too, so both paths work at once.
+#
+# No Host-rewrite middleware is needed: indah pushes updates over Server-Sent
+# Events (plain HTTP GET), not a websocket with a strict Host check.
+services:
+  indah:
+    networks:
+      - default
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.indah.rule=Host(`indah.localhost`)
+      - traefik.http.services.indah.loadbalancer.server.port=8000
+
+networks:
+  proxy:
+    external: true

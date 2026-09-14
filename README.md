@@ -86,6 +86,9 @@ Or just run the built-in demo from a clone:
 make demo   # prints a URL; binds the first free port from 8000
 ```
 
+Prefer Docker with a stable `http://indah.localhost/` hostname? See
+[`docs/DEV-DOCKER.md`](docs/DEV-DOCKER.md) (`make demo-docker`).
+
 ## Planning and design
 
 | Doc | What |
