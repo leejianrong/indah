@@ -1,4 +1,4 @@
-"""indah — a Python UI framework for ephemeral cloud notebooks.
+"""indah - a Python UI framework for ephemeral cloud notebooks.
 
 This is an early placeholder release reserving the name on PyPI. The public API
 is not yet stable. See https://github.com/leejianrong/indah for the plan.

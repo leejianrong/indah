@@ -193,10 +193,12 @@ from fastui import FastUI, AnyComponent, prebuilt_html, components as c
 
 app = FastAPI()
 
+
 # 1. The main entry point serves the pre-compiled frontend shell
 @app.get("/{path:path}")
 def html_landing() -> HTMLResponse:
     return HTMLResponse(prebuilt_html(title="FastUI Demo"))
+
 
 # 2. The API endpoint that dictates what the frontend actually draws
 @app.get("/api/", response_model=FastUI, response_model_exclude_none=True)

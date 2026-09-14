@@ -19,6 +19,7 @@ None — the grill round is closed.
 | F3 | Framework for the pre-built JS shell? | DECIDED | Svelte, bundled in the wheel | ADR-0004 |
 | F4 | Hand-written-frontend escape hatch in v0? | DECIDED | Defer tooling; make the JSON protocol a versioned public contract + custom-component seam | ADR-0005 |
 | Q-name | Project name and availability? | DECIDED | "indah"; free on PyPI and npm | ADR-0006 |
+| Q-docs | Documentation tooling and feel? | DECIDED | Zensical site, FastAPI-grade polish; deferred as build until ~Slice 4 | ADR-0007 |
 | Q-user | Primary user and actors? | ASSUMED | AI/ML notebook users first; agents deferred | PLAN §Users |
 | Q-scope | Scope boundary for v0? | ASSUMED | See in/out lists | PLAN §Scope |
 | Q-data | Core data model and identity? | ASSUMED | UI tree of nodes with stable server IDs; named signals; per-session in-memory | PLAN §Shape (S3, S4), ADR-0003 |

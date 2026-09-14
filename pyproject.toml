@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "indah"
 version = "0.0.1"
-description = "A Python UI framework for ephemeral cloud notebooks (Colab, RunPod) — reactive, single-port, no Node required."
+description = "A Python UI framework for ephemeral cloud notebooks (Colab, Runpod). Reactive, single-port, no Node required."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

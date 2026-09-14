@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Fast pre-push gate: mirrors the cheap CI jobs (lint + fast tests).
+# Bypass once with:  git push --no-verify
+set -euo pipefail
+
+echo "pre-push: ruff check + format check + fast tests"
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest -m "unit or integration" -q
+echo "pre-push: ok"
