@@ -5,11 +5,16 @@
 indah is a Python UI framework for ephemeral cloud notebooks (Colab, Runpod):
 reactive, single-port, no Node required at install or runtime.
 
-Status: early development. Slices 1-2.5 are implemented: single-port ASGI app +
-SSE transport (ADR-0002), the reactive core (signals/computeds/effects, ADR-0003)
-driving a component tree (Text, Button, Slider, Column), and a pre-built Svelte
-shell (ADR-0004). Next: async/streaming (V3). Trust the code over any doc where
-they disagree, and fix the doc.
+Status: early development, MVP feature-complete. Slices 1-4 are implemented:
+single-port ASGI app + SSE/POST transport (ADR-0002), the reactive core
+(signals/computeds/effects, ADR-0003), a pre-built Svelte shell (ADR-0004), async
+handlers + LLM token streaming (ADR-0011), the starter component set (Text, Button,
+Slider, TextInput, Select, Image, Plot, DataFrame, StreamText, Column), and a
+`register_component()` seam for custom components (ADR-0012). The JSON protocol is
+documented as a versioned public contract (`docs/protocol.md`, ADR-0005). Next:
+post-MVP direction - per-session state (ADR-0010), the graduation path
+(ADR-0008/0009), a Zensical docs site (ADR-0007) - likely a planning round first.
+Trust the code over any doc where they disagree, and fix the doc.
 
 Layout:
 
@@ -17,10 +22,12 @@ Layout:
   at `src/indah/static/index.html`
 - `frontend/` Svelte source for the shell (build-time only; not shipped, not
   needed to install or run indah)
-- `examples/demo.ipynb` the notebook demo; `docs/DEV-DOCKER.md` the Docker/Traefik flow
+- `examples/demo.ipynb` the notebook demo, `examples/starter_components.py` a
+  ~20-line app; `docs/DEV-DOCKER.md` the Docker/Traefik flow
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
-- `docs/` PLAN, SLICES, QUESTIONS, RELEASING, and `docs/adr/` for decisions
-  (the user-facing docs site will be Zensical, FastAPI-style; see ADR-0007)
+- `docs/` PLAN, SLICES, QUESTIONS, RELEASING, `protocol.md` (the public wire
+  contract), and `docs/adr/` for decisions (the user-facing docs site will be
+  Zensical, FastAPI-style; see ADR-0007)
 - `.github/workflows/` CI and PyPI publish
 
 ## Why

@@ -8,10 +8,10 @@ Colab or Runpod cell. It keeps Streamlit's zero-config, single-port startup, add
 the async performance of a real full-stack app, and ships its frontend pre-built
 so there is no Node, npm, or bun anywhere at install or runtime.
 
-> **Status: early development.** The core works end to end from a clone: the
-> reactive core, the SSE transport, async token streaming, the starter component
-> set, and a custom-component seam. It is not on PyPI yet, so install from source
-> for now (`uv sync --extra dev`, then `make demo`). Start with
+> **Status: early development, MVP feature-complete.** The core works end to end
+> from a clone: the reactive core, the SSE transport, async token streaming, the
+> starter component set, and a custom-component seam. Only a `0.0.x` name
+> placeholder is on PyPI so far, so install from source for now (below). Start with
 > [`docs/PLAN.md`](docs/PLAN.md) for the plan and [`docs/SLICES.md`](docs/SLICES.md)
 > for what is built.
 
@@ -24,7 +24,7 @@ so there is no Node, npm, or bun anywhere at install or runtime.
 | Reflex needs a Node build step that breaks in transient containers | Frontend ships pre-built in the wheel; zero runtime Node ([ADR-0004](docs/adr/0004-svelte-prebuilt-shell.md)) |
 | Colab's proxy does not support WebSockets | SSE + HTTP POST transport that passes the proxy ([ADR-0002](docs/adr/0002-sse-plus-post-transport.md)) |
 
-## How it will work
+## How it works
 
 ```mermaid
 flowchart LR
@@ -49,22 +49,37 @@ proxies of Colab and Runpod without a tunnel or a local JavaScript toolchain.
 
 ## Try it
 
-Launch the built-in demo: two sliders and a label computed from both.
+Run the built-in demo from a clone:
+
+```bash
+git clone https://github.com/leejianrong/indah && cd indah
+uv sync --extra dev
+make demo            # prints a URL; binds the first free port from 8000
+```
+
+The demo streams a mock LLM token by token into a `StreamText`; below it, a `Select`
+switches a live `DataFrame` and a colour picker (a registered custom component)
+two-way binds a signal - all updating over SSE, with no WebSocket and no Node. Only
+the components that depend on a changed value are patched; there is no full-script
+rerun.
+
+Other ways to run it:
+
+```bash
+make demo-notebook   # inline in a local JupyterLab cell
+make demo-docker     # in Docker on an auto-picked free port
+```
+
+Prefer Docker with a stable `http://indah.localhost/` hostname (via a machine-wide
+Traefik proxy)? `make demo-traefik` - see [`docs/DEV-DOCKER.md`](docs/DEV-DOCKER.md).
+
+## Your app
+
+An app is a tree of components bound to reactive signals. Mutate a signal and only
+the components that read it update - no full-script rerun:
 
 ```python
 import indah
-
-indah.launch()  # prints the URL; in Colab/Runpod it embeds the app inline
-```
-
-Drag a slider and the label updates live over SSE, with no WebSocket and no Node.
-Only the components that actually depend on the changed value are patched, with no
-full-script rerun.
-
-Under the hood it uses the reactive core (this is roughly what the built-in demo
-does):
-
-```python
 from indah import Signal, computed, Column, Slider, Text, Session
 
 a, b = Signal(2), Signal(3)
@@ -77,7 +92,10 @@ page = Column(
         Text(total),
     ]
 )
-# indah.launch(indah.create_app(session=Session(page)))
+
+indah.launch(
+    indah.create_app(session=Session(page))
+)  # prints the URL; embeds inline in Colab/Runpod
 ```
 
 The frontend is a pre-built Svelte shell bundled in the wheel; no Node runs at
@@ -118,17 +136,6 @@ picker = indah.custom("colorpicker", value=colour)  # two-way, like a built-in
 
 The pre-built shell renders it from that declarative spec at runtime. The protocol
 is a documented, versioned public contract: see [`docs/protocol.md`](docs/protocol.md).
-
-Or just run the built-in demo from a clone:
-
-```bash
-make demo            # prints a URL; binds the first free port from 8000
-make demo-notebook   # try indah inline in a local JupyterLab notebook
-make demo-docker     # run it in Docker on an auto-picked free port
-```
-
-Prefer Docker with a stable `http://indah.localhost/` hostname (via a machine-wide
-Traefik proxy)? `make demo-traefik` — see [`docs/DEV-DOCKER.md`](docs/DEV-DOCKER.md).
 
 ## Planning and design
 
