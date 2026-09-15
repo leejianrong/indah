@@ -550,6 +550,150 @@ class StreamText(Component):
             self._session.emit_props(self.id, {"text": ""})
 
 
+# -- Layout containers (ADR-0015) --------------------------------------------
+#
+# These arrange existing child nodes, so they need no new protocol capability:
+# the tree still serialises as nodes with ``children`` and their show/active state
+# rides ordinary reactive props merged by the existing ``patch`` op. Layout itself
+# is CSS in the shell driven by these static props (columns, gap, orientation).
+
+
+def _as_signal(value: Any, default: Any, cast: Callable[[Any], Any]) -> Signal:
+    """Return ``value`` if it is a Signal, else wrap a plain value in one.
+
+    Lets ``Tabs``/``Expander`` accept either a caller's Signal (so the app drives
+    the active/open state) or a plain literal (so the container is self-contained
+    and the shell's clicks still round-trip through the reactive graph).
+    """
+    if isinstance(value, Signal):
+        return value
+    return Signal(cast(default if value is None else value))
+
+
+class Row(Component):
+    """A horizontal flex row of children, wrapping onto the next line as needed."""
+
+    type = "row"
+
+    def __init__(
+        self,
+        children: list[Component] | None = None,
+        *,
+        gap: str = "1rem",
+        wrap: bool = True,
+        align: str = "stretch",
+    ) -> None:
+        super().__init__(children)
+        self._gap = gap
+        self._wrap = wrap
+        self._align = align
+
+    def static_props(self) -> dict[str, Any]:
+        return {"gap": self._gap, "wrap": bool(self._wrap), "align": self._align}
+
+
+class Grid(Component):
+    """An N-column grid of children that collapses to one column at phone width."""
+
+    type = "grid"
+
+    def __init__(
+        self,
+        children: list[Component] | None = None,
+        *,
+        columns: int = 2,
+        gap: str = "1rem",
+    ) -> None:
+        super().__init__(children)
+        self._columns = columns
+        self._gap = gap
+
+    def static_props(self) -> dict[str, Any]:
+        return {"columns": int(self._columns), "gap": self._gap}
+
+
+class Tabs(Component):
+    """A tabbed container: one child panel shown at a time (ADR-0015).
+
+    ``labels`` names the tabs (one per child); ``active`` is the index of the shown
+    panel. Pass a ``Signal[int]`` to drive it from Python, or leave it and the
+    container keeps its own; either way a tab click round-trips through the graph
+    and the shell re-renders only the active panel.
+    """
+
+    type = "tabs"
+
+    def __init__(
+        self,
+        children: list[Component] | None = None,
+        *,
+        labels: list[Any],
+        active: Signal[int] | int | None = None,
+    ) -> None:
+        super().__init__(children)
+        self._labels = [str(label) for label in labels]
+        self._active = _as_signal(active, 0, int)
+
+    def static_props(self) -> dict[str, Any]:
+        return {"labels": self._labels}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"active": lambda: int(self._active.value)}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "select" and "index" in payload:
+            self._active.set(int(payload["index"]))
+            return True
+        return False
+
+
+class Sidebar(Component):
+    """A persistent side region plus a main region (ADR-0015).
+
+    The first child renders in the sidebar; the rest render in the main region.
+    On a narrow screen the sidebar stacks above the main region.
+    """
+
+    type = "sidebar"
+
+
+class Expander(Component):
+    """A collapsible section: a labelled header that shows/hides its children.
+
+    ``open`` is a reactive prop -- pass a ``Signal[bool]`` to drive it from Python,
+    or a plain bool for the initial state. Toggling in the UI round-trips through
+    the graph and the shell renders the children only while open.
+    """
+
+    type = "expander"
+
+    def __init__(
+        self,
+        children: list[Component] | None = None,
+        *,
+        label: str = "",
+        open: Signal[bool] | bool = False,
+    ) -> None:
+        super().__init__(children)
+        self._label = label
+        self._open = _as_signal(open, False, bool)
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"open": lambda: bool(self._open.value)}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "toggle":
+            if "value" in payload:
+                self._open.set(bool(payload["value"]))
+            else:
+                self._open.set(not self._open.value)
+            return True
+        return False
+
+
 def walk(root: Component):
     """Yield every component in the tree, pre-order."""
     yield root
