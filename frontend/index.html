@@ -112,6 +112,78 @@
       }
 
       .column { display: flex; flex-direction: column; gap: 1rem; }
+
+      /* Layout containers (ADR-0015). Arrangement only; styled through the tokens.
+         Row/Grid take gap + columns as inline style from static props. */
+      .row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: stretch; }
+      .row > * { flex: 1 1 0; min-width: 0; }
+      .grid { display: grid; gap: 1rem; }
+      .sidebar-layout { display: flex; gap: 1.5rem; align-items: flex-start; }
+      .sidebar-layout > .sidebar-aside { flex: 0 0 min(240px, 34%); }
+      .sidebar-layout > .sidebar-main { flex: 1 1 0; min-width: 0; }
+      /* Collapse multi-column layouts to a single column on a phone. !important
+         beats the inline grid-template-columns set from the columns prop. */
+      @media (max-width: 560px) {
+        .grid { grid-template-columns: 1fr !important; }
+        .sidebar-layout { flex-direction: column; }
+        .sidebar-layout > .sidebar-aside { flex: none; width: 100%; }
+      }
+
+      .tabs { display: flex; flex-direction: column; gap: 0.9rem; }
+      .tablist {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.2rem;
+        border-bottom: 1px solid var(--outline-soft);
+      }
+      .tab {
+        font: inherit;
+        font-weight: 600;
+        color: var(--muted);
+        background: none;
+        border: 0;
+        border-radius: 0;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+        padding: 0.5rem 0.9rem;
+        cursor: pointer;
+        align-self: auto;
+      }
+      .tab:hover { filter: none; color: var(--text); }
+      .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+      .tab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+      .expander {
+        border: 1px solid var(--outline);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .expander-summary {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        font: inherit;
+        font-weight: 600;
+        color: var(--text);
+        background: var(--surface-2);
+        border: 0;
+        border-radius: 0;
+        padding: 0.6rem 0.9rem;
+        cursor: pointer;
+        align-self: auto;
+        text-align: left;
+      }
+      .expander-summary:hover { filter: none; background: var(--surface-3); }
+      .expander-caret {
+        font-size: 0.7rem;
+        color: var(--muted);
+        transition: transform 0.15s ease;
+      }
+      .expander.open .expander-caret { transform: rotate(90deg); }
+      .expander-body { display: flex; flex-direction: column; gap: 1rem; padding: 0.9rem; }
+
       .field { display: flex; flex-direction: column; gap: 0.3rem; }
       .field label, .stream-label {
         font-size: 0.8rem;

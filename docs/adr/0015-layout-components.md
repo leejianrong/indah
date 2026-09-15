@@ -1,6 +1,6 @@
 # ADR-0015: Layout components
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-15
 - Deciders: Jian (owner)
 

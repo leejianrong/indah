@@ -52,6 +52,11 @@ BUILTIN_TYPES = frozenset(
         "radio",
         "multiselect",
         "date",
+        "row",
+        "grid",
+        "tabs",
+        "sidebar",
+        "expander",
     }
 )
 

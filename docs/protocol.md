@@ -92,12 +92,28 @@ UI down: the traceback is logged server-side and an `error` message is pushed.
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label` | `input` `{value}` |
 | `select` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
+| `checkbox` | input | `checked`, `label` | `change` `{value}` |
+| `number` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
+| `radio` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
+| `multiselect` | input | `value:[...]`, `options:[{value,label}]`, `label` | `change` `{value:[...]}` |
+| `date` | input | `value` (ISO `YYYY-MM-DD`), `label` | `change` `{value}` |
 | `image` | display | `src`, `alt` | — |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
+| `row` | container | `gap`, `wrap`, `align` | — |
+| `grid` | container | `columns`, `gap` | — |
+| `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
+| `sidebar` | container | — (first child is the side region, the rest is main) | — |
+| `expander` | container | `label`, `open` | `toggle` `{value?}` |
 
 `Plot` serialises to an `image` node whose `src` is a PNG `data:` URI rendered on
 the Python side, so the shell needs nothing extra to show it.
+
+The layout containers (`row`, `grid`, `tabs`, `sidebar`, `expander`) only arrange
+existing `children`, so they add no protocol capability: show/active/open state
+rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
+render only the active/open region; `textinput`'s `submit` event (Enter) carries no
+payload.
 
 ## Custom components (`_spec`)
 

@@ -36,6 +36,75 @@
       <Self node={child} />
     {/each}
   </div>
+{:else if node.type === "row"}
+  <div
+    class="row"
+    style="gap: {props.gap ?? '1rem'}; flex-wrap: {props.wrap === false
+      ? 'nowrap'
+      : 'wrap'}; align-items: {props.align ?? 'stretch'};"
+  >
+    {#each node.children as child (child.id)}
+      <Self node={child} />
+    {/each}
+  </div>
+{:else if node.type === "grid"}
+  <div
+    class="grid"
+    style="gap: {props.gap ?? '1rem'}; grid-template-columns: repeat({props.columns ??
+      2}, minmax(0, 1fr));"
+  >
+    {#each node.children as child (child.id)}
+      <Self node={child} />
+    {/each}
+  </div>
+{:else if node.type === "sidebar"}
+  <div class="sidebar-layout">
+    {#if node.children.length}
+      <aside class="sidebar-aside"><Self node={node.children[0]} /></aside>
+    {/if}
+    <div class="sidebar-main">
+      {#each node.children.slice(1) as child (child.id)}
+        <Self node={child} />
+      {/each}
+    </div>
+  </div>
+{:else if node.type === "tabs"}
+  <div class="tabs">
+    <div class="tablist" role="tablist">
+      {#each props.labels ?? [] as label, i}
+        <button
+          class="tab"
+          class:active={(props.active ?? 0) === i}
+          role="tab"
+          aria-selected={(props.active ?? 0) === i}
+          onclick={() => postEvent(node.id, "select", { index: i })}>{label}</button
+        >
+      {/each}
+    </div>
+    {#each node.children as child, i (child.id)}
+      {#if (props.active ?? 0) === i}
+        <div class="tabpanel" role="tabpanel"><Self node={child} /></div>
+      {/if}
+    {/each}
+  </div>
+{:else if node.type === "expander"}
+  <div class="expander" class:open={props.open}>
+    <button
+      class="expander-summary"
+      aria-expanded={props.open ? "true" : "false"}
+      onclick={() => postEvent(node.id, "toggle")}
+    >
+      <span class="expander-caret" aria-hidden="true">▶</span>
+      <span>{props.label ?? ""}</span>
+    </button>
+    {#if props.open}
+      <div class="expander-body">
+        {#each node.children as child (child.id)}
+          <Self node={child} />
+        {/each}
+      </div>
+    {/if}
+  </div>
 {:else if node.type === "text"}
   <div class="text">{props.text ?? ""}</div>
 {:else if node.type === "button"}

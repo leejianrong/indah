@@ -6,13 +6,18 @@ from indah.components import (
     Column,
     DataFrame,
     Date,
+    Expander,
+    Grid,
     Image,
     MultiSelect,
     Number,
     Plot,
     Radio,
+    Row,
     Select,
+    Sidebar,
     Slider,
+    Tabs,
     Text,
     TextInput,
     walk,
@@ -273,3 +278,107 @@ def test_date_round_trips_iso_string():
     assert d.to_json()["props"] == {"label": "when", "value": ""}
     assert d.handle("change", {"value": "2026-09-15"}) is True
     assert v.peek() == "2026-09-15"
+
+
+# -- Slice A layout containers (ADR-0015) ------------------------------------
+
+
+@pytest.mark.unit
+def test_row_serialises_static_layout_props_and_keeps_children():
+    a, b = Text("a"), Text("b")
+    row = Row(children=[a, b], gap="0.5rem", wrap=False, align="center")
+    row.id = "n0"
+    node = row.to_json()
+    assert node["type"] == "row"
+    assert node["props"] == {"gap": "0.5rem", "wrap": False, "align": "center"}
+    assert [c["props"]["text"] for c in node["children"]] == ["a", "b"]
+
+
+@pytest.mark.unit
+def test_grid_serialises_columns_and_gap():
+    grid = Grid(children=[Text("a")], columns=3, gap="2rem")
+    grid.id = "n0"
+    assert grid.to_json()["props"] == {"columns": 3, "gap": "2rem"}
+
+
+@pytest.mark.unit
+def test_row_and_grid_have_no_handler():
+    # Pure layout: arrangement only, no events to handle.
+    assert Row().handle("click", {}) is False
+    assert Grid().handle("select", {"index": 0}) is False
+
+
+@pytest.mark.unit
+def test_sidebar_is_a_plain_container():
+    # First child is the aside, the rest the main region -- a rendering concern;
+    # on the wire it is just a node with children (no split in the protocol).
+    aside, main = Column(), Column()
+    sb = Sidebar(children=[aside, main])
+    sb.id = "n0"
+    node = sb.to_json()
+    assert node["type"] == "sidebar"
+    assert len(node["children"]) == 2
+
+
+@pytest.mark.unit
+def test_tabs_serialise_labels_and_default_active_zero():
+    tabs = Tabs(children=[Text("one"), Text("two")], labels=["One", "Two"])
+    tabs.id = "n0"
+    props = tabs.to_json()["props"]
+    assert props == {"labels": ["One", "Two"], "active": 0}
+
+
+@pytest.mark.unit
+def test_tabs_select_event_sets_active_index():
+    tabs = Tabs(children=[Text("one"), Text("two")], labels=["One", "Two"])
+    assert tabs.handle("select", {"index": 1}) is True
+    assert tabs.to_json()["props"]["active"] == 1
+    # An unrelated event is unhandled.
+    assert tabs.handle("click", {}) is False
+
+
+@pytest.mark.unit
+def test_tabs_active_can_be_driven_by_a_caller_signal():
+    active = Signal(0)
+    tabs = Tabs(children=[Text("one"), Text("two")], labels=["One", "Two"], active=active)
+    active.set(1)
+    assert tabs.to_json()["props"]["active"] == 1
+    # A UI select writes back into the same signal.
+    assert tabs.handle("select", {"index": 0}) is True
+    assert active.peek() == 0
+
+
+@pytest.mark.unit
+def test_expander_serialises_label_and_open_state():
+    exp = Expander(children=[Text("detail")], label="More", open=True)
+    exp.id = "n0"
+    assert exp.to_json()["props"] == {"label": "More", "open": True}
+
+
+@pytest.mark.unit
+def test_expander_toggle_flips_open_and_can_be_set_explicitly():
+    exp = Expander(children=[Text("detail")], label="More")
+    assert exp.to_json()["props"]["open"] is False
+    assert exp.handle("toggle", {}) is True
+    assert exp.to_json()["props"]["open"] is True
+    assert exp.handle("toggle", {"value": False}) is True
+    assert exp.to_json()["props"]["open"] is False
+    assert exp.handle("click", {}) is False
+
+
+@pytest.mark.unit
+def test_expander_open_can_be_driven_by_a_caller_signal():
+    is_open = Signal(False)
+    exp = Expander(children=[Text("detail")], label="More", open=is_open)
+    is_open.set(True)
+    assert exp.to_json()["props"]["open"] is True
+    assert exp.handle("toggle", {}) is True
+    assert is_open.peek() is False
+
+
+@pytest.mark.unit
+def test_containers_walk_preorder_over_nested_children():
+    leaf = Text("x")
+    inner = Column(children=[leaf])
+    root = Tabs(children=[inner], labels=["T"])
+    assert list(walk(root)) == [root, inner, leaf]
