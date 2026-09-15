@@ -301,3 +301,128 @@ for the clean-env check.
   empty type, and a malformed spec. The pre-built shell ships in the package and
   runtime deps stay Python-only. Select/Image/Plot/DataFrame serialise and
   round-trip their values.
+
+---
+
+# Post-MVP slices (Milestone 1)
+
+Planned increments from the 2026-09-15 planning round (see `docs/PLAN.md` §Post-MVP
+roadmap). Each still ends in something demonstrable. Foundation first (Slice 0, A,
+B, C), then the two specialisations (D, E). None bumps `protocol_version` except
+where noted.
+
+## Slice 0: Design system & identity
+
+**Delivers:** the token substrate every later component is drawn to; indah's visual
+identity (ADR-0014).
+
+**Build plan**
+
+1. A design-token layer in the shell (CSS custom properties): colour roles, type
+   scale, shape, elevation, state layers — Material 3's role architecture, seeded to
+   the "Studio" identity, wired so a theme is a token-set swap (no rebuild).
+2. Restyle the existing components (`frontend/`) to the tokens; drop the indigo look.
+3. Add the "Bunga" mark + "indah" wordmark to the shell header; wire the favicon.
+   Assets from `assets/brand/`.
+4. Point the Zensical docs site (`website/`) at the Studio palette and the
+   Bunga logo/favicon, replacing the indigo defaults (ADR-0007).
+5. Rebuild the shell (`make frontend`), commit the regenerated
+   `src/indah/static/index.html`.
+
+**Demo:** `make demo` renders the existing app in the Studio theme with the Bunga
+mark in the header; the docs site (`make docs-serve`) shares the identity.
+
+**Test sketch:** the built shell still ships in the wheel and passes the stale-asset
+check; the browser e2e still renders and patches (styling change, no behaviour
+change); no Node at install/runtime.
+
+## Slice A: Layout & the input set
+
+**Delivers:** arrangement for both halves; the rest of the common inputs (ADR-0015).
+
+**Build plan**
+
+1. Container components: `Row`, `Grid`, `Tabs`, `Sidebar`, `Expander` — arrange
+   existing children; active/expanded state rides reactive props (no protocol
+   change).
+2. Complete the basic inputs: `Checkbox`, `Number`, `Radio`, `MultiSelect`, `Date`
+   (each mirrors `Select`'s two-way pattern).
+3. Markdown/code rendering in `Text` (sanitised); progress/spinner; Enter-to-submit
+   on `TextInput` (KAN-1399).
+
+**Demo:** a multi-panel form/dashboard — tabs + sidebar, inputs left, output right —
+in one app.
+
+**Test sketch:** each container renders/nests and collapses responsively; each new
+input round-trips its value; Tabs shows only the active child; markdown renders and
+cannot inject script.
+
+## Slice B: Data-driven list
+
+**Delivers:** chat, galleries, logs (ADR-0016).
+
+**Build plan**
+
+1. `List`/`Repeat` driven by a `Signal[list]`, rendered via an item template; add/
+   remove/reorder is a prop change over the existing `patch` op (no protocol bump).
+2. Specialisations `Chat` (role bubbles, auto-scroll) and `Gallery` (image grid).
+3. Rebuild the chatbot example on `Chat` (KAN-1398), replacing the single-StreamText
+   transcript.
+
+**Demo:** the chatbot with real message bubbles; a gallery of generated images.
+
+**Test sketch:** appending/removing/reordering items patches exactly the list;
+snapshot on resume carries the full list; Chat bubbles render per role.
+
+## Slice C: Per-session state
+
+**Delivers:** honest multi-user; the prerequisite for per-user uploads (ADR-0010,
+EPIC-205).
+
+**Build plan**
+
+1. Implement the ADR-0010 session-store seam so each viewer gets isolated
+   signals/session instead of the single shared session (session.py note).
+2. Keep the in-memory backend; the seam stays open for an external store later.
+
+**Demo:** two browser tabs drive independent state on the same app.
+
+**Test sketch:** two sessions do not see each other's signal writes; a handler in one
+session emits patches only to that session's stream.
+
+## Slice D: File/media upload
+
+**Delivers:** the classic upload → run → show demo (ADR-0017). Depends on Slice C.
+
+**Build plan**
+
+1. A multipart upload endpoint separate from `POST /api/event`; an `Upload`
+   component (image/audio/file). Bytes go to a plain handler (ADR-0009); results
+   return over SSE.
+2. Download / file-out (a served blob URL).
+3. Document the endpoint in `docs/protocol.md` (additive; confirm whether
+   `protocol_version` moves — expected not, it is a new route not an SSE change).
+
+**Demo:** upload an image → run a classifier (mock or real) → show the result.
+
+**Test sketch:** an upload reaches the handler and its result patches the UI; size/
+type limits enforced; a user's upload is isolated to their session (rides Slice C).
+
+## Slice E: Hybrid charting
+
+**Delivers:** the data-viz half (ADR-0018). Rides after the transport pad fix
+(KAN-1395).
+
+**Build plan**
+
+1. Keep server-PNG `Plot` for static; add one bundled client chart component
+   (recommended uPlot) built into the shell; data/encoding ride reactive props;
+   streaming points use the `append` op.
+2. Land the per-frame proxy-pad fix (KAN-1395) first — streaming points amplify it.
+
+**Demo:** a live-updating line chart (streaming points) beside a static Matplotlib
+plot; a heatmap.
+
+**Test sketch:** the chart renders from props and updates on patch; streaming points
+append at O(point); static Plot still rasterises unchanged; wheel has no Node/Python
+chart dep (build-time only).
