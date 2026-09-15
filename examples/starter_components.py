@@ -28,7 +28,8 @@ name = indah.Signal("Alice")
 dataset = indah.Signal("Squares")
 accent = indah.Signal("#5b5bd6")
 
-app = indah.Column(
+app = indah.Card(
+    title="Starter components",
     children=[
         indah.Text(lambda: f"Hello, {name.value}!"),
         indah.TextInput(name, label="Your name"),
@@ -36,7 +37,7 @@ app = indah.Column(
         indah.DataFrame(lambda: DATASETS[dataset.value], label="Data"),
         indah.custom("colorpicker", value=accent),
         indah.Text(lambda: f"Accent colour: {accent.value}"),
-    ]
+    ],
 )
 
 if __name__ == "__main__":

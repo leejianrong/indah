@@ -39,6 +39,7 @@ PROTOCOL_VERSION = 1
 BUILTIN_TYPES = frozenset(
     {
         "column",
+        "card",
         "text",
         "button",
         "slider",

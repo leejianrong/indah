@@ -2,6 +2,7 @@ import pytest
 
 from indah.components import (
     Button,
+    Card,
     Checkbox,
     Column,
     DataFrame,
@@ -68,6 +69,26 @@ def test_button_click_calls_handler():
     b = Button("go", on_click=lambda: calls.append(1))
     assert b.handle("click", {}) is True
     assert calls == [1]
+
+
+@pytest.mark.unit
+def test_button_variant_only_serialises_when_not_default():
+    plain = Button("go")
+    plain.id = "n0"
+    assert plain.to_json()["props"] == {"label": "go"}  # no variant on a filled button
+    tonal = Button("go", variant="tonal")
+    tonal.id = "n1"
+    assert tonal.to_json()["props"] == {"variant": "tonal", "label": "go"}
+
+
+@pytest.mark.unit
+def test_card_serialises_title_and_keeps_children():
+    card = Card(children=[Text("a"), Text("b")], title="Panel")
+    card.id = "n0"
+    node = card.to_json()
+    assert node["type"] == "card"
+    assert node["props"] == {"title": "Panel"}
+    assert [c["props"]["text"] for c in node["children"]] == ["a", "b"]
 
 
 @pytest.mark.unit

@@ -47,6 +47,13 @@
       <Self node={child} />
     {/each}
   </div>
+{:else if node.type === "card"}
+  <section class="card">
+    {#if props.title}<h3 class="card-title">{props.title}</h3>{/if}
+    {#each node.children as child (child.id)}
+      <Self node={child} />
+    {/each}
+  </section>
 {:else if node.type === "row"}
   <div
     class="row"
@@ -190,7 +197,11 @@
     </div>
   {/if}
 {:else if node.type === "button"}
-  <button onclick={() => postEvent(node.id, "click")}>{props.label ?? ""}</button>
+  <button
+    class:tonal={props.variant === "tonal"}
+    class:ghost={props.variant === "ghost"}
+    onclick={() => postEvent(node.id, "click")}>{props.label ?? ""}</button
+  >
 {:else if node.type === "textinput"}
   <div class="field">
     {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}

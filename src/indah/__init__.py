@@ -12,6 +12,7 @@ See https://github.com/leejianrong/indah for the plan.
 from .app import build_demo_session, create_app, mock_llm
 from .components import (
     Button,
+    Card,
     Chat,
     Checkbox,
     Column,
@@ -65,6 +66,7 @@ __all__ = [
     # components
     "Component",
     "Column",
+    "Card",
     "Text",
     "Button",
     "Slider",

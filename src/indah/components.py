@@ -76,6 +76,24 @@ class Column(Component):
     type = "column"
 
 
+class Card(Component):
+    """A surface panel: a titled card that floats on the page ground (ADR-0014).
+
+    The building block of the "panels on warm porcelain" Studio layout -- wrap a
+    region's children in a ``Card`` to give it a surface, radius, and soft shadow.
+    ``title`` renders a small uppercase panel heading.
+    """
+
+    type = "card"
+
+    def __init__(self, children: list[Component] | None = None, *, title: str = "") -> None:
+        super().__init__(children)
+        self._title = title
+
+    def static_props(self) -> dict[str, Any]:
+        return {"title": self._title}
+
+
 class Text(Component):
     """A text display bound to a source.
 
@@ -102,12 +120,31 @@ class Text(Component):
 
 
 class Button(Component):
+    """A clickable button.
+
+    ``variant`` picks the Studio treatment: ``"filled"`` (default, the magenta
+    primary), ``"tonal"`` (the teal secondary container -- a softer secondary
+    action), or ``"ghost"`` (outline only). It is a static styling prop; the
+    click behaviour is identical.
+    """
+
     type = "button"
 
-    def __init__(self, label: Source, on_click: Callable[[], Any] | None = None) -> None:
+    def __init__(
+        self,
+        label: Source,
+        on_click: Callable[[], Any] | None = None,
+        *,
+        variant: str = "filled",
+    ) -> None:
         super().__init__()
         self._label = label
         self._on_click = on_click
+        self._variant = variant
+
+    def static_props(self) -> dict[str, Any]:
+        # Only emit a non-default variant, so a plain Button stays minimal on the wire.
+        return {"variant": self._variant} if self._variant != "filled" else {}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"label": lambda: str(_read(self._label))}
