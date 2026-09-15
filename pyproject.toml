@@ -43,6 +43,12 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.6",
 ]
+# The browser layer of the e2e suite (marked `e2e`). Kept out of `dev`/the fast
+# gate so `uv sync --extra dev` stays light and Node/browser-free; CI installs it
+# only for the dedicated browser-e2e job (which also runs `playwright install`).
+e2e = [
+    "playwright>=1.40",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/indah"]
