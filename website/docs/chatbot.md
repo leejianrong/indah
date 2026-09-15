@@ -28,7 +28,7 @@ indah is pure-Python to install and run. `transformers`, `accelerate`, and
 Colab already ships `torch`.
 
 ```bash
-pip install --pre indah transformers accelerate
+pip install indah transformers accelerate
 ```
 
 ## The model layer (no indah imports)
