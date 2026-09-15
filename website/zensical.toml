@@ -9,6 +9,8 @@ repo_url = "https://github.com/leejianrong/indah"
 repo_name = "leejianrong/indah"
 edit_uri = "edit/main/website/docs/"
 
+extra_css = ["stylesheets/extra.css"]
+
 nav = [
   { "Home" = "index.md" },
   { "Quickstart" = "quickstart.md" },
@@ -20,6 +22,8 @@ nav = [
 
 [project.theme]
 language = "en"
+logo = "assets/logo.svg"
+favicon = "assets/favicon.svg"
 features = [
   "announce.dismiss",
   "content.code.annotate",
@@ -41,24 +45,24 @@ features = [
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme)"
-primary = "indigo"
-accent = "indigo"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun-moon"
 toggle.name = "Switch to light mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
 scheme = "default"
-primary = "indigo"
-accent = "indigo"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
-primary = "indigo"
-accent = "indigo"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to system preference"
 
