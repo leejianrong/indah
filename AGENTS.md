@@ -23,7 +23,9 @@ Layout:
 - `frontend/` Svelte source for the shell (build-time only; not shipped, not
   needed to install or run indah)
 - `examples/demo.ipynb` the notebook demo, `examples/starter_components.py` a
-  ~20-line app; `docs/DEV-DOCKER.md` the Docker/Traefik flow
+  ~20-line app, `examples/chatbot.py` + `examples/chatbot_colab.ipynb` the
+  flagship "real LLM in Colab" chatbot (transformers is the user's dep, not
+  indah's); `docs/DEV-DOCKER.md` the Docker/Traefik flow
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
 - `docs/` PLAN, SLICES, QUESTIONS, RELEASING, `protocol.md` (the public wire
   contract), and `docs/adr/` for decisions (engineering docs, not the published site)

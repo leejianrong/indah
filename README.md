@@ -137,6 +137,18 @@ picker = indah.custom("colorpicker", value=colour)  # two-way, like a built-in
 The pre-built shell renders it from that declarative spec at runtime. The protocol
 is a documented, versioned public contract: see [`docs/protocol.md`](docs/protocol.md).
 
+## Examples
+
+| Example | What |
+|---------|------|
+| [`examples/chatbot_colab.ipynb`](examples/chatbot_colab.ipynb) | A streaming LLM chatbot, end to end in one Colab runtime: a small transformers model streaming tokens into an indah page |
+| [`examples/chatbot.py`](examples/chatbot.py) | The same chatbot as a script, with a `--mock` mode that runs with no model or GPU |
+| [`examples/starter_components.py`](examples/starter_components.py) | A ~20-line tour of the starter component set |
+| [`examples/demo.ipynb`](examples/demo.ipynb) | The built-in demo (async streaming + starter components) inline in a notebook |
+
+The chatbot is walked through step by step in the docs:
+[Build a chatbot](https://leejianrong.github.io/indah/chatbot/).
+
 ## Planning and design
 
 | Doc | What |

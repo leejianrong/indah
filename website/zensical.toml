@@ -12,6 +12,7 @@ edit_uri = "edit/main/website/docs/"
 nav = [
   { "Home" = "index.md" },
   { "Quickstart" = "quickstart.md" },
+  { "Build a chatbot" = "chatbot.md" },
   { "Components" = "components.md" },
   { "Custom components" = "custom-components.md" },
   { "Protocol" = "protocol.md" },
