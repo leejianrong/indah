@@ -279,3 +279,60 @@ def test_data_driven_list_chat_and_gallery_grow_on_a_signal_change():
                 browser.close()
     finally:
         handle.stop()
+
+
+def _session_counter_app():
+    """A per-viewer counter over a session_factory, so each tab gets its own signal.
+    This is the shape of examples/session_state.py, trimmed to one counter."""
+    from indah import Button, Column, Session, Signal, Text, create_app
+
+    def factory():
+        n = Signal(0)
+        root = Column(
+            children=[
+                Button("+1", on_click=lambda: n.set(n.value + 1)),
+                Text(lambda: f"count = {n.value}"),
+            ]
+        )
+        return Session(root)
+
+    return create_app(session_factory=factory)
+
+
+@pytest.mark.e2e
+def test_two_tabs_drive_independent_session_state():
+    """Two browser tabs on the same app hold independent state (ADR-0010, KAN-1418).
+
+    Each tab mints its own per-tab session id (sessionStorage), so the server gives
+    it an isolated session: clicking +1 in one tab never moves the other's counter.
+    """
+    handle = launch(_session_counter_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            context = browser.new_context()
+            tab1 = context.new_page()
+            tab2 = context.new_page()
+            try:
+                tab1.goto(handle.url, wait_until="domcontentloaded")
+                tab2.goto(handle.url, wait_until="domcontentloaded")
+
+                # Both start isolated at zero.
+                expect(tab1.locator("div.text", has_text="count = 0")).to_be_visible()
+                expect(tab2.locator("div.text", has_text="count = 0")).to_be_visible()
+
+                # Drive them differently: tab1 twice, tab2 once.
+                tab1.locator("button", has_text="+1").click()
+                tab1.locator("button", has_text="+1").click()
+                tab2.locator("button", has_text="+1").click()
+
+                # Each tab reflects only its own clicks - no cross-talk.
+                expect(tab1.locator("div.text", has_text="count = 2")).to_be_visible()
+                expect(tab2.locator("div.text", has_text="count = 1")).to_be_visible()
+
+                # And a tab's own view is stable: tab1 is still 2, not tab2's 1.
+                expect(tab1.locator("div.text", has_text="count = 1")).to_have_count(0)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
