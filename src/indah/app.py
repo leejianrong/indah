@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import urllib.parse
 from collections.abc import AsyncIterator
+from datetime import datetime
 from importlib.resources import files
 from typing import Any
 
@@ -25,17 +28,34 @@ from starlette.routing import Route
 
 from .components import (
     Button,
+    Chat,
+    Checkbox,
     Column,
     DataFrame,
+    Date,
+    Expander,
+    Gallery,
+    Grid,
+    Image,
+    List,
+    MultiSelect,
+    Number,
+    Plot,
+    Progress,
+    Radio,
+    Row,
     Select,
+    Sidebar,
     Slider,
+    Spinner,
     StreamText,
+    Tabs,
     Text,
     TextInput,
 )
 from .custom import custom, register_component
 from .protocol import EventIn, init_message, patch_message, ping_message
-from .reactive import Signal, computed
+from .reactive import Signal
 from .session import Session
 from .transport import Hub, Item
 
@@ -83,12 +103,54 @@ async def mock_llm(prompt: str) -> AsyncIterator[str]:
         yield word + " "
 
 
-# A couple of tiny datasets the demo's Select switches between, to show a
-# DataFrame re-rendering reactively.
-_DATASETS: dict[str, dict[str, Any]] = {
-    "squares": {"columns": ["n", "n^2"], "rows": [[n, n * n] for n in range(1, 6)]},
-    "primes": {"columns": ["i", "prime"], "rows": [[1, 2], [2, 3], [3, 5], [4, 7], [5, 11]]},
+# The demo generates its "images" as inline SVG data URIs, so the showcase needs no
+# image files, no network, and no extra dependency -- it runs on indah alone.
+_STYLE_PALETTES: dict[str, list[str]] = {
+    "Vivid": ["#b5296b", "#2e6d62", "#e0701a", "#3457d5", "#c0362c"],
+    "Muted": ["#8a6d84", "#6e8b84", "#a98a6b", "#6b7a9a", "#7a9a6b"],
+    "Mono": ["#241c22", "#4a3d48", "#6e6169", "#a9969f", "#d8ccd3"],
 }
+
+
+def _svg_data_uri(svg: str) -> str:
+    return "data:image/svg+xml," + urllib.parse.quote(svg, safe="")
+
+
+def _solid(color: str) -> str:
+    """A rounded solid-colour swatch (the live accent preview)."""
+    return _svg_data_uri(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'>"
+        f"<rect width='120' height='120' rx='16' fill='{color}'/></svg>"
+    )
+
+
+def _swatch(index: int, style: str) -> dict[str, str]:
+    """A numbered colour tile for the gallery, coloured by the chosen style."""
+    palette = _STYLE_PALETTES.get(style, _STYLE_PALETTES["Vivid"])
+    color = palette[index % len(palette)]
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'>"
+        f"<rect width='200' height='200' fill='{color}'/>"
+        "<text x='100' y='120' font-size='64' fill='white' fill-opacity='0.9' "
+        f"text-anchor='middle' font-family='sans-serif'>{index + 1}</text></svg>"
+    )
+    return {"src": _svg_data_uri(svg), "caption": f"{style} #{index + 1}"}
+
+
+def _svg_chart(temperature: float) -> str:
+    """A tiny bar sparkline whose bars scale with the temperature slider."""
+    scale = 0.4 + float(temperature) / 3
+    bars = []
+    for i in range(9):
+        height = int((14 + 46 * (0.5 + 0.5 * math.sin(i * 0.8))) * scale)
+        bars.append(
+            f"<rect x='{8 + i * 22}' y='{86 - height}' width='14' height='{height}' "
+            "rx='3' fill='#b5296b'/>"
+        )
+    return _svg_data_uri(
+        f"<svg xmlns='http://www.w3.org/2000/svg' width='210' height='90'>{''.join(bars)}</svg>"
+    )
+
 
 # One worked custom component (ADR-0012): a native colour picker the shell renders
 # from its declarative spec, with no shell rebuild. Registered once at import.
@@ -103,51 +165,227 @@ register_component(
 )
 
 
+def _preview_chart(temperature: Signal[float]) -> Any:
+    """A live chart of the temperature. A real Matplotlib ``Plot`` when matplotlib
+    is installed (exercising that component), else an inline-SVG ``Image`` so the
+    demo still runs on indah alone -- both render through the shell's <img>."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        from matplotlib.figure import Figure
+
+        def figure():
+            fig = Figure(figsize=(3, 1.3))
+            ax = fig.add_subplot(111)
+            xs = [i * 0.4 for i in range(20)]
+            ax.plot(xs, [math.sin(x) * (0.4 + temperature.value / 3) for x in xs], color="#b5296b")
+            ax.set_axis_off()
+            return fig
+
+        return Plot(figure, alt="temperature chart")
+    except Exception:
+        return Image(lambda: _svg_chart(temperature.value), alt="temperature chart")
+
+
 def build_demo_session() -> Session:
-    """The built-in demo: async streaming plus the V4 starter + custom components.
+    """The built-in demo (``make demo``): "indah Studio", a mock prompt-to-content
+    workbench that brings every component together in one page.
 
-    Clicking Generate runs an async handler that streams tokens into the output
-    while the rest of the page stays fully responsive -- proving async work does not
-    freeze the UI (R3). Below it, a Select switches a reactive DataFrame, and a
-    registered colour picker (a custom component, ADR-0012) two-way binds a signal.
+    A control panel on the left (the full input set + a custom colour picker) feeds
+    a tabbed workspace on the right. One **Generate** runs an async handler that, in
+    a single non-blocking pass, streams a reply into **Chat** bubbles, renders a
+    **Gallery** of colour tiles while driving the **Progress** bar and **Spinner**,
+    and updates the **Dashboard** (a DataFrame run history, a templated activity
+    List, a streaming console, and Markdown settings) -- proving async work never
+    freezes the UI (R3). Layout uses Sidebar/Tabs/Grid/Row/Expander (ADR-0015);
+    the lists are data-driven over ``Signal[list]`` (ADR-0016).
     """
-    prompt: Signal[str] = Signal("")
-    stream = StreamText(label="Response")
+    # -- inputs (the left control panel) --
+    prompt: Signal[str] = Signal("a serene mountain lake at dawn")
+    model: Signal[str] = Signal("indah-mock-mini")
+    temperature: Signal[float] = Signal(0.7)
+    count: Signal[int] = Signal(3)
+    style: Signal[str] = Signal("Vivid")
+    tags: Signal[list] = Signal(["landscape"])
+    include_notes: Signal[bool] = Signal(True)
+    when: Signal[str] = Signal(datetime.now().strftime("%Y-%m-%d"))
+    accent: Signal[str] = Signal("#b5296b")
 
-    async def on_generate() -> None:
-        stream.reset()
-        async for token in mock_llm(prompt.value):
-            stream.feed(token)
+    # -- output state (data-driven, ADR-0016) --
+    busy: Signal[bool] = Signal(False)
+    progress: Signal[float] = Signal(0.0)
+    messages: Signal[list] = Signal([])
+    pending: Signal[str] = Signal("")
+    images: Signal[list] = Signal([])
+    activity: Signal[list] = Signal([])
+    history: Signal[list] = Signal([])
+    runs: Signal[int] = Signal(0)
+    console = StreamText(label="Run console")
 
-    dataset: Signal[str] = Signal("squares")
-    table = computed(lambda: _DATASETS[dataset.value])
+    def log(text: str) -> None:
+        stamp = datetime.now().strftime("%H:%M:%S")
+        activity.set([{"time": stamp, "text": text}] + activity.value)
 
-    accent: Signal[str] = Signal("#5b5bd6")
+    async def generate() -> None:
+        if busy.value:
+            return
+        question = prompt.value.strip() or "something interesting"
+        busy.set(True)
+        progress.set(0.0)
+        console.reset()
+        console.feed(f"> run #{runs.value + 1} on {model.value}\n")
 
-    a: Signal[float] = Signal(3)
-    doubled = computed(
-        lambda: f"the slider stays live during streaming: 2 x {a.value} = {2 * a.value}"
+        # 1) Chat: the user's turn, then a streamed assistant reply into a live bubble.
+        messages.set(messages.value + [{"role": "user", "content": question}])
+        pending.set("")
+        parts: list[str] = []
+        async for token in mock_llm(question):
+            pending.set(pending.value + token)
+            parts.append(token)
+        messages.set(messages.value + [{"role": "assistant", "content": "".join(parts)}])
+        pending.set("")
+        console.feed("> reply streamed into bubbles\n")
+
+        # 2) Gallery: render `count` tiles, driving the progress bar as it goes.
+        n = max(1, int(count.value))
+        for i in range(n):
+            await asyncio.sleep(0.18)
+            images.set(images.value + [_swatch(len(images.value), style.value)])
+            progress.set((i + 1) / n)
+            console.feed(f"> rendered tile {i + 1}/{n}\n")
+
+        # 3) Dashboard: append to the run history and the activity log.
+        runs.set(runs.value + 1)
+        history.set(
+            history.value
+            + [
+                {
+                    "run": runs.value,
+                    "prompt": question,
+                    "model": model.value,
+                    "style": style.value,
+                    "images": n,
+                }
+            ]
+        )
+        log(f"Generated {n} {style.value.lower()} tiles for “{question}”")
+        if include_notes.value:
+            console.feed("> notes attached\n")
+        busy.set(False)
+
+    def clear() -> None:
+        messages.set([])
+        pending.set("")
+        images.set([])
+        history.set([])
+        runs.set(0)
+        progress.set(0.0)
+        console.reset()
+        log("Cleared the workspace")
+
+    def settings_md() -> str:
+        return (
+            "### Settings\n\n"
+            f"- **model** `{model.value}`\n"
+            f"- **temperature** `{temperature.value}`\n"
+            f"- **images** `{count.value}`\n"
+            f"- **style** `{style.value}`\n"
+            f"- **tags** `{', '.join(tags.value) or '-'}`\n"
+            f"- **notes** `{include_notes.value}`\n"
+            f"- **schedule** `{when.value}`\n"
+            f"- **accent** `{accent.value}`"
+        )
+
+    intro = Text(
+        "# indah Studio\n\n"
+        "A mock prompt-to-content workbench that brings **every** indah component "
+        "into one page. Type a prompt and hit **Generate** -- one click streams a "
+        "chat reply, renders a gallery, and fills the dashboard, all without "
+        "freezing the page.",
+        markdown=True,
     )
 
-    root = Column(
+    controls = Column(
         children=[
-            Text("indah: starter components + async streaming"),
-            TextInput(prompt, placeholder="Ask the mock LLM something...", label="Prompt"),
-            Button("Generate", on_click=on_generate),
-            stream,
-            Select(
-                dataset,
-                options=[("squares", "Squares"), ("primes", "Primes")],
-                label="Dataset",
+            TextInput(
+                prompt, label="Prompt", placeholder="Describe something...", on_submit=generate
             ),
-            DataFrame(table, label="Data"),
-            custom("colorpicker", value=accent),  # a worked custom component
-            Text(lambda: f"accent = {accent.value}"),
-            Slider(a, min=0, max=10, step=1, label="a"),
-            Text(doubled),
+            Select(model, options=["indah-mock-mini", "indah-mock-pro"], label="Model"),
+            Slider(temperature, min=0, max=2, step=0.1, label="Temperature"),
+            Text(lambda: f"temperature = {temperature.value}"),
+            Number(count, min=1, max=6, step=1, label="Images to render"),
+            Radio(style, options=["Vivid", "Muted", "Mono"], label="Style"),
+            MultiSelect(tags, options=["landscape", "portrait", "abstract", "retro"], label="Tags"),
+            Checkbox(include_notes, label="Attach notes"),
+            Date(when, label="Schedule"),
+            Row(
+                gap="0.75rem",
+                children=[
+                    custom("colorpicker", value=accent),
+                    Image(lambda: _solid(accent.value), alt="accent preview"),
+                ],
+            ),
+            Row(
+                children=[
+                    Button("Generate", on_click=generate),
+                    Button("Clear", on_click=clear),
+                ]
+            ),
+            Spinner(active=busy, label="Generating..."),
+            Progress(progress, label="Progress"),
         ]
     )
-    return Session(root)
+
+    dashboard = Column(
+        children=[
+            Grid(
+                columns=2,
+                children=[
+                    Column(children=[Text("Runs"), Text(lambda: str(runs.value))]),
+                    Column(children=[Text("Tiles"), Text(lambda: str(len(images.value)))]),
+                ],
+            ),
+            _preview_chart(temperature),
+            DataFrame(
+                lambda: (
+                    history.value
+                    or {"columns": ["run", "prompt", "model", "style", "images"], "rows": []}
+                ),
+                label="Run history",
+            ),
+            List(
+                activity,
+                empty="No activity yet -- hit Generate.",
+                item={
+                    "tag": "div",
+                    "class": "log-line",
+                    "children": [
+                        {"tag": "code", "text": "time"},
+                        {"tag": "span", "text": "text"},
+                    ],
+                },
+            ),
+            Expander(label="Run console", children=[console]),
+            Expander(label="Current settings", children=[Text(settings_md, markdown=True)]),
+        ]
+    )
+
+    workspace = Sidebar(
+        children=[
+            controls,
+            Tabs(
+                labels=["Chat", "Gallery", "Dashboard"],
+                children=[
+                    Chat(messages, pending=pending, label="Conversation"),
+                    Gallery(images, columns=3, label="Generated tiles"),
+                    dashboard,
+                ],
+            ),
+        ]
+    )
+
+    return Session(Column(children=[intro, workspace]))
 
 
 def create_app(

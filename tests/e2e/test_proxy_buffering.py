@@ -175,10 +175,10 @@ def test_shell_renders_and_patches_through_a_window_buffering_proxy():
                 expect(slider).to_be_visible()
                 # A live patch also flushes: drag the slider, the label updates.
                 slider.evaluate(
-                    "el => { el.value = '7';"
+                    "el => { el.value = '2';"
                     " el.dispatchEvent(new Event('input', { bubbles: true })); }"
                 )
-                expect(page.locator("div.text", has_text="2 x 7 = 14")).to_be_visible()
+                expect(page.locator("div.text", has_text="temperature = 2")).to_be_visible()
             finally:
                 browser.close()
     finally:

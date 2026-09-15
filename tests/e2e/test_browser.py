@@ -17,6 +17,8 @@ it never collides with pytest-asyncio's event loop), while `launch()` runs the
 real uvicorn server in its own background thread.
 """
 
+import re
+
 import pytest
 
 from indah.launch import launch
@@ -30,8 +32,8 @@ expect = playwright_sync.expect
 
 @pytest.mark.e2e
 def test_shell_renders_and_patches_in_a_real_browser():
-    """The demo app renders in Chromium, and slider/select/custom events patch
-    the live DOM through the SSE round-trip."""
+    """The indah Studio demo renders in Chromium, and slider/colorpicker/Generate
+    events patch the live DOM (chat bubbles, gallery) through the SSE round-trip."""
     handle = launch(block=False, open_inline=False)
     try:
         with sync_playwright() as p:
@@ -40,39 +42,42 @@ def test_shell_renders_and_patches_in_a_real_browser():
             try:
                 page.goto(handle.url, wait_until="domcontentloaded")
 
-                # 1) The init tree renders: the heading plus one of each V4 control.
-                expect(
-                    page.locator("div.text", has_text="indah: starter components")
-                ).to_be_visible()
+                # 1) The init tree renders: the markdown heading, the sidebar
+                # controls, and the Chat tab (active by default).
+                expect(page.locator(".markdown h1", has_text="indah Studio")).to_be_visible()
                 slider = page.locator("input[type=range]")
-                select = page.locator("select")
                 color = page.locator("input[type=color]")
                 expect(slider).to_be_visible()
-                expect(select).to_be_visible()
+                expect(page.locator("select").first).to_be_visible()
                 expect(color).to_be_visible()
-                expect(page.locator("table.dataframe")).to_be_visible()
+                expect(page.locator(".chat")).to_be_visible()
 
                 # 2) A slider event patches its dependent label live. Setting a
                 # range input's value needs a dispatched input event (fill() does
                 # not fire one for type=range).
                 slider.evaluate(
-                    "el => { el.value = '7';"
+                    "el => { el.value = '2';"
                     " el.dispatchEvent(new Event('input', { bubbles: true })); }"
                 )
-                expect(page.locator("div.text", has_text="2 x 7 = 14")).to_be_visible()
+                expect(page.locator("div.text", has_text="temperature = 2")).to_be_visible()
 
-                # 3) A select event swaps the reactive DataFrame (squares -> primes).
-                expect(page.locator("table.dataframe th", has_text="n^2")).to_be_visible()
-                select.select_option("primes")
-                expect(page.locator("table.dataframe th", has_text="prime")).to_be_visible()
-
-                # 4) The registered custom component (colorpicker) round-trips its
-                # value back into Python, which patches the accent label.
+                # 3) The colorpicker (a custom component) round-trips its value into
+                # Python, which patches the accent preview image's src.
                 color.evaluate(
                     "el => { el.value = '#ff0000';"
                     " el.dispatchEvent(new Event('input', { bubbles: true })); }"
                 )
-                expect(page.locator("div.text", has_text="accent = #ff0000")).to_be_visible()
+                expect(page.locator("img[alt='accent preview']")).to_have_attribute(
+                    "src", re.compile("ff0000")
+                )
+
+                # 4) Generate runs an async handler that streams into Chat bubbles and
+                # then fills the Gallery - all live over SSE, without freezing the UI.
+                page.locator("button", has_text="Generate").click()
+                expect(page.locator(".chat .bubble.role-user")).to_be_visible()
+                expect(page.locator(".chat .bubble.role-assistant")).to_be_visible()
+                page.locator(".tab", has_text="Gallery").click()
+                expect(page.locator(".gallery-item")).to_have_count(3)
             finally:
                 browser.close()
     finally:

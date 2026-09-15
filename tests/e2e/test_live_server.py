@@ -45,31 +45,32 @@ async def test_streaming_demo_streams_tokens_incrementally_and_stays_responsive(
 
                 init = await _next_data(lines)
                 assert init["type"] == "init"
-                stream_node = _find(init["root"], "streamtext")
-                button_node = _find(init["root"], "button")
+                chat_node = _find(init["root"], "chat")
+                button_node = _find(init["root"], "button")  # first button = Generate
                 slider_node = _find(init["root"], "slider")
-                assert stream_node is not None and button_node is not None
+                assert chat_node is not None and button_node is not None
 
-                # Click Generate: tokens must arrive as several append patches, not
-                # a single final dump.
+                # Click Generate: the assistant reply must arrive as many small
+                # `pending` patches (token by token), not a single final dump.
                 posted = await client.post(
                     "/api/event", json={"component": button_node["id"], "event": "click"}
                 )
                 assert posted.status_code == 200
 
-                appends = 0
-                streamed = ""
+                pending_patches = 0
+                last_pending = ""
                 slider_patched = False
                 # Read a batch of frames while generation runs; drive a slider event
                 # in the middle to prove the UI stays responsive during streaming.
-                for i in range(40):
+                for i in range(60):
                     msg = await _next_data(lines)
                     if msg["type"] != "patch":
                         continue
                     for change in msg["changes"]:
-                        if change["target"] == stream_node["id"] and "append" in change:
-                            appends += 1
-                            streamed += change["append"]["text"]
+                        props = change.get("props") or {}
+                        if change["target"] == chat_node["id"] and "pending" in props:
+                            pending_patches += 1
+                            last_pending = props["pending"]
                         if change["target"] == slider_node["id"] and "props" in change:
                             slider_patched = True
                     if i == 2:
@@ -82,11 +83,11 @@ async def test_streaming_demo_streams_tokens_incrementally_and_stays_responsive(
                                 "payload": {"value": 7},
                             },
                         )
-                    if appends >= 3 and slider_patched:
+                    if pending_patches >= 3 and slider_patched:
                         break
 
-                assert appends >= 3  # incremental: many small appends, not one dump
-                assert streamed.strip()  # actual text arrived
+                assert pending_patches >= 3  # incremental: token by token, not one dump
+                assert last_pending.strip()  # actual text arrived
                 assert slider_patched  # the rest of the UI stayed live while streaming
     finally:
         handle.stop()

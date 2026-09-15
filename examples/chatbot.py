@@ -7,7 +7,8 @@ The example is deliberately in two layers, kept apart (ADR-0009):
   app drops its own model behind the same shape; on graduation the function lifts
   out of indah unchanged.
 - the indah layer (``build_session``) wires that stream into a UI: a message box,
-  a Send button, and one ``StreamText`` that holds the whole running transcript.
+  a Send button, and a ``Chat`` of role bubbles whose in-flight reply streams into
+  a live pending bubble (ADR-0016).
 
 Generation runs on a background thread and is pulled token by token with
 ``asyncio.to_thread``, so the event loop is never blocked and the rest of the UI
@@ -33,7 +34,7 @@ import asyncio
 from collections.abc import AsyncIterator
 
 import indah
-from indah import Button, Column, Session, Signal, StreamText, Text, TextInput
+from indah import Button, Chat, Column, Session, Signal, Text, TextInput
 
 DEFAULT_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -149,17 +150,17 @@ async def _coalesced(
 def build_session(stream_fn, tokenizer=None, model=None) -> Session:
     """Build the chat UI around a ``stream_fn(tokenizer, model, messages)``.
 
-    The whole conversation lives in one ``StreamText``: each turn is fed in as
-    append deltas (the user's line, then the assistant's tokens as they arrive), so
-    the transcript grows at O(token) wire cost and resumes correctly after a proxy
-    reconnect - and it needs no dynamic-children protocol op, which v1 does not have
-    (see docs/QUESTIONS.md).
+    The conversation is a ``Signal[list]`` of ``{"role","content"}`` messages
+    rendered as ``Chat`` bubbles (ADR-0016); the in-flight reply streams token by
+    token into a ``pending`` signal so it shows as a live, growing assistant bubble,
+    then commits to the list when done. Growing the transcript is an ordinary prop
+    change over the existing patch op - no dynamic-children protocol op needed.
     """
     prompt: Signal[str] = Signal("")
     status: Signal[str] = Signal("Ask me something.")
     busy: Signal[bool] = Signal(False)
-    transcript = StreamText(label="Conversation")
-    messages: list[Message] = []
+    messages: Signal[list] = Signal([])
+    pending: Signal[str] = Signal("")
 
     async def on_send() -> None:
         question = prompt.value.strip()
@@ -168,27 +169,32 @@ def build_session(stream_fn, tokenizer=None, model=None) -> Session:
         busy.set(True)
         status.set("Generating...")
         prompt.set("")  # clear the box for the next message
-        messages.append({"role": "user", "content": question})
-        transcript.feed(f"You: {question}\n")
-        transcript.feed("Assistant: ")
+        history: list[Message] = messages.value + [{"role": "user", "content": question}]
+        messages.set(history)
+        pending.set("")
 
         parts: list[str] = []
-        async for chunk in _coalesced(stream_fn(tokenizer, model, messages)):
-            transcript.feed(chunk)
+        async for chunk in _coalesced(stream_fn(tokenizer, model, list(history))):
+            pending.set(pending.value + chunk)
             parts.append(chunk)
 
-        transcript.feed("\n\n")
-        messages.append({"role": "assistant", "content": "".join(parts)})
+        messages.set(messages.value + [{"role": "assistant", "content": "".join(parts)}])
+        pending.set("")
         busy.set(False)
         status.set("Ask me something.")
 
     page = Column(
         children=[
-            Text("indah chatbot: a small local LLM, streaming into the page"),
-            TextInput(prompt, placeholder="Type a message, then click Send", label="Message"),
+            Text("indah chatbot: a small local LLM, streaming into message bubbles"),
+            Chat(messages, pending=pending, label="Conversation"),
+            TextInput(
+                prompt,
+                placeholder="Type a message, then press Enter or click Send",
+                label="Message",
+                on_submit=on_send,
+            ),
             Button("Send", on_click=on_send),
             Text(status),
-            transcript,
         ]
     )
     return Session(page)
