@@ -18,8 +18,11 @@ event loop only interleaves handlers at quiescent points, so concurrent async
 handlers need no locking. A handler that raises does not take the UI down: the
 traceback is logged and a short toast message is pushed to the client (Q-fail).
 
-Slice 2 keeps a single shared session per app. Per-session isolation for multiple
-concurrent users arrives with the state seam (ADR-0010).
+A ``Session`` is one viewer's reactive graph. Slice C gives each browser tab its
+own via the session-store seam (``session_store.py``, ADR-0010), so concurrent
+viewers stay isolated; ``app.py`` reaches a session only through that store, keyed
+by the id the shell sends. A ``Session`` binds to its own ``Hub`` there, so its
+live emits reach only that viewer's stream.
 """
 
 from __future__ import annotations

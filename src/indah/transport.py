@@ -14,8 +14,9 @@ replayed the messages it missed (``replay_since``). Queue items are
 streamed tokens strictly ordered even when emitted from between an async
 handler's awaits.
 
-Slice 1 kept one shared hub for the whole app; that still holds in v0. Per-session
-isolation for multiple concurrent users arrives with the state seam (ADR-0010).
+Slices 1-3 kept one shared hub for the whole app. Slice C gives each viewer its own
+hub, paired with its own session behind the session-store seam (``session_store.py``,
+ADR-0010), so a patch fans out only to that viewer's stream, never another's.
 """
 
 from __future__ import annotations

@@ -102,6 +102,10 @@ class EventIn(BaseModel):
     component: str
     event: str
     payload: dict[str, Any] = Field(default_factory=dict)
+    # The sender's session id (ADR-0010): routes the event to that viewer's
+    # isolated session. Optional -- an id-less client (a test or a curl) falls back
+    # to the default session, which is the whole app for a single-shared app.
+    sid: str | None = None
 
 
 # -- Custom-component render spec (ADR-0012) ---------------------------------

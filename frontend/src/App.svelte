@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { apiUrl, PROTOCOL_VERSION } from "./api.js";
+  import { streamUrl, PROTOCOL_VERSION } from "./api.js";
   import { structure, nodeProps, status, toast } from "./stores.js";
   import Node from "./Node.svelte";
 
@@ -56,7 +56,7 @@
   onMount(() => {
     // EventSource resends Last-Event-Id on reconnect natively; the server replays
     // the missed messages, so a dropped stream resumes without extra client code.
-    const source = new EventSource(apiUrl("api/stream"));
+    const source = new EventSource(streamUrl());
     source.onopen = () => status.set({ live: true, text: "live" });
     source.onmessage = (event) => {
       status.set({ live: true, text: "live" });

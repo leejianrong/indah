@@ -22,6 +22,16 @@ HTTP POSTs. Both ride one port so Colab's and Runpod's proxies pass them
 Every message is a JSON object with a `v` field (the protocol version) and a
 `type`.
 
+### Sessions
+
+Each browser tab drives its own isolated server-side session (its own signals and
+its own patch stream, ADR-0010). The shell mints a per-tab **session id** and sends
+it on both endpoints: as `?sid=<id>` on the stream URL and as a `sid` field in the
+event body (below). Requests that carry the same id share one session; distinct ids
+are isolated. An id-less request (a hand-written client, a curl) falls back to a
+single default session. The `sid` is a transport detail, not a UI message — it does
+not change any message schema, so `protocol_version` is unaffected.
+
 ## Nodes
 
 The UI is a tree of nodes. A node is:
@@ -71,12 +81,14 @@ accumulated text). `init` and `ping` carry no id. See ADR-0011.
 `POST /api/event` with:
 
 ```json
-{ "component": "n3", "event": "input", "payload": { "value": 7 } }
+{ "component": "n3", "event": "input", "payload": { "value": 7 }, "sid": "…" }
 ```
 
 - `component` — the node id the event came from.
 - `event` — the event name (e.g. `click`, `input`, `change`).
 - `payload` — event data; value-bearing inputs send `{ "value": ... }`.
+- `sid` — the sender's session id (optional; see [Sessions](#sessions)). Omitted, the
+  event lands on the default session.
 
 A malformed body is rejected `400`; a body that does not validate, `422`; an event
 for an unknown component or event, `400`. A handler that raises does not take the
