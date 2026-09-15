@@ -213,12 +213,15 @@ Test at the highest seams that stay honest about the cross-language boundary:
 ## Open risks
 
 - **Colab proxy + SSE reliability** (R2). SSE should pass Colab's proxy where
-  WebSockets do not, but this must be proven on real hardware — confronted in
-  Slice 1. Status: proven locally (heartbeat + `Last-Event-Id` resume); the
-  real-hardware run is pending, packaged as `examples/smoke_test_rc.ipynb` against
-  `0.1.0rc1` and gating the final `0.1.0` tag (see `docs/SLICES.md`).
-- **RunPod's 100s proxy timeout** (R3). Long SSE streams may be cut; needs a
-  heartbeat/reconnect strategy — exercised in Slice 3 (streaming).
+  WebSockets do not. Status: **proven on real hardware** on `0.1.0` (2026-09-15) -
+  a full Colab browser run of `examples/smoke_test_rc.ipynb` (every checklist row)
+  plus an automated RunPod curl smoke through `proxy.runpod.net`; the Colab
+  window-buffering fix is guarded locally by `tests/e2e/test_proxy_buffering.py`
+  (see the results table in `docs/SLICES.md`).
+- **RunPod's 100s proxy timeout** (R3). Long SSE streams may be cut. Status:
+  **confirmed handled** - the RunPod smoke held an SSE stream open past the ~100s
+  Cloudflare cap on 8 heartbeats (15s interval), with `Last-Event-Id` resume as the
+  backstop (Slice 3 streaming, ADR-0011).
 - **Granular-patch correctness** (R1). The diffing core is the hardest part to get
   right; a wrong patch set silently corrupts the UI — unit + e2e in Slice 2.
 - **Notebook inline display** across Colab vs RunPod (JupyterLab) iframe quirks —
