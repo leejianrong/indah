@@ -47,6 +47,11 @@ BUILTIN_TYPES = frozenset(
         "select",
         "image",
         "dataframe",
+        "checkbox",
+        "number",
+        "radio",
+        "multiselect",
+        "date",
     }
 )
 

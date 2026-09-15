@@ -120,7 +120,7 @@
       }
 
       input[type="range"] { width: 100%; accent-color: var(--primary); }
-      input[type="text"], select {
+      input[type="text"], input[type="number"], input[type="date"], select {
         font: inherit;
         width: 100%;
         padding: 0.55rem 0.75rem;
@@ -131,11 +131,23 @@
         transition: border-color 0.15s, box-shadow 0.15s;
       }
       input[type="text"]::placeholder { color: var(--muted); }
-      input[type="text"]:focus, select:focus {
+      input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus,
+      select:focus {
         outline: none;
         border-color: var(--primary);
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
       }
+      select[multiple] { min-height: 5.5rem; }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.95rem;
+        color: var(--text);
+        cursor: pointer;
+      }
+      .check input { accent-color: var(--primary); width: 1.05rem; height: 1.05rem; flex: none; }
+      .radio-group { display: flex; flex-direction: column; gap: 0.45rem; }
       input[type="color"] {
         width: 3rem;
         height: 2rem;

@@ -16,7 +16,9 @@
   let inputEl = $state();
   function syncFromServer() {
     if (!inputEl) return;
-    const next = node.type === "slider" ? String(props.value ?? "") : (props.value ?? "");
+    // Compare/assign as a string: element .value is always a string, so coercing
+    // keeps text/slider/number/date on the same focused-echo path.
+    const next = props.value == null ? "" : String(props.value);
     if (inputEl.value !== next) inputEl.value = next;
   }
   // While the user is editing (element focused), the DOM owns the value so a laggy
@@ -47,8 +49,79 @@
       type="text"
       placeholder={props.placeholder ?? ""}
       oninput={(e) => postEvent(node.id, "input", { value: e.currentTarget.value })}
+      onkeydown={(e) => { if (e.key === "Enter") postEvent(node.id, "submit"); }}
       onblur={syncFromServer}
     />
+  </div>
+{:else if node.type === "checkbox"}
+  <label class="check">
+    <input
+      type="checkbox"
+      checked={props.checked ?? false}
+      onchange={(e) => postEvent(node.id, "change", { value: e.currentTarget.checked })}
+    />
+    {#if props.label}<span>{props.label}</span>{/if}
+  </label>
+{:else if node.type === "number"}
+  <div class="field">
+    {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
+    <input
+      bind:this={inputEl}
+      id={`${node.id}-input`}
+      type="number"
+      min={props.min ?? undefined}
+      max={props.max ?? undefined}
+      step={props.step ?? undefined}
+      oninput={(e) => postEvent(node.id, "input", { value: Number(e.currentTarget.value) })}
+      onblur={syncFromServer}
+    />
+  </div>
+{:else if node.type === "date"}
+  <div class="field">
+    {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
+    <input
+      bind:this={inputEl}
+      id={`${node.id}-input`}
+      type="date"
+      oninput={(e) => postEvent(node.id, "input", { value: e.currentTarget.value })}
+      onblur={syncFromServer}
+    />
+  </div>
+{:else if node.type === "radio"}
+  <div class="field">
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    <div class="radio-group">
+      {#each props.options ?? [] as option (option.value)}
+        <label class="check">
+          <input
+            type="radio"
+            name={node.id}
+            value={option.value}
+            checked={props.value === option.value}
+            onchange={(e) => postEvent(node.id, "change", { value: e.currentTarget.value })}
+          />
+          <span>{option.label}</span>
+        </label>
+      {/each}
+    </div>
+  </div>
+{:else if node.type === "multiselect"}
+  <div class="field">
+    {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
+    <select
+      id={`${node.id}-input`}
+      multiple
+      onchange={(e) =>
+        postEvent(node.id, "change", {
+          value: Array.from(e.currentTarget.selectedOptions).map((o) => o.value),
+        })}
+    >
+      {#each props.options ?? [] as option (option.value)}
+        <option value={option.value} selected={(props.value ?? []).includes(option.value)}
+          >{option.label}</option
+        >
+      {/each}
+    </select>
   </div>
 {:else if node.type === "streamtext"}
   <div class="field">
