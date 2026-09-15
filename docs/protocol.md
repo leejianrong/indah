@@ -87,7 +87,7 @@ UI down: the traceback is logged server-side and an `error` message is pushed.
 | `type` | Kind | Key props | Events (payload) |
 |--------|------|-----------|------------------|
 | `column` | container | — | — |
-| `text` | display | `text` | — |
+| `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree) | — |
 | `button` | input | `label` | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label` | `input` `{value}` |
@@ -100,6 +100,8 @@ UI down: the traceback is logged server-side and an `error` message is pushed.
 | `image` | display | `src`, `alt` | — |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
+| `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
+| `spinner` | display | `active`, `label` | — |
 | `row` | container | `gap`, `wrap`, `align` | — |
 | `grid` | container | `columns`, `gap` | — |
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
@@ -114,6 +116,14 @@ existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no
 payload.
+
+A `text` node with `markdown:true` carries a `blocks` tree instead of `text`: the
+backend parses a safe subset of Markdown (server-side) into nodes the shell renders
+through its safe DOM builder. A block node is either a string (a text leaf the shell
+escapes) or `{"tag": <name>, "children": [node,...]}` (with `href` on an `a`); only
+an allowlisted set of tags is ever produced, and raw HTML in the source stays
+literal text, so nothing can inject script. This is a prop shape, not a new op — no
+version bump.
 
 ## Custom components (`_spec`)
 

@@ -153,3 +153,59 @@ def test_dragging_slider_is_not_snapped_back_by_a_server_echo():
                 browser.close()
     finally:
         handle.stop()
+
+
+def _markdown_app():
+    """An app with a markdown Text (including a raw <script>), a progress bar, and
+    a spinner - to prove the shell renders the safe block tree and never injects."""
+    from indah import Column, Progress, Session, Spinner, Text, create_app
+
+    md = (
+        "## Heading\n\n"
+        "Some **bold** text and a [link](https://example.com).\n\n"
+        "<script>window.__pwned = true</script>\n\n"
+        "- item one\n- item two"
+    )
+    root = Column(
+        children=[
+            Text(md, markdown=True),
+            Progress(0.5, label="Progress"),
+            Spinner(label="Busy"),
+        ]
+    )
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_markdown_renders_safely_with_progress_and_spinner():
+    """Markdown renders as real elements, but source HTML stays inert text: no
+    <script> element is created and the injected global never gets set."""
+    handle = launch(_markdown_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                # Markdown became real elements.
+                expect(page.locator(".markdown h2", has_text="Heading")).to_be_visible()
+                expect(page.locator(".markdown strong", has_text="bold")).to_be_visible()
+                expect(page.locator(".markdown a", has_text="link")).to_have_attribute(
+                    "href", "https://example.com"
+                )
+                expect(page.locator(".markdown li")).to_have_count(2)
+
+                # The raw <script> was NOT interpreted: no script element inside the
+                # markdown, its text survives literally, and the global is unset.
+                assert page.locator(".markdown script").count() == 0
+                expect(page.locator(".markdown", has_text="window.__pwned")).to_be_visible()
+                assert page.evaluate("() => window.__pwned") is None
+
+                # Progress + spinner render.
+                expect(page.locator("progress.progress")).to_have_attribute("value", "0.5")
+                expect(page.locator(".spinner")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
