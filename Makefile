@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e build cleanroom check clean
+.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e build cleanroom docs docs-serve check clean
 
 # Print a free host port (stdlib only; no lsof/nc needed).
 FREE_PORT := python3 -c 'import socket;s=socket.socket();s.bind(("",0));p=s.getsockname()[1];s.close();print(p)'
@@ -64,6 +64,12 @@ build: ## Build the wheel and sdist
 
 cleanroom: build ## Prove R4: install the wheel with JS-toolchain tripwires on PATH
 	bash scripts/cleanroom.sh
+
+docs: ## Build the documentation site into website/site/
+	cd website && uv run --extra docs zensical build --clean
+
+docs-serve: ## Live-preview the documentation site
+	cd website && uv run --extra docs zensical serve
 
 check: lint test-fast ## The pre-push gate: lint + fast tests
 
