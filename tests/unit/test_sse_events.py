@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from indah.app import sse_events
+from indah.app import _SSE_PREAMBLE, sse_events
 
 
 def _parse(chunk: str) -> tuple[int | None, dict]:
@@ -34,6 +34,28 @@ async def test_first_chunk_is_the_init_payload_with_no_id():
     gen = sse_events(queue, _init_payload(), heartbeat_seconds=60)
     event_id, data = _parse(await gen.__anext__())
     assert event_id is None  # init is not a resume point
+    assert data == _init_payload()
+    await gen.aclose()
+
+
+@pytest.mark.unit
+async def test_preamble_is_a_large_ignored_comment_before_the_init():
+    """With send_preamble, the stream opens with ~2 KB of SSE comment padding so a
+    buffering proxy (Colab) flushes immediately instead of stalling on
+    'connecting'. The comment is ignored by EventSource; the init follows it."""
+    queue: asyncio.Queue = asyncio.Queue()
+    gen = sse_events(queue, _init_payload(), heartbeat_seconds=60, send_preamble=True)
+
+    preamble = await gen.__anext__()
+    assert preamble is _SSE_PREAMBLE
+    assert preamble.startswith(":")  # an SSE comment line -> ignored by the client
+    assert "data:" not in preamble  # carries no protocol payload
+    assert len(preamble) >= 2000  # big enough to push past a proxy's flush buffer
+    assert preamble.endswith("\n\n")
+
+    # The real first frame (the init) still arrives right after the padding.
+    event_id, data = _parse(await gen.__anext__())
+    assert event_id is None
     assert data == _init_payload()
     await gen.aclose()
 

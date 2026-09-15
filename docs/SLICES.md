@@ -65,6 +65,12 @@ Results (fill in after the run):
 | Survives a ~2 min idle gap | - | - |
 | No Node in the runtime | - | - |
 
+**Colab run 1 (0.1.0rc1):** install/import fine, but the shell stalled on
+"connecting..." - Colab's proxy buffered the SSE response and held the first
+`init` frame, so `EventSource` never opened. Fixed by an ~8 KB SSE comment
+preamble that forces the proxy to flush immediately (ADR-0002 real-hardware note).
+Re-test with the fix is pending (rides in the next RC).
+
 Any proxy fixes discovered here update ADR-0002/0011 and the R2 note in
 `docs/PLAN.md`.
 

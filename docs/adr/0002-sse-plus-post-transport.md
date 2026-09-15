@@ -40,3 +40,14 @@ so the transport sits behind one interface.
   (proven in Slice 3).
 - Forecloses nothing: the WebSocket upgrade path remains available behind the same
   interface.
+
+## Real-hardware note: Colab proxy buffering (2026-09)
+
+The first Colab run on `0.1.0rc1` surfaced the R2 risk in a concrete form: the
+shell loaded but sat on "connecting...", because Colab's front-end proxy buffered
+the SSE response and held the small first `init` frame below its flush threshold -
+so `EventSource` never saw a byte and stayed in `CONNECTING`. `X-Accel-Buffering:
+no` alone did not prevent it. Fix: every stream now opens with an ~8 KB SSE comment
+preamble (`_SSE_PREAMBLE`), which is ignored by the client but pushes the proxy
+past its buffer so it flushes immediately. This keeps SSE as the transport; the
+WebSocket-upgrade escalation was not needed.

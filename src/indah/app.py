@@ -48,6 +48,19 @@ _SSE_HEADERS = {
     "X-Accel-Buffering": "no",
 }
 
+# Some proxies buffer a streamed response until they have collected a chunk of it,
+# regardless of X-Accel-Buffering (Colab's front-end is the one that bit us: the
+# shell loaded but sat on "connecting..." because the first small `init` frame was
+# held below the proxy's flush threshold). An SSE comment line (one starting with
+# ":") is ignored by EventSource, so we send a block of comment padding as the very
+# first bytes of every stream to push past that threshold and force an immediate
+# flush, so `onopen`/the init arrive right away (ADR-0002, the R2 proxy risk).
+#
+# 8 KB clears the common proxy buffer sizes (nginx's default proxy_buffer_size is
+# 4-8 KB); it costs one extra ~8 KB write per connection, which is negligible.
+_SSE_PADDING_BYTES = 8192
+_SSE_PREAMBLE = ":" + " " * _SSE_PADDING_BYTES + "\n\n"
+
 
 async def mock_llm(prompt: str) -> AsyncIterator[str]:
     """A stand-in LLM: a plain async generator yielding a reply token by token.
@@ -170,6 +183,7 @@ async def sse_events(
     *,
     replay: tuple[Item, ...] | list[Item] = (),
     skip_upto: int = 0,
+    send_preamble: bool = False,
 ) -> AsyncIterator[str]:
     """Yield SSE-framed strings for one browser connection.
 
@@ -184,7 +198,13 @@ async def sse_events(
     carry an SSE ``id:`` so a reconnecting client resumes from where it left off;
     init and ping do not. Framing is separated from the HTTP handler so it can be
     tested without a server.
+
+    ``send_preamble`` prepends ~2 KB of ignored comment padding so a buffering
+    proxy flushes the stream immediately instead of leaving the client stuck
+    "connecting" (Colab; see ``_SSE_PREAMBLE``).
     """
+    if send_preamble:
+        yield _SSE_PREAMBLE
     if init_payload is not None:
         yield _sse(init_payload)
     for offset, message in replay:
@@ -230,6 +250,7 @@ async def _stream(request: Request) -> StreamingResponse:
                 app.state.heartbeat_seconds,
                 replay=replay,
                 skip_upto=skip_upto,
+                send_preamble=True,
             ):
                 yield chunk
         finally:
