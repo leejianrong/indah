@@ -77,3 +77,79 @@ def test_shell_renders_and_patches_in_a_real_browser():
                 browser.close()
     finally:
         handle.stop()
+
+
+def _shared_signal_app(control):
+    """An app whose input and a button both write the same signal, so a button
+    click is a server-side change to the (still-focused) input's value - the exact
+    shape of the echo that used to clobber fast typing / slider drags."""
+    from indah import Button, Column, Session, Signal, Slider, TextInput, create_app
+
+    if control == "text":
+        sig = Signal("")
+        field = TextInput(sig, label="Prompt")
+        stale = lambda: sig.set("STALE")  # noqa: E731
+    else:
+        sig = Signal(1)
+        field = Slider(sig, min=0, max=10, step=1, label="n")
+        stale = lambda: sig.set(2)  # noqa: E731
+    root = Column(children=[field, Button("set-from-server", on_click=stale)])
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_focused_text_input_is_not_clobbered_by_a_server_echo():
+    """While a text box is focused, a server value change to it must be ignored, so
+    a stale echo can't eat fast keystrokes; once focus leaves, the box adopts the
+    server value (two-way binding intact). dispatch_event fires the button handler
+    without moving focus, delivering a server change while the box stays focused."""
+    handle = launch(_shared_signal_app("text"), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                box = page.locator("input[type=text]").first
+                expect(box).to_be_visible()
+                box.click()
+                page.keyboard.type("hello")
+                expect(box).to_have_value("hello")
+                page.locator("button").dispatch_event("click")  # server sets it "STALE"
+                page.wait_for_timeout(300)
+                expect(box).to_have_value("hello")  # not clobbered while focused
+                box.blur()
+                expect(box).to_have_value("STALE")  # adopted once editing ends
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_dragging_slider_is_not_snapped_back_by_a_server_echo():
+    """The slider version of the same guard: a server change while the thumb is
+    held (focused) must not snap it back mid-drag."""
+    handle = launch(_shared_signal_app("slider"), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                slider = page.locator("input[type=range]").first
+                expect(slider).to_be_visible()
+                slider.focus()  # as while dragging
+                slider.evaluate(
+                    "el => { el.value = '8';"
+                    " el.dispatchEvent(new Event('input', { bubbles: true })); }"
+                )
+                page.locator("button").dispatch_event("click")  # server sets it to 2
+                page.wait_for_timeout(300)
+                expect(slider).to_have_value("8")  # not snapped back while focused
+                slider.blur()
+                expect(slider).to_have_value("2")  # adopts server value after
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

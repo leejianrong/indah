@@ -6,6 +6,26 @@
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
+
+  // Value-bearing inputs (text box, slider) are two-way bound: a keystroke/drag is
+  // POSTed and the server echoes the new value back as a patch. If we let that echo
+  // re-set the DOM value *while the user is editing*, a stale echo (the round-trip
+  // lags behind fast typing, especially through Colab's proxy) clobbers newer
+  // keystrokes - the "missing letters" bug. So we sync the server value into the
+  // element only when it does NOT have focus; while focused, the DOM owns it.
+  let inputEl = $state();
+  function syncFromServer() {
+    if (!inputEl) return;
+    const next = node.type === "slider" ? String(props.value ?? "") : (props.value ?? "");
+    if (inputEl.value !== next) inputEl.value = next;
+  }
+  // While the user is editing (element focused), the DOM owns the value so a laggy
+  // server echo can't clobber fast typing. Otherwise, adopt the server value - and
+  // on blur, adopt whatever the server settled on while we were editing.
+  $effect(() => {
+    void props.value; // track the server value
+    if (inputEl && document.activeElement !== inputEl) syncFromServer();
+  });
 </script>
 
 {#if node.type === "column"}
@@ -22,11 +42,12 @@
   <div class="field">
     {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
     <input
+      bind:this={inputEl}
       id={`${node.id}-input`}
       type="text"
       placeholder={props.placeholder ?? ""}
-      value={props.value ?? ""}
       oninput={(e) => postEvent(node.id, "input", { value: e.currentTarget.value })}
+      onblur={syncFromServer}
     />
   </div>
 {:else if node.type === "streamtext"}
@@ -38,13 +59,14 @@
   <div class="field">
     <label for={`${node.id}-input`}>{props.label ?? ""}</label>
     <input
+      bind:this={inputEl}
       id={`${node.id}-input`}
       type="range"
       min={props.min}
       max={props.max}
       step={props.step}
-      value={props.value}
       oninput={(e) => postEvent(node.id, "input", { value: Number(e.currentTarget.value) })}
+      onblur={syncFromServer}
     />
   </div>
 {:else if node.type === "select"}

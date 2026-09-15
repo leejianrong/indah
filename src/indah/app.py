@@ -48,6 +48,22 @@ _SSE_HEADERS = {
     "X-Accel-Buffering": "no",
 }
 
+# Some proxies buffer a streamed response in fixed-size windows, forwarding a
+# window to the client only once it fills, regardless of X-Accel-Buffering (Colab's
+# front-end is the one that bit us). A small SSE frame (the `init`, a slider patch,
+# one streamed token) lands in a window that never fills on its own, so the proxy
+# holds it and the browser renders nothing -- even though the connection is "live".
+#
+# An SSE comment line (one starting with ":") is ignored by EventSource, so we
+# flush past the window by emitting a block of comment padding: once on connect (so
+# the stream opens even before any data), and again after every real frame (so each
+# frame is pushed out of the proxy's buffer immediately instead of waiting for the
+# next one). 8 KB clears the common window sizes (nginx's default proxy_buffer_size
+# is 4-8 KB). This is the "proxy flush" path, enabled for the real HTTP stream and
+# off for framing unit tests (ADR-0002, the R2 proxy risk).
+_SSE_PADDING_BYTES = 8192
+_SSE_FLUSH_PAD = ":" + " " * _SSE_PADDING_BYTES + "\n\n"
+
 
 async def mock_llm(prompt: str) -> AsyncIterator[str]:
     """A stand-in LLM: a plain async generator yielding a reply token by token.
@@ -170,6 +186,7 @@ async def sse_events(
     *,
     replay: tuple[Item, ...] | list[Item] = (),
     skip_upto: int = 0,
+    proxy_flush: bool = False,
 ) -> AsyncIterator[str]:
     """Yield SSE-framed strings for one browser connection.
 
@@ -184,20 +201,34 @@ async def sse_events(
     carry an SSE ``id:`` so a reconnecting client resumes from where it left off;
     init and ping do not. Framing is separated from the HTTP handler so it can be
     tested without a server.
+
+    ``proxy_flush`` interleaves ignored comment padding -- once on connect and after
+    every frame -- so a window-buffering proxy flushes each frame immediately
+    instead of holding it (Colab; see ``_SSE_FLUSH_PAD``).
     """
+    if proxy_flush:
+        yield _SSE_FLUSH_PAD  # open the stream even before any data (caught-up resume)
     if init_payload is not None:
         yield _sse(init_payload)
+        if proxy_flush:
+            yield _SSE_FLUSH_PAD
     for offset, message in replay:
         yield _sse(message, event_id=offset)
+        if proxy_flush:
+            yield _SSE_FLUSH_PAD
     while True:
         try:
             offset, message = await asyncio.wait_for(queue.get(), timeout=heartbeat_seconds)
         except (asyncio.TimeoutError, TimeoutError):
             yield _sse(ping_message())
+            if proxy_flush:
+                yield _SSE_FLUSH_PAD
             continue
         if offset <= skip_upto:
             continue
         yield _sse(message, event_id=offset)
+        if proxy_flush:
+            yield _SSE_FLUSH_PAD
 
 
 async def _stream(request: Request) -> StreamingResponse:
@@ -230,6 +261,7 @@ async def _stream(request: Request) -> StreamingResponse:
                 app.state.heartbeat_seconds,
                 replay=replay,
                 skip_upto=skip_upto,
+                proxy_flush=True,
             ):
                 yield chunk
         finally:

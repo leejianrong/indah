@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from indah.app import sse_events
+from indah.app import _SSE_FLUSH_PAD, sse_events
 
 
 def _parse(chunk: str) -> tuple[int | None, dict]:
@@ -35,6 +35,29 @@ async def test_first_chunk_is_the_init_payload_with_no_id():
     event_id, data = _parse(await gen.__anext__())
     assert event_id is None  # init is not a resume point
     assert data == _init_payload()
+    await gen.aclose()
+
+
+@pytest.mark.unit
+async def test_proxy_flush_pads_the_stream_open_and_after_each_frame():
+    """With proxy_flush, the stream opens with a large SSE comment pad AND repeats
+    one after every real frame, so a window-buffering proxy (Colab) flushes each
+    frame immediately instead of holding it. The pad is ignored by EventSource."""
+    queue: asyncio.Queue = asyncio.Queue()
+    gen = sse_events(queue, _init_payload(), heartbeat_seconds=60, proxy_flush=True)
+
+    lead = await gen.__anext__()  # opens the stream even before any data
+    assert lead is _SSE_FLUSH_PAD
+    assert lead.startswith(":")  # an SSE comment line -> ignored by the client
+    assert "data:" not in lead  # carries no protocol payload
+    assert len(lead) >= 8192  # big enough to fill a proxy's buffer window
+    assert lead.endswith("\n\n")
+
+    event_id, data = _parse(await gen.__anext__())  # the real init frame
+    assert event_id is None
+    assert data == _init_payload()
+
+    assert await gen.__anext__() is _SSE_FLUSH_PAD  # pad after the init flushes it
     await gen.aclose()
 
 
