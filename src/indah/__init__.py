@@ -29,7 +29,7 @@ from .launch import LaunchHandle, launch
 from .reactive import Computed, Signal, batch, computed, effect
 from .session import DispatchResult, Session
 
-__version__ = "0.1.0rc1"
+__version__ = "0.1.0rc2"
 
 __all__ = [
     "__version__",
