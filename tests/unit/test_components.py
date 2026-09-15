@@ -12,11 +12,13 @@ from indah.components import (
     MultiSelect,
     Number,
     Plot,
+    Progress,
     Radio,
     Row,
     Select,
     Sidebar,
     Slider,
+    Spinner,
     Tabs,
     Text,
     TextInput,
@@ -374,6 +376,76 @@ def test_expander_open_can_be_driven_by_a_caller_signal():
     assert exp.to_json()["props"]["open"] is True
     assert exp.handle("toggle", {}) is True
     assert is_open.peek() is False
+
+
+# -- Slice A: markdown Text, Progress, Spinner -------------------------------
+
+
+@pytest.mark.unit
+def test_plain_text_is_unchanged_without_markdown():
+    t = Text(Signal("hi"))
+    t.id = "n0"
+    # No markdown flag, no blocks prop -- exactly the pre-Slice-A shape.
+    assert t.to_json() == {"id": "n0", "type": "text", "props": {"text": "hi"}, "children": []}
+
+
+@pytest.mark.unit
+def test_markdown_text_emits_blocks_not_text():
+    t = Text(Signal("# Hi"), markdown=True)
+    t.id = "n0"
+    props = t.to_json()["props"]
+    assert props["markdown"] is True
+    assert props["blocks"] == [{"tag": "h1", "children": ["Hi"]}]
+    assert "text" not in props  # markdown renders from the block tree
+
+
+@pytest.mark.unit
+def test_markdown_text_reacts_to_its_source():
+    src = Signal("a")
+    t = Text(src, markdown=True)
+    assert t.reactive_props()["blocks"]() == [{"tag": "p", "children": ["a"]}]
+    src.set("**b**")
+    assert t.reactive_props()["blocks"]() == [
+        {"tag": "p", "children": [{"tag": "strong", "children": ["b"]}]}
+    ]
+
+
+@pytest.mark.unit
+def test_progress_determinate_serialises_value_and_max():
+    p = Progress(Signal(0.4), max=1.0, label="Loading")
+    p.id = "n0"
+    assert p.to_json()["props"] == {"max": 1.0, "label": "Loading", "value": 0.4}
+
+
+@pytest.mark.unit
+def test_progress_is_indeterminate_when_value_is_none():
+    p = Progress(label="Working")
+    assert p.reactive_props()["value"]() is None
+
+
+@pytest.mark.unit
+def test_progress_reacts_to_signal():
+    v = Signal(0)
+    p = Progress(v, max=10)
+    assert p.reactive_props()["value"]() == 0.0
+    v.set(7)
+    assert p.reactive_props()["value"]() == 7.0
+
+
+@pytest.mark.unit
+def test_spinner_serialises_label_and_reactive_active():
+    active = Signal(True)
+    sp = Spinner(active=active, label="Thinking")
+    sp.id = "n0"
+    props = sp.to_json()["props"]
+    assert props == {"label": "Thinking", "active": True}
+    active.set(False)
+    assert sp.reactive_props()["active"]() is False
+
+
+@pytest.mark.unit
+def test_spinner_defaults_to_active():
+    assert Spinner().reactive_props()["active"]() is True
 
 
 @pytest.mark.unit

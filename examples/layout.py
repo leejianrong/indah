@@ -50,7 +50,23 @@ sections = indah.Tabs(
             ]
         ),
         indah.DataFrame(sales, label="Monthly sales"),
-        indah.Column(children=[indah.Text("Built with indah layout containers.")]),
+        indah.Column(
+            children=[
+                indah.Text(
+                    "## Built with indah\n\n"
+                    "These panels use the **layout containers** and render "
+                    "*Markdown* in `Text` -- safely: raw HTML like "
+                    "`<script>` stays literal text. See the "
+                    "[docs](https://leejianrong.github.io/indah/).\n\n"
+                    "- Row / Grid / Tabs / Sidebar / Expander\n"
+                    "- Markdown + code\n"
+                    "- Progress + spinner",
+                    markdown=True,
+                ),
+                indah.Progress(0.65, label="Coverage"),
+                indah.Spinner(label="Streaming..."),
+            ]
+        ),
     ],
 )
 

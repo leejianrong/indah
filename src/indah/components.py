@@ -18,6 +18,7 @@ import io
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from .markdown import to_blocks
 from .reactive import Computed, Signal
 
 if TYPE_CHECKING:
@@ -75,13 +76,27 @@ class Column(Component):
 
 
 class Text(Component):
+    """A text display bound to a source.
+
+    With ``markdown=True`` the source is rendered as a safe subset of Markdown: it
+    is parsed (server-side) into a block tree the shell renders through its safe DOM
+    builder, so raw HTML stays literal and nothing can inject script (see
+    ``markdown.py``). The node then carries ``blocks`` instead of ``text``.
+    """
+
     type = "text"
 
-    def __init__(self, source: Source) -> None:
+    def __init__(self, source: Source, *, markdown: bool = False) -> None:
         super().__init__()
         self._source = source
+        self._markdown = markdown
+
+    def static_props(self) -> dict[str, Any]:
+        return {"markdown": True} if self._markdown else {}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        if self._markdown:
+            return {"blocks": lambda: to_blocks(str(_read(self._source)))}
         return {"text": lambda: str(_read(self._source))}
 
 
@@ -548,6 +563,58 @@ class StreamText(Component):
         self._text = ""
         if self._session is not None:
             self._session.emit_props(self.id, {"text": ""})
+
+
+class Progress(Component):
+    """A progress bar bound to a source (R5, Slice A).
+
+    Pass a value in ``[0, max]`` (a signal, number, or callable) to show
+    determinate progress; pass ``None`` (the default) for an indeterminate bar that
+    just signals "working". Set the value from Python and the bar updates reactively.
+    """
+
+    type = "progress"
+
+    def __init__(self, value: Source = None, *, max: float = 1.0, label: str = "") -> None:
+        super().__init__()
+        self._value = value
+        self._max = max
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"max": self._max, "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: _progress_value(_read(self._value))}
+
+
+def _progress_value(value: Any) -> float | None:
+    """Coerce a progress value to a float, or ``None`` for an indeterminate bar."""
+    if value is None:
+        return None
+    return float(value)
+
+
+class Spinner(Component):
+    """An indeterminate busy indicator (Slice A).
+
+    ``active`` (a signal or bool) toggles it: while true the shell shows a spinner
+    (and the optional ``label``); while false it renders nothing, so it can gate on
+    a "loading" signal.
+    """
+
+    type = "spinner"
+
+    def __init__(self, *, active: Source = True, label: str = "") -> None:
+        super().__init__()
+        self._active = active
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"active": lambda: bool(_read(self._active))}
 
 
 # -- Layout containers (ADR-0015) --------------------------------------------

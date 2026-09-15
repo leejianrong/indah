@@ -3,6 +3,7 @@
   import { postEvent } from "./api.js";
   import Self from "./Node.svelte";
   import Custom from "./Custom.svelte";
+  import Markdown from "./Markdown.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -106,7 +107,27 @@
     {/if}
   </div>
 {:else if node.type === "text"}
-  <div class="text">{props.text ?? ""}</div>
+  {#if props.markdown}
+    <div class="markdown"><Markdown nodes={props.blocks ?? []} /></div>
+  {:else}
+    <div class="text">{props.text ?? ""}</div>
+  {/if}
+{:else if node.type === "progress"}
+  <div class="field">
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    {#if props.value == null}
+      <progress class="progress"></progress>
+    {:else}
+      <progress class="progress" value={props.value} max={props.max ?? 1}></progress>
+    {/if}
+  </div>
+{:else if node.type === "spinner"}
+  {#if props.active ?? true}
+    <div class="spinner-box" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      {#if props.label}<span class="spinner-label">{props.label}</span>{/if}
+    </div>
+  {/if}
 {:else if node.type === "button"}
   <button onclick={() => postEvent(node.id, "click")}>{props.label ?? ""}</button>
 {:else if node.type === "textinput"}
