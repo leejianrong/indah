@@ -1,3 +1,4 @@
+import "./fonts.css"; // self-hosted Studio typefaces, inlined into the bundle
 import { mount } from "svelte";
 import App from "./App.svelte";
 

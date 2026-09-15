@@ -120,7 +120,9 @@ def test_focused_text_input_is_not_clobbered_by_a_server_echo():
                 box.click()
                 page.keyboard.type("hello")
                 expect(box).to_have_value("hello")
-                page.locator("button").dispatch_event("click")  # server sets it "STALE"
+                page.locator("button", has_text="set-from-server").dispatch_event(
+                    "click"
+                )  # server sets it "STALE"
                 page.wait_for_timeout(300)
                 expect(box).to_have_value("hello")  # not clobbered while focused
                 box.blur()
@@ -149,7 +151,9 @@ def test_dragging_slider_is_not_snapped_back_by_a_server_echo():
                     "el => { el.value = '8';"
                     " el.dispatchEvent(new Event('input', { bubbles: true })); }"
                 )
-                page.locator("button").dispatch_event("click")  # server sets it to 2
+                page.locator("button", has_text="set-from-server").dispatch_event(
+                    "click"
+                )  # server sets it to 2
                 page.wait_for_timeout(300)
                 expect(slider).to_have_value("8")  # not snapped back while focused
                 slider.blur()

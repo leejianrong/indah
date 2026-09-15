@@ -72,9 +72,45 @@
       source.close();
     };
   });
+
+  // Theme: "system" | "light" | "dark", persisted in localStorage. A <head>
+  // script already resolved the saved choice into data-theme before first paint;
+  // here we manage the toggle and keep "system" in sync with OS changes.
+  let theme = $state("system");
+
+  function applyTheme(choice) {
+    const dark =
+      choice === "dark" ||
+      (choice === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  }
+
+  function setTheme(choice) {
+    theme = choice;
+    try {
+      localStorage.setItem("indah-theme", choice);
+    } catch (e) {
+      /* storage may be blocked; the in-memory choice still applies */
+    }
+    applyTheme(choice);
+  }
+
+  onMount(() => {
+    try {
+      theme = localStorage.getItem("indah-theme") || "system";
+    } catch (e) {
+      /* ignore */
+    }
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onSystemChange = () => {
+      if (theme === "system") applyTheme("system");
+    };
+    mq.addEventListener("change", onSystemChange);
+    return () => mq.removeEventListener("change", onSystemChange);
+  });
 </script>
 
-<main class="card">
+<div class="shell">
   <header class="brand">
     <svg class="mark" viewBox="0 0 32 32" aria-label="indah" role="img">
       <path d="M16 16C11.7 12.4 11.7 6 16 3.6C20.3 6 20.3 12.4 16 16Z" fill="var(--primary)" />
@@ -83,6 +119,46 @@
       <path d="M16 16C19.6 20.3 26 20.3 28.4 16C26 11.7 19.6 11.7 16 16Z" fill="var(--secondary)" />
     </svg>
     <span class="wordmark">indah</span>
+    <span class="spacer"></span>
+    <div class="theme-toggle" role="group" aria-label="Theme">
+      <button
+        type="button"
+        title="Follow system theme"
+        aria-label="System theme"
+        aria-pressed={theme === "system"}
+        onclick={() => setTheme("system")}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="13" rx="2" />
+          <path d="M8 20h8M12 17v3" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        title="Light theme"
+        aria-label="Light theme"
+        aria-pressed={theme === "light"}
+        onclick={() => setTheme("light")}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="4" />
+          <path
+            d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+          />
+        </svg>
+      </button>
+      <button
+        type="button"
+        title="Dark theme"
+        aria-label="Dark theme"
+        aria-pressed={theme === "dark"}
+        onclick={() => setTheme("dark")}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+        </svg>
+      </button>
+    </div>
   </header>
   {#if $structure}
     <Node node={$structure} />
@@ -91,7 +167,7 @@
     <span class="dot" class:live={$status.live}></span>
     <span>{$status.text}</span>
   </div>
-</main>
+</div>
 
 {#if $toast}
   <button type="button" class="toast" onclick={() => toast.set(null)}>{$toast}</button>

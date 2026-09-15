@@ -11,11 +11,14 @@
     <style>
       /* indah "Studio" theme (ADR-0014). A design-token layer: colour roles, shape,
          elevation, type. A theme is this token set; components below style through
-         the tokens, never literals. Fonts use a system stack so the shell fetches
-         nothing at runtime (ADR-0004); bundling the display/mono faces is a later
-         enhancement. */
+         the tokens, never literals. Light is the base on :root; Studio dark is
+         :root[data-theme="dark"]. A tiny <head> script resolves the user's choice
+         (light / dark / system, in localStorage) into data-theme before first
+         paint, so there is no flash and the toggle wins over the OS both ways. The
+         Studio typefaces are self-hosted (src/fonts.css), so the shell still
+         fetches nothing at runtime (ADR-0004). */
       :root {
-        color-scheme: light dark;
+        color-scheme: light;
 
         --bg: #faf6f0;
         --surface: #fffdf9;
@@ -30,9 +33,11 @@
         --on-primary: #ffffff;
         --primary-container: #ffd9e7;
         --secondary: #2e6d62;
+        --on-secondary: #ffffff;
         --secondary-container: #c9ece4;
 
         --ok: #2e6d47;
+        --warn: #8a5300;
         --err: #c0362c;
 
         --shadow: 0 2px 5px -2px rgba(90, 20, 55, 0.16),
@@ -41,75 +46,122 @@
         --radius-sm: 10px;
         --radius-pill: 24px;
 
-        --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
-          sans-serif;
-        --font-display: var(--font-body);
-        --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo,
+        --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+        --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo,
           monospace;
       }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #191319;
-          --surface: #221b22;
-          --surface-2: #2c232c;
-          --surface-3: #382d38;
-          --text: #f1e7ee;
-          --muted: #bda9b6;
-          --outline: #4a3d48;
-          --outline-soft: #332833;
+      :root[data-theme="dark"] {
+        color-scheme: dark;
 
-          --primary: #f06ca6;
-          --on-primary: #5a0d38;
-          --primary-container: #5a1740;
-          --secondary: #66b7a6;
-          --secondary-container: #1f4d44;
+        --bg: #191319;
+        --surface: #221b22;
+        --surface-2: #2c232c;
+        --surface-3: #382d38;
+        --text: #f1e7ee;
+        --muted: #bda9b6;
+        --outline: #4a3d48;
+        --outline-soft: #332833;
 
-          --ok: #7fd39a;
-          --err: #ff8a7a;
+        --primary: #f06ca6;
+        --on-primary: #5a0d38;
+        --primary-container: #5a1740;
+        --secondary: #66b7a6;
+        --on-secondary: #00382f;
+        --secondary-container: #1f4d44;
 
-          --shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.5),
-            0 12px 30px -16px rgba(0, 0, 0, 0.6);
-        }
+        --ok: #7fd39a;
+        --warn: #f0c04c;
+        --err: #ffb4ab;
+
+        --shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.5),
+          0 12px 30px -16px rgba(0, 0, 0, 0.6);
       }
 
       * { box-sizing: border-box; }
       body {
         margin: 0;
         min-height: 100vh;
-        display: grid;
-        place-items: center;
         font: 15px/1.5 var(--font-body);
         color: var(--text);
         background: var(--bg);
         padding: 1.5rem;
         -webkit-font-smoothing: antialiased;
       }
+      /* The app frame: content floats on the warm page ground, no chrome itself. */
+      .shell { max-width: 1080px; margin: 0 auto; }
+
+      /* Card: a surface panel that floats on the ground (the Studio "panels on
+         porcelain" look). The building block layout components sit inside. */
       .card {
         background: var(--surface);
         border: 1px solid var(--outline-soft);
         border-radius: var(--radius);
-        padding: 1.75rem 2rem;
+        padding: 1.4rem 1.5rem;
         box-shadow: var(--shadow);
-        min-width: min(380px, 90vw);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .card-title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--muted);
       }
 
-      /* brand lockup: Bunga mark + wordmark */
+      /* brand lockup: Bunga mark + wordmark + theme toggle, on the page ground */
       .brand {
         display: flex;
         align-items: center;
         gap: 0.6rem;
-        margin: 0 0 1.4rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--outline-soft);
+        margin: 0 0 1.3rem;
       }
-      .brand .mark { width: 26px; height: 26px; flex: none; display: block; }
+      .brand .mark { width: 28px; height: 28px; flex: none; display: block; }
       .brand .wordmark {
         font-family: var(--font-display);
         font-weight: 700;
-        font-size: 1.35rem;
+        font-size: 1.4rem;
         letter-spacing: -0.03em;
         color: var(--text);
       }
+      .brand .spacer { margin-left: auto; }
+
+      /* theme toggle: a compact segmented control (system / light / dark) */
+      .theme-toggle {
+        display: inline-flex;
+        gap: 2px;
+        padding: 3px;
+        background: var(--surface-2);
+        border: 1px solid var(--outline);
+        border-radius: var(--radius-pill);
+      }
+      .theme-toggle button {
+        font: inherit;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 26px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-pill);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        transition: color 0.15s, background 0.15s;
+      }
+      .theme-toggle button:hover { filter: none; color: var(--text); }
+      .theme-toggle button[aria-pressed="true"] {
+        background: var(--surface);
+        color: var(--primary);
+        box-shadow: var(--shadow);
+      }
+      .theme-toggle svg { width: 15px; height: 15px; }
 
       .column { display: flex; flex-direction: column; gap: 1rem; }
 
@@ -439,6 +491,15 @@
         outline: 2px solid var(--primary);
         outline-offset: 2px;
       }
+      /* Studio secondary actions: tonal (teal container) and ghost (outline). */
+      button.tonal { color: var(--text); background: var(--secondary-container); }
+      button.tonal:hover { filter: brightness(0.97); }
+      button.ghost {
+        color: var(--primary);
+        background: transparent;
+        border: 1px solid var(--outline);
+      }
+      button.ghost:hover { filter: none; background: var(--surface-2); }
 
       .status {
         margin-top: 1.4rem;
@@ -473,6 +534,23 @@
         cursor: pointer;
       }
     </style>
+    <script>
+      // Resolve the saved theme choice (light / dark / system) into data-theme
+      // before first paint, so dark never flashes light. The toggle in the shell
+      // writes localStorage["indah-theme"]; "system" (the default) follows the OS.
+      (function () {
+        try {
+          var choice = localStorage.getItem("indah-theme") || "system";
+          var dark =
+            choice === "dark" ||
+            (choice === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+        } catch (e) {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

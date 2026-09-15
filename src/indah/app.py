@@ -28,6 +28,7 @@ from starlette.routing import Route
 
 from .components import (
     Button,
+    Card,
     Chat,
     Checkbox,
     Column,
@@ -306,7 +307,8 @@ def build_demo_session() -> Session:
         markdown=True,
     )
 
-    controls = Column(
+    controls = Card(
+        title="Controls",
         children=[
             TextInput(
                 prompt, label="Prompt", placeholder="Describe something...", on_submit=generate
@@ -329,42 +331,58 @@ def build_demo_session() -> Session:
             Row(
                 children=[
                     Button("Generate", on_click=generate),
-                    Button("Clear", on_click=clear),
+                    Button("Clear", on_click=clear, variant="tonal"),
                 ]
             ),
             Spinner(active=busy, label="Generating..."),
             Progress(progress, label="Progress"),
-        ]
+        ],
     )
 
     dashboard = Column(
         children=[
-            Grid(
-                columns=2,
+            Card(
                 children=[
-                    Column(children=[Text("Runs"), Text(lambda: str(runs.value))]),
-                    Column(children=[Text("Tiles"), Text(lambda: str(len(images.value)))]),
+                    Grid(
+                        columns=2,
+                        children=[
+                            Column(children=[Text("Runs"), Text(lambda: str(runs.value))]),
+                            Column(children=[Text("Tiles"), Text(lambda: str(len(images.value)))]),
+                        ],
+                    ),
                 ],
             ),
-            _preview_chart(temperature),
-            DataFrame(
-                lambda: (
-                    history.value
-                    or {"columns": ["run", "prompt", "model", "style", "images"], "rows": []}
-                ),
-                label="Run history",
+            Card(title="Temperature", children=[_preview_chart(temperature)]),
+            Card(
+                title="Run history",
+                children=[
+                    DataFrame(
+                        lambda: (
+                            history.value
+                            or {
+                                "columns": ["run", "prompt", "model", "style", "images"],
+                                "rows": [],
+                            }
+                        )
+                    ),
+                ],
             ),
-            List(
-                activity,
-                empty="No activity yet -- hit Generate.",
-                item={
-                    "tag": "div",
-                    "class": "log-line",
-                    "children": [
-                        {"tag": "code", "text": "time"},
-                        {"tag": "span", "text": "text"},
-                    ],
-                },
+            Card(
+                title="Activity",
+                children=[
+                    List(
+                        activity,
+                        empty="No activity yet -- hit Generate.",
+                        item={
+                            "tag": "div",
+                            "class": "log-line",
+                            "children": [
+                                {"tag": "code", "text": "time"},
+                                {"tag": "span", "text": "text"},
+                            ],
+                        },
+                    ),
+                ],
             ),
             Expander(label="Run console", children=[console]),
             Expander(label="Current settings", children=[Text(settings_md, markdown=True)]),
@@ -377,8 +395,8 @@ def build_demo_session() -> Session:
             Tabs(
                 labels=["Chat", "Gallery", "Dashboard"],
                 children=[
-                    Chat(messages, pending=pending, label="Conversation"),
-                    Gallery(images, columns=3, label="Generated tiles"),
+                    Card(title="Conversation", children=[Chat(messages, pending=pending)]),
+                    Card(title="Generated tiles", children=[Gallery(images, columns=3)]),
                     dashboard,
                 ],
             ),

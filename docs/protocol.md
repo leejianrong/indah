@@ -87,8 +87,9 @@ UI down: the traceback is logged server-side and an `error` message is pushed.
 | `type` | Kind | Key props | Events (payload) |
 |--------|------|-----------|------------------|
 | `column` | container | — | — |
+| `card` | container | `title` (a surface panel) | — |
 | `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree) | — |
-| `button` | input | `label` | `click` |
+| `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`) | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label` | `input` `{value}` |
 | `select` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
