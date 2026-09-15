@@ -43,27 +43,37 @@ fallback is Cloudflared or long-polling, decided here before building further.
 #### Unit
 - The env detector returns the correct URL shape for Colab, RunPod, and local.
 
-### R2 smoke test on real hardware (pending)
+### R2 smoke test on real hardware - PASSED (0.1.0, 2026-09-15)
 
 The proxy behaviour (R2) cannot be reproduced by a local test - it needs a run on
 the actual Colab and RunPod runtimes. `examples/smoke_test_rc.ipynb` is the
-ready-to-run check: it `pip install --pre indah==0.1.0rc1`, confirms no Node is
-needed, launches one app that exercises every proxy-sensitive path (SSE streaming,
-live slider/select patches, a custom-component round-trip), and carries a
-checklist to tick. It rides on `0.1.0rc1` being published (see
-`docs/RELEASING.md`), so it runs before the final `0.1.0` tag.
+ready-to-run check: it `pip install indah==0.1.0`, confirms no Node is needed,
+launches one app that exercises every proxy-sensitive path (SSE streaming, live
+slider/select patches, a custom-component round-trip), and carries a checklist to
+tick.
 
-Results (fill in after the run):
+Results (indah 0.1.0):
 
 | Check | Colab | RunPod |
 |-------|-------|--------|
-| Inline iframe renders | - | - |
-| Slider patches live | - | - |
-| Select patches live | - | - |
-| Streaming arrives incrementally | - | - |
-| Custom component round-trips | - | - |
-| Survives a ~2 min idle gap | - | - |
-| No Node in the runtime | - | - |
+| Inline iframe renders | ✓ | n/a¹ |
+| Slider patches live | ✓ | ✓ |
+| Select patches live | ✓ | ✓² |
+| Streaming arrives incrementally | ✓ | ✓² |
+| Custom component round-trips | ✓ | ✓² |
+| Survives a ~2 min idle gap | ✓ | ✓ |
+| No Node in the runtime | ✓ | ✓ |
+
+**Colab** - full browser run of the checklist by the owner (all boxes).
+**RunPod** - an automated curl smoke against the pod's `proxy.runpod.net` URL: the
+SSE stream served the `init` tree, delivered 8 heartbeats over a 130s stream (so it
+survived past the ~100s Cloudflare cap), and round-tripped a slider event to a live
+`patch`; the pod ran `python:3.12-slim` with no Node. The recipe is in the
+`runpod-jobs` skill (`references/http-service-pods.md`).
+
+¹ No browser in the RunPod curl smoke, so the inline-iframe render is a Colab-only
+check. ² These per-widget rows were not separately driven on RunPod; they ride the
+same SSE/patch path already proven through the proxy (init + heartbeat + patch).
 
 **Colab runs on 0.1.0rc1:** install/import fine, but the shell would not render -
 Colab's proxy forwards the SSE response in fixed-size windows and holds any frame
@@ -73,7 +83,8 @@ flushed, but the `init` after it sat in a fresh window). Fixed by emitting ~8 KB
 ignored SSE comment padding on connect and after every frame, so each frame fills a
 window and flushes (ADR-0002 real-hardware note). Reproduced and guarded locally by
 a window-buffering TCP proxy in `tests/e2e/test_proxy_buffering.py` (no Colab
-needed). Re-confirmation on real Colab rides in the next RC.
+needed). Re-confirmed on real Colab on `0.1.0` - the shell renders and every
+checklist row passes (results table above).
 
 Any proxy fixes discovered here update ADR-0002/0011 and the R2 note in
 `docs/PLAN.md`.
