@@ -214,7 +214,9 @@ Test at the highest seams that stay honest about the cross-language boundary:
 
 - **Colab proxy + SSE reliability** (R2). SSE should pass Colab's proxy where
   WebSockets do not, but this must be proven on real hardware — confronted in
-  Slice 1.
+  Slice 1. Status: proven locally (heartbeat + `Last-Event-Id` resume); the
+  real-hardware run is pending, packaged as `examples/smoke_test_rc.ipynb` against
+  `0.1.0rc1` and gating the final `0.1.0` tag (see `docs/SLICES.md`).
 - **RunPod's 100s proxy timeout** (R3). Long SSE streams may be cut; needs a
   heartbeat/reconnect strategy — exercised in Slice 3 (streaming).
 - **Granular-patch correctness** (R1). The diffing core is the hardest part to get

@@ -43,6 +43,31 @@ fallback is Cloudflared or long-polling, decided here before building further.
 #### Unit
 - The env detector returns the correct URL shape for Colab, RunPod, and local.
 
+### R2 smoke test on real hardware (pending)
+
+The proxy behaviour (R2) cannot be reproduced by a local test - it needs a run on
+the actual Colab and RunPod runtimes. `examples/smoke_test_rc.ipynb` is the
+ready-to-run check: it `pip install --pre indah==0.1.0rc1`, confirms no Node is
+needed, launches one app that exercises every proxy-sensitive path (SSE streaming,
+live slider/select patches, a custom-component round-trip), and carries a
+checklist to tick. It rides on `0.1.0rc1` being published (see
+`docs/RELEASING.md`), so it runs before the final `0.1.0` tag.
+
+Results (fill in after the run):
+
+| Check | Colab | RunPod |
+|-------|-------|--------|
+| Inline iframe renders | - | - |
+| Slider patches live | - | - |
+| Select patches live | - | - |
+| Streaming arrives incrementally | - | - |
+| Custom component round-trips | - | - |
+| Survives a ~2 min idle gap | - | - |
+| No Node in the runtime | - | - |
+
+Any proxy fixes discovered here update ADR-0002/0011 and the R2 note in
+`docs/PLAN.md`.
+
 ---
 
 ## V2: Reactive core with granular patches — DONE
@@ -238,6 +263,12 @@ for the clean-env check.
   bun/yarn/pnpm/vite/svelte/esbuild tripwires first on `PATH`, assert zero
   invocations at install and runtime); its invariants are pinned by the packaging
   unit test.
+- **(post-MVP hardening)** `tests/e2e/test_browser.py` renders the shell in a real
+  headless Chromium (Playwright) and asserts the DOM patches through the SSE
+  round-trip: the init tree renders, a slider and a select patch the live DOM, and
+  the registered colorpicker round-trips a value. This is the only layer that
+  exercises the V4 shell additions (the generic `Custom.svelte` renderer, Select,
+  DataFrame) in a real DOM; it runs in a dedicated `browser-e2e` CI job.
 
 #### Integration
 - Each value-bearing component round-trips (set from Python → snapshot/patch;
