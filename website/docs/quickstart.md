@@ -5,14 +5,11 @@
 indah is pure-Python to install and run - no Node, npm, or bun, because the
 frontend ships pre-built inside the wheel.
 
-The first release is being cut as a release candidate. Until `0.1.0` is final,
-install the RC (pre-releases need `--pre`):
-
 ```bash
-pip install --pre indah
+pip install indah
 ```
 
-Prefer to run from a clone while the release lands:
+Prefer to run from a clone:
 
 ```bash
 git clone https://github.com/leejianrong/indah && cd indah
