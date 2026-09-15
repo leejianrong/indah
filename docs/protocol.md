@@ -102,6 +102,9 @@ UI down: the traceback is logged server-side and an `error` message is pushed.
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
 | `spinner` | display | `active`, `label` | — |
+| `list` | display | `items:[...]` (a `Signal[list]`), `template` (item render spec), `empty` | — |
+| `chat` | display | `messages:[{role,content}]`, `pending`, `label` | — |
+| `gallery` | display | `images:[{src,alt,caption}]`, `columns`, `label` | — |
 | `row` | container | `gap`, `wrap`, `align` | — |
 | `grid` | container | `columns`, `gap` | — |
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
@@ -116,6 +119,13 @@ existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no
 payload.
+
+The data-driven lists (`list`, `chat`, `gallery`) hold their items in one reactive
+prop (a `Signal[list]`), so growing, shrinking, or reordering is an ordinary prop
+change over the `patch` op -- no structural children op and no version bump (ADR-0016).
+`list` renders each item through an optional `template` (the same render-spec
+vocabulary as `_spec`, binding the item's fields) or as text; `chat` and `gallery`
+use a built-in per-item template.
 
 A `text` node with `markdown:true` carries a `blocks` tree instead of `text`: the
 backend parses a safe subset of Markdown (server-side) into nodes the shell renders

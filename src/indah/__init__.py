@@ -12,14 +12,17 @@ See https://github.com/leejianrong/indah for the plan.
 from .app import build_demo_session, create_app, mock_llm
 from .components import (
     Button,
+    Chat,
     Checkbox,
     Column,
     Component,
     DataFrame,
     Date,
     Expander,
+    Gallery,
     Grid,
     Image,
+    List,
     MultiSelect,
     Number,
     Plot,
@@ -78,6 +81,10 @@ __all__ = [
     "StreamText",
     "Progress",
     "Spinner",
+    # data-driven list (ADR-0016)
+    "List",
+    "Chat",
+    "Gallery",
     # layout containers (ADR-0015)
     "Row",
     "Grid",

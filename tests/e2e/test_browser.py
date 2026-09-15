@@ -209,3 +209,64 @@ def test_markdown_renders_safely_with_progress_and_spinner():
                 browser.close()
     finally:
         handle.stop()
+
+
+def _data_list_app():
+    """An app with a data-driven List, Chat, and Gallery, plus a button that grows
+    all three by setting each Signal[list] to a fresh list (ADR-0016)."""
+    from indah import Button, Chat, Column, Gallery, List, Session, Signal, create_app
+
+    swatch = (
+        "data:image/svg+xml,"
+        "%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E"
+        "%3Crect width='40' height='40' fill='%23b5296b'/%3E%3C/svg%3E"
+    )
+    logs = Signal(["first", "second"])
+    messages = Signal([{"role": "user", "content": "hi"}])
+    images = Signal([swatch])
+
+    def add():
+        logs.set(logs.value + ["third"])
+        messages.set(messages.value + [{"role": "assistant", "content": "hello there"}])
+        images.set(images.value + [swatch])
+
+    root = Column(
+        children=[
+            List(logs, empty="none"),
+            Chat(messages, label="Chat"),
+            Gallery(images, columns=2, label="Gallery"),
+            Button("add", on_click=add),
+        ]
+    )
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_data_driven_list_chat_and_gallery_grow_on_a_signal_change():
+    """List/Chat/Gallery render from one Signal[list] each and grow when the signal
+    is reassigned - add/remove is a prop change over the existing patch op."""
+    handle = launch(_data_list_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                expect(page.locator(".list-item")).to_have_count(2)
+                expect(page.locator(".chat .bubble")).to_have_count(1)
+                expect(page.locator(".gallery-item")).to_have_count(1)
+
+                page.locator("button", has_text="add").click()
+
+                # Each list grew by one, live, through the SSE patch round-trip.
+                expect(page.locator(".list-item")).to_have_count(3)
+                expect(page.locator(".chat .bubble")).to_have_count(2)
+                expect(
+                    page.locator(".chat .bubble.role-assistant", has_text="hello there")
+                ).to_be_visible()
+                expect(page.locator(".gallery-item")).to_have_count(2)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

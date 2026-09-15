@@ -1,6 +1,6 @@
 # ADR-0016: Dynamic content — a data-driven list, not a structural op
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-15
 - Deciders: Jian (owner)
 

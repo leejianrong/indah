@@ -29,6 +29,16 @@
     void props.value; // track the server value
     if (inputEl && document.activeElement !== inputEl) syncFromServer();
   });
+
+  // Keep a chat pinned to the newest message. The dependency array is re-created
+  // whenever messages/pending change, so the action's update() runs and scrolls.
+  function autoscroll(node) {
+    const toBottom = () => {
+      node.scrollTop = node.scrollHeight;
+    };
+    toBottom();
+    return { update: toBottom };
+  }
 </script>
 
 {#if node.type === "column"}
@@ -102,6 +112,57 @@
       <div class="expander-body">
         {#each node.children as child (child.id)}
           <Self node={child} />
+        {/each}
+      </div>
+    {/if}
+  </div>
+{:else if node.type === "list"}
+  <div class="list">
+    {#if (props.items ?? []).length === 0}
+      {#if props.empty}<div class="list-empty">{props.empty}</div>{/if}
+    {:else}
+      {#each props.items ?? [] as item, i (item?.key ?? item?.id ?? i)}
+        {#if props.template}
+          <div class="list-item"><Custom spec={props.template} props={item} nodeId={node.id} /></div>
+        {:else}
+          <div class="list-item">{item}</div>
+        {/if}
+      {/each}
+    {/if}
+  </div>
+{:else if node.type === "chat"}
+  <div class="field">
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    <div class="chat" use:autoscroll={[props.messages, props.pending]}>
+      {#each props.messages ?? [] as m, i (i)}
+        <div class="bubble role-{m.role}">
+          <span class="bubble-role">{m.role}</span>
+          <div class="bubble-body">{m.content}</div>
+        </div>
+      {/each}
+      {#if props.pending}
+        <div class="bubble role-assistant pending">
+          <span class="bubble-role">assistant</span>
+          <div class="bubble-body">{props.pending}</div>
+        </div>
+      {/if}
+    </div>
+  </div>
+{:else if node.type === "gallery"}
+  <div class="field">
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    {#if (props.images ?? []).length === 0}
+      <div class="list-empty">No images yet.</div>
+    {:else}
+      <div
+        class="gallery"
+        style="grid-template-columns: repeat({props.columns ?? 3}, minmax(0, 1fr));"
+      >
+        {#each props.images ?? [] as img, i (img.src + i)}
+          <figure class="gallery-item">
+            <img src={img.src} alt={img.alt ?? ""} />
+            {#if img.caption}<figcaption>{img.caption}</figcaption>{/if}
+          </figure>
         {/each}
       </div>
     {/if}

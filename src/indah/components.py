@@ -19,6 +19,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from .markdown import to_blocks
+from .protocol import RenderSpec
 from .reactive import Computed, Signal
 
 if TYPE_CHECKING:
@@ -759,6 +760,158 @@ class Expander(Component):
                 self._open.set(not self._open.value)
             return True
         return False
+
+
+# -- Data-driven list (ADR-0016) ---------------------------------------------
+#
+# Growing/variable content (logs, search results, chat, galleries) is modelled as
+# *data*, not as a growing subtree: the items live in one reactive prop and the
+# shell renders each through a template. Add/remove/reorder is an ordinary prop
+# change carried by the existing ``patch`` op -- no structural children op, no
+# ``protocol_version`` bump. ``Chat`` and ``Gallery`` are specialisations the shell
+# renders with a built-in template; the generic ``List`` renders each item with an
+# ADR-0012 render spec (or as text when none is given).
+
+
+def _to_items(value: Any) -> list[Any]:
+    """Coerce a source value to a JSON-safe list of items (dicts or scalars)."""
+    if value is None:
+        return []
+    out: list[Any] = []
+    for item in value:
+        if isinstance(item, dict):
+            out.append({str(k): _json_safe(v) for k, v in item.items()})
+        else:
+            out.append(_json_safe(item))
+    return out
+
+
+class List(Component):
+    """A data-driven list bound to a ``Signal[list]`` (ADR-0016).
+
+    The items live in one reactive prop; set the signal to a new list to add,
+    remove, or reorder (mutating in place will not notify -- assign a fresh list,
+    e.g. ``items.set(items.value + [row])``). Pass an ``item`` render spec (the
+    ADR-0012 vocabulary, binding each item's fields) to shape each row; without one
+    each item renders as text. ``empty`` is shown when the list is empty.
+    """
+
+    type = "list"
+
+    def __init__(
+        self,
+        items: Source,
+        *,
+        item: dict[str, Any] | RenderSpec | None = None,
+        empty: str = "",
+    ) -> None:
+        super().__init__()
+        self._items = items
+        self._empty = empty
+        if item is None:
+            self._template: dict[str, Any] | None = None
+        else:
+            spec = item if isinstance(item, RenderSpec) else RenderSpec.model_validate(item)
+            self._template = spec.validated().wire()
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"empty": self._empty}
+        if self._template is not None:
+            props["template"] = self._template
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"items": lambda: _to_items(_read(self._items))}
+
+
+def _to_messages(value: Any) -> list[dict[str, str]]:
+    """Normalise chat messages to ``[{"role","content"}, ...]`` (both strings)."""
+    if value is None:
+        return []
+    out: list[dict[str, str]] = []
+    for message in value:
+        if isinstance(message, dict):
+            role = str(message.get("role", "assistant"))
+            content = str(message.get("content", ""))
+        elif isinstance(message, (tuple, list)) and len(message) == 2:
+            role, content = str(message[0]), str(message[1])
+        else:
+            continue
+        out.append({"role": role, "content": content})
+    return out
+
+
+class Chat(Component):
+    """A chat transcript of role bubbles bound to a ``Signal[list]`` (ADR-0016).
+
+    ``messages`` is a list of ``{"role","content"}`` (or ``(role, content)``) items;
+    the shell renders one bubble per message and auto-scrolls to the newest. Bind
+    ``pending`` to a ``Signal[str]`` to show a live, still-streaming assistant bubble
+    while a reply is being generated (set it back to ``""`` once committed).
+    """
+
+    type = "chat"
+
+    def __init__(self, messages: Source, *, pending: Source = None, label: str = "") -> None:
+        super().__init__()
+        self._messages = messages
+        self._pending = pending
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {
+            "messages": lambda: _to_messages(_read(self._messages)),
+            "pending": lambda: str(_read(self._pending)) if self._pending is not None else "",
+        }
+
+
+def _to_images(value: Any) -> list[dict[str, str]]:
+    """Normalise gallery images to ``[{"src","alt","caption"}, ...]``.
+
+    Accepts a URL/``data:`` URI string, raw PNG ``bytes``, or a dict with ``src``
+    (plus optional ``alt``/``caption``); reuses the ``Image`` source coercion.
+    """
+    if value is None:
+        return []
+    out: list[dict[str, str]] = []
+    for image in value:
+        if isinstance(image, dict):
+            out.append(
+                {
+                    "src": _image_src(image.get("src")),
+                    "alt": str(image.get("alt", "")),
+                    "caption": str(image.get("caption", "")),
+                }
+            )
+        else:
+            out.append({"src": _image_src(image), "alt": "", "caption": ""})
+    return out
+
+
+class Gallery(Component):
+    """An image grid bound to a ``Signal[list]`` (ADR-0016).
+
+    ``images`` is a list of URL/``data:`` strings, PNG ``bytes``, or
+    ``{"src","alt","caption"}`` dicts; the shell lays them out in ``columns``
+    columns (collapsing on a phone). Set the signal to a new list to grow the grid.
+    """
+
+    type = "gallery"
+
+    def __init__(self, images: Source, *, columns: int = 3, label: str = "") -> None:
+        super().__init__()
+        self._images = images
+        self._columns = columns
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"columns": int(self._columns), "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"images": lambda: _to_images(_read(self._images))}
 
 
 def walk(root: Component):
