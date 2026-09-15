@@ -151,11 +151,13 @@ class TextInput(Component):
         *,
         placeholder: str = "",
         label: str = "",
+        on_submit: Callable[[], Any] | None = None,
     ) -> None:
         super().__init__()
         self._value = value
         self._placeholder = placeholder
         self._label = label
+        self._on_submit = on_submit
 
     def static_props(self) -> dict[str, Any]:
         return {"placeholder": self._placeholder, "label": self._label}
@@ -165,6 +167,97 @@ class TextInput(Component):
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "input" and "value" in payload:
+            self._value.set(str(payload["value"]))
+            return True
+        if event == "submit":
+            # Enter in the box. Always handled (a no-op without on_submit, so it
+            # never 400s); runs on_submit sync or async, like a Button click.
+            if self._on_submit is not None:
+                result = self._on_submit()
+                if inspect.iscoroutine(result):
+                    return result
+            return True
+        return False
+
+
+class Checkbox(Component):
+    """A checkbox two-way bound to a ``Signal[bool]`` (R5)."""
+
+    type = "checkbox"
+
+    def __init__(self, value: Signal[bool], *, label: str = "") -> None:
+        super().__init__()
+        self._value = value
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"checked": lambda: bool(self._value.value)}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "change" and "value" in payload:
+            self._value.set(bool(payload["value"]))
+            return True
+        return False
+
+
+class Number(Component):
+    """A numeric input two-way bound to a ``Signal[float]`` (R5).
+
+    Like a Slider without the track: a plain number box with optional bounds.
+    """
+
+    type = "number"
+
+    def __init__(
+        self,
+        value: Signal[float],
+        *,
+        min: float | None = None,
+        max: float | None = None,
+        step: float = 1,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._value = value
+        self._min = min
+        self._max = max
+        self._step = step
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"min": self._min, "max": self._max, "step": self._step, "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: self._value.value}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "input" and "value" in payload:
+            self._value.set(payload["value"])
+            return True
+        return False
+
+
+class Date(Component):
+    """A date picker two-way bound to a ``Signal[str]`` (ISO ``YYYY-MM-DD``) (R5)."""
+
+    type = "date"
+
+    def __init__(self, value: Signal[str], *, label: str = "") -> None:
+        super().__init__()
+        self._value = value
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: self._value.value}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event in ("input", "change") and "value" in payload:
             self._value.set(str(payload["value"]))
             return True
         return False
@@ -213,6 +306,65 @@ class Select(Component):
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event in ("change", "input") and "value" in payload:
             self._value.set(str(payload["value"]))
+            return True
+        return False
+
+
+class Radio(Component):
+    """A radio group two-way bound to a ``Signal[str]`` (R5).
+
+    Like a Select, but shows every option at once. Options are ``"a"`` or
+    ``(value, label)`` tuples, same as Select.
+    """
+
+    type = "radio"
+
+    def __init__(self, value: Signal[str], *, options: list[Any], label: str = "") -> None:
+        super().__init__()
+        self._value = value
+        self._options = [_normalise_option(o) for o in options]
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"options": self._options, "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: self._value.value}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event in ("change", "input") and "value" in payload:
+            self._value.set(str(payload["value"]))
+            return True
+        return False
+
+
+class MultiSelect(Component):
+    """A multi-select two-way bound to a ``Signal[list[str]]`` (R5).
+
+    The signal holds the list of selected string values; choosing in the UI
+    replaces it. Options are ``"a"`` or ``(value, label)`` tuples, same as Select.
+    """
+
+    type = "multiselect"
+
+    def __init__(self, value: Signal[list], *, options: list[Any], label: str = "") -> None:
+        super().__init__()
+        self._value = value
+        self._options = [_normalise_option(o) for o in options]
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"options": self._options, "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: list(self._value.value)}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event in ("change", "input") and "value" in payload:
+            values = payload["value"]
+            if not isinstance(values, (list, tuple)):
+                return False
+            self._value.set([str(v) for v in values])
             return True
         return False
 

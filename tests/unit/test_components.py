@@ -2,13 +2,19 @@ import pytest
 
 from indah.components import (
     Button,
+    Checkbox,
     Column,
     DataFrame,
+    Date,
     Image,
+    MultiSelect,
+    Number,
     Plot,
+    Radio,
     Select,
     Slider,
     Text,
+    TextInput,
     walk,
 )
 from indah.reactive import Signal
@@ -197,3 +203,73 @@ def test_dataframe_rejects_unsupported_source():
     df = DataFrame(42)
     with pytest.raises(TypeError):
         df.reactive_props()["data"]()
+
+
+# -- Slice A input set -------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_textinput_submit_runs_handler_and_is_always_handled():
+    calls = []
+    v = Signal("")
+    ti = TextInput(v, on_submit=lambda: calls.append(1))
+    assert ti.handle("submit", {}) is True
+    assert calls == [1]
+    # No handler: still handled (a no-op), so Enter never 400s.
+    assert TextInput(Signal("")).handle("submit", {}) is True
+
+
+@pytest.mark.unit
+def test_checkbox_serialises_and_round_trips():
+    v = Signal(False)
+    cb = Checkbox(v, label="agree")
+    cb.id = "n0"
+    assert cb.to_json()["props"] == {"label": "agree", "checked": False}
+    assert cb.handle("change", {"value": True}) is True
+    assert v.peek() is True
+
+
+@pytest.mark.unit
+def test_number_serialises_and_sets_signal():
+    v = Signal(3)
+    n = Number(v, min=0, max=10, step=0.5, label="qty")
+    n.id = "n0"
+    assert n.to_json()["props"] == {"min": 0, "max": 10, "step": 0.5, "label": "qty", "value": 3}
+    assert n.handle("input", {"value": 7.5}) is True
+    assert v.peek() == 7.5
+
+
+@pytest.mark.unit
+def test_radio_normalises_options_and_sets_signal():
+    v = Signal("a")
+    r = Radio(v, options=["a", ("b", "Bee")], label="pick")
+    r.id = "n0"
+    assert r.to_json()["props"] == {
+        "options": [{"value": "a", "label": "a"}, {"value": "b", "label": "Bee"}],
+        "label": "pick",
+        "value": "a",
+    }
+    assert r.handle("change", {"value": "b"}) is True
+    assert v.peek() == "b"
+
+
+@pytest.mark.unit
+def test_multiselect_round_trips_a_list():
+    v = Signal(["a"])
+    ms = MultiSelect(v, options=["a", "b", "c"])
+    ms.id = "n0"
+    assert ms.to_json()["props"]["value"] == ["a"]
+    assert ms.handle("change", {"value": ["a", "c"]}) is True
+    assert v.peek() == ["a", "c"]
+    # A non-list payload is rejected (unhandled), never crashes.
+    assert ms.handle("change", {"value": "a"}) is False
+
+
+@pytest.mark.unit
+def test_date_round_trips_iso_string():
+    v = Signal("")
+    d = Date(v, label="when")
+    d.id = "n0"
+    assert d.to_json()["props"] == {"label": "when", "value": ""}
+    assert d.handle("change", {"value": "2026-09-15"}) is True
+    assert v.peek() == "2026-09-15"
