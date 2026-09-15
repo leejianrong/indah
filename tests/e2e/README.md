@@ -25,5 +25,12 @@ Two layers:
   If the `e2e` extra isn't installed, the browser test skips cleanly (via
   `importorskip`) and the httpx layer still runs.
 
+- **`test_proxy_buffering.py`** reproduces Colab's window-buffering proxy with a
+  local TCP proxy in front of a real launched app, and asserts the shell renders
+  and patches through it in Chromium - the guard for the SSE flush-padding fix
+  (ADR-0002). A negative test disables the padding and shows the same proxy stalls,
+  so it proves the fix rather than luck. Needs the `e2e` extra (browser).
+
 A separate Colab/RunPod smoke check (`examples/smoke_test_rc.ipynb`, a real
-notebook run) guards proxy compatibility and cannot be reproduced by a local test.
+notebook run) is still the final proxy sign-off, but the buffering class of failure
+is now reproduced and guarded locally by `test_proxy_buffering.py`.

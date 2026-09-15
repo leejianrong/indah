@@ -65,11 +65,15 @@ Results (fill in after the run):
 | Survives a ~2 min idle gap | - | - |
 | No Node in the runtime | - | - |
 
-**Colab run 1 (0.1.0rc1):** install/import fine, but the shell stalled on
-"connecting..." - Colab's proxy buffered the SSE response and held the first
-`init` frame, so `EventSource` never opened. Fixed by an ~8 KB SSE comment
-preamble that forces the proxy to flush immediately (ADR-0002 real-hardware note).
-Re-test with the fix is pending (rides in the next RC).
+**Colab runs on 0.1.0rc1:** install/import fine, but the shell would not render -
+Colab's proxy forwards the SSE response in fixed-size windows and holds any frame
+that does not fill one. First symptom: stuck on "connecting..." (even the `init`
+was held); with a lead-in flush added, second symptom: "live" but empty (the lead
+flushed, but the `init` after it sat in a fresh window). Fixed by emitting ~8 KB of
+ignored SSE comment padding on connect and after every frame, so each frame fills a
+window and flushes (ADR-0002 real-hardware note). Reproduced and guarded locally by
+a window-buffering TCP proxy in `tests/e2e/test_proxy_buffering.py` (no Colab
+needed). Re-confirmation on real Colab rides in the next RC.
 
 Any proxy fixes discovered here update ADR-0002/0011 and the R2 note in
 `docs/PLAN.md`.

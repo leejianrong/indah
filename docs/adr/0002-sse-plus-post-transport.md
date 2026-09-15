@@ -43,11 +43,21 @@ so the transport sits behind one interface.
 
 ## Real-hardware note: Colab proxy buffering (2026-09)
 
-The first Colab run on `0.1.0rc1` surfaced the R2 risk in a concrete form: the
-shell loaded but sat on "connecting...", because Colab's front-end proxy buffered
-the SSE response and held the small first `init` frame below its flush threshold -
-so `EventSource` never saw a byte and stayed in `CONNECTING`. `X-Accel-Buffering:
-no` alone did not prevent it. Fix: every stream now opens with an ~8 KB SSE comment
-preamble (`_SSE_PREAMBLE`), which is ignored by the client but pushes the proxy
-past its buffer so it flushes immediately. This keeps SSE as the transport; the
-WebSocket-upgrade escalation was not needed.
+The first Colab runs on `0.1.0rc1` surfaced the R2 risk concretely. Colab's
+front-end proxy forwards the upstream response in fixed-size **windows**, releasing
+a window to the browser only once it fills - it does not honour `X-Accel-Buffering:
+no`. A small SSE frame lands in a window that never fills on its own, so it is held:
+
+- **Symptom 1** - the shell sat on "connecting...": even the response and first
+  `init` frame were held, so `EventSource` never opened.
+- **Symptom 2** - after a lead-in flush was added, the status went "live" but the
+  page stayed empty: the lead-in filled one window (so headers flushed and
+  `onopen` fired), but the `init` frame after it sat in a fresh unfilled window.
+
+Fix: emit a block of ignored SSE comment padding (`_SSE_FLUSH_PAD`, ~8 KB, one
+window) **on connect and again after every frame**, so each frame fills a window
+and is flushed immediately. This keeps SSE as the transport - the WebSocket-upgrade
+escalation was not needed. It is reproduced and guarded locally by a
+window-buffering TCP proxy in `tests/e2e/test_proxy_buffering.py`. Cost: ~8 KB per
+frame; fine for init and interactive input, and a later token-coalescing pass can
+trim it for high-rate streaming if needed.
