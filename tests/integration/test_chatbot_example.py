@@ -74,6 +74,29 @@ async def test_mock_chatbot_streams_into_bubbles_and_clears_the_prompt():
 
 
 @pytest.mark.integration
+async def test_build_session_threads_max_new_tokens_into_the_stream():
+    """The reply cap (KAN-1401) reaches the stream: build_session must pass
+    max_new_tokens through to stream_fn, not drop it (which capped replies at the
+    library default and cut them off). The mock honours the cap, so a small value
+    yields a short reply."""
+    chatbot = _load_example()
+    session = chatbot.build_session(chatbot.mock_chat_stream, max_new_tokens=3)
+    hub = Hub()
+    session.bind_hub(hub)
+
+    textinput = _node(session, "textinput")
+    button = _node(session, "button")
+    chat = _node(session, "chat")
+
+    session.dispatch(textinput.id, "input", {"value": "hi"})
+    result = session.dispatch(button.id, "click", {})
+    await result.coro
+
+    reply = _messages(chat)[1]["content"]
+    assert len(reply.split()) == 3  # capped at 3 tokens, not the full mock reply
+
+
+@pytest.mark.integration
 async def test_mock_chatbot_is_guarded_against_an_empty_message():
     chatbot = _load_example()
     session = chatbot.build_session(chatbot.mock_chat_stream)

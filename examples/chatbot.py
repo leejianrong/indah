@@ -61,9 +61,15 @@ def load_model(model_name: str = DEFAULT_MODEL):
 
 
 async def chat_stream(
-    tokenizer, model, messages: list[Message], *, max_new_tokens: int = 512
+    tokenizer, model, messages: list[Message], *, max_new_tokens: int = 1024
 ) -> AsyncIterator[str]:
     """Yield an assistant reply token by token for a chat ``messages`` list.
+
+    ``max_new_tokens`` caps how long a single reply may be. It defaults high (1024)
+    and is exposed through ``build_session``/``--max-new-tokens`` so a reply is not
+    truncated mid-sentence (KAN-1401). This is the generation cap only, distinct
+    from the model's context window -- the small instruct models here have a large
+    context (32k+), so 1024 new tokens never hits it.
 
     transformers' ``TextIteratorStreamer`` runs ``model.generate`` on a background
     thread and exposes a *blocking* iterator of tokens. We pull each token off it
@@ -105,19 +111,20 @@ async def chat_stream(
 
 
 async def mock_chat_stream(
-    tokenizer, model, messages: list[Message], *, max_new_tokens: int = 512
+    tokenizer, model, messages: list[Message], *, max_new_tokens: int = 1024
 ) -> AsyncIterator[str]:
     """A model-free stand-in with the same shape as ``chat_stream`` (for --mock).
 
     Lets the whole app - wiring, streaming, transcript - run and be smoke-tested
-    with no transformers/torch and no GPU.
+    with no transformers/torch and no GPU. It honours ``max_new_tokens`` (one word
+    ~ one token here) so the same cap that bounds a real reply is exercised.
     """
     last = messages[-1]["content"].strip() if messages else ""
     reply = (f"You said: '{last}'. " if last else "") + (
         "This is a mock reply, streamed token by token. Pass a real model to "
         "chat_stream() to swap me out - the wiring does not change."
     )
-    for word in reply.split(" "):
+    for word in reply.split(" ")[:max_new_tokens]:
         await asyncio.sleep(0.05)
         yield word + " "
 
@@ -147,7 +154,7 @@ async def _coalesced(
         yield "".join(buffer)
 
 
-def build_session(stream_fn, tokenizer=None, model=None) -> Session:
+def build_session(stream_fn, tokenizer=None, model=None, *, max_new_tokens: int = 1024) -> Session:
     """Build the chat UI around a ``stream_fn(tokenizer, model, messages)``.
 
     The conversation is a ``Signal[list]`` of ``{"role","content"}`` messages
@@ -155,6 +162,9 @@ def build_session(stream_fn, tokenizer=None, model=None) -> Session:
     token into a ``pending`` signal so it shows as a live, growing assistant bubble,
     then commits to the list when done. Growing the transcript is an ordinary prop
     change over the existing patch op - no dynamic-children protocol op needed.
+
+    ``max_new_tokens`` is threaded into every ``stream_fn`` call so replies are not
+    capped at the low library default and cut off mid-sentence (KAN-1401).
     """
     prompt: Signal[str] = Signal("")
     status: Signal[str] = Signal("Ask me something.")
@@ -174,7 +184,8 @@ def build_session(stream_fn, tokenizer=None, model=None) -> Session:
         pending.set("")
 
         parts: list[str] = []
-        async for chunk in _coalesced(stream_fn(tokenizer, model, list(history))):
+        stream = stream_fn(tokenizer, model, list(history), max_new_tokens=max_new_tokens)
+        async for chunk in _coalesced(stream):
             pending.set(pending.value + chunk)
             parts.append(chunk)
 
@@ -208,14 +219,20 @@ def main() -> None:
         help="canned replies with no model/GPU (needs only indah)",
     )
     parser.add_argument("--model", default=DEFAULT_MODEL, help="a Hugging Face model id")
+    parser.add_argument(
+        "--max-new-tokens",
+        type=int,
+        default=1024,
+        help="cap on a single reply's length (raise if replies still cut off)",
+    )
     args = parser.parse_args()
 
     if args.mock:
-        session = build_session(mock_chat_stream)
+        session = build_session(mock_chat_stream, max_new_tokens=args.max_new_tokens)
     else:
         print(f"Loading {args.model} (the first run downloads weights)...", flush=True)
         tokenizer, model = load_model(args.model)
-        session = build_session(chat_stream, tokenizer, model)
+        session = build_session(chat_stream, tokenizer, model, max_new_tokens=args.max_new_tokens)
 
     indah.launch(indah.create_app(session=session))
 
