@@ -188,6 +188,14 @@
       .list { display: flex; flex-direction: column; gap: 0.4rem; }
       .list-item { font-size: 0.92rem; color: var(--text); }
       .list-empty { font-size: 0.9rem; color: var(--muted); font-style: italic; }
+      /* one worked item template: a timestamped activity line (a code + a span) */
+      .log-line { display: flex; gap: 0.55rem; align-items: baseline; }
+      .log-line code {
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        color: var(--muted);
+        flex: none;
+      }
       .chat {
         display: flex;
         flex-direction: column;
