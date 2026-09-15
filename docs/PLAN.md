@@ -1,6 +1,8 @@
 # indah: Plan
 
-Status: draft · Milestone: MVP (v0)
+Status: MVP shipped (0.1.0, 2026-09-15) · Active milestone: post-MVP (Milestone 1) —
+see [Post-MVP roadmap](#post-mvp-roadmap-milestone-1) at the end of this file. The
+sections below record the MVP (v0) plan as delivered.
 
 ## Problem
 
@@ -226,3 +228,77 @@ Test at the highest seams that stay honest about the cross-language boundary:
   right; a wrong patch set silently corrupts the UI — unit + e2e in Slice 2.
 - **Notebook inline display** across Colab vs RunPod (JupyterLab) iframe quirks —
   surfaced in Slice 1.
+
+---
+
+# Post-MVP roadmap (Milestone 1)
+
+The MVP proved the architecture (single-port SSE+POST through Colab/RunPod proxies,
+reactive patches, streaming, the starter set). Milestone 1 answers "what do people
+actually reach for Streamlit and Gradio to do, and what does indah need to serve
+those well without losing its Colab / zero-Node / single-port / reactive north
+star." Worked backwards from use cases to the missing primitives (planning round,
+2026-09-15).
+
+## Decisions taken this round
+
+- **Shared foundation first.** Build the primitives both the ML-demo and data-viz
+  halves need (layout, a list, per-session state) before specialising.
+- **Dynamic content is a data-driven list, not a structural protocol op** (ADR-0016).
+  Chat/gallery/logs ride one reactive `data` prop like `DataFrame` already does — no
+  wire-format change. A true structural children op stays deferred (reframes
+  Q-children / KAN-1396).
+- **Charting is hybrid** (ADR-0018): keep server-PNG `Plot` for static, add one
+  bundled client chart for interactive/real-time. No protocol bump (data rides
+  props).
+- **Media is upload-and-process now; live video later for non-Colab** (ADR-0017).
+  Transport tiers are explicit: Tier 0 = SSE+POST (the Colab floor); Tier 1 = an
+  optional WS upgrade for continuous media, non-Colab only, declared now and built
+  later.
+- **Visual identity locked** (ADR-0014): the "Studio" theme (warm porcelain,
+  bougainvillea magenta, deep teal; Bricolage Grotesque / IBM Plex) and the "Bunga"
+  four-petal logo. A design-token layer lands *before* the new components so each is
+  drawn to it once. One theme baked now; a switcher is deferred but cheap.
+
+## Use-case clusters (worked backwards to gaps)
+
+| Cluster | Missing primitive | Cost |
+|---------|-------------------|------|
+| A · Dashboards & tables | layout containers; rich Table (sort/page/select/edit); metric cards | cheap–medium |
+| B · Charts & viz (static/real-time/interactive, heatmaps, spectrograms, maps) | client-side charting (Plot is a server PNG/frame) | expensive |
+| C · Media I/O (upload image/audio/file, gallery, download) | upload input + multipart endpoint; download | medium |
+| D · Chat / RAG / streaming | data-driven list (bubbles, citations, logs) | cheap–medium |
+| E · Annotation / canvas (boxes, masks) | interactive canvas + pointer round-trip | expensive (deferred) |
+| F · Real-time media (webcam, live detection) | transport Tier 1 (non-Colab) | expensive (deferred) |
+| G · App structure (multi-page, per-session) | per-session state; layout; (later) structural op | medium–expensive |
+
+Also folded in as cheap wins: complete the basic input set
+(checkbox/number/radio/multiselect/date), markdown/code in `Text`, progress/spinner,
+Enter-to-submit, download.
+
+## Highest-leverage primitives
+
+The recurring insight: **almost all new UI can be first-class shell components
+carrying data in ordinary props over today's protocol.** The wire format only needs
+to change for a genuine structural-children op (deferred) — not for lists, layout, or
+charts. The foundation primitives, most-shared first: **layout containers**,
+**data-driven list**, **per-session state**, then the two specialisations
+**file/media upload** and **hybrid charting**.
+
+## Slice sequence
+
+| Slice | Delivers | New primitives | Protocol | ADR |
+|-------|----------|----------------|----------|-----|
+| 0 · Design system & identity | the token substrate + brand | Studio tokens, theming seam, Bunga logo/favicon (shell + docs) | none | 0014 |
+| A · Layout & input set | foundation for both halves | Row/Grid/Tabs/Sidebar/Expander; checkbox/number/radio/multiselect/date; markdown in Text; progress; Enter-to-submit | none | 0015 |
+| B · Data-driven list | chat, galleries, logs | List/Repeat + Chat + Gallery; chatbot rebuilt on Chat | none | 0016 |
+| C · Per-session state | honest multi-user; prereq for upload | implement the ADR-0010 session-store seam | none | 0010 |
+| D · File/media upload | the classic ML demo | Upload + multipart endpoint; download | +endpoint (additive) | 0017 |
+| E · Hybrid charting | data-viz half | bundled client chart (interactive/real-time) alongside server-PNG Plot | none | 0018 |
+
+Deferred with a recorded boundary: structural-children op (KAN-1396), interactive
+canvas annotation, real-time video (Tier 1), multi-page routing. Transport hardening
+(KAN-1395, the per-frame pad) rides just before Slice E, which amplifies it.
+
+Sequenced into demoable increments in `docs/SLICES.md`; open questions and their
+resolutions in `docs/QUESTIONS.md`.

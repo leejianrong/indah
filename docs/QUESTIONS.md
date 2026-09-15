@@ -8,7 +8,10 @@ RunPod). See `PLAN.md` for the live plan.
 
 ## Open forks
 
-None — the grill round is closed.
+None. The MVP grill round is closed; the post-MVP (Milestone 1) forks were decided
+in the 2026-09-15 planning round and are recorded in the register below
+(Q-usecase-priority, Q-dynamic, Q-charting, Q-media, Q-design, Q-layout,
+Q-theme-switcher).
 
 ## Register
 
@@ -42,8 +45,15 @@ None — the grill round is closed.
 | Q-custom | How does register_component() add a type without runtime Node? | DECIDED | A validated declarative render spec the pre-built shell interprets at runtime; travels on the wire as the `_spec` prop, keyed off the protocol | ADR-0012 |
 | Q-market | Component marketplace / plugin distribution? | DEFERRED | Post-v0 | n/a |
 | Q-persist | Persistent state / database integration? | DEFERRED | User code owns durable data | n/a |
-| Q-children | Dynamic children (grow/reorder a node's child list at runtime)? | DEFERRED | v1 patches only merge/append props — no structural child op. A growing list (e.g. a chat transcript) is modelled by appending into one `StreamText`; a `repeat`/list component is the post-v0 answer. Surfaced building the chatbot example (`examples/chatbot.py`). | n/a |
-| Q-frame-coalesce | Streaming wire overhead: one ~8 KB proxy-flush pad per token frame | DEFERRED | Ship on the current pad for 0.1.0; the chatbot example coalesces tokens in userland as the mitigation. Framework-level coalescing/debounce (or not padding sub-window frames) is a post-0.1.0 optimization. | ADR-0002, ADR-0011 |
+| Q-children | Dynamic children (grow/reorder a node's child list at runtime)? | DECIDED | Near-term answer is a **data-driven list** (items in one reactive `data` prop, rendered by a shell template — no protocol op), Slice B. A general structural children op (heterogeneous nodes added/removed/reordered) stays DEFERRED until multi-page/dynamic-forms need it (KAN-1396). Supersedes the earlier `repeat`-needs-a-structural-op framing. | ADR-0016 |
+| Q-frame-coalesce | Streaming wire overhead: one ~8 KB proxy-flush pad per token frame | DEFERRED | Ship on the current pad for 0.1.0; the chatbot example coalesces tokens in userland as the mitigation. Framework-level coalescing/debounce (or not padding sub-window frames) is a post-0.1.0 optimization; scheduled just before Slice E (streaming chart points amplify it), KAN-1395. | ADR-0002, ADR-0011 |
+| Q-usecase-priority | Which use-case half leads post-MVP? | DECIDED | Shared foundation first (layout + list + per-session state), then ML-demo I/O ahead of data-viz (Colab-researcher north star) | PLAN §Post-MVP, SLICES |
+| Q-dynamic | Dynamic content: structural protocol op or data-driven list? | DECIDED | Data-driven list first (no wire change); structural op deferred | ADR-0016 |
+| Q-charting | Charting: server-PNG, a client lib, or hybrid? | DECIDED | Hybrid — keep server-PNG `Plot` for static, add one bundled client chart for interactive/real-time; no protocol bump | ADR-0018 |
+| Q-media | Media I/O and real-time scope? | DECIDED | Upload-and-process now on Tier 0 (SSE+POST, the Colab floor); live video/real-time on Tier 1 (optional WS upgrade, non-Colab) later | ADR-0017 |
+| Q-design | Visual language and identity? | DECIDED | "Studio" theme + "Bunga" logo; a design-token layer using Material 3's role architecture but not its look; one theme baked now | ADR-0014 |
+| Q-layout | Layout beyond `Column`? | DECIDED | Named container components (Row/Grid/Tabs/Sidebar/Expander) arranging existing children; no protocol change | ADR-0015 |
+| Q-theme-switcher | User-selectable themes in the shell? | DEFERRED | One baked theme (Studio) now; a theme is a token-set swap, so a switcher is a cheap later addition | ADR-0014 |
 
 ## Coverage
 
@@ -62,3 +72,8 @@ None — the grill round is closed.
 | Measurable success | Q-succ |
 | Security and secrets | Q-sec |
 | Versioning and migration | Q-ver, F4 |
+| Post-MVP use-case priority | Q-usecase-priority |
+| Visual design and identity | Q-design, Q-theme-switcher |
+| Layout and dynamic content | Q-layout, Q-dynamic, Q-children |
+| Media and real-time transport | Q-media |
+| Charting | Q-charting |
