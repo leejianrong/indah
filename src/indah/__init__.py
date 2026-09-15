@@ -44,6 +44,12 @@ from .env import Environment, detect_environment, public_url
 from .launch import LaunchHandle, launch
 from .reactive import Computed, Signal, batch, computed, effect
 from .session import DispatchResult, Session
+from .session_store import (
+    InMemorySessionStore,
+    SessionHandle,
+    SessionStore,
+    SharedSessionStore,
+)
 
 __version__ = "0.1.0"
 
@@ -57,6 +63,11 @@ __all__ = [
     "LaunchHandle",
     "Session",
     "DispatchResult",
+    # per-session state seam (ADR-0010)
+    "SessionStore",
+    "SessionHandle",
+    "InMemorySessionStore",
+    "SharedSessionStore",
     # reactive
     "Signal",
     "Computed",

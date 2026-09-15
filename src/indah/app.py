@@ -15,7 +15,7 @@ import asyncio
 import json
 import math
 import urllib.parse
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from importlib.resources import files
 from typing import Any
@@ -58,9 +58,19 @@ from .custom import custom, register_component
 from .protocol import EventIn, init_message, patch_message, ping_message
 from .reactive import Signal
 from .session import Session
-from .transport import Hub, Item
+from .session_store import (
+    InMemorySessionStore,
+    SessionHandle,
+    SessionStore,
+    SharedSessionStore,
+)
+from .transport import Item
 
 DEFAULT_HEARTBEAT_SECONDS = 15.0
+
+# An id-less connection (a test, a curl, an old shell) shares this one session.
+# The real shell mints a per-tab id, so real viewers never land here together.
+DEFAULT_SESSION_ID = "default"
 
 _SSE_HEADERS = {
     "Cache-Control": "no-cache",
@@ -409,8 +419,43 @@ def build_demo_session() -> Session:
 def create_app(
     *,
     session: Session | None = None,
+    session_factory: Callable[[], Session] | None = None,
+    store: SessionStore | None = None,
     heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
 ) -> Starlette:
+    """Build the ASGI app.
+
+    State is reached through a :class:`~indah.session_store.SessionStore` seam
+    (ADR-0010), so each viewer gets an isolated session. Three ways to seed it,
+    most specific first:
+
+    - ``store=`` -- supply a ``SessionStore`` directly (a future external backend).
+    - ``session_factory=`` -- a zero-arg callable that builds a fresh ``Session``
+      (new signals) per viewer. The default is the built-in demo, so ``create_app()``
+      already isolates viewers.
+    - ``session=`` -- a single pre-built ``Session`` **shared** by every viewer (the
+      pre-Slice-C behaviour; for single-user apps and introspection in tests).
+
+    ``session``, ``session_factory``, and ``store`` are mutually exclusive.
+    """
+    given = [
+        name
+        for name, val in (
+            ("session", session),
+            ("session_factory", session_factory),
+            ("store", store),
+        )
+        if val is not None
+    ]
+    if len(given) > 1:
+        raise ValueError(f"pass at most one of session/session_factory/store, got {given}")
+
+    if store is None:
+        if session is not None:
+            store = SharedSessionStore(session)
+        else:
+            store = InMemorySessionStore(session_factory or build_demo_session)
+
     app = Starlette(
         routes=[
             Route("/", _index, methods=["GET"]),
@@ -419,11 +464,14 @@ def create_app(
             Route("/api/event", _event, methods=["POST"]),
         ]
     )
-    app.state.hub = Hub()
+    app.state.store = store
     app.state.heartbeat_seconds = heartbeat_seconds
-    app.state.session = build_demo_session() if session is None else session
-    # Live (async/streaming) emits reach clients through the hub.
-    app.state.session.bind_hub(app.state.hub)
+    # Back-compat: a single-shared app still exposes .session/.hub for callers and
+    # tests that introspect the one graph. A per-session app has neither -- there is
+    # no single session to name; go through the store (keyed by sid) instead.
+    if isinstance(store, SharedSessionStore):
+        app.state.session = store.handle.session
+        app.state.hub = store.handle.hub
     return app
 
 
@@ -489,8 +537,13 @@ async def sse_events(
 
 async def _stream(request: Request) -> StreamingResponse:
     app = request.app
-    hub: Hub = app.state.hub
-    session: Session = app.state.session
+    store: SessionStore = app.state.store
+    # One session per browser tab, keyed by the id the shell sends (?sid=...).
+    # An id-less connection shares the default session (ADR-0010).
+    sid = request.query_params.get("sid") or DEFAULT_SESSION_ID
+    handle: SessionHandle = store.get_or_create(sid)
+    hub = handle.hub
+    session = handle.session
     queue = hub.subscribe()
 
     # Subscribe first, then decide init-vs-resume against the current offset with
@@ -539,8 +592,12 @@ async def _event(request: Request) -> JSONResponse:
             {"ok": False, "error": "validation", "detail": exc.errors()}, status_code=422
         )
 
-    hub: Hub = request.app.state.hub
-    session: Session = request.app.state.session
+    # Route the event to the sender's session (ADR-0010): its handler runs on its
+    # own signals and its patches go only to its own hub -- never another viewer's.
+    store: SessionStore = request.app.state.store
+    handle: SessionHandle = store.get_or_create(event.sid or DEFAULT_SESSION_ID)
+    hub = handle.hub
+    session = handle.session
     result = session.dispatch(event.component, event.event, event.payload)
     if result is None:
         return JSONResponse({"ok": False, "error": "unknown event"}, status_code=400)
