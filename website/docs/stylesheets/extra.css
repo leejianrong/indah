@@ -1,0 +1,27 @@
+/* indah "Studio" identity on the docs site (ADR-0014).
+   The palette is set to `custom` in zensical.toml, so we define the primary
+   (bougainvillea magenta) and accent (deep teal) here, per Material's custom-colour
+   pattern. Light uses the base tones; the slate (dark) scheme uses the lighter
+   variants so they stay legible. */
+
+[data-md-color-primary="custom"] {
+  --md-primary-fg-color: #b5296b;
+  --md-primary-fg-color--light: #c65488;
+  --md-primary-fg-color--dark: #8f1f54;
+  --md-primary-bg-color: #fffdf9;
+  --md-primary-bg-color--light: #fffdf9;
+}
+[data-md-color-accent="custom"] {
+  --md-accent-fg-color: #2e6d62;
+  --md-accent-fg-color--transparent: rgba(46, 109, 98, 0.1);
+}
+
+[data-md-color-scheme="slate"][data-md-color-primary="custom"] {
+  --md-primary-fg-color: #f06ca6;
+  --md-primary-fg-color--light: #f492bf;
+  --md-primary-fg-color--dark: #c65488;
+}
+[data-md-color-scheme="slate"][data-md-color-accent="custom"] {
+  --md-accent-fg-color: #66b7a6;
+  --md-accent-fg-color--transparent: rgba(102, 183, 166, 0.12);
+}
