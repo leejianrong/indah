@@ -42,6 +42,8 @@ None — the grill round is closed.
 | Q-custom | How does register_component() add a type without runtime Node? | DECIDED | A validated declarative render spec the pre-built shell interprets at runtime; travels on the wire as the `_spec` prop, keyed off the protocol | ADR-0012 |
 | Q-market | Component marketplace / plugin distribution? | DEFERRED | Post-v0 | n/a |
 | Q-persist | Persistent state / database integration? | DEFERRED | User code owns durable data | n/a |
+| Q-children | Dynamic children (grow/reorder a node's child list at runtime)? | DEFERRED | v1 patches only merge/append props — no structural child op. A growing list (e.g. a chat transcript) is modelled by appending into one `StreamText`; a `repeat`/list component is the post-v0 answer. Surfaced building the chatbot example (`examples/chatbot.py`). | n/a |
+| Q-frame-coalesce | Streaming wire overhead: one ~8 KB proxy-flush pad per token frame | DEFERRED | Ship on the current pad for 0.1.0; the chatbot example coalesces tokens in userland as the mitigation. Framework-level coalescing/debounce (or not padding sub-window frames) is a post-0.1.0 optimization. | ADR-0002, ADR-0011 |
 
 ## Coverage
 
