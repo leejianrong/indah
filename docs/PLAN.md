@@ -305,3 +305,14 @@ window each (ADR-0002 "Streaming wire optimisation").
 
 Sequenced into demoable increments in `docs/SLICES.md`; open questions and their
 resolutions in `docs/QUESTIONS.md`.
+
+## Next: the dogfooding demo push (Milestone 1 continued)
+
+With the foundation and both specialisations shipped (Slices 0–E), the next round
+builds real demos on indah — to showcase it and to surface its own gaps by using it
+hard. The competitor landscape, positioning, the demo catalogue (split by audience:
+Colab-notebook vs standalone), and the gap analysis live in `docs/POSITIONING.md`;
+the gap primitives are proposed in ADR-0019 (client heatmap), ADR-0020 (image
+overlay / annotation), and ADR-0021 (rich Table). The prioritised backlog is on
+board 30 (epics split by audience + a framework-gaps epic). Planning only until the
+owner reviews it — no demos are built yet.
