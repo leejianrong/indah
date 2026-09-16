@@ -34,6 +34,7 @@ MANIFEST: list[tuple[str, str, str, str]] = [
     ("poster", "Poster generator", "🖼️", "poster"),
     ("image-classify", "Image classifier", "🔍", "upload_classify"),
     ("charts", "Hybrid charting", "📊", "charts"),
+    ("stocks", "Stock peer analysis", "💹", "stocks"),
 ]
 
 # One-line blurb per demo for the gallery cards (keyed by slug).
@@ -44,6 +45,7 @@ BLURBS: dict[str, str] = {
     "poster": "Tweak controls, watch a poster re-render live, then download it.",
     "image-classify": "Upload an image, get a prediction and a downloadable report.",
     "charts": "An interactive client chart beside a server plot and a heatmap.",
+    "stocks": "Compare a peer group's price, valuation, and 1-year return.",
 }
 
 # The Bunga mark (two magenta petals, two teal), inlined so the gallery needs no assets.

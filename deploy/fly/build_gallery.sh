@@ -14,7 +14,7 @@ app="${FLY_APP:-indah-demos}"
 region="${FLY_REGION:-sin}"
 
 # Example modules the gallery mounts (must match MANIFEST in gallery_app.py).
-examples=(chatbot training_dashboard diffusion poster upload_classify charts)
+examples=(chatbot training_dashboard diffusion poster upload_classify charts stocks)
 
 INDAH_REQ='indah @ git+https://github.com/leejianrong/indah@main'
 
