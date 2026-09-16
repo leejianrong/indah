@@ -30,11 +30,12 @@ That is a complete app. Drag a slider and only the label recomputes - no
 full-script rerun. `launch()` prints a URL and, in a notebook, embeds the app
 inline in the cell.
 
-!!! note "Status: early development, MVP feature-complete"
-    The core works end to end: the reactive core, the SSE transport, async token
-    streaming, the starter component set, and a custom-component seam. The `indah`
-    name is reserved on PyPI; the first release is being cut as `0.1.0rc1`. See
-    [Quickstart](quickstart.md) to run it today from a clone.
+!!! note "Status: 0.2.0 - Milestone 1 components shipped"
+    On top of the MVP (reactive core, SSE transport, streaming, custom-component
+    seam), 0.2.0 adds the full input set and layout containers, data-driven lists,
+    per-session state, file upload/download, and charting (server-PNG `Plot` plus
+    client-side `Chart`, `Heatmap`, an interactive `Table`, `Stat` cards, and
+    `ImageOverlay`). `pip install indah`, or see [Quickstart](quickstart.md).
 
 ## See it in one click
 
