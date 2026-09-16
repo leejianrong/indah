@@ -71,6 +71,19 @@ async def test_gallery_index_is_a_landing_page():
     assert "col-indah" in body  # the comparison table highlights indah
     assert 'href="chatbot/"' in body  # demo card link, relative -> base-path safe
     assert "token by token" in body  # the demo's blurb rendered on its card
+    assert 'src="thumbnails/chatbot.png"' in body  # real screenshot thumbnail wired in
+
+
+@pytest.mark.integration
+async def test_gallery_serves_the_demo_thumbnails():
+    build_gallery = _build_gallery()
+    gallery = build_gallery(
+        [{"slug": "chatbot", "title": "Streaming chatbot", "emoji": "💬", "app": _counter_app()}]
+    )
+    async with _client(gallery) as client:
+        r = await client.get("/thumbnails/chatbot.png")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("image/")
 
 
 @pytest.mark.integration
