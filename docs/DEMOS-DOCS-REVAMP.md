@@ -218,3 +218,36 @@ separable from the big redesign:
 - Slice 6: Docs IA reorg + de-competitor + screenshots.
 - Slice 7: Diffusion real/replay.
 - Slice 8 (stretch): Playground.
+
+## Status (2026-09-16)
+
+Landed on `main` (each its own squash-merged PR):
+
+- **#56** Chat box fixed-height scroll viewport (no more stretch).
+- **#57** This plan doc + factual fixes: live-gallery links (README/docs), Components
+  reference up to 0.2.0, canonical demo names, chatbot header, README badges.
+- **#58** Demo shell chrome: clickable logo -> gallery, view-source link, per-demo
+  `<title>` (via `create_app(title=/home_url=/source_url=)`, wired per demo in the gallery).
+- **#59** Training dashboard: `Stat` KPI cards instead of the big metric string.
+- **#60** Docs de-competitored (comparisons live only on the landing page now).
+- **#61** Landing page rebuilt: hero, get-started, principles, gallery grid, comparison
+  table, on-brand Studio theme + Bunga favicon (in `deploy/fly/landing.html`).
+- **#62** Colab demos: `pip install indah` from PyPI + full source inline (no clone/wget).
+- **#63** Docs nav grouped into Get started / Guides / Reference.
+
+Not the live site yet: the landing page, demo chrome, dashboard, and chat fix reach
+`indah-demos.fly.dev` only after a **Fly redeploy** (owner step), and PyPI users need a
+**0.2.1** (owner: PyPI token). Batch the chat fix + this wave into one 0.2.1.
+
+Remaining — needs a decision or an asset I can't produce solo:
+
+- **Keyed real chatbot (BYOK).** Needs: a `SecretInput`/`TextInput(password=True)`
+  component (buildable now), a provider choice (most free usage/availability), and a real
+  key to test. Decision: provider + confirm BYOK-only (no embedded shared key).
+- **New demos (stocks peer analysis, prettymapp).** The owner referenced specific
+  Streamlit apps to match *visually*; building blind risks missing the mark. Need the
+  owner's eye or acceptance of a mock-data interpretation.
+- **Real screenshots** (gallery thumbnails currently styled placeholders) and a **hero
+  video/GIF** — need browser/screen capture.
+- **Diffusion pre-recorded real steps** — need a real diffusion run to record frames.
+- **Playground** — Pyodide spike, roadmapped.
