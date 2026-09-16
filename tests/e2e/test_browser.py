@@ -17,6 +17,7 @@ it never collides with pytest-asyncio's event loop), while `launch()` runs the
 real uvicorn server in its own background thread.
 """
 
+import base64
 import re
 
 import pytest
@@ -332,6 +333,87 @@ def test_two_tabs_drive_independent_session_state():
 
                 # And a tab's own view is stable: tab1 is still 2, not tab2's 1.
                 expect(tab1.locator("div.text", has_text="count = 1")).to_have_count(0)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+# A 1x1 transparent PNG, so the upload e2e needs no fixture file on disk.
+_TINY_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+)
+
+
+def _upload_classify_app():
+    """An upload -> classify -> show app (the shape of examples/upload_classify.py),
+    with a sync handler so the browser assertion is deterministic."""
+    from indah import (
+        Column,
+        Download,
+        DownloadFile,
+        Image,
+        Session,
+        Signal,
+        Text,
+        Upload,
+        create_app,
+    )
+
+    def factory():
+        preview = Signal("")
+        result = Signal("")
+        report = Signal(None)
+
+        def on_upload(file):
+            preview.set("data:image/png;base64," + base64.b64encode(file.data).decode())
+            result.set(f"Predicted: **cat** from {file.filename}")
+            report.set(DownloadFile(b"prediction: cat\n", filename="prediction.txt"))
+
+        root = Column(
+            children=[
+                Upload(on_upload, accept="image/*", label="Upload an image"),
+                Image(preview, alt="uploaded image"),
+                Text(lambda: result.value or "_No prediction yet._", markdown=True),
+                Download(report, label="Download report"),
+            ]
+        )
+        return Session(root)
+
+    return create_app(session_factory=factory)
+
+
+@pytest.mark.e2e
+def test_upload_image_classify_and_show_result(tmp_path):
+    """The classic upload -> run -> show demo end to end (ADR-0017, KAN-1421):
+    a file posted from the shell reaches the handler, whose result (the echoed
+    image, the prediction, and a download link) patches the live DOM over SSE."""
+    handle = launch(_upload_classify_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                # Before upload: no prediction, and the download link is inert.
+                expect(page.locator(".markdown", has_text="No prediction yet")).to_be_visible()
+                expect(page.locator("a.download")).to_have_count(0)
+
+                # Upload an in-memory PNG through the shell's file input.
+                png = tmp_path / "cat.png"
+                png.write_bytes(_TINY_PNG)
+                page.locator("input[type=file]").set_input_files(str(png))
+
+                # The result patches in over SSE: prediction text, the echoed image,
+                # and a now-enabled download link served from this session.
+                expect(page.locator(".markdown", has_text="Predicted:")).to_be_visible()
+                expect(page.locator("img[alt='uploaded image']")).to_have_attribute(
+                    "src", re.compile("^data:image/png;base64,")
+                )
+                download = page.locator("a.download")
+                expect(download).to_be_visible()
+                expect(download).to_have_attribute("href", re.compile("api/file/"))
             finally:
                 browser.close()
     finally:
