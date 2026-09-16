@@ -27,27 +27,35 @@ cd deploy/spaces
 
 Each `build/<slug>/` is a complete Docker Space.
 
-## Push (owner step - needs a Hugging Face account/token)
+## Push (owner step - needs a Hugging Face **write** token)
 
-No secrets live in this repo (AGENTS.md). Do this once per demo, signed in as the
-indah HF org/user:
+No secrets live in this repo (AGENTS.md). The push needs a token with **write**
+access (a read token gets `403 Forbidden` on Space creation). Create one at
+<https://huggingface.co/settings/tokens> (role *write*, or a fine-grained token with
+"Write access to Spaces"), then log in and deploy:
 
 ```bash
-# 1) Create the Space (Docker SDK) once, via the HF UI or the CLI:
-pip install huggingface_hub
-huggingface-cli login                      # paste your HF token
-huggingface-cli repo create indah-poster --repo-type space --space_sdk docker
+hf auth login                              # paste your WRITE token
+# (or: export HF_TOKEN=hf_...write-token...)
 
-# 2) Push the built folder to it:
-cd deploy/spaces/build/poster
-git init && git add . && git commit -m "indah poster demo"
-git remote add space https://huggingface.co/spaces/<your-user>/indah-poster
-git push space HEAD:main
+./build_space.sh                           # assemble build/<slug>/
+uv run python deploy_hf.py                 # create + upload every Space
+uv run python deploy_hf.py poster          # ...or just one, by slug
 ```
 
-The Space builds the Dockerfile and serves the demo at
-`https://<your-user>-indah-poster.hf.space`. Add that URL to the gallery
-(`website/docs/gallery.md`) next to the demo's "Open in Colab" badge.
+`deploy_hf.py` creates `<you>/indah-<slug>` as a Docker Space (idempotent) and
+uploads the folder; HF builds the Dockerfile and serves each demo at
+`https://<you>-indah-<slug>.hf.space`. Add those URLs to the gallery
+(`website/docs/gallery.md`) next to each demo's "Open in Colab" badge.
+
+Manual alternative (per demo), if you prefer git over the script:
+
+```bash
+cd build/poster
+git init && git add . && git commit -m "indah poster demo"
+git remote add space https://huggingface.co/spaces/<you>/indah-poster
+git push space HEAD:main
+```
 
 ## Notes
 
