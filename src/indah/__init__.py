@@ -1,12 +1,13 @@
 """indah - a Python UI framework for ephemeral cloud notebooks.
 
-Reactive, single-port, no Node required at install or runtime. The MVP is
-feature-complete: the reactive core (signals, computeds, effects), a starter
-component set (Text, Button, Slider, TextInput, Select, Image, Plot, DataFrame,
-StreamText, Column) served over the single-port SSE transport, async handlers and
-LLM token streaming, and the register_component() seam for custom components
-(ADR-0012). The wire protocol is a versioned public contract (docs/protocol.md).
-See https://github.com/leejianrong/indah for the plan.
+Reactive, single-port, no Node required at install or runtime. Over the single-port
+SSE transport it ships: the reactive core (signals, computeds, effects); the full
+input set and layout containers (Row/Grid/Tabs/Sidebar/Expander); data-driven lists
+(List/Chat/Gallery); charting (server-PNG Plot plus the client-side Chart and
+Heatmap); an interactive Table and Stat cards; ImageOverlay for boxes/masks/keypoints;
+file upload/download; async handlers and LLM token streaming; per-session state; and
+the register_component() seam for custom components. The wire protocol is a versioned
+public contract (docs/protocol.md). See https://github.com/leejianrong/indah.
 """
 
 from .app import build_demo_session, create_app, mock_llm
@@ -60,7 +61,7 @@ from .session_store import (
     SharedSessionStore,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "__version__",

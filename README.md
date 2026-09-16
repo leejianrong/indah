@@ -8,12 +8,13 @@ Colab or Runpod cell. It keeps Streamlit's zero-config, single-port startup, add
 the async performance of a real full-stack app, and ships its frontend pre-built
 so there is no Node, npm, or bun anywhere at install or runtime.
 
-> **Status: early development, MVP feature-complete.** The core works end to end
-> from a clone: the reactive core, the SSE transport, async token streaming, the
-> starter component set, and a custom-component seam. Only a `0.0.x` name
-> placeholder is on PyPI so far, so install from source for now (below). Start with
-> [`docs/PLAN.md`](docs/PLAN.md) for the plan and [`docs/SLICES.md`](docs/SLICES.md)
-> for what is built.
+> **Status: 0.2.0 - Milestone 1 components shipped.** On top of the MVP (reactive
+> core, SSE transport, streaming, custom-component seam) it adds the full input set
+> and layout containers, data-driven lists (chat/gallery), per-session state, file
+> upload/download, and charting (server-PNG `Plot` plus client-side `Chart`,
+> `Heatmap`, an interactive `Table`, `Stat` cards, and `ImageOverlay`). Install with
+> `pip install indah`. Start with [`docs/PLAN.md`](docs/PLAN.md) for the plan and
+> [`docs/SLICES.md`](docs/SLICES.md) for what is built.
 
 ## Why another one
 
