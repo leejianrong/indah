@@ -250,9 +250,17 @@ Not the live site yet: everything above reaches `indah-demos.fly.dev` only after
 **Fly redeploy** (owner step), and PyPI users need the **0.2.1** publish (owner: PyPI
 token; notes drafted in #66).
 
-Remaining — needs an asset I can't produce solo, or roadmapped:
+- **#71** Real per-demo **screenshots** as gallery thumbnails — `scripts/capture_thumbnails.py`
+  drives each demo with headless Chromium (Playwright) and saves PNGs the gallery serves.
 
-- **Real screenshots** (gallery thumbnails are styled placeholder tiles) and a **hero
-  video/GIF** — need browser/screen capture of the running demos.
-- **Diffusion pre-recorded real steps** — need a real diffusion run to record frames.
-- **Playground** — Pyodide spike, roadmapped (feasibility analysis above).
+Remaining — backlogged on the indah board (KAN board 30):
+
+- **KAN-1488** — new demo: LLM comparison charts (cost/token, benchmarks; right chart per
+  metric). Owner idea, mock/published data.
+- **KAN-1489** — diffusion demo: pre-record **real** forward + reverse (noising +
+  denoising) frames from a model on Runpod, replay them. Plan only for now.
+- **KAN-1490** — Pyodide in-browser **playground** spike. Lives in the **Zensical docs
+  site** as a static Playground page (Pyodide is client-side JS, hosts on GitHub Pages,
+  CDN-loaded, lazy); the Fly landing links/embeds it. Reuses the Python core + Svelte
+  shell + a postMessage transport shim (not the parked WASM rewrite).
+- **Hero video/GIF** on the landing — still needs a screen recording of a demo/Colab run.
