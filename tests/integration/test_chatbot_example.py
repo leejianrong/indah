@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from indah.reactive import Signal
 from indah.transport import Hub
 
 _EXAMPLE = Path(__file__).resolve().parents[2] / "examples" / "chatbot.py"
@@ -38,6 +39,18 @@ def _pending_patches(hub: Hub) -> list[str]:
 
 def _node(session, node_type):
     return next(c for c in session._by_id.values() if c.type == node_type)
+
+
+def _textinputs(session):
+    return [c for c in session._by_id.values() if c.type == "textinput"]
+
+
+def _prompt_input(session):
+    return next(c for c in _textinputs(session) if not c.static_props().get("password"))
+
+
+def _key_input(session):
+    return next(c for c in _textinputs(session) if c.static_props().get("password"))
 
 
 def _messages(chat):
@@ -94,6 +107,59 @@ async def test_build_session_threads_max_new_tokens_into_the_stream():
 
     reply = _messages(chat)[1]["content"]
     assert len(reply.split()) == 3  # capped at 3 tokens, not the full mock reply
+
+
+@pytest.mark.integration
+async def test_byok_renders_a_masked_key_field():
+    chatbot = _load_example()
+    session = chatbot.build_session(
+        chatbot.mock_chat_stream, api_key=Signal(""), keyed_stream_fn=chatbot.gemini_chat_stream
+    )
+    # A masked (password) key field plus the ordinary prompt field.
+    assert len(_textinputs(session)) == 2
+    assert _key_input(session).static_props()["password"] is True
+
+
+@pytest.mark.integration
+async def test_byok_routes_to_the_keyed_stream_when_a_key_is_present():
+    chatbot = _load_example()
+
+    async def fake_keyed(api_key, messages, *, max_new_tokens=1024):
+        assert api_key == "secret-key"  # the entered key reaches the keyed stream
+        for tok in ["real ", "gemini ", "reply"]:
+            yield tok
+
+    session = chatbot.build_session(
+        chatbot.mock_chat_stream, api_key=Signal(""), keyed_stream_fn=fake_keyed
+    )
+    hub = Hub()
+    session.bind_hub(hub)
+
+    session.dispatch(_key_input(session).id, "input", {"value": "secret-key"})
+    session.dispatch(_prompt_input(session).id, "input", {"value": "hi"})
+    result = session.dispatch(_node(session, "button").id, "click", {})
+    await result.coro
+
+    reply = _messages(_node(session, "chat"))[1]["content"]
+    assert reply == "real gemini reply"  # from the keyed stream, not the mock echo
+
+
+@pytest.mark.integration
+async def test_byok_falls_back_to_the_mock_when_the_key_is_blank():
+    chatbot = _load_example()
+    session = chatbot.build_session(
+        chatbot.mock_chat_stream, api_key=Signal(""), keyed_stream_fn=chatbot.gemini_chat_stream
+    )
+    hub = Hub()
+    session.bind_hub(hub)
+
+    # Key left blank -> the mock answers (no network).
+    session.dispatch(_prompt_input(session).id, "input", {"value": "hello there"})
+    result = session.dispatch(_node(session, "button").id, "click", {})
+    await result.coro
+
+    reply = _messages(_node(session, "chat"))[1]["content"]
+    assert "hello there" in reply  # the mock echoes the question
 
 
 @pytest.mark.integration
