@@ -205,16 +205,25 @@ class TextInput(Component):
         *,
         placeholder: str = "",
         label: str = "",
+        password: bool = False,
         on_submit: Callable[[], Any] | None = None,
     ) -> None:
         super().__init__()
         self._value = value
         self._placeholder = placeholder
         self._label = label
+        # ``password`` masks the field (``<input type=password>``) for secrets like an
+        # API key. It is only display masking - the value still round-trips to the
+        # server like any input, so keep it in session state and never log it.
+        self._password = password
         self._on_submit = on_submit
 
     def static_props(self) -> dict[str, Any]:
-        return {"placeholder": self._placeholder, "label": self._label}
+        return {
+            "placeholder": self._placeholder,
+            "label": self._label,
+            "password": self._password,
+        }
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"value": lambda: self._value.value}

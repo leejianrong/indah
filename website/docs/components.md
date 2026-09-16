@@ -122,6 +122,10 @@ page = Column(
 label are the same. Read the current value anywhere with `.value`; it stays in
 sync with what the user picked.
 
+`TextInput(value, password=True)` masks the field (an `<input type="password">`) for
+secrets like an API key. It is only display masking - the value still round-trips like
+any input, so keep it in per-session state and never log it.
+
 ## Buttons and async handlers
 
 ```python
