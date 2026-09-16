@@ -1,19 +1,27 @@
-# Hosting the indah demos on Fly.io
+# Hosting the indah demo gallery on Fly.io
 
-The persistent "try-it-now" gallery (ADR-0023, the self-hosted path). We host on
-**Fly.io** rather than Hugging Face Spaces because HF now requires a **PRO**
-subscription to run Docker Spaces on free CPU (static Spaces are the only free tier,
-and indah is a server) - deploying to HF returns `402 Payment Required`. Fly runs the
-exact same Docker image, one app per demo, with machines that **auto-stop when idle**
-(so idle demos cost ~nothing).
+The persistent "try-it-now" gallery (ADR-0023, self-hosted path) - **one Fly app**
+that serves every demo behind a sub-path. We host on Fly rather than Hugging Face
+Spaces because HF now requires a **PRO** subscription for Docker Spaces on free CPU
+(deploying to HF returns `402`; only static Spaces are free, and indah is a server).
 
-The Colab one-click badges (the other tier) remain the free, zero-host baseline.
+**One machine, one domain.** `gallery_app.py` mounts each demo's indah app under
+`/<slug>` and serves a gallery index at `/`. This works because the indah shell uses
+document-relative URLs, so it runs under a base path - the same property that carries
+it through Colab's/Runpod's proxies (ADR-0001), pinned by
+`tests/integration/test_gallery_mount.py`. The machine auto-stops when idle, so the
+gallery costs ~nothing at rest.
+
+The Colab one-click badges remain the free, zero-host baseline.
 
 ## What's here
 
-- `deploy_fly.sh` - deploys each demo to a Fly app, reusing the Docker build folders
-  from `../spaces/build/<slug>/` (the same `Dockerfile` that would have gone to HF).
-  It writes a `fly.toml` into each build folder and `fly deploy`s it.
+- `gallery_app.py` - the single Starlette app (`build_gallery` mounts the demos;
+  `create_gallery` imports the examples and is the uvicorn factory entrypoint).
+- `build_gallery.sh` - assembles `build/`: `gallery_app.py` + the demo example files
+  + the Dockerfile / requirements / fly.toml.
+- `deploy_fly.sh` - builds then `fly deploy`s the one app.
+- `build/` - generated output (git-ignored).
 
 ## Deploy (owner step - needs a Fly account)
 
@@ -22,25 +30,22 @@ The Colab one-click badges (the other tier) remain the free, zero-host baseline.
 curl -L https://fly.io/install.sh | sh      # or: brew install flyctl
 fly auth login                               # or: fly auth signup
 
-# 2) Build the Docker folders, then deploy:
-cd deploy/spaces && ./build_space.sh
-cd ../fly && ./deploy_fly.sh                  # all demos
-./deploy_fly.sh poster                        # ...or one, by slug
+# 2) Deploy the gallery (builds build/ then fly deploy):
+cd deploy/fly && ./deploy_fly.sh
 ```
 
-Each demo goes live at `https://indah-demo-<slug>.fly.dev`. Fly app names are
-**global**, so if one is taken set a different prefix: `FLY_PREFIX=indah-jian ./deploy_fly.sh`
-(pick your own region with `FLY_REGION=...`, default `sin`).
+It goes live at `https://indah-demos.fly.dev`, with the demos at `/chatbot`,
+`/training-dashboard`, `/diffusion`, `/poster`, `/image-classify`, `/charts`. Fly app
+names are **global**, so if `indah-demos` is taken set your own: `FLY_APP=indah-jian
+./deploy_fly.sh` (region via `FLY_REGION=...`, default `sin`).
 
-Then add each URL to the gallery (`website/docs/gallery.md`) next to the demo's
+Then add the URLs to the gallery (`website/docs/gallery.md`) next to each demo's
 "Open in Colab" badge.
 
 ## Notes
 
-- Machines are configured `auto_stop_machines = "stop"` + `min_machines_running = 0`,
-  so an idle demo scales to zero; the first hit after idle pays a short cold start
-  (fine for demos).
+- `auto_stop_machines = "stop"` + `min_machines_running = 0` scale the machine to
+  zero when idle; the first hit after idle pays a short cold start (fine for demos).
 - The image installs indah from `git+https://github.com/leejianrong/indah@main`; pin
-  it to a release once indah is on PyPI (edit `INDAH_REQ` in `../spaces/build_space.sh`).
-- `deploy/spaces/deploy_hf.py` (the HF path) is kept for anyone with HF PRO; Fly is
-  the default free-tier host.
+  to a release once indah is on PyPI (edit `INDAH_REQ` in `build_gallery.sh`).
+- The per-demo Hugging Face path (`deploy/spaces/`) is kept for anyone with HF PRO.
