@@ -459,6 +459,123 @@ def _image_src(value: Any) -> str:
     return str(value)
 
 
+def _num(v: Any, default: float = 0.0) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_boxes(value: Any) -> list[dict[str, Any]]:
+    """Normalise detection boxes to ``[{x,y,w,h,label,color,score}, ...]`` (coords in
+    ``[0, 1]``, fractions of the image)."""
+    out: list[dict[str, Any]] = []
+    for b in value or []:
+        if isinstance(b, dict):
+            box = {
+                "x": _num(b.get("x")),
+                "y": _num(b.get("y")),
+                "w": _num(b.get("w")),
+                "h": _num(b.get("h")),
+            }
+        elif isinstance(b, (list, tuple)) and len(b) >= 4:
+            box = {"x": _num(b[0]), "y": _num(b[1]), "w": _num(b[2]), "h": _num(b[3])}
+        else:
+            continue
+        if isinstance(b, dict):
+            if b.get("label") is not None:
+                box["label"] = str(b["label"])
+            if b.get("color"):
+                box["color"] = str(b["color"])
+            if b.get("score") is not None:
+                box["score"] = _num(b["score"])
+        out.append(box)
+    return out
+
+
+def _to_points(value: Any) -> list[dict[str, Any]]:
+    """Normalise keypoints to ``[{x,y,label,color}, ...]`` (coords in ``[0, 1]``)."""
+    out: list[dict[str, Any]] = []
+    for p in value or []:
+        if isinstance(p, dict):
+            pt = {"x": _num(p.get("x")), "y": _num(p.get("y"))}
+            if p.get("label") is not None:
+                pt["label"] = str(p["label"])
+            if p.get("color"):
+                pt["color"] = str(p["color"])
+        elif isinstance(p, (list, tuple)) and len(p) >= 2:
+            pt = {"x": _num(p[0]), "y": _num(p[1])}
+        else:
+            continue
+        out.append(pt)
+    return out
+
+
+def _to_masks(value: Any) -> list[dict[str, Any]]:
+    """Normalise masks to ``[{src, opacity}, ...]`` - each an overlay image (a
+    URL/``data:`` URI or PNG ``bytes``) drawn over the base image with an alpha."""
+    out: list[dict[str, Any]] = []
+    for m in value or []:
+        if isinstance(m, dict):
+            src = _image_src(m.get("src"))
+            opacity = _num(m.get("opacity", 0.5), 0.5)
+        else:
+            src = _image_src(m)
+            opacity = 0.5
+        if src:
+            out.append({"src": src, "opacity": opacity})
+    return out
+
+
+class ImageOverlay(Component):
+    """An image with vector overlays drawn on top (ADR-0020): the read-only display
+    path for detection boxes, segmentation masks, and keypoints.
+
+    The base image is a ``source`` (URL / ``data:`` URI / PNG ``bytes``, like
+    ``Image``). ``boxes``, ``points``, and ``masks`` are reactive sources whose
+    coordinates are **fractions of the image** (``[0, 1]``), so they line up at any
+    rendered size. Because they are ordinary reactive props, streaming a model's
+    output per frame is a prop update over the existing ``patch`` op - no
+    ``protocol_version`` bump. Display only (the model produces the shapes; the shell
+    draws them); interactive annotation - the user *drawing* boxes - is the ADR-0020
+    step-two follow-up.
+
+    - ``boxes``: ``{x, y, w, h, label?, color?, score?}`` (or an ``(x, y, w, h)`` tuple).
+    - ``points``: ``{x, y, label?, color?}`` (or an ``(x, y)`` tuple).
+    - ``masks``: an overlay image (URL / ``data:`` / bytes) or ``{src, opacity?}``.
+    """
+
+    type = "imageoverlay"
+
+    def __init__(
+        self,
+        source: Source,
+        *,
+        boxes: Source = None,
+        points: Source = None,
+        masks: Source = None,
+        alt: str = "",
+    ) -> None:
+        super().__init__()
+        self._source = source
+        self._boxes = boxes
+        self._points = points
+        self._masks = masks
+        self._alt = alt
+
+    def static_props(self) -> dict[str, Any]:
+        return {"alt": self._alt}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {
+            "src": lambda: _image_src(_read(self._source)),
+            "boxes": lambda: _to_boxes(_read(self._boxes)),
+            "points": lambda: _to_points(_read(self._points)),
+            "masks": lambda: _to_masks(_read(self._masks)),
+        }
+        return props
+
+
 class Plot(Component):
     """A rendered figure, shown as an image (R5).
 

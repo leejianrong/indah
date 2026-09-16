@@ -368,6 +368,34 @@
   </div>
 {:else if node.type === "image"}
   <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />
+{:else if node.type === "imageoverlay"}
+  <div class="overlay-wrap">
+    <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />
+    {#each props.masks ?? [] as m (m.src)}
+      <img class="ov-mask" src={m.src} alt="" style="opacity: {m.opacity ?? 0.5};" />
+    {/each}
+    {#each props.boxes ?? [] as b, i (i)}
+      <div
+        class="ov-box"
+        style="left: {(b.x ?? 0) * 100}%; top: {(b.y ?? 0) * 100}%; width: {(b.w ?? 0) *
+          100}%; height: {(b.h ?? 0) * 100}%; border-color: {b.color ?? 'var(--primary)'};"
+      >
+        {#if b.label != null}
+          <span class="ov-label" style="background: {b.color ?? 'var(--primary)'};"
+            >{b.label}{#if b.score != null}&nbsp;{(b.score * 100).toFixed(0)}%{/if}</span
+          >
+        {/if}
+      </div>
+    {/each}
+    {#each props.points ?? [] as p, i (i)}
+      <div
+        class="ov-point"
+        style="left: {(p.x ?? 0) * 100}%; top: {(p.y ?? 0) * 100}%; background: {p.color ??
+          'var(--primary)'};"
+        title={p.label ?? ""}
+      ></div>
+    {/each}
+  </div>
 {:else if node.type === "table"}
   <Table {props} nodeId={node.id} />
 {:else if node.type === "stat"}

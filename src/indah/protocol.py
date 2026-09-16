@@ -47,6 +47,7 @@ BUILTIN_TYPES = frozenset(
         "streamtext",
         "select",
         "image",
+        "imageoverlay",
         "chart",
         "heatmap",
         "dataframe",

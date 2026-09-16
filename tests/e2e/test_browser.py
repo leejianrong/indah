@@ -355,6 +355,54 @@ def test_client_chart_renders_and_streams_points(tmp_path):
         handle.stop()
 
 
+def _overlay_app():
+    """An ImageOverlay with detection boxes from a signal + a button that adds one -
+    the read-only overlay path (ADR-0020), streaming detections as a prop update."""
+    from indah import Button, Column, ImageOverlay, Session, Signal, create_app
+
+    img = (
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' "
+        "height='100'%3E%3Crect width='200' height='100' fill='%23ccc'/%3E%3C/svg%3E"
+    )
+    boxes = Signal([{"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4, "label": "cat", "score": 0.9}])
+
+    def add():
+        boxes.set(boxes.value + [{"x": 0.5, "y": 0.5, "w": 0.2, "h": 0.2, "label": "dog"}])
+
+    root = Column(
+        children=[ImageOverlay(img, boxes=boxes, alt="scene"), Button("add", on_click=add)]
+    )
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_image_overlay_draws_boxes_and_streams_detections():
+    """Detection boxes render over the image at fractional positions, with labels,
+    and a new detection appears live over SSE (ADR-0020)."""
+    handle = launch(_overlay_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                boxes = page.locator(".overlay-wrap .ov-box")
+                expect(boxes).to_have_count(1)
+                # Positioned by fraction: x=0.1 -> left:10%.
+                assert boxes.first.evaluate("el => el.style.left") == "10%"
+                expect(page.locator(".ov-label", has_text="cat")).to_be_visible()
+
+                # A streamed detection shows up live.
+                page.locator("button", has_text="add").click()
+                expect(boxes).to_have_count(2)
+                expect(page.locator(".ov-label", has_text="dog")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
 def _table_app():
     """A selectable, sortable Table driving a Stat, plus a text echo of the selection
     - the dashboard pattern: pick a row, the rest of the app reacts."""
