@@ -13,6 +13,7 @@ from .app import build_demo_session, create_app, mock_llm
 from .components import (
     Button,
     Card,
+    Chart,
     Chat,
     Checkbox,
     Column,
@@ -94,6 +95,7 @@ __all__ = [
     "Date",
     "Image",
     "Plot",
+    "Chart",
     "DataFrame",
     "StreamText",
     "Progress",

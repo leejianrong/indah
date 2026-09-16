@@ -47,6 +47,7 @@ BUILTIN_TYPES = frozenset(
         "streamtext",
         "select",
         "image",
+        "chart",
         "dataframe",
         "checkbox",
         "number",

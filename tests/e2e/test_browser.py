@@ -282,6 +282,79 @@ def test_data_driven_list_chat_and_gallery_grow_on_a_signal_change():
         handle.stop()
 
 
+def _chart_app():
+    """An app with a streaming line Chart and a button that pushes points, plus a
+    reactive Chart driven from a slider - the two ways to feed a client chart."""
+    from indah import Button, Chart, Column, Session, Signal, Slider, create_app
+
+    live = Chart(series=["loss"], title="Training loss", x_label="step")
+    gain: Signal[float] = Signal(1.0)
+    static = Chart(
+        lambda: [[x, gain.value * x] for x in range(6)], series=["y = k·x"], title="Reactive"
+    )
+    step = {"n": 0}
+
+    def push():
+        step["n"] += 1
+        live.push(step["n"], 1.0 / step["n"])
+
+    root = Column(
+        children=[
+            live,
+            Button("push", on_click=push),
+            static,
+            Slider(gain, min=1, max=5, step=1, label="k"),
+        ]
+    )
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_client_chart_renders_and_streams_points(tmp_path):
+    """The client uPlot chart (ADR-0018) mounts from the init tree and grows via the
+    append op: clicking push streams a point over SSE and uPlot's data array grows,
+    while a reactive chart redraws when its bound slider changes."""
+    handle = launch(_chart_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                # Both charts mounted as uPlot canvases from the init tree.
+                expect(page.locator(".chart canvas").first).to_be_visible()
+                assert page.locator(".chart canvas").count() >= 2
+                expect(page.locator(".u-title", has_text="Training loss")).to_be_visible()
+
+                # The streaming chart starts empty; each push appends one point that
+                # reaches uPlot's data array (x row), live over SSE.
+                live = page.locator(".chart").first
+                assert live.evaluate("el => el.__uplot.data[0].length") == 0
+                page.locator("button", has_text="push").click()
+                page.locator("button", has_text="push").click()
+                page.wait_for_function(
+                    "() => document.querySelector('.chart').__uplot.data[0].length === 2"
+                )
+
+                # The reactive chart redraws when its bound signal changes: sample the
+                # last y before and after moving the slider (k: 1 -> 5).
+                static = page.locator(".chart").nth(1)
+                before = static.evaluate("el => el.__uplot.data[1][5]")
+                page.locator("input[type=range]").first.evaluate(
+                    "el => { el.value = '5';"
+                    " el.dispatchEvent(new Event('input', { bubbles: true })); }"
+                )
+                page.wait_for_function(
+                    "(prev) => document.querySelectorAll('.chart')[1].__uplot.data[1][5] !== prev",
+                    arg=before,
+                )
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
 def _session_counter_app():
     """A per-viewer counter over a session_factory, so each tab gets its own signal.
     This is the shape of examples/session_state.py, trimmed to one counter."""
