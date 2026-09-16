@@ -120,5 +120,9 @@ def build_session() -> Session:
     )
 
 
+# Module-level ASGI app for hosting (HF Spaces / uvicorn, ADR-0023).
+app = create_app(session_factory=build_session)
+
+
 if __name__ == "__main__":
-    indah.launch(create_app(session_factory=build_session))
+    indah.launch(app)

@@ -237,5 +237,11 @@ def main() -> None:
     indah.launch(indah.create_app(session=session))
 
 
+# Module-level ASGI app for hosting (HF Spaces / uvicorn, ADR-0023): the mock
+# chatbot, so a hosted demo needs no model weights or GPU. `python examples/chatbot.py`
+# (main) still runs the real model by default; pass --mock for the same as here.
+app = indah.create_app(session_factory=lambda: build_session(mock_chat_stream))
+
+
 if __name__ == "__main__":
     main()
