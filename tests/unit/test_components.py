@@ -248,6 +248,13 @@ def test_textinput_submit_runs_handler_and_is_always_handled():
 
 
 @pytest.mark.unit
+def test_textinput_password_masks_the_field():
+    # Off by default; opt in for secrets like an API key.
+    assert TextInput(Signal("")).static_props()["password"] is False
+    assert TextInput(Signal(""), password=True).static_props()["password"] is True
+
+
+@pytest.mark.unit
 def test_checkbox_serialises_and_round_trips():
     v = Signal(False)
     cb = Checkbox(v, label="agree")

@@ -224,7 +224,8 @@
     <input
       bind:this={inputEl}
       id={`${node.id}-input`}
-      type="text"
+      type={props.password ? "password" : "text"}
+      autocomplete={props.password ? "off" : null}
       placeholder={props.placeholder ?? ""}
       oninput={(e) => postEvent(node.id, "input", { value: e.currentTarget.value })}
       onkeydown={(e) => { if (e.key === "Enter") postEvent(node.id, "submit"); }}

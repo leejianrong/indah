@@ -31,6 +31,14 @@ def test_prebuilt_shell_ships_in_the_package():
 
 
 @pytest.mark.unit
+def test_shell_supports_password_text_inputs():
+    # The shell renders TextInput(password=True) as <input type=password> - the masked
+    # field for secrets like an API key (the keyed-demo path).
+    shell = files("indah.static").joinpath("index.html").read_text(encoding="utf-8")
+    assert '"password":"text"' in shell  # type={props.password ? "password" : "text"}
+
+
+@pytest.mark.unit
 def test_chat_box_is_fixed_height_and_does_not_stretch():
     """Regression: the Chat container is a fixed-height scroll viewport, not a box
     that grows message by message.
