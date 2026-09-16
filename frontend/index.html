@@ -392,6 +392,14 @@
       .download.disabled { color: var(--muted); opacity: 0.6; }
 
       .image { max-width: 100%; border-radius: var(--radius-sm); display: block; }
+      /* Client chart (uPlot, ADR-0018). Draw it on a surface and pull uPlot's
+         chrome onto the Studio tokens so it reads in light and dark. */
+      .chart { width: 100%; }
+      .chart .u-title {
+        font-family: var(--font-display); font-size: 0.95rem; color: var(--text);
+      }
+      .chart .u-legend { font-family: var(--font-body); font-size: 0.8rem; color: var(--muted); }
+      .chart .u-legend .u-value { color: var(--text); }
       .table-scroll { overflow-x: auto; }
       .dataframe { border-collapse: collapse; font-size: 0.9rem; width: 100%; }
       .dataframe th, .dataframe td {

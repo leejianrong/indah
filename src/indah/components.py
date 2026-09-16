@@ -492,6 +492,145 @@ def _figure_src(value: Any) -> str:
     return _image_src(value)
 
 
+def _normalise_series(spec: Any) -> dict[str, Any]:
+    """A series descriptor: ``"loss"`` or ``{"label","stroke"}`` -> a wire dict."""
+    if isinstance(spec, dict):
+        out: dict[str, Any] = {"label": str(spec.get("label", ""))}
+        if spec.get("stroke"):
+            out["stroke"] = str(spec["stroke"])
+        return out
+    return {"label": str(spec)}
+
+
+def _to_rows(value: Any) -> list[list[Any]]:
+    """Coerce chart data to a JSON-safe list of rows ``[[x, y0, y1, ...], ...]``."""
+    if value is None:
+        return []
+    rows: list[list[Any]] = []
+    for row in value:
+        if isinstance(row, (list, tuple)):
+            rows.append([_json_safe(v) for v in row])
+        else:
+            rows.append([_json_safe(row)])
+    return rows
+
+
+class Chart(Component):
+    """An interactive, client-side chart (ADR-0018, hybrid charting).
+
+    Where ``Plot`` rasterises a figure to a PNG on the Python side (the zero-JS
+    static path), ``Chart`` sends its data as ordinary reactive props and the shell's
+    bundled uPlot draws it in the browser -- so zoom (drag on the x-axis), hover, and
+    live updates all run client-side, with no PNG per frame. It is a line /
+    time-series chart: ``series`` names the y-columns, and the data is a list of rows
+    ``[[x, y0, y1, ...], ...]`` (x first, then one value per series).
+
+    Two ways to drive it:
+
+    - **Reactive** -- pass ``data`` as a ``Signal`` / callable / list; setting it
+      replaces the whole dataset (good for a static chart, or one recomputed from
+      inputs).
+    - **Streaming** -- leave ``data`` unset and call :meth:`push` (or :meth:`extend`)
+      to append points. Each call emits an *append* patch carrying only the new
+      row(s), so a live curve grows at O(point) on the wire, the same way
+      ``StreamText`` streams text. :meth:`clear` resets it. ``snapshot`` always
+      carries the full accumulated data, so a fresh connect or a resume re-renders
+      the whole curve (ADR-0011).
+
+    Example (a streaming loss curve fed from a training loop, ADR-0009)::
+
+        chart = Chart(series=["loss"], title="Training loss", x_label="step")
+
+        async def train():
+            chart.clear()
+            for step, loss in enumerate(run_epoch()):
+                chart.push(step, loss)
+                await asyncio.sleep(0)
+    """
+
+    type = "chart"
+
+    def __init__(
+        self,
+        data: Source = None,
+        *,
+        series: list[Any] | None = None,
+        title: str = "",
+        x_label: str = "",
+        y_label: str = "",
+        height: int = 240,
+        points: bool = False,
+    ) -> None:
+        super().__init__()
+        self._reactive = data is not None
+        self._data = data
+        self._buffer: list[list[Any]] = []
+        self._series = [_normalise_series(s) for s in (series or [])]
+        self._title = title
+        self._x_label = x_label
+        self._y_label = y_label
+        self._height = int(height)
+        self._points = bool(points)
+        self._session: Session | None = None
+
+    def bind(self, session: Session) -> None:
+        """Called by the session during wiring so push/extend/clear can emit patches."""
+        self._session = session
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {
+            "series": self._series,
+            "title": self._title,
+            "xLabel": self._x_label,
+            "yLabel": self._y_label,
+            "height": self._height,
+            "points": self._points,
+        }
+        if not self._reactive:
+            # Streaming mode: carry the accumulated data in the snapshot so a fresh
+            # connect / resume re-renders the full curve.
+            props["data"] = [list(row) for row in self._buffer]
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        if self._reactive:
+            return {"data": lambda: _to_rows(_read(self._data))}
+        return {}
+
+    # -- streaming API (only when data= is unset) ----------------------------
+
+    def _guard_streaming(self) -> None:
+        if self._reactive:
+            raise TypeError(
+                "push/extend/clear are for a streaming Chart; this one has reactive data="
+            )
+
+    def push(self, *row: Any) -> None:
+        """Append one point ``(x, y0, y1, ...)`` and emit an append delta."""
+        self._guard_streaming()
+        point = [_json_safe(v) for v in row]
+        self._buffer.append(point)
+        if self._session is not None:
+            self._session.emit_append(self.id, "data", [point])
+
+    def extend(self, rows: Any) -> None:
+        """Append several points at once, as a single append patch."""
+        self._guard_streaming()
+        batch = [[_json_safe(v) for v in row] for row in rows]
+        if not batch:
+            return
+        self._buffer.extend(batch)
+        if self._session is not None:
+            self._session.emit_append(self.id, "data", batch)
+
+    def clear(self) -> None:
+        """Reset the accumulated points (emits a props replace)."""
+        self._guard_streaming()
+        self._buffer = []
+        if self._session is not None:
+            self._session.emit_props(self.id, {"data": []})
+
+
 class DataFrame(Component):
     """A tabular display bound to a source (R5).
 

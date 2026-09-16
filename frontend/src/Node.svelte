@@ -4,6 +4,7 @@
   import Self from "./Node.svelte";
   import Custom from "./Custom.svelte";
   import Markdown from "./Markdown.svelte";
+  import Chart from "./Chart.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -353,6 +354,11 @@
   {:else}
     <span class="download disabled">{props.label ?? "Download"}</span>
   {/if}
+{:else if node.type === "chart"}
+  <div class="field">
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    <Chart {props} />
+  </div>
 {:else if node.type === "image"}
   <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />
 {:else if node.type === "dataframe"}

@@ -34,7 +34,7 @@ from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
-from .components import Component, Download, StreamText, walk
+from .components import Chart, Component, Download, StreamText, walk
 from .protocol import error_message, patch_message
 from .reactive import Computation, batch, effect
 from .transport import Hub
@@ -85,7 +85,7 @@ class Session:
 
     def _wire(self) -> None:
         for component in walk(self.root):
-            if isinstance(component, (StreamText, Download)):
+            if isinstance(component, (StreamText, Download, Chart)):
                 component.bind(self)
             for prop_name, getter in component.reactive_props().items():
                 self._effects.append(self._make_effect(component.id, prop_name, getter))
@@ -142,8 +142,11 @@ class Session:
         if self._hub is not None:
             self._hub.publish(patch_message([{"target": node_id, "props": props}]))
 
-    def emit_append(self, node_id: str, prop: str, delta: str) -> None:
-        """Publish an append delta for one node immediately (streaming path)."""
+    def emit_append(self, node_id: str, prop: str, delta: Any) -> None:
+        """Publish an append delta for one node immediately (streaming path).
+
+        The delta is a string for text streaming (``StreamText``) or a list of rows
+        for point streaming (``Chart``); the shell concatenates by type."""
         if self._hub is not None:
             self._hub.publish(patch_message([{"target": node_id, "append": {prop: delta}}]))
 

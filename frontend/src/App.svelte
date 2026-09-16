@@ -36,10 +36,16 @@
         for (const change of msg.changes || []) {
           const cur = map.get(change.target) || {};
           if (change.append) {
-            // Concatenate a streamed delta onto the existing prop value.
+            // Concatenate a streamed delta onto the existing prop value: strings
+            // grow token-by-token (StreamText), arrays grow point-by-point (Chart).
             const next = { ...cur };
             for (const [key, delta] of Object.entries(change.append)) {
-              next[key] = (next[key] ?? "") + delta;
+              const base = next[key];
+              if (Array.isArray(base) || Array.isArray(delta)) {
+                next[key] = (base ?? []).concat(delta);
+              } else {
+                next[key] = (base ?? "") + delta;
+              }
             }
             map.set(change.target, next);
           } else {
