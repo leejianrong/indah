@@ -5,7 +5,30 @@ import json
 
 import pytest
 
-from indah.app import _SSE_FLUSH_PAD, sse_events
+from indah.app import _SSE_FLUSH_PAD, _SSE_PADDING_BYTES, sse_events
+
+
+def _is_pad(chunk: str) -> bool:
+    """A flush pad: an SSE comment line (ignored by EventSource), no data."""
+    return chunk.startswith(":") and "data:" not in chunk
+
+
+async def _drain(gen, timeout: float = 0.2) -> list[str]:
+    """Every chunk the generator yields until it next blocks (queue empty)."""
+    out: list[str] = []
+    try:
+        while True:
+            out.append(await asyncio.wait_for(gen.__anext__(), timeout))
+    except (asyncio.TimeoutError, TimeoutError):
+        pass
+    return out
+
+
+def _patch(offset: int, text: str) -> tuple[int, dict]:
+    return (
+        offset,
+        {"v": 1, "type": "patch", "changes": [{"target": "n1", "append": {"text": text}}]},
+    )
 
 
 def _parse(chunk: str) -> tuple[int | None, dict]:
@@ -39,10 +62,11 @@ async def test_first_chunk_is_the_init_payload_with_no_id():
 
 
 @pytest.mark.unit
-async def test_proxy_flush_pads_the_stream_open_and_after_each_frame():
-    """With proxy_flush, the stream opens with a large SSE comment pad AND repeats
-    one after every real frame, so a window-buffering proxy (Colab) flushes each
-    frame immediately instead of holding it. The pad is ignored by EventSource."""
+async def test_proxy_flush_pads_the_stream_open_and_after_the_init_frame():
+    """With proxy_flush, the stream opens with a full-window SSE comment pad and the
+    init frame is flushed by padding out to the next window boundary, so a
+    window-buffering proxy (Colab) releases it immediately. Pads are ignored by
+    EventSource."""
     queue: asyncio.Queue = asyncio.Queue()
     gen = sse_events(queue, _init_payload(), heartbeat_seconds=60, proxy_flush=True)
 
@@ -50,15 +74,62 @@ async def test_proxy_flush_pads_the_stream_open_and_after_each_frame():
     assert lead is _SSE_FLUSH_PAD
     assert lead.startswith(":")  # an SSE comment line -> ignored by the client
     assert "data:" not in lead  # carries no protocol payload
-    assert len(lead) >= 8192  # big enough to fill a proxy's buffer window
+    assert len(lead) == _SSE_PADDING_BYTES  # exactly one window, so it aligns cleanly
     assert lead.endswith("\n\n")
 
-    event_id, data = _parse(await gen.__anext__())  # the real init frame
+    init_chunk = await gen.__anext__()  # the real init frame
+    event_id, data = _parse(init_chunk)
     assert event_id is None
     assert data == _init_payload()
 
-    assert await gen.__anext__() is _SSE_FLUSH_PAD  # pad after the init flushes it
+    pad = await gen.__anext__()  # boundary pad after the init flushes it
+    assert _is_pad(pad)
+    # init + pad lands on a window boundary; the pad is only the tail, < a full window.
+    assert (len(init_chunk) + len(pad)) % _SSE_PADDING_BYTES == 0
+    assert len(pad) < _SSE_PADDING_BYTES
     await gen.aclose()
+
+
+@pytest.mark.unit
+async def test_proxy_flush_coalesces_a_burst_into_one_pad():
+    """A run of frames already waiting on the queue (streamed tokens / chart points)
+    is drained and emitted back to back, then flushed with a *single* pad -- not one
+    ~8 KB window per frame. This is the KAN-1395 win: the per-token pad no longer
+    scales with the token rate."""
+    queue: asyncio.Queue = asyncio.Queue()
+    for i in range(1, 6):
+        queue.put_nowait(_patch(i, "x"))
+
+    gen = sse_events(queue, None, heartbeat_seconds=60, proxy_flush=True)
+    chunks = await _drain(gen)
+    await gen.aclose()
+
+    data_frames = [c for c in chunks if "data:" in c]
+    pads = [c for c in chunks if _is_pad(c)]
+    assert len(data_frames) == 5  # all five delivered
+    # One lead-in pad opens the stream; the five-frame burst shares one trailing pad.
+    # The old per-frame padding would have produced six pads here.
+    assert len(pads) == 2
+
+
+@pytest.mark.unit
+async def test_proxy_flush_pads_only_up_to_the_window_boundary():
+    """A frame larger than one window is flushed by padding out only its tail to the
+    next window boundary, not by appending a whole fresh window every time."""
+    queue: asyncio.Queue = asyncio.Queue()
+    big = {"v": 1, "type": "patch", "changes": [{"target": "n1", "props": {"text": "z" * 10000}}]}
+    queue.put_nowait((1, big))
+
+    gen = sse_events(queue, None, heartbeat_seconds=60, proxy_flush=True)
+    chunks = await _drain(gen)
+    await gen.aclose()
+
+    frame = next(c for c in chunks if "data:" in c)
+    trailing = chunks[chunks.index(frame) + 1]
+    assert _is_pad(trailing)
+    # frame + pad lands on a window boundary, so the pad is < a full window.
+    assert (len(frame) + len(trailing)) % _SSE_PADDING_BYTES == 0
+    assert len(trailing) < _SSE_PADDING_BYTES
 
 
 @pytest.mark.unit

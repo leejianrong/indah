@@ -54,10 +54,31 @@ no`. A small SSE frame lands in a window that never fills on its own, so it is h
   page stayed empty: the lead-in filled one window (so headers flushed and
   `onopen` fired), but the `init` frame after it sat in a fresh unfilled window.
 
-Fix: emit a block of ignored SSE comment padding (`_SSE_FLUSH_PAD`, ~8 KB, one
-window) **on connect and again after every frame**, so each frame fills a window
-and is flushed immediately. This keeps SSE as the transport - the WebSocket-upgrade
-escalation was not needed. It is reproduced and guarded locally by a
-window-buffering TCP proxy in `tests/e2e/test_proxy_buffering.py`. Cost: ~8 KB per
-frame; fine for init and interactive input, and a later token-coalescing pass can
-trim it for high-rate streaming if needed.
+Fix: emit ignored SSE comment padding (an `_SSE_FLUSH_PAD` lead-in of one window on
+connect, then a pad after each frame) so each frame fills a window and is flushed
+immediately. This keeps SSE as the transport - the WebSocket-upgrade escalation was
+not needed. It is reproduced and guarded locally by a window-buffering TCP proxy in
+`tests/e2e/test_proxy_buffering.py`.
+
+### Streaming wire optimisation (KAN-1395, 2026-09-16)
+
+The first cut padded a full ~8 KB window after *every* frame. Under token or
+chart-point streaming that is ~8 KB per token, amplifying bandwidth on the exact
+platform (Colab) the pad exists for. Two changes in `sse_events` cut it without
+weakening the guarantee (the proxy still releases every frame):
+
+- **Coalesce a burst.** After a blocking read, drain everything already on the
+  queue (`get_nowait`) and emit it back to back, then flush *once*. A run of rapid
+  appends - streamed tokens emitted between an async handler's awaits, or chart
+  points pushed in a loop - now shares one pad instead of paying a window each.
+- **Pad only to the next window boundary.** Track bytes emitted since the last
+  flush and pad out just the tail (`_boundary_pad`), so a large frame or a coalesced
+  burst that already crossed a boundary pays little or nothing, not a whole fresh
+  window.
+
+A lone small frame (a single slider patch, a slowly-arriving token) still costs
+~one window - that is irreducible for a window-buffering proxy - but the per-token
+amplification is gone. `_SSE_FLUSH_PAD` doubles as the on/off knob (setting it to
+`""` disables padding, which the negative proxy-buffering e2e relies on). Guarded by
+the coalesce/boundary unit tests in `tests/unit/test_sse_events.py` and the
+unchanged proxy-buffering e2e.
