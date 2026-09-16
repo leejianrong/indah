@@ -53,3 +53,16 @@ export function postEvent(id, event, payload) {
     body: JSON.stringify({ sid: sessionId(), component: id, event, payload: payload || {} }),
   }).catch(() => {});
 }
+
+// Upload one or more files as multipart/form-data (ADR-0017), on its own route so
+// binary never rides the JSON event path. The result flows back over SSE, so this
+// only needs to report whether the POST itself was accepted. Returns a promise.
+export function postUpload(id, files) {
+  const form = new FormData();
+  form.append("sid", sessionId());
+  form.append("component", id);
+  for (const file of files) form.append("file", file);
+  return fetch(apiUrl("api/upload"), { method: "POST", body: form })
+    .then((resp) => resp.ok)
+    .catch(() => false);
+}

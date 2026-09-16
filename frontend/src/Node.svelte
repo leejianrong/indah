@@ -1,6 +1,6 @@
 <script>
   import { nodeProps } from "./stores.js";
-  import { postEvent } from "./api.js";
+  import { postEvent, postUpload } from "./api.js";
   import Self from "./Node.svelte";
   import Custom from "./Custom.svelte";
   import Markdown from "./Markdown.svelte";
@@ -15,6 +15,19 @@
   // keystrokes - the "missing letters" bug. So we sync the server value into the
   // element only when it does NOT have focus; while focused, the DOM owns it.
   let inputEl = $state();
+
+  // Upload status shown under a file input while the multipart POST is in flight
+  // and after it settles (the result itself arrives over SSE as ordinary patches).
+  let uploadStatus = $state("");
+  async function onUpload(e) {
+    const files = e.currentTarget.files;
+    if (!files || !files.length) return;
+    const names = Array.from(files, (f) => f.name).join(", ");
+    uploadStatus = `Uploading ${names}...`;
+    const ok = await postUpload(node.id, files);
+    uploadStatus = ok ? `Uploaded ${names}` : `Upload failed: ${names}`;
+  }
+
   function syncFromServer() {
     if (!inputEl) return;
     // Compare/assign as a string: element .value is always a string, so coercing
@@ -316,6 +329,18 @@
         <option value={option.value}>{option.label}</option>
       {/each}
     </select>
+  </div>
+{:else if node.type === "upload"}
+  <div class="field upload">
+    {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
+    <input
+      id={`${node.id}-input`}
+      type="file"
+      accept={props.accept || undefined}
+      multiple={props.multiple || undefined}
+      onchange={onUpload}
+    />
+    {#if uploadStatus}<span class="upload-status">{uploadStatus}</span>{/if}
   </div>
 {:else if node.type === "image"}
   <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />

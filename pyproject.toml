@@ -29,6 +29,9 @@ dependencies = [
     "starlette>=0.37",
     "uvicorn>=0.30",
     "pydantic>=2",
+    # Multipart parsing for the file-upload route (ADR-0017). Starlette needs it to
+    # read multipart/form-data; it is pure Python, so it keeps the no-Node story.
+    "python-multipart>=0.0.9",
 ]
 
 [project.urls]
