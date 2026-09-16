@@ -73,6 +73,9 @@ asyncio_mode = "auto"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# The Colab demo notebooks are generated (deploy/colab/make_colab.py) and contain
+# shell magics + long raw-GitHub URLs; the generator itself is linted, they are not.
+extend-exclude = ["examples/colab"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

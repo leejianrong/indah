@@ -139,15 +139,26 @@ is a documented, versioned public contract: see [`docs/protocol.md`](docs/protoc
 
 ## Examples
 
-| Example | What |
-|---------|------|
-| [`examples/chatbot_colab.ipynb`](examples/chatbot_colab.ipynb) | A streaming LLM chatbot, end to end in one Colab runtime: a small transformers model streaming tokens into an indah page |
-| [`examples/chatbot.py`](examples/chatbot.py) | The same chatbot as a script, with a `--mock` mode that runs with no model or GPU |
-| [`examples/starter_components.py`](examples/starter_components.py) | A ~20-line tour of the starter component set |
-| [`examples/demo.ipynb`](examples/demo.ipynb) | The built-in demo (async streaming + starter components) inline in a notebook |
+Each demo runs in one click in Colab (no install, no clone), or as a script. A live
+hosted gallery is coming (Hugging Face Spaces, [ADR-0023](docs/adr/0023-demo-hosting.md)).
 
-The chatbot is walked through step by step in the docs:
-[Build a chatbot](https://leejianrong.github.io/indah/chatbot/).
+| Demo | Try it | Source |
+|------|--------|--------|
+| Streaming LLM chatbot | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/chatbot.ipynb) | [`chatbot.py`](examples/chatbot.py) |
+| Live training dashboard (Runpod) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/training-dashboard.ipynb) | [`training_dashboard.py`](examples/training_dashboard.py) |
+| Image generation (streamed progress) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/diffusion.ipynb) | [`diffusion.py`](examples/diffusion.py) |
+| Poster / artifact generator | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/poster.ipynb) | [`poster.py`](examples/poster.py) |
+| Image classify (upload → predict → show) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/image-classify.ipynb) | [`upload_classify.py`](examples/upload_classify.py) |
+| Hybrid charting (client chart + server plot + heatmap) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/charts.ipynb) | [`charts.py`](examples/charts.py) |
+
+Also: [`examples/starter_components.py`](examples/starter_components.py) (a ~20-line
+tour of the component set) and [`examples/demo.ipynb`](examples/demo.ipynb) (the
+built-in demo inline in a notebook). The chatbot is walked through step by step in
+the docs: [Build a chatbot](https://leejianrong.github.io/indah/chatbot/).
+
+The Colab notebooks are generated from the demo manifest by
+[`deploy/colab/make_colab.py`](deploy/colab/make_colab.py); regenerate them after
+adding a demo.
 
 ## Planning and design
 
