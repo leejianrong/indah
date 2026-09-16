@@ -1,6 +1,6 @@
 # ADR-0017: Media I/O and transport tiers
 
-- Status: Proposed
+- Status: Accepted (media I/O built in Slice D, 2026-09-16; Tier 1 still deferred)
 - Date: 2026-09-15
 - Deciders: Jian (owner)
 
@@ -64,3 +64,14 @@ later on Tier 1**, never at the cost of Colab compatibility.
 - Upload size limits, allowed types, and temp-file lifecycle are defined when built;
   the dev-tool threat model (Q-sec) still applies — the app author owns what the
   handler does with the bytes.
+
+## As built (Slice D, 2026-09-16)
+
+Media I/O shipped on Tier 0 and `protocol_version` stayed 1 (new routes, not an SSE
+message change), as expected. `POST /api/upload` (multipart) hands bytes to an
+`Upload` component's plain handler as a synthetic `upload` event, so it reuses the
+whole session dispatch path; results flow back over SSE. File-out is
+`GET /api/file/{sid}/{token}` plus a `Download` component and `Session.serve_file`.
+The size cap is `create_app(max_upload_mb=…)` (default 25 MB, `413` over it); both
+routes are per-session isolated (ADR-0010). See `docs/protocol.md`. Tier 1
+(WebSocket for continuous live media) remains declared but unbuilt.
