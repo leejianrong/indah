@@ -35,6 +35,7 @@ MANIFEST: list[tuple[str, str, str, str]] = [
     ("image-classify", "Image classifier", "🔍", "upload_classify"),
     ("charts", "Hybrid charting", "📊", "charts"),
     ("stocks", "Stock peer analysis", "💹", "stocks"),
+    ("prettymap", "Pretty map", "🗺️", "prettymap"),
 ]
 
 # One-line blurb per demo for the gallery cards (keyed by slug).
@@ -46,6 +47,7 @@ BLURBS: dict[str, str] = {
     "image-classify": "Upload an image, get a prediction and a downloadable report.",
     "charts": "An interactive client chart beside a server plot and a heatmap.",
     "stocks": "Compare a peer group's price, valuation, and 1-year return.",
+    "prettymap": "Restyle a generated city map and download it as SVG.",
 }
 
 # The Bunga mark (two magenta petals, two teal), inlined so the gallery needs no assets.
