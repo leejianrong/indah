@@ -103,15 +103,40 @@ _SSE_HEADERS = {
 # one streamed token) lands in a window that never fills on its own, so the proxy
 # holds it and the browser renders nothing -- even though the connection is "live".
 #
-# An SSE comment line (one starting with ":") is ignored by EventSource, so we
-# flush past the window by emitting a block of comment padding: once on connect (so
-# the stream opens even before any data), and again after every real frame (so each
-# frame is pushed out of the proxy's buffer immediately instead of waiting for the
-# next one). 8 KB clears the common window sizes (nginx's default proxy_buffer_size
-# is 4-8 KB). This is the "proxy flush" path, enabled for the real HTTP stream and
-# off for framing unit tests (ADR-0002, the R2 proxy risk).
+# An SSE comment line (one starting with ":") is ignored by EventSource, so we flush
+# past the window by emitting comment padding. The window size below (8 KB) clears
+# the common proxy windows (nginx's default proxy_buffer_size is 4-8 KB). This is the
+# "proxy flush" path, enabled for the real HTTP stream and off for framing unit tests
+# (ADR-0002, the R2 proxy risk).
+#
+# KAN-1395: rather than a full window after *every* frame, we (1) coalesce a burst of
+# frames already queued (streamed tokens, streamed chart points) into one flush, and
+# (2) pad each flush only up to the next window boundary, tracking cumulative bytes --
+# so a large frame or a coalesced burst pays only its tail, not a whole fresh window.
+# A lone small frame still costs ~one window, which is irreducible for a
+# window-buffering proxy, but the per-token amplification is gone. ``_SSE_FLUSH_PAD``
+# is the connect lead-in (exactly one window) and doubles as the on/off knob: setting
+# it to "" disables all padding (the negative proxy-buffering e2e relies on this).
 _SSE_PADDING_BYTES = 8192
-_SSE_FLUSH_PAD = ":" + " " * _SSE_PADDING_BYTES + "\n\n"
+
+
+def _pad_chunk(nbytes: int) -> str:
+    """An ignored SSE comment line of exactly ``nbytes`` bytes (``nbytes >= 3``)."""
+    return ":" + " " * (nbytes - 3) + "\n\n"
+
+
+def _boundary_pad(pending: int) -> str:
+    """Padding that tops ``pending`` unflushed bytes up to the next window boundary,
+    so the proxy releases the frame(s) already emitted. Empty when already aligned."""
+    needed = (-pending) % _SSE_PADDING_BYTES
+    if needed == 0:
+        return ""
+    if needed < 3:  # too small to form a comment line exactly; carry a whole window
+        needed += _SSE_PADDING_BYTES
+    return _pad_chunk(needed)
+
+
+_SSE_FLUSH_PAD = _pad_chunk(_SSE_PADDING_BYTES)
 
 
 async def mock_llm(prompt: str) -> AsyncIterator[str]:
@@ -528,33 +553,75 @@ async def sse_events(
     init and ping do not. Framing is separated from the HTTP handler so it can be
     tested without a server.
 
-    ``proxy_flush`` interleaves ignored comment padding -- once on connect and after
-    every frame -- so a window-buffering proxy flushes each frame immediately
-    instead of holding it (Colab; see ``_SSE_FLUSH_PAD``).
+    ``proxy_flush`` interleaves ignored comment padding so a window-buffering proxy
+    releases each frame immediately instead of holding it (Colab; see
+    ``_SSE_FLUSH_PAD``). It coalesces a queued burst into one flush and pads only up
+    to the next window boundary, so streaming does not pay a full window per frame
+    (KAN-1395).
     """
-    if proxy_flush:
+    # ``_SSE_FLUSH_PAD`` doubles as the on/off knob: "" disables all padding.
+    flush_on = proxy_flush and bool(_SSE_FLUSH_PAD)
+    pending = 0  # bytes emitted since the last window-boundary flush
+
+    if flush_on:
         yield _SSE_FLUSH_PAD  # open the stream even before any data (caught-up resume)
+
+    # Connect-time frames (a fresh init and/or a replay of missed messages) go out
+    # back to back and share one trailing pad.
+    connect_frames = 0
     if init_payload is not None:
-        yield _sse(init_payload)
-        if proxy_flush:
-            yield _SSE_FLUSH_PAD
+        chunk = _sse(init_payload)
+        pending += len(chunk)
+        connect_frames += 1
+        yield chunk
     for offset, message in replay:
-        yield _sse(message, event_id=offset)
-        if proxy_flush:
-            yield _SSE_FLUSH_PAD
+        chunk = _sse(message, event_id=offset)
+        pending += len(chunk)
+        connect_frames += 1
+        yield chunk
+    if flush_on and connect_frames:
+        pad = _boundary_pad(pending)
+        pending = 0
+        if pad:
+            yield pad
+
     while True:
         try:
             offset, message = await asyncio.wait_for(queue.get(), timeout=heartbeat_seconds)
         except (asyncio.TimeoutError, TimeoutError):
-            yield _sse(ping_message())
-            if proxy_flush:
-                yield _SSE_FLUSH_PAD
+            chunk = _sse(ping_message())
+            pending += len(chunk)
+            yield chunk
+            if flush_on:
+                pad = _boundary_pad(pending)
+                pending = 0
+                if pad:
+                    yield pad
             continue
-        if offset <= skip_upto:
-            continue
-        yield _sse(message, event_id=offset)
-        if proxy_flush:
-            yield _SSE_FLUSH_PAD
+
+        # Coalesce a burst: drain everything already queued so a run of rapid
+        # appends (streamed tokens, streamed chart points) shares one flush pad
+        # instead of paying a whole window each (KAN-1395).
+        batch = [(offset, message)]
+        while True:
+            try:
+                batch.append(queue.get_nowait())
+            except asyncio.QueueEmpty:
+                break
+
+        emitted = 0
+        for off, msg in batch:
+            if off <= skip_upto:
+                continue
+            chunk = _sse(msg, event_id=off)
+            pending += len(chunk)
+            emitted += 1
+            yield chunk
+        if flush_on and emitted:
+            pad = _boundary_pad(pending)
+            pending = 0
+            if pad:
+                yield pad
 
 
 async def _stream(request: Request) -> StreamingResponse:

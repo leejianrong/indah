@@ -298,7 +298,10 @@ charts. The foundation primitives, most-shared first: **layout containers**,
 
 Deferred with a recorded boundary: structural-children op (KAN-1396), interactive
 canvas annotation, real-time video (Tier 1), multi-page routing. Transport hardening
-(KAN-1395, the per-frame pad) rides just before Slice E, which amplifies it.
+(KAN-1395, the per-frame pad) landed just before Slice E, which amplifies it: the
+per-frame ~8 KB Colab flush pad now coalesces a queued burst into one flush and pads
+only to the next window boundary, so streaming tokens/chart points no longer pay a
+window each (ADR-0002 "Streaming wire optimisation").
 
 Sequenced into demoable increments in `docs/SLICES.md`; open questions and their
 resolutions in `docs/QUESTIONS.md`.

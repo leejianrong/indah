@@ -78,3 +78,12 @@ stays alive and keeps handling events (Q-fail).
 - Still one shared session/hub per app in v0; the offset/buffer/resume machinery
   lives in the hub and moves cleanly to a per-session hub when the state seam
   lands (ADR-0010).
+
+## Update: streaming wire optimisation (KAN-1395, 2026-09-16)
+
+The append op keeps a token O(token) on the wire, but each frame also carried the
+Colab proxy-flush pad (ADR-0002), so streaming paid ~8 KB per token. `sse_events`
+now coalesces a queued burst into one flush and pads only up to the next window
+boundary, so the pad no longer scales with the token (or chart-point) rate. This is
+transport-only: the protocol, the append op, and resume are unchanged. See ADR-0002's
+"Streaming wire optimisation" note for the mechanics.
