@@ -82,10 +82,20 @@ def build_gallery(demos: list[dict[str, Any]]) -> Starlette:
     return Starlette(routes=routes)
 
 
+# The demo sources on GitHub, so each demo's "Source" link points at its own file.
+SOURCE_BASE = "https://github.com/leejianrong/indah/blob/main/examples"
+
+
 def create_gallery() -> Starlette:
     """Import the example modules and build the gallery (used in the deploy image)."""
     demos = []
     for slug, title, emoji, module in MANIFEST:
         mod = importlib.import_module(module)
+        # Per-demo page chrome (read by the shell's _index): a distinct tab title, a
+        # clickable logo back to the gallery ("../" resolves from /<slug>/ to /), and a
+        # link to this demo's source. The mounted sub-app carries its own app.state.
+        mod.app.state.page_title = title
+        mod.app.state.home_url = "../"
+        mod.app.state.source_url = f"{SOURCE_BASE}/{module}.py"
         demos.append({"slug": slug, "title": title, "emoji": emoji, "app": mod.app})
     return build_gallery(demos)

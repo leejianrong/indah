@@ -17,6 +17,7 @@ import math
 import urllib.parse
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
+from html import escape
 from importlib.resources import files
 from typing import Any
 
@@ -466,6 +467,9 @@ def create_app(
     store: SessionStore | None = None,
     heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
     max_upload_mb: float = DEFAULT_MAX_UPLOAD_MB,
+    title: str | None = None,
+    home_url: str | None = None,
+    source_url: str | None = None,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -513,6 +517,12 @@ def create_app(
     app.state.store = store
     app.state.heartbeat_seconds = heartbeat_seconds
     app.state.max_upload_bytes = int(max_upload_mb * 1024 * 1024)
+    # Optional page chrome, injected into the served shell by ``_index``. The gallery
+    # sets these per demo (a clickable logo back to the gallery, a view-source link,
+    # a distinct tab title); a standalone app leaves them unset and gets the plain shell.
+    app.state.page_title = title
+    app.state.home_url = home_url
+    app.state.source_url = source_url
     # Back-compat: a single-shared app still exposes .session/.hub for callers and
     # tests that introspect the one graph. A per-session app has neither -- there is
     # no single session to name; go through the store (keyed by sid) instead.
@@ -522,8 +532,36 @@ def create_app(
     return app
 
 
+def _chrome_html(state: Any) -> str:
+    """Serve the shell, injecting optional per-app chrome.
+
+    ``title`` renames the browser tab; ``home_url`` (a clickable logo) and
+    ``source_url`` (a view-source link) are handed to the shell as a small JSON
+    blob on ``window.__INDAH_CHROME__``. All three come from ``create_app`` via
+    ``app.state``; unset means the plain shell. The blob is JSON with ``<`` escaped
+    so a URL can never break out of the ``<script>``.
+    """
+    html_text = _read_static("index.html")
+    title = getattr(state, "page_title", None)
+    if title:
+        html_text = html_text.replace(
+            "<title>indah</title>", f"<title>{escape(title)} - indah</title>", 1
+        )
+    chrome = {
+        "homeUrl": getattr(state, "home_url", None),
+        "sourceUrl": getattr(state, "source_url", None),
+        "title": title,
+    }
+    if any(chrome.values()):
+        payload = json.dumps(chrome).replace("<", "\\u003c")
+        html_text = html_text.replace(
+            "</head>", f"<script>window.__INDAH_CHROME__={payload}</script></head>", 1
+        )
+    return html_text
+
+
 async def _index(request: Request) -> HTMLResponse:
-    return HTMLResponse(_read_static("index.html"))
+    return HTMLResponse(_chrome_html(request.app.state))
 
 
 async def _health(request: Request) -> JSONResponse:
