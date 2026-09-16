@@ -129,6 +129,82 @@ async def mock_chat_stream(
         yield word + " "
 
 
+# --- the keyed path: a real reply from Google Gemini (bring your own key) -----
+
+
+async def gemini_chat_stream(
+    api_key: str,
+    messages: list[Message],
+    *,
+    max_new_tokens: int = 1024,
+    model: str = "gemini-2.0-flash",
+) -> AsyncIterator[str]:
+    """Stream a real reply from Google Gemini, token by token (bring your own key).
+
+    Plain Python, no indah imports (ADR-0009): given a free Google AI Studio API key
+    and a chat ``messages`` list, it yields the model's reply as it arrives. It hits
+    the REST ``streamGenerateContent`` endpoint (server-sent events) over stdlib
+    ``urllib`` on a background thread, pulled with ``asyncio.to_thread`` so the event
+    loop never blocks. The key is used only for this request and never stored or
+    logged. On any error it yields a short message instead of raising, so the chat
+    stays usable (e.g. a bad key or exhausted quota).
+    """
+    import json
+    import queue as _queue
+    import threading
+    import urllib.error
+    import urllib.request
+
+    endpoint = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}"
+        f":streamGenerateContent?alt=sse&key={api_key}"
+    )
+    contents = [
+        {"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]}
+        for m in messages
+        if m["role"] in ("user", "assistant")
+    ]
+    payload = json.dumps(
+        {"contents": contents, "generationConfig": {"maxOutputTokens": max_new_tokens}}
+    ).encode()
+
+    q: _queue.Queue = _queue.Queue()
+    done = object()
+
+    def pump() -> None:
+        try:
+            req = urllib.request.Request(
+                endpoint, data=payload, headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310 (https only)
+                for raw in resp:
+                    line = raw.decode("utf-8").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    chunk = line[len("data:") :].strip()
+                    if not chunk:
+                        continue
+                    try:
+                        text = json.loads(chunk)["candidates"][0]["content"]["parts"][0]["text"]
+                    except (KeyError, IndexError, ValueError):
+                        continue
+                    if text:
+                        q.put(text)
+        except urllib.error.HTTPError as exc:
+            q.put(f"\n[Gemini error {exc.code}: check the API key or quota.]")
+        except (urllib.error.URLError, OSError) as exc:
+            q.put(f"\n[Could not reach Gemini: {exc}]")
+        finally:
+            q.put(done)
+
+    threading.Thread(target=pump, daemon=True).start()
+    while True:
+        item = await asyncio.to_thread(q.get)
+        if item is done:
+            break
+        yield item
+
+
 # --- the indah layer: wire the stream into a UI ------------------------------
 
 # Coalesce a few tokens per SSE frame. Each StreamText.feed() emits one frame, and
@@ -154,7 +230,15 @@ async def _coalesced(
         yield "".join(buffer)
 
 
-def build_session(stream_fn, tokenizer=None, model=None, *, max_new_tokens: int = 1024) -> Session:
+def build_session(
+    stream_fn,
+    tokenizer=None,
+    model=None,
+    *,
+    max_new_tokens: int = 1024,
+    api_key: Signal[str] | None = None,
+    keyed_stream_fn=None,
+) -> Session:
     """Build the chat UI around a ``stream_fn(tokenizer, model, messages)``.
 
     The conversation is a ``Signal[list]`` of ``{"role","content"}`` messages
@@ -163,8 +247,14 @@ def build_session(stream_fn, tokenizer=None, model=None, *, max_new_tokens: int 
     then commits to the list when done. Growing the transcript is an ordinary prop
     change over the existing patch op - no dynamic-children protocol op needed.
 
-    ``max_new_tokens`` is threaded into every ``stream_fn`` call so replies are not
-    capped at the low library default and cut off mid-sentence (KAN-1401).
+    ``max_new_tokens`` is threaded into every stream call so replies are not capped at
+    the low library default and cut off mid-sentence (KAN-1401).
+
+    Bring your own key (optional): pass ``api_key`` (a ``Signal[str]``) plus
+    ``keyed_stream_fn(api_key, messages, *, max_new_tokens)`` and the UI shows a masked
+    key field. When the field holds a key, a send routes to ``keyed_stream_fn`` (a real
+    model); left blank it falls back to ``stream_fn`` (the mock). The key lives only in
+    this session's signal and is never logged (ADR-0010).
     """
     prompt: Signal[str] = Signal("")
     status: Signal[str] = Signal("Ask me something.")
@@ -183,8 +273,14 @@ def build_session(stream_fn, tokenizer=None, model=None, *, max_new_tokens: int 
         messages.set(history)
         pending.set("")
 
+        # Route to the real (keyed) model when a key is present, else the mock.
+        key = api_key.value.strip() if api_key is not None else ""
+        if key and keyed_stream_fn is not None:
+            stream = keyed_stream_fn(key, list(history), max_new_tokens=max_new_tokens)
+        else:
+            stream = stream_fn(tokenizer, model, list(history), max_new_tokens=max_new_tokens)
+
         parts: list[str] = []
-        stream = stream_fn(tokenizer, model, list(history), max_new_tokens=max_new_tokens)
         async for chunk in _coalesced(stream):
             pending.set(pending.value + chunk)
             parts.append(chunk)
@@ -194,21 +290,36 @@ def build_session(stream_fn, tokenizer=None, model=None, *, max_new_tokens: int 
         busy.set(False)
         status.set("Ask me something.")
 
-    page = Column(
-        children=[
-            Text("indah chatbot: replies stream in token by token as message bubbles"),
-            Chat(messages, pending=pending, label="Conversation"),
+    children = [
+        Text("indah chatbot: replies stream in token by token as message bubbles"),
+    ]
+    if api_key is not None:
+        children.append(
             TextInput(
-                prompt,
-                placeholder="Type a message, then press Enter or click Send",
-                label="Message",
-                on_submit=on_send,
-            ),
-            Button("Send", on_click=on_send),
-            Text(status),
-        ]
-    )
-    return Session(page)
+                api_key,
+                password=True,
+                label="Google Gemini API key (optional)",
+                placeholder="Paste a free key for a real reply; blank streams a mock",
+            )
+        )
+        children.append(
+            Text(
+                "Get a free key at aistudio.google.com. It is used only for your "
+                "session and is never stored."
+            )
+        )
+    children += [
+        Chat(messages, pending=pending, label="Conversation"),
+        TextInput(
+            prompt,
+            placeholder="Type a message, then press Enter or click Send",
+            label="Message",
+            on_submit=on_send,
+        ),
+        Button("Send", on_click=on_send),
+        Text(status),
+    ]
+    return Session(Column(children=children))
 
 
 def main() -> None:
@@ -240,7 +351,13 @@ def main() -> None:
 # Module-level ASGI app for hosting (HF Spaces / uvicorn, ADR-0023): the mock
 # chatbot, so a hosted demo needs no model weights or GPU. `python examples/chatbot.py`
 # (main) still runs the real model by default; pass --mock for the same as here.
-app = indah.create_app(session_factory=lambda: build_session(mock_chat_stream))
+# The hosted demo: mock by default, but bring your own free Google Gemini key for a
+# real reply. A fresh api_key signal per session (never shared, never logged).
+app = indah.create_app(
+    session_factory=lambda: build_session(
+        mock_chat_stream, api_key=Signal(""), keyed_stream_fn=gemini_chat_stream
+    )
+)
 
 
 if __name__ == "__main__":
