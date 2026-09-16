@@ -46,6 +46,11 @@ async def test_training_streams_two_series_and_records_history():
     assert monitor.history.value and len(monitor.history.value) == 2  # a row per epoch
     assert not monitor.running.value  # loop cleared the running flag
 
+    # The live metric signals behind the Stat KPI cards are populated after the run.
+    assert isinstance(monitor.train_loss.value, float)
+    assert isinstance(monitor.val_loss.value, float)
+    assert monitor.step_i.value == monitor.total.value == 10  # 2 epochs x 5 steps
+
 
 @pytest.mark.integration
 def test_start_button_wires_an_async_training_handler():
