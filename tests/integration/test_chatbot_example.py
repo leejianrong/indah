@@ -41,6 +41,24 @@ def _node(session, node_type):
     return next(c for c in session._by_id.values() if c.type == node_type)
 
 
+def _buttons(session):
+    return [c for c in session._by_id.values() if c.type == "button"]
+
+
+def _send_button(session):
+    """The Send button, told apart from the ghost suggestion chips by its label."""
+    return next(b for b in _buttons(session) if b.reactive_props()["label"]() == "Send")
+
+
+def _chips(session):
+    """The empty-state suggestion chips (ghost-variant buttons that aren't Send)."""
+    return [
+        b
+        for b in _buttons(session)
+        if b.static_props().get("variant") == "ghost" and b.reactive_props()["label"]() != "Send"
+    ]
+
+
 def _textinputs(session):
     return [c for c in session._by_id.values() if c.type == "textinput"]
 
@@ -65,7 +83,7 @@ async def test_mock_chatbot_streams_into_bubbles_and_clears_the_prompt():
     session.bind_hub(hub)
 
     textinput = _node(session, "textinput")
-    button = _node(session, "button")
+    button = _send_button(session)
     chat = _node(session, "chat")
 
     # Type a message, then click Send.
@@ -98,7 +116,7 @@ async def test_build_session_threads_max_new_tokens_into_the_stream():
     session.bind_hub(hub)
 
     textinput = _node(session, "textinput")
-    button = _node(session, "button")
+    button = _send_button(session)
     chat = _node(session, "chat")
 
     session.dispatch(textinput.id, "input", {"value": "hi"})
@@ -137,7 +155,7 @@ async def test_byok_routes_to_the_keyed_stream_when_a_key_is_present():
 
     session.dispatch(_key_input(session).id, "input", {"value": "secret-key"})
     session.dispatch(_prompt_input(session).id, "input", {"value": "hi"})
-    result = session.dispatch(_node(session, "button").id, "click", {})
+    result = session.dispatch(_send_button(session).id, "click", {})
     await result.coro
 
     reply = _messages(_node(session, "chat"))[1]["content"]
@@ -155,11 +173,100 @@ async def test_byok_falls_back_to_the_mock_when_the_key_is_blank():
 
     # Key left blank -> the mock answers (no network).
     session.dispatch(_prompt_input(session).id, "input", {"value": "hello there"})
-    result = session.dispatch(_node(session, "button").id, "click", {})
+    result = session.dispatch(_send_button(session).id, "click", {})
     await result.coro
 
     reply = _messages(_node(session, "chat"))[1]["content"]
     assert "hello there" in reply  # the mock echoes the question
+
+
+@pytest.mark.integration
+async def test_settings_key_and_model_live_in_a_collapsed_expander():
+    """The API key + model Select are tucked into a collapsed Settings Expander, not
+    stacked above the chat as clutter."""
+    chatbot = _load_example()
+    session = chatbot.build_session(
+        chatbot.mock_chat_stream,
+        api_key=Signal(""),
+        keyed_stream_fn=chatbot.openrouter_chat_stream,
+        model_choice=Signal(chatbot.DEFAULT_OPENROUTER_MODEL),
+        models=chatbot.OPENROUTER_MODELS,
+    )
+    expander = _node(session, "expander")
+    assert expander.static_props()["label"] == "Settings"
+    assert expander.reactive_props()["open"]() is False  # collapsed by default
+    # The masked key field and the model dropdown both exist (inside the panel).
+    assert _key_input(session).static_props()["password"] is True
+    select = _node(session, "select")
+    assert select.reactive_props()["value"]() == chatbot.DEFAULT_OPENROUTER_MODEL
+
+
+@pytest.mark.integration
+async def test_the_chosen_model_reaches_the_keyed_stream():
+    """Picking a model in the Select routes it through to the keyed stream."""
+    chatbot = _load_example()
+    seen = {}
+
+    async def fake_keyed(api_key, messages, *, model=None, max_new_tokens=1024):
+        seen["model"] = model
+        yield "ok"
+
+    model = Signal("deepseek/deepseek-chat-v3.1:free")
+    session = chatbot.build_session(
+        chatbot.mock_chat_stream,
+        api_key=Signal(""),
+        keyed_stream_fn=fake_keyed,
+        model_choice=model,
+        models=chatbot.OPENROUTER_MODELS,
+    )
+    hub = Hub()
+    session.bind_hub(hub)
+
+    _node(session, "select")  # present
+    model.set("qwen/qwen-2.5-72b-instruct")  # user picks a different model
+    session.dispatch(_key_input(session).id, "input", {"value": "k"})
+    session.dispatch(_prompt_input(session).id, "input", {"value": "hi"})
+    await session.dispatch(_send_button(session).id, "click", {}).coro
+
+    assert seen["model"] == "qwen/qwen-2.5-72b-instruct"
+
+
+@pytest.mark.integration
+async def test_a_suggestion_chip_seeds_and_sends_a_prompt():
+    """Clicking an empty-state chip sends that prompt -- no typing, no status string."""
+    chatbot = _load_example()
+    session = chatbot.build_session(chatbot.mock_chat_stream, suggestions=["Hello indah"])
+    hub = Hub()
+    session.bind_hub(hub)
+
+    chips = _chips(session)
+    assert [c.reactive_props()["label"]() for c in chips] == ["Hello indah"]
+    result = session.dispatch(chips[0].id, "click", {})
+    assert result is not None and result.coro is not None  # async
+    await result.coro
+
+    messages = _messages(_node(session, "chat"))
+    assert messages[0] == {"role": "user", "content": "Hello indah"}
+    assert messages[1]["role"] == "assistant"
+
+
+@pytest.mark.integration
+async def test_no_explainer_or_status_text_and_the_chat_leads():
+    """The old explainer line and 'Ask me something.' status string are gone, and with
+    no settings the chat is the first node on the page."""
+    chatbot = _load_example()
+    session = chatbot.build_session(chatbot.mock_chat_stream)
+    texts = [
+        c.reactive_props()["text"]()
+        for c in session._by_id.values()
+        if c.type == "text" and "text" in c.reactive_props()
+    ]
+    joined = " ".join(texts)
+    assert "Ask me something" not in joined
+    assert "replies stream in token by token" not in joined
+    # Chat leads: the root Column's first child is the Chat (no api_key -> no Expander).
+    root = _node(session, "column")
+    assert root.children[0].type == "chat"
 
 
 @pytest.mark.integration
@@ -169,7 +276,7 @@ async def test_mock_chatbot_is_guarded_against_an_empty_message():
     hub = Hub()
     session.bind_hub(hub)
 
-    button = _node(session, "button")
+    button = _send_button(session)
     chat = _node(session, "chat")
     result = session.dispatch(button.id, "click", {})  # nothing typed
     assert result is not None and result.coro is not None
