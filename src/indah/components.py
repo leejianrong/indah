@@ -771,6 +771,88 @@ class DataFrame(Component):
         return {"data": lambda: _to_table(_read(self._source))}
 
 
+class Table(Component):
+    """An interactive table (ADR-0021): sort, page, and select, on reactive props.
+
+    A superset of ``DataFrame``'s display - it takes the same source (a pandas frame,
+    a ``{"columns","rows"}`` dict, or a list of row dicts) - adding interaction the
+    shell handles client-side: click a header to sort, page through large data, and
+    click a row to select it. Selection round-trips: bind ``selected`` to a
+    ``Signal[int]`` (the selected row index, or ``None``) and a click sets it, so the
+    selection drives the rest of the app (the dashboard pattern: pick a row -> charts
+    update). Sorting and paging are client-side (no round-trip), so the table stays
+    responsive; the data still rides one reactive prop, so no ``protocol_version``
+    bump. Use ``DataFrame`` when you only need to show a table.
+    """
+
+    type = "table"
+
+    def __init__(
+        self,
+        source: Source,
+        *,
+        page_size: int = 0,
+        selected: Signal[int] | None = None,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._source = source
+        self._page_size = int(page_size)
+        self._selected = selected
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {
+            "pageSize": self._page_size,
+            "selectable": self._selected is not None,
+            "label": self._label,
+        }
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {"data": lambda: _to_table(_read(self._source))}
+        if self._selected is not None:
+            props["value"] = lambda: (
+                None if self._selected.value is None else int(self._selected.value)
+            )
+        return props
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "select" and "index" in payload and self._selected is not None:
+            self._selected.set(int(payload["index"]))
+            return True
+        return False
+
+
+class Stat(Component):
+    """A metric / KPI card (ADR-0021): a big value with a label and optional delta.
+
+    The tile dashboards pair with a ``Table``. ``value`` and ``delta`` are sources
+    (signal / callable / plain); the shell colours the delta green when it does not
+    start with ``-`` and red when it does (so pass e.g. ``"+2.4%"`` / ``"-1.1%"``).
+    Display only; no new protocol capability.
+    """
+
+    type = "stat"
+
+    def __init__(
+        self, value: Source, *, label: str = "", delta: Source = None, help: str = ""
+    ) -> None:
+        super().__init__()
+        self._value = value
+        self._label = label
+        self._delta = delta
+        self._help = help
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label, "help": self._help}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {"value": lambda: str(_read(self._value))}
+        if self._delta is not None:
+            props["delta"] = lambda: None if _read(self._delta) is None else str(_read(self._delta))
+        return props
+
+
 def _json_safe(value: Any) -> Any:
     """Coerce a cell value to something JSON can carry (e.g. a numpy scalar)."""
     if value is None or isinstance(value, (str, int, float, bool)):

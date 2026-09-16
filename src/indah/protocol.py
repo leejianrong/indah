@@ -50,6 +50,8 @@ BUILTIN_TYPES = frozenset(
         "chart",
         "heatmap",
         "dataframe",
+        "table",
+        "stat",
         "checkbox",
         "number",
         "radio",
