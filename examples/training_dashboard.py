@@ -8,7 +8,8 @@ from inside your epoch/step loop and everything streams to the browser over SSE.
 What it shows off:
 - a **Chart** with two streaming series (train + val loss) that grows point-by-point
   via the append op at O(point) - the KAN-1395 + Slice E path, ideal for long runs;
-- a **Progress** bar and live metric **Text** that update without freezing the page;
+- a **Progress** bar and a row of live **Stat** KPI cards (step, train/val loss, LR)
+  that update in place without freezing the page;
 - a **DataFrame** run history that appends a row per epoch;
 - an async handler, so the UI stays fully live while "training" runs.
 
@@ -23,6 +24,14 @@ import math
 import random
 
 import indah
+
+
+def _fmt_loss(v: float | None) -> str:
+    return "-" if v is None else f"{v:.4f}"
+
+
+def _fmt_lr(v: float | None) -> str:
+    return "-" if v is None else f"{v:.2e}"
 
 
 class TrainingMonitor:
@@ -43,16 +52,23 @@ class TrainingMonitor:
         )
         self.running = indah.Signal(False)
         self.progress = indah.Signal(0.0)
-        self.metrics = indah.Signal("Idle - press Start to train.")
+        self.status = indah.Signal("Idle - press Start to train.")
+        # Live metrics, one signal each, shown as Stat KPI cards (not one big string).
+        self.step_i = indah.Signal(0)
+        self.total = indah.Signal(0)
+        self.train_loss: indah.Signal = indah.Signal(None)
+        self.val_loss: indah.Signal = indah.Signal(None)
+        self.lr: indah.Signal = indah.Signal(None)
         self.history = indah.Signal([])  # per-epoch summary rows
 
     def step(self, step: int, train_loss: float, val_loss: float, total: int, lr: float) -> None:
         self.curves.push(step, round(train_loss, 4), round(val_loss, 4))
         self.progress.set((step + 1) / total)
-        self.metrics.set(
-            f"step {step + 1}/{total}  ·  train {train_loss:.4f}  ·  "
-            f"val {val_loss:.4f}  ·  lr {lr:.4g}"
-        )
+        self.step_i.set(step + 1)
+        self.total.set(total)
+        self.train_loss.set(train_loss)
+        self.val_loss.set(val_loss)
+        self.lr.set(lr)
 
     def epoch_end(self, epoch: int, train_loss: float, val_loss: float) -> None:
         self.history.set(
@@ -64,6 +80,7 @@ class TrainingMonitor:
         if self.running.value:
             return
         self.running.set(True)
+        self.status.set("Training...")
         self.curves.clear()
         self.history.set([])
         total = epochs * steps_per_epoch
@@ -84,7 +101,7 @@ class TrainingMonitor:
                     self.step(step, train_loss, val_loss, total, lr)
                     await asyncio.sleep(0.03)  # a real step would take much longer
                 self.epoch_end(epoch, train_loss, val_loss)
-            self.metrics.set(f"Done - {epochs} epochs, final val {val_loss:.4f}.")
+            self.status.set(f"Done - {epochs} epochs, final val {val_loss:.4f}.")
         finally:
             self.running.set(False)
 
@@ -98,12 +115,26 @@ def build() -> indah.Session:
             indah.Button("Start training", on_click=m.train),
             indah.Spinner(active=m.running, label="training..."),
             indah.Progress(m.progress, label="Epoch progress"),
-            indah.Text(lambda: m.metrics.value),
+            indah.Text(lambda: m.status.value),
+        ],
+    )
+
+    # Live metrics as KPI cards that update in place, instead of one big number string.
+    metrics = indah.Row(
+        children=[
+            indah.Stat(
+                value=lambda: f"{m.step_i.value}/{m.total.value}" if m.total.value else "-",
+                label="Step",
+            ),
+            indah.Stat(value=lambda: _fmt_loss(m.train_loss.value), label="Train loss"),
+            indah.Stat(value=lambda: _fmt_loss(m.val_loss.value), label="Val loss"),
+            indah.Stat(value=lambda: _fmt_lr(m.lr.value), label="Learning rate"),
         ],
     )
 
     workspace = indah.Column(
         children=[
+            metrics,
             indah.Card(children=[m.curves]),
             indah.Card(
                 title="Run history",
