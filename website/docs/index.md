@@ -39,9 +39,11 @@ inline in the cell.
 
 ## See it in one click
 
-Every demo opens in Colab and embeds right in the cell - no install, no clone:
+Every demo is running live in your browser - no install, no clone - and also opens in
+Colab, embedded right in the cell:
 
-[Open the demo gallery :material-arrow-right:](gallery.md){ .md-button .md-button--primary }
+[Open the live demo gallery :material-arrow-right:](https://indah-demos.fly.dev){ .md-button .md-button--primary }
+[Browse the demos here :material-arrow-right:](gallery.md){ .md-button }
 
 A streaming chatbot, a live training dashboard, an image generator, a poster
 generator, and interactive charts - all in a Colab notebook or as a standalone app.
