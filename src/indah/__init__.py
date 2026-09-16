@@ -19,6 +19,8 @@ from .components import (
     Component,
     DataFrame,
     Date,
+    Download,
+    DownloadFile,
     Expander,
     Gallery,
     Grid,
@@ -96,9 +98,11 @@ __all__ = [
     "StreamText",
     "Progress",
     "Spinner",
-    # file upload (ADR-0017)
+    # file upload / download (ADR-0017)
     "Upload",
     "UploadedFile",
+    "Download",
+    "DownloadFile",
     # data-driven list (ADR-0016)
     "List",
     "Chat",

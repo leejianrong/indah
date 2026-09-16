@@ -29,11 +29,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
-from .components import Component, StreamText, walk
+from .components import Component, Download, StreamText, walk
 from .protocol import error_message, patch_message
 from .reactive import Computation, batch, effect
 from .transport import Hub
@@ -65,6 +66,12 @@ class Session:
         self._hub: Hub | None = None
         # Strong refs to running async-handler tasks so they are not GC'd.
         self._tasks: set[asyncio.Task[Any]] = set()
+        # File-out (ADR-0017): bytes handed back to this viewer, keyed by an
+        # unguessable token and served at api/file/<session_id>/<token>. The store
+        # stamps session_id so the URL routes back to this session; "default" is the
+        # id-less fallback (a single-shared app resolves any id to its one session).
+        self.session_id: str = "default"
+        self._files: dict[str, tuple[bytes, str, str]] = {}
 
         self._assign_ids()
         self._wire()
@@ -78,7 +85,7 @@ class Session:
 
     def _wire(self) -> None:
         for component in walk(self.root):
-            if isinstance(component, StreamText):
+            if isinstance(component, (StreamText, Download)):
                 component.bind(self)
             for prop_name, getter in component.reactive_props().items():
                 self._effects.append(self._make_effect(component.id, prop_name, getter))
@@ -98,6 +105,28 @@ class Session:
     def bind_hub(self, hub: Hub) -> None:
         """Attach the hub so live (async/streaming) emits reach clients."""
         self._hub = hub
+
+    # -- file-out (ADR-0017) -------------------------------------------------
+
+    _MAX_FILES = 64  # bound the per-session file store (drop oldest beyond this)
+
+    def serve_file(self, data: bytes, *, filename: str, media_type: str) -> str:
+        """Register bytes for download and return the URL that serves them.
+
+        The URL is relative (``api/file/<session_id>/<token>``) so it resolves
+        behind Colab/Runpod proxy base paths. The token is unguessable, and the
+        store is bounded so a long-running session does not grow without limit.
+        """
+        token = secrets.token_urlsafe(16)
+        self._files[token] = (bytes(data), str(filename), str(media_type))
+        while len(self._files) > self._MAX_FILES:
+            oldest = next(iter(self._files))
+            del self._files[oldest]
+        return f"api/file/{self.session_id}/{token}"
+
+    def get_file(self, token: str) -> tuple[bytes, str, str] | None:
+        """The ``(data, filename, media_type)`` for a token, or ``None``."""
+        return self._files.get(token)
 
     # -- emit paths ----------------------------------------------------------
 

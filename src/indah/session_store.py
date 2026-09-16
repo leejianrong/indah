@@ -82,6 +82,7 @@ class InMemorySessionStore:
         handle = self._handles.get(session_id)
         if handle is None:
             session = self._factory()
+            session.session_id = session_id  # so served file URLs route back here
             hub = Hub()
             session.bind_hub(hub)
             handle = SessionHandle(session=session, hub=hub)

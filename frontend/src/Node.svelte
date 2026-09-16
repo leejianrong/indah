@@ -1,6 +1,6 @@
 <script>
   import { nodeProps } from "./stores.js";
-  import { postEvent, postUpload } from "./api.js";
+  import { apiUrl, postEvent, postUpload } from "./api.js";
   import Self from "./Node.svelte";
   import Custom from "./Custom.svelte";
   import Markdown from "./Markdown.svelte";
@@ -342,6 +342,17 @@
     />
     {#if uploadStatus}<span class="upload-status">{uploadStatus}</span>{/if}
   </div>
+{:else if node.type === "download"}
+  {#if props.href}
+    <a
+      class="download"
+      href={apiUrl(props.href)}
+      download={props.filename || undefined}
+      rel="noopener">{props.label ?? "Download"}</a
+    >
+  {:else}
+    <span class="download disabled">{props.label ?? "Download"}</span>
+  {/if}
 {:else if node.type === "image"}
   <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />
 {:else if node.type === "dataframe"}

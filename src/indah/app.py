@@ -23,7 +23,12 @@ from typing import Any
 from pydantic import ValidationError
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, StreamingResponse
+from starlette.responses import (
+    HTMLResponse,
+    JSONResponse,
+    Response,
+    StreamingResponse,
+)
 from starlette.routing import Route
 
 try:  # python-multipart raises this on a malformed / over-limit multipart body
@@ -477,6 +482,7 @@ def create_app(
             Route("/api/stream", _stream, methods=["GET"]),
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
+            Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
         ]
     )
     app.state.store = store
@@ -674,6 +680,28 @@ async def _upload(request: Request) -> JSONResponse:
     if result.coro is not None:
         handle.session.spawn(result.coro)
     return JSONResponse({"ok": True, "files": [f.filename for f in files]})
+
+
+async def _file(request: Request) -> Response:
+    """Serve a file handed back to a viewer (ADR-0017): file-out over a blob URL.
+
+    The path carries the session id and an unguessable token; the bytes live in that
+    session's file store, so one viewer's download is not reachable from another's
+    session. Unknown id or token is a 404.
+    """
+    store: SessionStore = request.app.state.store
+    handle = store.get(request.path_params["sid"])
+    if handle is None:
+        return Response(status_code=404)
+    found = handle.session.get_file(request.path_params["token"])
+    if found is None:
+        return Response(status_code=404)
+    data, filename, media_type = found
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _parse_last_event_id(request: Request) -> int | None:

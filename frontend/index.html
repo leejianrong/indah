@@ -375,6 +375,22 @@
       }
       .upload-status { font-size: 0.85rem; color: var(--muted); }
 
+      a.download {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        align-self: start;
+        padding: 0.45rem 0.9rem;
+        font-size: 0.95rem;
+        color: var(--primary);
+        text-decoration: none;
+        background: var(--surface-2);
+        border: 1px solid var(--outline);
+        border-radius: var(--radius-sm);
+      }
+      a.download:hover { border-color: var(--primary); }
+      .download.disabled { color: var(--muted); opacity: 0.6; }
+
       .image { max-width: 100%; border-radius: var(--radius-sm); display: block; }
       .table-scroll { overflow-x: auto; }
       .dataframe { border-collapse: collapse; font-size: 0.9rem; width: 100%; }
