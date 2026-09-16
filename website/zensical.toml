@@ -13,12 +13,18 @@ extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { "Home" = "index.md" },
-  { "Gallery" = "gallery.md" },
-  { "Quickstart" = "quickstart.md" },
-  { "Build a chatbot" = "chatbot.md" },
-  { "Components" = "components.md" },
-  { "Custom components" = "custom-components.md" },
-  { "Protocol" = "protocol.md" },
+  { "Get started" = [
+    { "Quickstart" = "quickstart.md" },
+    { "Demo gallery" = "gallery.md" },
+  ] },
+  { "Guides" = [
+    { "Build a chatbot" = "chatbot.md" },
+  ] },
+  { "Reference" = [
+    { "Components" = "components.md" },
+    { "Custom components" = "custom-components.md" },
+    { "Protocol" = "protocol.md" },
+  ] },
 ]
 
 [project.theme]
