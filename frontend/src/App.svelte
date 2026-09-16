@@ -6,6 +6,11 @@
 
   let toastTimer;
 
+  // Optional page chrome injected by the server into the served shell (create_app
+  // args; the demo gallery sets them per demo): a clickable logo back to the
+  // gallery (home_url), a view-source link (source_url), and a distinct tab title.
+  const chrome = (typeof window !== "undefined" && window.__INDAH_CHROME__) || {};
+
   // Split an init tree into a skeleton (structure) plus a flat id->props map.
   function splitTree(node, map) {
     map.set(node.id, node.props || {});
@@ -118,14 +123,38 @@
 
 <div class="shell">
   <header class="brand">
-    <svg class="mark" viewBox="0 0 32 32" aria-label="indah" role="img">
-      <path d="M16 16C11.7 12.4 11.7 6 16 3.6C20.3 6 20.3 12.4 16 16Z" fill="var(--primary)" />
-      <path d="M16 16C20.3 19.6 20.3 26 16 28.4C11.7 26 11.7 19.6 16 16Z" fill="var(--primary)" />
-      <path d="M16 16C12.4 20.3 6 20.3 3.6 16C6 11.7 12.4 11.7 16 16Z" fill="var(--secondary)" />
-      <path d="M16 16C19.6 20.3 26 20.3 28.4 16C26 11.7 19.6 11.7 16 16Z" fill="var(--secondary)" />
-    </svg>
-    <span class="wordmark">indah</span>
+    <svelte:element
+      this={chrome.homeUrl ? "a" : "div"}
+      class="brand-id"
+      href={chrome.homeUrl}
+      title={chrome.homeUrl ? "Back to the gallery" : null}
+      aria-label={chrome.homeUrl ? "Back to the gallery" : null}
+    >
+      <svg class="mark" viewBox="0 0 32 32" aria-label="indah" role="img">
+        <path d="M16 16C11.7 12.4 11.7 6 16 3.6C20.3 6 20.3 12.4 16 16Z" fill="var(--primary)" />
+        <path d="M16 16C20.3 19.6 20.3 26 16 28.4C11.7 26 11.7 19.6 16 16Z" fill="var(--primary)" />
+        <path d="M16 16C12.4 20.3 6 20.3 3.6 16C6 11.7 12.4 11.7 16 16Z" fill="var(--secondary)" />
+        <path d="M16 16C19.6 20.3 26 20.3 28.4 16C26 11.7 19.6 11.7 16 16Z" fill="var(--secondary)" />
+      </svg>
+      <span class="wordmark">indah</span>
+    </svelte:element>
     <span class="spacer"></span>
+    {#if chrome.sourceUrl}
+      <a
+        class="source-link"
+        href={chrome.sourceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="View source on GitHub"
+      >
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+          <path
+            d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.4 18 4.7 18 4.7c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"
+          />
+        </svg>
+        <span>Source</span>
+      </a>
+    {/if}
     <div class="theme-toggle" role="group" aria-label="Theme">
       <button
         type="button"

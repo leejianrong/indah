@@ -81,6 +81,25 @@ async def test_each_demo_is_served_and_isolated_under_its_subpath():
 
 
 @pytest.mark.integration
+async def test_mounted_demo_serves_its_own_chrome():
+    # Each mounted sub-app carries its own app.state, so the shell's _index injects
+    # that demo's chrome (tab title, clickable logo back to the gallery, source link).
+    build_gallery = _build_gallery()
+    app_a = _counter_app()
+    app_a.state.page_title = "Demo A"
+    app_a.state.home_url = "../"
+    app_a.state.source_url = "https://github.com/leejianrong/indah/blob/main/examples/a.py"
+    gallery = build_gallery([{"slug": "a", "title": "Demo A", "emoji": "🅰️", "app": app_a}])
+    async with _client(gallery) as client:
+        shell = await client.get("/a/")
+    assert shell.status_code == 200
+    assert "<title>Demo A - indah</title>" in shell.text  # distinct per-demo tab title
+    assert "window.__INDAH_CHROME__={" in shell.text  # config assignment injected
+    assert '"homeUrl": "../"' in shell.text  # logo links back to the gallery
+    assert "examples/a.py" in shell.text  # view-source link
+
+
+@pytest.mark.integration
 async def test_subpath_without_trailing_slash_redirects():
     build_gallery = _build_gallery()
     gallery = build_gallery([{"slug": "a", "title": "A", "emoji": "🅰️", "app": _counter_app()}])

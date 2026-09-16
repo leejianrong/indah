@@ -39,6 +39,45 @@ async def test_index_serves_the_generic_renderer():
 
 
 @pytest.mark.integration
+async def test_index_has_no_chrome_by_default():
+    async with _client(create_app()) as client:
+        resp = await client.get("/")
+    assert "<title>indah</title>" in resp.text  # plain tab title
+    # The shell's own JS reads window.__INDAH_CHROME__; the injected config is an
+    # assignment (`={`), which must be absent when no chrome is configured.
+    assert "window.__INDAH_CHROME__={" not in resp.text
+
+
+@pytest.mark.integration
+async def test_index_injects_configured_chrome():
+    app = create_app(
+        session=Session(Column(children=[Text("hi")])),
+        title="Poster generator",
+        home_url="../",
+        source_url="https://github.com/leejianrong/indah/blob/main/examples/poster.py",
+    )
+    async with _client(app) as client:
+        resp = await client.get("/")
+    assert "<title>Poster generator - indah</title>" in resp.text  # distinct tab title
+    assert "window.__INDAH_CHROME__={" in resp.text  # config assignment injected
+    assert "examples/poster.py" in resp.text  # view-source link reaches the shell
+    assert '"homeUrl": "../"' in resp.text  # clickable-logo target
+
+
+@pytest.mark.integration
+async def test_chrome_json_escapes_angle_brackets():
+    # A `<` in a URL must not break out of the injected <script>.
+    app = create_app(
+        session=Session(Column(children=[Text("hi")])),
+        source_url="https://example.com/</script><b>x",
+    )
+    async with _client(app) as client:
+        resp = await client.get("/")
+    assert "</script><b>x" not in resp.text  # not injected raw
+    assert "\\u003c/script>" in resp.text  # angle bracket escaped in the JSON blob
+
+
+@pytest.mark.integration
 async def test_health_ok():
     async with _client(create_app()) as client:
         resp = await client.get("/health")
