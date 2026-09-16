@@ -36,6 +36,15 @@ inline in the cell.
     name is reserved on PyPI; the first release is being cut as `0.1.0rc1`. See
     [Quickstart](quickstart.md) to run it today from a clone.
 
+## See it in one click
+
+Every demo opens in Colab and embeds right in the cell - no install, no clone:
+
+[Open the demo gallery :material-arrow-right:](gallery.md){ .md-button .md-button--primary }
+
+A streaming chatbot, a live training dashboard, an image generator, a poster
+generator, and interactive charts - all in a Colab notebook or as a standalone app.
+
 ## Why another one
 
 | Pain | indah's answer |
@@ -44,6 +53,11 @@ inline in the cell.
 | Gradio's layout and state model get awkward past a demo | Plain Python components bound to state, custom layouts |
 | Reflex needs a Node build step that breaks in transient containers | Frontend ships pre-built in the wheel; zero runtime Node |
 | Colab's proxy does not support WebSockets | SSE + HTTP POST transport that passes the proxy |
+
+indah is **SSE-first** - the same architecture Google's Mesop bet on before it was
+retired - carried forward and made notebook-native. Reach for indah when you want a
+reactive app (not a full-script rerun) that runs inline in Colab or Runpod today and
+deploys as a standalone app tomorrow, with no Node anywhere.
 
 ## How it works
 

@@ -13,6 +13,7 @@ extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { "Home" = "index.md" },
+  { "Gallery" = "gallery.md" },
   { "Quickstart" = "quickstart.md" },
   { "Build a chatbot" = "chatbot.md" },
   { "Components" = "components.md" },
