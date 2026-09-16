@@ -1,0 +1,9 @@
+# slug	example (in examples/)	title	emoji	extra pip deps (space-separated, or -)
+# One Hugging Face Docker Space per demo (ADR-0023). Each example exposes a
+# module-level `app` (an indah ASGI app) that uvicorn serves on the Space port.
+chatbot	chatbot.py	Chatbot (streaming)	💬	-
+training-dashboard	training_dashboard.py	Live training dashboard	📈	-
+diffusion	diffusion.py	Image generation	🎨	-
+poster	poster.py	Poster generator	🖼️	-
+image-classify	upload_classify.py	Image classifier	🔍	-
+charts	charts.py	Hybrid charting	📊	matplotlib
