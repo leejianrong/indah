@@ -85,8 +85,10 @@ A patch `change` is one of:
 ```
 
 `props` merges the given keys into the node's current props. `append` concatenates
-a delta onto a single string prop, so a streamed value costs O(delta) per token
-rather than resending the whole string (ADR-0011).
+a delta onto an existing prop: a **string** delta grows a streamed string prop
+(a `streamtext`'s `text`, token by token) and a **list** delta grows a streamed
+list prop (a `chart`'s `data`, point by point). Either way a streamed value costs
+O(delta) rather than resending the whole prop (ADR-0011, ADR-0018).
 
 ### Resume
 
@@ -166,6 +168,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `upload` | input | `label`, `accept`, `multiple` | file(s) via `POST /api/upload` (not the event path) |
 | `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |
 | `image` | display | `src`, `alt` | — |
+| `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?}]`, `title`, `xLabel`, `yLabel`, `height`, `points`, `label` | — (grows via `append` patches) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
@@ -180,7 +183,24 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |
 
 `Plot` serialises to an `image` node whose `src` is a PNG `data:` URI rendered on
-the Python side, so the shell needs nothing extra to show it.
+the Python side, so the shell needs nothing extra to show it. Charting is **hybrid**
+(ADR-0018): `Plot` stays the zero-JS static path (a server PNG, good for static
+figures, heatmaps, and spectrograms), while `chart` is the interactive/real-time
+path — a client-side chart the pre-built shell draws with a bundled library (uPlot,
+inlined at build time; not a Python or runtime dependency, ADR-0004). Both carry
+their data in ordinary props, so neither adds a wire capability or moves
+`protocol_version`.
+
+A `chart` node holds a line / time-series chart. Its `data` is a list of rows
+`[[x, y0, y1, ...], ...]` — the x value first, then one value per y-series — and
+`series` names those y-series (`[{"label": "loss", "stroke": "#b5296b"}, ...]`;
+`stroke` is optional). `title`, `xLabel`, `yLabel`, `height` (px), and `points`
+(show per-point markers) are static encoding props. A whole-dataset change is a
+`props` merge of a new `data`; a streamed series grows `data` with an `append`
+whose delta is a list of new rows (`{"append": {"data": [[x, y0, ...]]}}`), so a
+live curve costs O(point) on the wire. Interactive zoom (drag), hover, and live
+redraw run in the browser. The full snapshot always carries the accumulated `data`,
+so a resume that falls back to `init` re-renders the whole curve.
 
 The layout containers (`row`, `grid`, `tabs`, `sidebar`, `expander`) only arrange
 existing `children`, so they add no protocol capability: show/active/open state

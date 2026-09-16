@@ -1,7 +1,7 @@
 # ADR-0018: Hybrid charting
 
-- Status: Proposed
-- Date: 2026-09-15
+- Status: Accepted
+- Date: 2026-09-15 (accepted 2026-09-16, built in Slice E)
 - Deciders: Jian (owner)
 
 ## Context
@@ -53,3 +53,25 @@ Because chart data travels as props, there is **no `protocol_version` bump**.
   documented in `docs/protocol.md`.
 - Picks a charting library as a build-time dependency of `frontend/` only; the
   Python package stays pure-Python.
+
+## As built (Slice E, 2026-09-16)
+
+- **Library: uPlot** (1.6.x, ~50 KB), a `devDependency` of `frontend/`, inlined
+  into the pre-built shell by the Vite singlefile build. It is not a Python or
+  runtime dependency and adds no Node at install or runtime (ADR-0004); the
+  packaging test/`make cleanroom` guard the pure-Python wheel.
+- **`Chart` component** (`components.py`): data/encoding ride ordinary reactive
+  props, so no `protocol_version` bump. Two modes — *reactive* (`data=` a
+  Signal/callable/list, replaced on change) and *streaming* (`push`/`extend`/`clear`
+  append rows via the existing `append` op at O(point), the same path `StreamText`
+  uses for text). The snapshot carries the full accumulated data for a resume.
+- **Streaming append generalised**: the shell's `append` handler now concatenates
+  list deltas (chart points) as well as string deltas (tokens); `chart`'s prop
+  schema is documented in `docs/protocol.md`. Landed on top of the KAN-1395 wire
+  optimisation, which keeps streamed points from paying a full proxy pad each.
+- **Scope: `Chart` is a line / time-series chart** (uPlot's core strength). Raster
+  output — heatmaps, spectrograms — stays on the server-PNG `Plot` for now (the demo
+  renders its heatmap that way); a client-side heatmap/2-D renderer is a candidate
+  follow-up if the demo push needs it, not part of this slice.
+- **Interaction** (drag-to-zoom on x, hover, live redraw) runs client-side; the
+  server only ships data. Demo: `examples/charts.py`.
