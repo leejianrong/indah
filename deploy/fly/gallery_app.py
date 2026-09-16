@@ -16,8 +16,10 @@ examples; `create_gallery` imports the example modules (present in the deploy im
 
 from __future__ import annotations
 
+import base64
 import html
 import importlib
+from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
@@ -34,38 +36,86 @@ MANIFEST: list[tuple[str, str, str, str]] = [
     ("charts", "Hybrid charting", "📊", "charts"),
 ]
 
+# One-line blurb per demo for the gallery cards (keyed by slug).
+BLURBS: dict[str, str] = {
+    "chatbot": "Chat replies streamed token by token into role bubbles.",
+    "training-dashboard": "Loss curves and live KPI cards while a model trains.",
+    "diffusion": "A prompt-to-image sampler refining from noise, with live progress.",
+    "poster": "Tweak controls, watch a poster re-render live, then download it.",
+    "image-classify": "Upload an image, get a prediction and a downloadable report.",
+    "charts": "An interactive client chart beside a server plot and a heatmap.",
+}
+
+# The Bunga mark (two magenta petals, two teal), inlined so the gallery needs no assets.
+_BUNGA = (
+    '<path d="M16 16C11.7 12.4 11.7 6 16 3.6C20.3 6 20.3 12.4 16 16Z" fill="#b5296b"/>'
+    '<path d="M16 16C20.3 19.6 20.3 26 16 28.4C11.7 26 11.7 19.6 16 16Z" fill="#b5296b"/>'
+    '<path d="M16 16C12.4 20.3 6 20.3 3.6 16C6 11.7 12.4 11.7 16 16Z" fill="#2e6d62"/>'
+    '<path d="M16 16C19.6 20.3 26 20.3 28.4 16C26 11.7 19.6 11.7 16 16Z" fill="#2e6d62"/>'
+)
+_FAVICON_SVG = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">{_BUNGA}</svg>'
+_FAVICON_URI = "data:image/svg+xml;base64," + base64.b64encode(_FAVICON_SVG.encode()).decode()
+GITHUB_URL = "https://github.com/leejianrong/indah"
+DOCS_URL = "https://leejianrong.github.io/indah/"
+
+
+def _mark(size: int) -> str:
+    return (
+        f'<svg class="mark" width="{size}" height="{size}" viewBox="0 0 32 32" '
+        f'role="img" aria-label="indah">{_BUNGA}</svg>'
+    )
+
+
+def _card(d: dict[str, Any]) -> str:
+    slug = html.escape(d["slug"])
+    title = html.escape(d["title"])
+    blurb = html.escape(BLURBS.get(d["slug"], ""))
+    # Relative link (trailing slash) so it resolves under any base path.
+    return (
+        f'<a class="card" href="{slug}/">'
+        f'<span class="thumb"><span class="thumb-dots"></span>'
+        f'<span class="thumb-emoji">{d["emoji"]}</span></span>'
+        f'<span class="card-body"><span class="card-title">{title}'
+        f'<span class="live">live</span></span>'
+        f'<span class="card-blurb">{blurb}</span></span></a>'
+    )
+
+
+# The comparison table lives on the landing page (not the docs). Framed to indah's
+# strengths, but honest about what each row means.
+_COMPARE = """
+<tr><th scope="row">Reactive updates (no full-script rerun)</th>
+  <td class="col-indah">Yes</td><td class="no">Reruns the script</td>
+  <td class="mid">Event callbacks</td><td class="yes">Yes</td></tr>
+<tr><th scope="row">No Node build at install or runtime</th>
+  <td class="col-indah">Yes</td><td class="yes">Yes</td><td class="yes">Yes</td>
+  <td class="no">Needs a Node build</td></tr>
+<tr><th scope="row">Single port, notebook-proxy friendly</th>
+  <td class="col-indah">Yes (SSE + POST)</td><td class="mid">WebSocket</td>
+  <td class="mid">WebSocket</td><td class="mid">WebSocket</td></tr>
+<tr><th scope="row">Token / point streaming built in</th>
+  <td class="col-indah">Yes</td><td class="mid">Limited</td>
+  <td class="yes">Yes</td><td class="mid">Limited</td></tr>
+<tr><th scope="row">Runs inside a throwaway Colab / Runpod container</th>
+  <td class="col-indah">Yes</td><td class="mid">Often</td>
+  <td class="mid">Often</td><td class="no">Build step breaks</td></tr>
+"""
+
+
+_LANDING = (Path(__file__).parent / "landing.html").read_text(encoding="utf-8")
+
 
 def _index_html(demos: list[dict[str, Any]]) -> str:
-    cards = "".join(
-        # Relative links (trailing slash) so they resolve under any base path.
-        f'<a class="card" href="{html.escape(d["slug"])}/">'
-        f'<span class="emoji">{d["emoji"]}</span>'
-        f'<span class="title">{html.escape(d["title"])}</span></a>'
-        for d in demos
+    cards = "".join(_card(d) for d in demos)
+    return (
+        _LANDING.replace("%%FAVICON%%", _FAVICON_URI)
+        .replace("%%LOGO_NAV%%", _mark(26))
+        .replace("%%LOGO_HERO%%", _mark(64))
+        .replace("%%CARDS%%", cards)
+        .replace("%%COMPARE%%", _COMPARE)
+        .replace("%%GITHUB%%", GITHUB_URL)
+        .replace("%%DOCS%%", DOCS_URL)
     )
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>indah demos</title><style>
-  :root {{ color-scheme: light dark; }}
-  body {{ margin:0; font-family: system-ui, sans-serif; background:#faf6f0; color:#241c22; }}
-  @media (prefers-color-scheme: dark) {{ body {{ background:#191319; color:#f3e6de; }} }}
-  header {{ padding: 2.5rem 1.5rem 1rem; }}
-  h1 {{ margin:0; font-size:1.8rem; }} p {{ color:#6e6169; max-width:44rem; }}
-  .grid {{ display:grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr));
-    gap:1rem; padding:1rem 1.5rem 3rem; }}
-  .card {{ display:flex; flex-direction:column; gap:.5rem; padding:1.3rem;
-    border-radius:14px; background:#fffdf9; border:1px solid #e0d4c6;
-    text-decoration:none; color:inherit; box-shadow:0 2px 5px -2px rgba(90,20,55,.16); }}
-  @media (prefers-color-scheme: dark) {{ .card {{ background:#221b22; border-color:#3a2f3a; }} }}
-  .card:hover {{ border-color:#b5296b; }}
-  .emoji {{ font-size:2rem; }} .title {{ font-weight:600; }}
-</style></head><body>
-<header><h1>indah demos</h1>
-<p>Live demos built with <a href="https://github.com/leejianrong/indah">indah</a> -
-a reactive Python UI framework for cloud notebooks (no Node, single port, streaming
-over SSE). Pick one:</p></header>
-<div class="grid">{cards}</div>
-</body></html>"""
 
 
 def build_gallery(demos: list[dict[str, Any]]) -> Starlette:

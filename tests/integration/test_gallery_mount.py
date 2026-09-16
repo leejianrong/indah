@@ -55,6 +55,25 @@ async def test_gallery_index_lists_the_mounted_demos():
 
 
 @pytest.mark.integration
+async def test_gallery_index_is_a_landing_page():
+    build_gallery = _build_gallery()
+    # A real slug so its blurb renders on the card.
+    gallery = build_gallery(
+        [{"slug": "chatbot", "title": "Streaming chatbot", "emoji": "💬", "app": _counter_app()}]
+    )
+    async with _client(gallery) as client:
+        r = await client.get("/")
+    body = r.text
+    assert r.status_code == 200
+    assert "data:image/svg+xml;base64," in body  # favicon = the indah (Bunga) logo
+    assert "Explore the demos" in body  # hero call-to-action
+    assert 'id="gallery"' in body  # gallery section anchor for the nav link
+    assert "col-indah" in body  # the comparison table highlights indah
+    assert 'href="chatbot/"' in body  # demo card link, relative -> base-path safe
+    assert "token by token" in body  # the demo's blurb rendered on its card
+
+
+@pytest.mark.integration
 async def test_each_demo_is_served_and_isolated_under_its_subpath():
     build_gallery = _build_gallery()
     app_a = _counter_app()
