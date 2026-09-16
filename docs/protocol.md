@@ -18,9 +18,15 @@ HTTP POSTs. Both ride one port so Colab's and Runpod's proxies pass them
 
 - `GET /api/stream` — the SSE stream (server → client).
 - `POST /api/event` — one UI event (client → server).
+- `POST /api/upload` — a multipart file upload (client → server); see
+  [File upload and download](#file-upload-and-download).
+- `GET /api/file/{sid}/{token}` — download a file the app handed back (server →
+  client); see [File upload and download](#file-upload-and-download).
 
-Every message is a JSON object with a `v` field (the protocol version) and a
-`type`.
+Every message on the SSE stream is a JSON object with a `v` field (the protocol
+version) and a `type`. The upload and file routes carry bytes, not JSON messages,
+so they are outside the versioned message schema (they are additive routes, not a
+wire-format change).
 
 ### Sessions
 
@@ -31,6 +37,21 @@ event body (below). Requests that carry the same id share one session; distinct 
 are isolated. An id-less request (a hand-written client, a curl) falls back to a
 single default session. The `sid` is a transport detail, not a UI message — it does
 not change any message schema, so `protocol_version` is unaffected.
+
+### Transport tiers
+
+indah declares two transport tiers (ADR-0017); everything shipped today is Tier 0.
+
+- **Tier 0 — SSE + POST.** The Colab-compatible floor: an SSE stream, small JSON
+  POSTs, and the multipart upload / file-download routes above. This is the only
+  tier Colab's proxy supports (it blocks WebSockets, ADR-0002), so **everything in
+  this document runs on Tier 0.** Upload and record-*snapshot* media (a single
+  frame, a recorded clip) fit here.
+- **Tier 1 — an optional streaming upgrade (WebSocket), not built.** Reserved for
+  continuous high-frequency binary (live webcam, real-time detection), enabled only
+  where the environment supports it (non-Colab). It is declared to keep that door
+  open without weakening Tier 0; nothing here depends on it, and it does not change
+  the Tier 0 contract.
 
 ## Nodes
 
@@ -94,6 +115,38 @@ A malformed body is rejected `400`; a body that does not validate, `422`; an eve
 for an unknown component or event, `400`. A handler that raises does not take the
 UI down: the traceback is logged server-side and an `error` message is pushed.
 
+## File upload and download
+
+Binary rides its own routes, not the JSON event path, so a file never bloats an
+event or the reactive path (ADR-0017). Both are Tier 0.
+
+### Upload (`POST /api/upload`)
+
+A `multipart/form-data` body with these fields:
+
+- `component` — the id of the `upload` node the file is for (required).
+- `sid` — the sender's session id (optional; the default session otherwise).
+- `file` — the uploaded file part; repeat the field for several files (a `multiple`
+  upload).
+
+The server hands the bytes to that component's handler as the app's `upload` event,
+and the result flows back over that session's SSE stream (e.g. `patch`es setting an
+image, a label, a download link). The response is JSON: `{"ok": true, "files":
+[<filename>, ...]}`.
+
+A missing/unknown `component` is rejected `400`; a file larger than the server cap
+(`create_app(max_upload_mb=…)`, default 25 MB) is rejected `413` before it is
+buffered.
+
+### Download (`GET /api/file/{sid}/{token}`)
+
+When the app hands a file back (a generated CSV, an image), indah stores the bytes
+in that session and exposes them at this URL. The response body is the bytes, with
+the file's `Content-Type` and a `Content-Disposition: attachment; filename="…"`.
+The `token` is unguessable and the file lives in one session's store, so it is
+reachable only through that session (an unknown `sid` or `token` is `404`). The URL
+is document-relative, so it resolves behind Colab/Runpod proxy base paths.
+
 ## Built-in component types
 
 | `type` | Kind | Key props | Events (payload) |
@@ -110,6 +163,8 @@ UI down: the traceback is logged server-side and an `error` message is pushed.
 | `radio` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
 | `multiselect` | input | `value:[...]`, `options:[{value,label}]`, `label` | `change` `{value:[...]}` |
 | `date` | input | `value` (ISO `YYYY-MM-DD`), `label` | `change` `{value}` |
+| `upload` | input | `label`, `accept`, `multiple` | file(s) via `POST /api/upload` (not the event path) |
+| `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |
 | `image` | display | `src`, `alt` | — |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
