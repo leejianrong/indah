@@ -730,6 +730,96 @@ class Upload(Component):
         return False
 
 
+@dataclass
+class DownloadFile:
+    """Bytes to hand back to the user, with the filename the browser saves as."""
+
+    data: bytes
+    filename: str = "download"
+    media_type: str = "application/octet-stream"
+
+
+class Download(Component):
+    """A download link that hands the user a file back (ADR-0017).
+
+    Bind ``source`` to a signal/callable/plain value that yields one of:
+
+    - a URL string (served elsewhere) -- passed through as the link target;
+    - raw ``bytes`` -- served by indah at a per-session blob URL (``filename`` and
+      ``media_type`` name the download);
+    - a :class:`DownloadFile` -- bytes plus their own filename/media type.
+
+    Set the source from Python (e.g. after a run produces a CSV or an image) and the
+    link updates; ``None`` yields an inert link. Serving is per-session (ADR-0010),
+    so one viewer's file is not reachable from another's session.
+    """
+
+    type = "download"
+
+    def __init__(
+        self,
+        source: Source = None,
+        *,
+        label: str = "Download",
+        filename: str = "download",
+        media_type: str = "application/octet-stream",
+    ) -> None:
+        super().__init__()
+        self._source = source
+        self._label = label
+        self._filename = filename
+        self._media_type = media_type
+        self._session: Session | None = None
+        self._cache: tuple[Any, tuple[str, str]] | None = None
+
+    def bind(self, session: Session) -> None:
+        """Called by the session during wiring so bytes can be served per-session."""
+        self._session = session
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {
+            "href": lambda: self._resolve()[0],
+            "filename": lambda: self._resolve()[1],
+        }
+
+    def _resolve(self) -> tuple[str, str]:
+        """Coerce the source to ``(href, filename)``, serving bytes if needed.
+
+        Cached by the source value so repeated getter calls (the two props, plus
+        every snapshot) do not re-serve identical bytes under a fresh token.
+        """
+        value = _read(self._source)
+        if self._cache is not None and _same_download(self._cache[0], value):
+            return self._cache[1]
+
+        if value is None:
+            result = ("", self._filename)
+        elif isinstance(value, DownloadFile):
+            result = self._serve(value.data, value.filename, value.media_type)
+        elif isinstance(value, (bytes, bytearray)):
+            result = self._serve(bytes(value), self._filename, self._media_type)
+        else:
+            result = (str(value), self._filename)  # already a URL
+
+        self._cache = (value, result)
+        return result
+
+    def _serve(self, data: bytes, filename: str, media_type: str) -> tuple[str, str]:
+        if self._session is None:
+            return ("", filename)  # not wired yet (e.g. serialised standalone)
+        return (self._session.serve_file(data, filename=filename, media_type=media_type), filename)
+
+
+def _same_download(a: Any, b: Any) -> bool:
+    """Value-equality for the download cache, treating bytes/bytearray by content."""
+    if isinstance(a, (bytes, bytearray)) and isinstance(b, (bytes, bytearray)):
+        return bytes(a) == bytes(b)
+    return a is b or a == b
+
+
 # -- Layout containers (ADR-0015) --------------------------------------------
 #
 # These arrange existing child nodes, so they need no new protocol capability:
