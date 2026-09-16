@@ -171,6 +171,8 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?}]`, `title`, `xLabel`, `yLabel`, `height`, `points`, `label` | — (grows via `append` patches) |
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
+| `table` | display/input | `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index) | `select` `{index}` |
+| `stat` | display | `value`, `label`, `delta`, `help` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
 | `spinner` | display | `active`, `label` | — |
@@ -218,6 +220,16 @@ existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no
 payload.
+
+`table` is the interactive superset of `dataframe`: it takes the same
+`data:{columns,rows}` and adds sorting and paging (both **client-side** in the shell,
+no round-trip) plus row selection. When `selectable` is set (the app bound a
+selection signal), clicking a row emits `select` `{index}` — the index into the
+source rows — and the server patches back `value` (the selected row index) so the
+selection can drive other components. `pageSize` (0 = no paging) sets the page size.
+`stat` is a metric card: a `value` with a `label`, an optional `delta` (the shell
+colours it by sign — red when it starts with `-`, otherwise green), and an optional
+`help` line. Both carry their data in ordinary props, so no `protocol_version` bump.
 
 The data-driven lists (`list`, `chat`, `gallery`) hold their items in one reactive
 prop (a `Signal[list]`), so growing, shrinking, or reordering is an ordinary prop

@@ -6,6 +6,7 @@
   import Markdown from "./Markdown.svelte";
   import Chart from "./Chart.svelte";
   import Heatmap from "./Heatmap.svelte";
+  import Table from "./Table.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -367,6 +368,17 @@
   </div>
 {:else if node.type === "image"}
   <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />
+{:else if node.type === "table"}
+  <Table {props} nodeId={node.id} />
+{:else if node.type === "stat"}
+  <div class="stat">
+    {#if props.label}<span class="stat-label">{props.label}</span>{/if}
+    <span class="stat-value">{props.value ?? ""}</span>
+    {#if props.delta != null}
+      <span class="stat-delta" class:down={String(props.delta).startsWith("-")}>{props.delta}</span>
+    {/if}
+    {#if props.help}<span class="stat-help">{props.help}</span>{/if}
+  </div>
 {:else if node.type === "dataframe"}
   <div class="field">
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}

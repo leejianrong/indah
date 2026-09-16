@@ -355,6 +355,64 @@ def test_client_chart_renders_and_streams_points(tmp_path):
         handle.stop()
 
 
+def _table_app():
+    """A selectable, sortable Table driving a Stat, plus a text echo of the selection
+    - the dashboard pattern: pick a row, the rest of the app reacts."""
+    from indah import Column, Session, Signal, Stat, Table, Text, create_app
+
+    rows = [
+        {"ticker": "AAPL", "price": 220},
+        {"ticker": "MSFT", "price": 410},
+        {"ticker": "NVDA", "price": 130},
+    ]
+    picked = Signal(None)
+
+    def price_of():
+        i = picked.value
+        return f"${rows[i]['price']}" if i is not None else "-"
+
+    root = Column(
+        children=[
+            Table(rows, selected=picked, label="Peers"),
+            Stat(price_of, label="Selected price"),
+            Text(lambda: "none" if picked.value is None else rows[picked.value]["ticker"]),
+        ]
+    )
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_table_sorts_and_selects_and_drives_a_stat():
+    """The Table sorts client-side on a header click and selects a row, which
+    round-trips to Python and updates a bound Stat (ADR-0021)."""
+    handle = launch(_table_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                rows = page.locator("table.table tbody tr")
+                expect(rows).to_have_count(3)
+                # First data row is AAPL in source order.
+                expect(rows.first.locator("td").first).to_have_text("AAPL")
+
+                # Sort by price ascending: NVDA (130) rises to the top (client-side).
+                page.locator("table.table th .th-sort", has_text="price").click()
+                expect(rows.first.locator("td").first).to_have_text("NVDA")
+
+                # Select that row -> round-trips, the Stat and text echo update.
+                rows.first.click()
+                expect(page.locator(".stat-value")).to_have_text("$130")
+                expect(page.locator("div.text", has_text="NVDA")).to_be_visible()
+                expect(rows.first).to_have_class(re.compile("selected"))
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
 def _heatmap_app():
     """A streaming Heatmap + a button that pushes a column (a spectrogram time slice),
     plus a reactive Heatmap from a fixed field."""

@@ -1,7 +1,7 @@
 # ADR-0021: Rich Table (sort / page / filter / select)
 
-- Status: Proposed
-- Date: 2026-09-16
+- Status: Accepted
+- Date: 2026-09-16 (accepted + built same day, KAN-1462/1463)
 - Deciders: Jian (owner)
 
 ## Context
@@ -55,3 +55,19 @@ the dashboard demo has both halves.
   use events, so the component scales without a wire change.
 - `DataFrame` is unchanged; a new `table` (and `stat`) component type + prop/event
   schema are documented in `docs/protocol.md`, additive within `protocol_version` 1.
+
+## As built (KAN-1462/1463, 2026-09-16)
+
+- **`Table`** (`components.py`): same source as `DataFrame` (pandas / dict / records
+  via `_to_table`), plus `page_size` and a `selected` `Signal[int]` (or `None`). A row
+  click emits `select {index}` which sets the signal and patches back `value`, so a
+  selection drives other components. `DataFrame` stays the zero-interaction display.
+- **Sort + paging are client-side** (`Table.svelte`): header click sorts (numeric or
+  locale string), `pageSize` pages, and the shell tracks each row's original index so
+  a click/highlight refers to the source row, not the sorted/paged position. The
+  planned server-side sort/page events are **not** built — client-side covers the
+  demo data sizes; add them later if a backend-owned dataset needs them.
+- **`Stat`** metric card: `value` + `label` + optional `delta` (shell colours by sign)
+  + `help`. No new protocol capability.
+- Documented in `docs/protocol.md`; guarded by unit tests + a browser e2e (sort, then
+  select a row that drives a bound `Stat`).
