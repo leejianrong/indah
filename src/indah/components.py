@@ -16,6 +16,7 @@ import base64
 import inspect
 import io
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .markdown import to_blocks
@@ -653,6 +654,80 @@ class Spinner(Component):
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"active": lambda: bool(_read(self._active))}
+
+
+# -- File upload (ADR-0017) --------------------------------------------------
+#
+# Upload is the one input whose payload is binary, not JSON, so it does not ride
+# ``POST /api/event``: the shell posts the file(s) to a separate multipart route
+# (``POST /api/upload``), and the app hands the bytes to this component's handler
+# as ``UploadedFile`` objects. Everything after that is ordinary indah -- the
+# handler mutates signals / feeds a StreamText and results flow back over SSE.
+
+
+@dataclass
+class UploadedFile:
+    """One uploaded file's bytes and metadata, handed to an ``Upload`` handler.
+
+    ``data`` is the raw bytes; ``text()`` decodes them and ``size`` is their length.
+    The handler owns what it does with the bytes (ADR-0009/Q-sec).
+    """
+
+    filename: str
+    content_type: str
+    data: bytes
+
+    @property
+    def size(self) -> int:
+        return len(self.data)
+
+    def text(self, encoding: str = "utf-8") -> str:
+        return self.data.decode(encoding)
+
+
+class Upload(Component):
+    """A file input (image / audio / any file), ADR-0017.
+
+    ``on_upload`` is a plain callable the caller supplies (ADR-0009). It receives an
+    :class:`UploadedFile` (or a ``list`` of them when ``multiple=True``); it may be
+    sync or ``async def`` (an async handler runs in the background like a Button's,
+    so a slow model never blocks the request). ``accept`` is an HTML accept hint
+    (e.g. ``"image/*"``) and ``multiple`` allows selecting several files; both are UI
+    hints -- the hard size cap is enforced server-side by the upload route.
+    """
+
+    type = "upload"
+
+    def __init__(
+        self,
+        on_upload: Callable[[Any], Any] | None = None,
+        *,
+        label: str = "",
+        accept: str = "",
+        multiple: bool = False,
+    ) -> None:
+        super().__init__()
+        self._on_upload = on_upload
+        self._label = label
+        self._accept = accept
+        self._multiple = multiple
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label, "accept": self._accept, "multiple": bool(self._multiple)}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        # The upload route dispatches a synthetic "upload" event whose payload
+        # carries the parsed UploadedFile objects (not JSON) -- so it reuses the
+        # whole session dispatch/sink/error path like any other event.
+        if event == "upload":
+            files: list[UploadedFile] = list(payload.get("files", []))
+            if self._on_upload is not None:
+                arg: Any = files if self._multiple else (files[0] if files else None)
+                result = self._on_upload(arg)
+                if inspect.iscoroutine(result):
+                    return result  # async handler: awaited as a background task
+            return True  # always handled (a no-op without a handler), never 400s
+        return False
 
 
 # -- Layout containers (ADR-0015) --------------------------------------------

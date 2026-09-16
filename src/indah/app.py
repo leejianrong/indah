@@ -26,6 +26,13 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.routing import Route
 
+try:  # python-multipart raises this on a malformed / over-limit multipart body
+    from starlette.datastructures import UploadFile
+    from starlette.formparsers import MultiPartException
+except Exception:  # pragma: no cover - starlette always ships these
+    UploadFile = None  # type: ignore[assignment,misc]
+    MultiPartException = Exception  # type: ignore[assignment,misc]
+
 from .components import (
     Button,
     Card,
@@ -53,6 +60,7 @@ from .components import (
     Tabs,
     Text,
     TextInput,
+    UploadedFile,
 )
 from .custom import custom, register_component
 from .protocol import EventIn, init_message, patch_message, ping_message
@@ -71,6 +79,11 @@ DEFAULT_HEARTBEAT_SECONDS = 15.0
 # An id-less connection (a test, a curl, an old shell) shares this one session.
 # The real shell mints a per-tab id, so real viewers never land here together.
 DEFAULT_SESSION_ID = "default"
+
+# The server-side hard cap on an uploaded file (ADR-0017 / Q-sec). The app author
+# can raise or lower it with create_app(max_upload_mb=...); the route rejects a
+# larger part with 413 rather than buffering it.
+DEFAULT_MAX_UPLOAD_MB = 25.0
 
 _SSE_HEADERS = {
     "Cache-Control": "no-cache",
@@ -422,6 +435,7 @@ def create_app(
     session_factory: Callable[[], Session] | None = None,
     store: SessionStore | None = None,
     heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
+    max_upload_mb: float = DEFAULT_MAX_UPLOAD_MB,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -462,10 +476,12 @@ def create_app(
             Route("/health", _health, methods=["GET"]),
             Route("/api/stream", _stream, methods=["GET"]),
             Route("/api/event", _event, methods=["POST"]),
+            Route("/api/upload", _upload, methods=["POST"]),
         ]
     )
     app.state.store = store
     app.state.heartbeat_seconds = heartbeat_seconds
+    app.state.max_upload_bytes = int(max_upload_mb * 1024 * 1024)
     # Back-compat: a single-shared app still exposes .session/.hub for callers and
     # tests that introspect the one graph. A per-session app has neither -- there is
     # no single session to name; go through the store (keyed by sid) instead.
@@ -610,6 +626,54 @@ async def _event(request: Request) -> JSONResponse:
         # proxy timeout, nor blocks the event loop or other sessions (R3).
         session.spawn(result.coro)
     return JSONResponse({"ok": True})
+
+
+async def _upload(request: Request) -> JSONResponse:
+    """Multipart file upload (ADR-0017), separate from the JSON event path.
+
+    Reads the ``sid`` + ``component`` form fields and the uploaded file part(s),
+    then dispatches a synthetic ``upload`` event carrying ``UploadedFile`` objects to
+    the target ``Upload`` component in the sender's session. From there it is an
+    ordinary event: sync mutations broadcast at once, an async handler streams in the
+    background, and results flow back over that session's SSE stream. A part larger
+    than the server cap is rejected with 413 rather than buffered.
+    """
+    max_bytes: int = request.app.state.max_upload_bytes
+    try:
+        async with request.form(max_part_size=max_bytes) as form:
+            component_id = form.get("component")
+            sid = form.get("sid") or DEFAULT_SESSION_ID
+            if not isinstance(component_id, str) or not component_id:
+                return JSONResponse({"ok": False, "error": "missing component"}, status_code=400)
+            files: list[UploadedFile] = []
+            for value in form.getlist("file"):
+                if UploadFile is not None and isinstance(value, UploadFile):
+                    data = await value.read()
+                    if len(data) > max_bytes:
+                        return JSONResponse(
+                            {"ok": False, "error": "file too large"}, status_code=413
+                        )
+                    files.append(
+                        UploadedFile(
+                            filename=value.filename or "",
+                            content_type=value.content_type or "application/octet-stream",
+                            data=data,
+                        )
+                    )
+    except MultiPartException:
+        return JSONResponse({"ok": False, "error": "file too large"}, status_code=413)
+
+    store: SessionStore = request.app.state.store
+    handle: SessionHandle = store.get_or_create(sid)
+    result = handle.session.dispatch(component_id, "upload", {"files": files})
+    if result is None:
+        return JSONResponse({"ok": False, "error": "unknown component"}, status_code=400)
+
+    if result.changes:
+        handle.hub.publish(patch_message(result.changes))
+    if result.coro is not None:
+        handle.session.spawn(result.coro)
+    return JSONResponse({"ok": True, "files": [f.filename for f in files]})
 
 
 def _parse_last_event_id(request: Request) -> int | None:

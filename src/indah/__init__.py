@@ -38,6 +38,8 @@ from .components import (
     Tabs,
     Text,
     TextInput,
+    Upload,
+    UploadedFile,
 )
 from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
@@ -94,6 +96,9 @@ __all__ = [
     "StreamText",
     "Progress",
     "Spinner",
+    # file upload (ADR-0017)
+    "Upload",
+    "UploadedFile",
     # data-driven list (ADR-0016)
     "List",
     "Chat",
