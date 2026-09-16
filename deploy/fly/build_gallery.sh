@@ -22,6 +22,7 @@ rm -rf "$out"
 mkdir -p "$out"
 cp "$here/gallery_app.py" "$out/"
 cp "$here/landing.html" "$out/"   # the landing-page template gallery_app.py reads
+cp -r "$here/thumbnails" "$out/"  # real per-demo screenshots for the gallery cards
 for mod in "${examples[@]}"; do
   cp "$repo/examples/$mod.py" "$out/$mod.py"
 done
