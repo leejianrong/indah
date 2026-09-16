@@ -34,7 +34,26 @@ import asyncio
 from collections.abc import AsyncIterator
 
 import indah
-from indah import Button, Chat, Column, Session, Signal, Text, TextInput
+from indah import (
+    Button,
+    Chat,
+    Column,
+    Expander,
+    Row,
+    Select,
+    Session,
+    Signal,
+    Text,
+    TextInput,
+)
+
+# The empty-state prompt chips: clickable suggestions that both teach what indah is and
+# give a first-time visitor something to send without thinking of a prompt.
+DEFAULT_SUGGESTIONS: list[str] = [
+    "Explain how indah streams tokens",
+    "Write a haiku about Colab",
+    "What is a reactive signal?",
+]
 
 DEFAULT_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -205,6 +224,101 @@ async def gemini_chat_stream(
         yield item
 
 
+# --- the keyed path: a real reply from OpenRouter (bring your own key) --------
+
+# OpenRouter model picks for the demo, as ``(id, label)`` pairs for the Select. The
+# default is a **free** model so nobody has to pay; the others are cheap paid picks for
+# users who have credits. NOTE: OpenRouter's free-model roster rotates, so treat these
+# ``:free`` ids as a starting set and edit them as the catalogue changes.
+DEFAULT_OPENROUTER_MODEL = "deepseek/deepseek-chat-v3.1:free"
+OPENROUTER_MODELS: list[tuple[str, str]] = [
+    ("deepseek/deepseek-chat-v3.1:free", "DeepSeek V3.1 (free)"),
+    ("qwen/qwen-2.5-72b-instruct:free", "Qwen 2.5 72B (free)"),
+    ("meta-llama/llama-3.3-70b-instruct:free", "Llama 3.3 70B (free)"),
+    ("deepseek/deepseek-chat", "DeepSeek (paid, cheap)"),
+    ("qwen/qwen-2.5-72b-instruct", "Qwen 2.5 72B (paid)"),
+]
+
+
+async def openrouter_chat_stream(
+    api_key: str,
+    messages: list[Message],
+    *,
+    model: str = DEFAULT_OPENROUTER_MODEL,
+    max_new_tokens: int = 1024,
+) -> AsyncIterator[str]:
+    """Stream a real reply from OpenRouter, token by token (bring your own key).
+
+    Plain Python, no indah imports (ADR-0009). OpenRouter is OpenAI-compatible: we POST
+    to ``/chat/completions`` with ``stream: true`` and read the server-sent ``data:``
+    lines over stdlib ``urllib`` on a background thread, pulled with ``asyncio.to_thread``
+    so the event loop never blocks. ``model`` picks which OpenRouter model answers; the
+    default is a free one. The key is used only for this request and never stored or
+    logged. On any error it yields a short message instead of raising, so the chat stays
+    usable (e.g. a bad key, an unavailable model, or exhausted quota).
+    """
+    import json
+    import queue as _queue
+    import threading
+    import urllib.error
+    import urllib.request
+
+    endpoint = "https://openrouter.ai/api/v1/chat/completions"
+    payload = json.dumps(
+        {
+            "model": model,
+            "stream": True,
+            "max_tokens": max_new_tokens,
+            "messages": [
+                {"role": m["role"], "content": m["content"]}
+                for m in messages
+                if m["role"] in ("user", "assistant", "system")
+            ],
+        }
+    ).encode()
+
+    q: _queue.Queue = _queue.Queue()
+    done = object()
+
+    def pump() -> None:
+        try:
+            req = urllib.request.Request(
+                endpoint,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310 (https only)
+                for raw in resp:
+                    line = raw.decode("utf-8").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    chunk = line[len("data:") :].strip()
+                    if not chunk or chunk == "[DONE]":
+                        continue
+                    try:
+                        text = json.loads(chunk)["choices"][0]["delta"].get("content") or ""
+                    except (KeyError, IndexError, ValueError):
+                        continue
+                    if text:
+                        q.put(text)
+        except urllib.error.HTTPError as exc:
+            q.put(f"\n[OpenRouter error {exc.code}: check the API key or model.]")
+        except (urllib.error.URLError, OSError) as exc:
+            q.put(f"\n[Could not reach OpenRouter: {exc}]")
+        finally:
+            q.put(done)
+
+    threading.Thread(target=pump, daemon=True).start()
+    while True:
+        item = await asyncio.to_thread(q.get)
+        if item is done:
+            break
+        yield item
+
+
 # --- the indah layer: wire the stream into a UI ------------------------------
 
 # Coalesce a few tokens per SSE frame. Each StreamText.feed() emits one frame, and
@@ -238,6 +352,9 @@ def build_session(
     max_new_tokens: int = 1024,
     api_key: Signal[str] | None = None,
     keyed_stream_fn=None,
+    model_choice: Signal[str] | None = None,
+    models: list[tuple[str, str]] | None = None,
+    suggestions: list[str] | None = None,
 ) -> Session:
     """Build the chat UI around a ``stream_fn(tokenizer, model, messages)``.
 
@@ -251,13 +368,17 @@ def build_session(
     the low library default and cut off mid-sentence (KAN-1401).
 
     Bring your own key (optional): pass ``api_key`` (a ``Signal[str]``) plus
-    ``keyed_stream_fn(api_key, messages, *, max_new_tokens)`` and the UI shows a masked
-    key field. When the field holds a key, a send routes to ``keyed_stream_fn`` (a real
-    model); left blank it falls back to ``stream_fn`` (the mock). The key lives only in
-    this session's signal and is never logged (ADR-0010).
+    ``keyed_stream_fn(api_key, messages, *, max_new_tokens)`` and the key + a model
+    ``Select`` (when ``model_choice`` + ``models`` are given) live in a collapsed
+    **Settings** ``Expander`` -- out of the way, not clutter above the chat. When the key
+    field holds a key, a send routes to ``keyed_stream_fn`` (a real model, using the chosen
+    ``model_choice``); left blank it falls back to ``stream_fn`` (the mock). The key lives
+    only in this session's signal and is never logged (ADR-0010).
+
+    The empty state is a row of clickable suggestion chips (``suggestions``) that seed and
+    send a prompt -- no explainer text, and the live streaming bubble is the only status.
     """
     prompt: Signal[str] = Signal("")
-    status: Signal[str] = Signal("Ask me something.")
     busy: Signal[bool] = Signal(False)
     messages: Signal[list] = Signal([])
     pending: Signal[str] = Signal("")
@@ -267,16 +388,17 @@ def build_session(
         if not question or busy.value:
             return
         busy.set(True)
-        status.set("Generating...")
         prompt.set("")  # clear the box for the next message
         history: list[Message] = messages.value + [{"role": "user", "content": question}]
         messages.set(history)
         pending.set("")
 
-        # Route to the real (keyed) model when a key is present, else the mock.
+        # Route to the real (keyed) model when a key is present, else the mock. When a
+        # model choice is exposed (OpenRouter), pass it through.
         key = api_key.value.strip() if api_key is not None else ""
         if key and keyed_stream_fn is not None:
-            stream = keyed_stream_fn(key, list(history), max_new_tokens=max_new_tokens)
+            extra = {"model": model_choice.value} if model_choice is not None else {}
+            stream = keyed_stream_fn(key, list(history), max_new_tokens=max_new_tokens, **extra)
         else:
             stream = stream_fn(tokenizer, model, list(history), max_new_tokens=max_new_tokens)
 
@@ -288,37 +410,59 @@ def build_session(
         messages.set(messages.value + [{"role": "assistant", "content": "".join(parts)}])
         pending.set("")
         busy.set(False)
-        status.set("Ask me something.")
 
-    children = [
-        Text("indah chatbot: replies stream in token by token as message bubbles"),
-    ]
+    async def on_chip(text: str) -> None:
+        """Seed the box with a suggestion and send it (empty-state chips)."""
+        if busy.value:
+            return
+        prompt.set(text)
+        await on_send()
+
+    # Settings (key + model choice) hide in a collapsed Expander, so the chat leads the
+    # page instead of an API-key box and explainer text.
+    children: list = []
     if api_key is not None:
-        children.append(
+        settings: list = []
+        if model_choice is not None and models:
+            settings.append(Select(model_choice, options=models, label="Model (OpenRouter)"))
+        settings.append(
             TextInput(
                 api_key,
                 password=True,
-                label="Google Gemini API key (optional)",
+                label="OpenRouter API key",
                 placeholder="Paste a free key for a real reply; blank streams a mock",
             )
         )
-        children.append(
+        settings.append(
             Text(
-                "Get a free key at aistudio.google.com. It is used only for your "
-                "session and is never stored."
+                "The default model is free -- no cost. Get a free key at openrouter.ai. "
+                "Your key is used only for this session and is never stored."
             )
         )
-    children += [
-        Chat(messages, pending=pending, label="Conversation"),
-        TextInput(
-            prompt,
-            placeholder="Type a message, then press Enter or click Send",
-            label="Message",
-            on_submit=on_send,
-        ),
-        Button("Send", on_click=on_send),
-        Text(status),
+        children.append(Expander(settings, label="Settings", open=False))
+
+    children.append(Chat(messages, pending=pending, label="Conversation"))
+
+    # Empty-state suggestion chips: click one to seed and send it (ghost buttons). They
+    # replace the old "Ask me something." status string and teach what indah is.
+    chips = [
+        Button(text, on_click=(lambda t=text: on_chip(t)), variant="ghost")
+        for text in (suggestions or DEFAULT_SUGGESTIONS)
     ]
+    children.append(Row(chips, gap="0.5rem"))
+
+    # Composer: the message box and Send, side by side. The live streaming bubble is the
+    # only status -- no status line.
+    children.append(
+        Row(
+            [
+                TextInput(prompt, placeholder="Message", on_submit=on_send),
+                Button("Send", on_click=on_send),
+            ],
+            gap="0.5rem",
+            align="end",
+        )
+    )
     return Session(Column(children=children))
 
 
@@ -351,11 +495,16 @@ def main() -> None:
 # Module-level ASGI app for hosting (HF Spaces / uvicorn, ADR-0023): the mock
 # chatbot, so a hosted demo needs no model weights or GPU. `python examples/chatbot.py`
 # (main) still runs the real model by default; pass --mock for the same as here.
-# The hosted demo: mock by default, but bring your own free Google Gemini key for a
-# real reply. A fresh api_key signal per session (never shared, never logged).
+# The hosted demo: mock by default, but bring your own OpenRouter key for a real reply,
+# choosing a model (a free one by default). A fresh api_key + model signal per session
+# (never shared, never logged).
 app = indah.create_app(
     session_factory=lambda: build_session(
-        mock_chat_stream, api_key=Signal(""), keyed_stream_fn=gemini_chat_stream
+        mock_chat_stream,
+        api_key=Signal(""),
+        keyed_stream_fn=openrouter_chat_stream,
+        model_choice=Signal(DEFAULT_OPENROUTER_MODEL),
+        models=OPENROUTER_MODELS,
     )
 )
 
