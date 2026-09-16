@@ -210,8 +210,10 @@ the decision to make.
   - **In-browser WASM (Shinylive/Panel-style)** — not viable near-term: indah is a
     server (SSE + POST), so this would need a substantial rework. Note and park.
 
-Recommendation: **Colab one-click on every demo now + a persistent gallery on HF
-Spaces or a small Fly app** for the "click and it runs" experience. The persistent
-host is an owner decision (cost/ops); a hosting ADR (~ADR-0023) follows once picked.
+**Decided (owner, 2026-09-16):** Colab one-click on every demo **+ Hugging Face
+Spaces (a Docker Space per demo)** for the always-on "click and it runs" gallery.
+Self-hosting (Fly/VPS) stays the fallback if HF's free-tier limits bite; WASM is
+parked. See **ADR-0023**. The Space Dockerfile + deploy script live in `deploy/spaces/`;
+the final push to HF is an owner step (needs HF credentials).
 
 Tracked on board 30 as **EPIC-220 (landing page & hosted demos)**.
