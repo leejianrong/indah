@@ -8,7 +8,7 @@ cell. Every demo's source is a single Python file in
 
 [Open the live gallery :material-arrow-right:](https://indah-demos.fly.dev){ .md-button .md-button--primary }
 
-## Notebook-native (the Gradio lane)
+## Notebook-native
 
 Model behind a UI, inline in a cell, over a single proxy-friendly port.
 
@@ -18,7 +18,7 @@ Model behind a UI, inline in a cell, over a single proxy-friendly port.
 | **Image generation** | [Open](https://indah-demos.fly.dev/diffusion/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/diffusion.ipynb) | A prompt-to-image sampler whose picture refines from noise to a finished frame with live progress. The demo replays a mock sampler; a real pipeline drops in behind the same shape. |
 | **Image classifier** | [Open](https://indah-demos.fly.dev/image-classify/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/image-classify.ipynb) | The classic upload -> predict -> show, with a downloadable report. The demo uses a mock classifier; per-session, so viewers do not collide. |
 
-## Standalone apps (the Streamlit lane)
+## Standalone apps
 
 Real apps you run and deploy - dashboards, explorers, generators.
 
