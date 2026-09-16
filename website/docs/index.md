@@ -30,9 +30,9 @@ That is a complete app. Drag a slider and only the label recomputes - no
 full-script rerun. `launch()` prints a URL and, in a notebook, embeds the app
 inline in the cell.
 
-!!! note "Status: 0.2.0 - Milestone 1 components shipped"
+!!! note "Status: Milestone 1 components shipped"
     On top of the MVP (reactive core, SSE transport, streaming, custom-component
-    seam), 0.2.0 adds the full input set and layout containers, data-driven lists,
+    seam), it adds the full input set and layout containers, data-driven lists,
     per-session state, file upload/download, and charting (server-PNG `Plot` plus
     client-side `Chart`, `Heatmap`, an interactive `Table`, `Stat` cards, and
     `ImageOverlay`). `pip install indah`, or see [Quickstart](quickstart.md).

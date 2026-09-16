@@ -16,7 +16,7 @@ so there is no Node, npm, or bun anywhere at install or runtime.
 **[See it running in your browser](https://indah-demos.fly.dev)** - the full demo
 gallery, live, no install and no clone.
 
-> **Status: 0.2.0 - Milestone 1 components shipped.** On top of the MVP (reactive
+> **Status: Milestone 1 components shipped.** On top of the MVP (reactive
 > core, SSE transport, streaming, custom-component seam) it adds the full input set
 > and layout containers, data-driven lists (chat/gallery), per-session state, file
 > upload/download, and charting (server-PNG `Plot` plus client-side `Chart`,
