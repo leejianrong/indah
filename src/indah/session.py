@@ -34,7 +34,7 @@ from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
-from .components import Chart, Component, Download, StreamText, walk
+from .components import Chart, Component, Download, Heatmap, StreamText, walk
 from .protocol import error_message, patch_message
 from .reactive import Computation, batch, effect
 from .transport import Hub
@@ -85,7 +85,7 @@ class Session:
 
     def _wire(self) -> None:
         for component in walk(self.root):
-            if isinstance(component, (StreamText, Download, Chart)):
+            if isinstance(component, (StreamText, Download, Chart, Heatmap)):
                 component.bind(self)
             for prop_name, getter in component.reactive_props().items():
                 self._effects.append(self._make_effect(component.id, prop_name, getter))
