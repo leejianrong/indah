@@ -166,6 +166,7 @@ script ([ADR-0023](docs/adr/0023-demo-hosting.md)).
 | Poster generator | [Open](https://indah-demos.fly.dev/poster/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/poster.ipynb) | [`poster.py`](examples/poster.py) |
 | Image classifier | [Open](https://indah-demos.fly.dev/image-classify/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/image-classify.ipynb) | [`upload_classify.py`](examples/upload_classify.py) |
 | Hybrid charting | [Open](https://indah-demos.fly.dev/charts/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/charts.ipynb) | [`charts.py`](examples/charts.py) |
+| Stock peer analysis | [Open](https://indah-demos.fly.dev/stocks/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/stocks.ipynb) | [`stocks.py`](examples/stocks.py) |
 
 Also: [`examples/starter_components.py`](examples/starter_components.py) (a ~20-line
 tour of the component set) and [`examples/demo.ipynb`](examples/demo.ipynb) (the

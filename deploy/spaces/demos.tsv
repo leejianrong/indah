@@ -7,3 +7,4 @@ diffusion	diffusion.py	Image generation	🎨	-
 poster	poster.py	Poster generator	🖼️	-
 image-classify	upload_classify.py	Image classifier	🔍	-
 charts	charts.py	Hybrid charting	📊	matplotlib
+stocks	stocks.py	Stock peer analysis	💹	-
