@@ -22,5 +22,5 @@ fly apps create "$app" >/dev/null 2>&1 || true   # idempotent: ignore "already e
 fly deploy "$out" --config "$out/fly.toml" --ha=false
 
 echo
-echo "Live at https://$app.fly.dev  (demos at /chatbot, /training-dashboard, /diffusion,"
-echo "  /poster, /image-classify, /charts). Add those URLs to website/docs/gallery.md."
+echo "Live at https://$app.fly.dev  (landing page + demos at /chatbot, /training-dashboard,"
+echo "  /diffusion, /poster, /image-classify, /charts, /stocks, /prettymap)."
