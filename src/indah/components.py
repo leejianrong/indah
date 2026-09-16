@@ -631,6 +631,124 @@ class Chart(Component):
             self._session.emit_props(self.id, {"data": []})
 
 
+def _to_columns(value: Any) -> list[list[Any]]:
+    """Coerce a 2-D field to a JSON-safe list of columns ``[[y0, y1, ...], ...]``."""
+    if value is None:
+        return []
+    cols: list[list[Any]] = []
+    for col in value:
+        cols.append([_json_safe(v) for v in col])
+    return cols
+
+
+class Heatmap(Component):
+    """A client-side heatmap / 2-D field (ADR-0019): spectrograms, heatmaps, maps.
+
+    The interactive/real-time counterpart to a server-PNG ``Plot`` of a raster: the
+    2-D field rides ordinary reactive props and the shell's canvas renderer draws it
+    (no PNG per frame, no ``protocol_version`` bump). The field ``z`` is **column-major**
+    -- a list of columns, ``z[x][y]`` -- so a streaming spectrogram appends one new
+    column (a time slice) per frame via the append op at O(column), the same path
+    ``Chart``/``StreamText`` use. The shell draws column ``x`` at horizontal position
+    ``x`` and colours cell ``(x, y)`` by ``z[x][y]`` through ``colormap``.
+
+    Two ways to drive it, like ``Chart``:
+
+    - **Reactive** -- pass ``z`` as a ``Signal`` / callable / list of columns; setting
+      it replaces the whole field (a confusion matrix, an attention map).
+    - **Streaming** -- leave ``z`` unset and call :meth:`push_column` (or
+      :meth:`extend`) to append time slices (a live spectrogram); :meth:`clear`
+      resets. ``snapshot`` carries the full field for a resume.
+
+    ``zmin`` / ``zmax`` fix the colour scale (else it auto-scales in the browser);
+    ``colormap`` is one of the shell's built-ins (``"magma"``, ``"viridis"``,
+    ``"gray"``).
+    """
+
+    type = "heatmap"
+
+    def __init__(
+        self,
+        z: Source = None,
+        *,
+        colormap: str = "magma",
+        zmin: float | None = None,
+        zmax: float | None = None,
+        title: str = "",
+        x_label: str = "",
+        y_label: str = "",
+        height: int = 240,
+    ) -> None:
+        super().__init__()
+        self._reactive = z is not None
+        self._z = z
+        self._buffer: list[list[Any]] = []
+        self._colormap = colormap
+        self._zmin = zmin
+        self._zmax = zmax
+        self._title = title
+        self._x_label = x_label
+        self._y_label = y_label
+        self._height = int(height)
+        self._session: Session | None = None
+
+    def bind(self, session: Session) -> None:
+        """Called by the session during wiring so push/extend/clear can emit patches."""
+        self._session = session
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {
+            "colormap": self._colormap,
+            "zmin": self._zmin,
+            "zmax": self._zmax,
+            "title": self._title,
+            "xLabel": self._x_label,
+            "yLabel": self._y_label,
+            "height": self._height,
+        }
+        if not self._reactive:
+            props["z"] = [list(col) for col in self._buffer]
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        if self._reactive:
+            return {"z": lambda: _to_columns(_read(self._z))}
+        return {}
+
+    # -- streaming API (only when z= is unset) -------------------------------
+
+    def _guard_streaming(self) -> None:
+        if self._reactive:
+            raise TypeError(
+                "push_column/extend/clear are for a streaming Heatmap; this one has reactive z="
+            )
+
+    def push_column(self, column: Any) -> None:
+        """Append one column (a time slice) and emit an append delta."""
+        self._guard_streaming()
+        col = [_json_safe(v) for v in column]
+        self._buffer.append(col)
+        if self._session is not None:
+            self._session.emit_append(self.id, "z", [col])
+
+    def extend(self, columns: Any) -> None:
+        """Append several columns at once, as a single append patch."""
+        self._guard_streaming()
+        batch = [[_json_safe(v) for v in col] for col in columns]
+        if not batch:
+            return
+        self._buffer.extend(batch)
+        if self._session is not None:
+            self._session.emit_append(self.id, "z", batch)
+
+    def clear(self) -> None:
+        """Reset the accumulated field (emits a props replace)."""
+        self._guard_streaming()
+        self._buffer = []
+        if self._session is not None:
+            self._session.emit_props(self.id, {"z": []})
+
+
 class DataFrame(Component):
     """A tabular display bound to a source (R5).
 

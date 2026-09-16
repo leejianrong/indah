@@ -169,6 +169,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |
 | `image` | display | `src`, `alt` | — |
 | `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?}]`, `title`, `xLabel`, `yLabel`, `height`, `points`, `label` | — (grows via `append` patches) |
+| `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
@@ -201,6 +202,16 @@ whose delta is a list of new rows (`{"append": {"data": [[x, y0, ...]]}}`), so a
 live curve costs O(point) on the wire. Interactive zoom (drag), hover, and live
 redraw run in the browser. The full snapshot always carries the accumulated `data`,
 so a resume that falls back to `init` re-renders the whole curve.
+
+A `heatmap` node holds a 2-D field — the interactive/real-time counterpart to a
+server-PNG raster `Plot` (spectrograms, heatmaps, attention maps). Its `z` is
+**column-major**: a list of columns, `z[x][y]` (so the shell draws column `x` at
+horizontal position `x` and colours cell `(x, y)` by `z[x][y]`, with `y = 0` at the
+bottom). `colormap` picks a built-in ramp (`"magma"`, `"viridis"`, `"gray"`); `zmin`
+/ `zmax` fix the colour scale (omit/`null` to auto-scale). A whole-field change is a
+`props` merge of a new `z`; a streamed spectrogram grows `z` with an `append` whose
+delta is a list of new columns (`{"append": {"z": [[...]]}}`), so it costs O(column)
+on the wire. The snapshot carries the full field for a resume.
 
 The layout containers (`row`, `grid`, `tabs`, `sidebar`, `expander`) only arrange
 existing `children`, so they add no protocol capability: show/active/open state

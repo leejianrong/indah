@@ -1,7 +1,7 @@
 # ADR-0019: Client-side heatmap / 2-D field renderer
 
-- Status: Proposed
-- Date: 2026-09-16
+- Status: Accepted
+- Date: 2026-09-16 (accepted + built same day, KAN-1461)
 - Deciders: Jian (owner)
 
 ## Context
@@ -51,3 +51,21 @@ via the existing `append` op at O(row) rather than resending the grid.
   change and it composes with the KAN-1395 flush coalescing.
 - A new `heatmap` (or `field`) component type + its prop schema get documented in
   `docs/protocol.md`, additive within `protocol_version` 1.
+
+## As built (KAN-1461, 2026-09-16)
+
+- **`Heatmap` component** (`components.py`): a column-major field `z` (`z[x][y]`) on
+  ordinary reactive props — no `protocol_version` bump. Reactive mode (`z=` a
+  Signal/callable/list, replaced on change) and streaming mode (`push_column` /
+  `extend` / `clear` append time slices via the append op at O(column), the Chart
+  path). Snapshot carries the full field for a resume.
+- **Renderer** (`Heatmap.svelte`): a hand-rolled canvas fill — an offscreen
+  `ImageData` at data resolution drawn scaled (nearest-neighbour) to the canvas, so a
+  redraw is O(cells) with no dependency. Built-in colormaps `magma` / `viridis` /
+  `gray` (anchor-stop interpolation); `y = 0` at the bottom (spectrogram convention);
+  auto colour-scale when `zmin`/`zmax` are omitted.
+- **Server-PNG `Plot` stays** for static raster and Matplotlib-only cases (hybrid,
+  ADR-0018). Streaming rides the array-aware append op (Slice E) and composes with the
+  KAN-1395 flush coalescing.
+- Documented in `docs/protocol.md`; guarded by unit tests + a browser e2e (canvas
+  mounts, streamed columns grow the field).

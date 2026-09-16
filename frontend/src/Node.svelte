@@ -5,6 +5,7 @@
   import Custom from "./Custom.svelte";
   import Markdown from "./Markdown.svelte";
   import Chart from "./Chart.svelte";
+  import Heatmap from "./Heatmap.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -358,6 +359,11 @@
   <div class="field">
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}
     <Chart {props} />
+  </div>
+{:else if node.type === "heatmap"}
+  <div class="field">
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    <Heatmap {props} />
   </div>
 {:else if node.type === "image"}
   <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />

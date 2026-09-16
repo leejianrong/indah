@@ -355,6 +355,57 @@ def test_client_chart_renders_and_streams_points(tmp_path):
         handle.stop()
 
 
+def _heatmap_app():
+    """A streaming Heatmap + a button that pushes a column (a spectrogram time slice),
+    plus a reactive Heatmap from a fixed field."""
+    from indah import Button, Column, Heatmap, Session, create_app
+
+    live = Heatmap(colormap="magma", title="Spectrogram")
+    static = Heatmap([[0.0, 0.5, 1.0], [1.0, 0.5, 0.0]], colormap="viridis", title="Field")
+    t = {"n": 0}
+
+    def push():
+        t["n"] += 1
+        live.push_column([0.1 * t["n"], 0.2 * t["n"], 0.3 * t["n"]])
+
+    root = Column(children=[live, Button("push", on_click=push), static])
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_client_heatmap_renders_and_streams_columns():
+    """The client heatmap (ADR-0019) mounts a canvas from the init tree, and a
+    streamed column grows its field over SSE (via the array append op)."""
+    handle = launch(_heatmap_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                # Both heatmaps mounted as canvases; the static one already has a field.
+                expect(page.locator(".heatmap canvas").first).to_be_visible()
+                assert page.locator(".heatmap canvas").count() >= 2
+                page.wait_for_function(
+                    "() => document.querySelectorAll('.heatmap')[1].__heatmap.ncols === 2"
+                )
+
+                # The streaming heatmap starts empty; each push appends a column live.
+                live = page.locator(".heatmap").first
+                assert live.evaluate("el => el.__heatmap.ncols") == 0
+                page.locator("button", has_text="push").click()
+                page.locator("button", has_text="push").click()
+                page.wait_for_function(
+                    "() => document.querySelector('.heatmap').__heatmap.ncols === 2"
+                )
+                assert live.evaluate("el => el.__heatmap.nrows") == 3
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
 def _session_counter_app():
     """A per-viewer counter over a session_factory, so each tab gets its own signal.
     This is the shape of examples/session_state.py, trimmed to one counter."""

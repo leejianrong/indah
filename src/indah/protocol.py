@@ -48,6 +48,7 @@ BUILTIN_TYPES = frozenset(
         "select",
         "image",
         "chart",
+        "heatmap",
         "dataframe",
         "checkbox",
         "number",
