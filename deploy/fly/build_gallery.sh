@@ -16,7 +16,10 @@ region="${FLY_REGION:-sin}"
 # Example modules the gallery mounts (must match MANIFEST in gallery_app.py).
 examples=(chatbot training_dashboard diffusion poster upload_classify charts stocks prettymap)
 
-INDAH_REQ='indah @ git+https://github.com/leejianrong/indah@main'
+# Install the published wheel from PyPI (the python:3.12-slim base has no git, and a
+# PyPI install is what a user would run). Bump this when the gallery should track a new
+# release; the demos themselves are copied into the image, not pulled from the package.
+INDAH_REQ='indah>=0.2.1'
 
 rm -rf "$out"
 mkdir -p "$out"
