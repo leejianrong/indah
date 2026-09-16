@@ -1,7 +1,7 @@
 # ADR-0020: Image overlay and annotation (boxes, masks, keypoints)
 
-- Status: Proposed
-- Date: 2026-09-16
+- Status: Accepted (step 1 built; step 2 deferred)
+- Date: 2026-09-16 (accepted + step-1 built same day, KAN-1464)
 - Deciders: Jian (owner)
 
 ## Context
@@ -51,3 +51,19 @@ binary, so this is unrelated to the Tier 1 live-video boundary (ADR-0017).
   documented in `docs/protocol.md`, additive within `protocol_version` 1.
 - Step 2 (interactive annotation) is recorded as the follow-on that finally closes the
   cluster-E "interactive canvas annotation" boundary, when a demo needs authoring.
+
+## As built (step 1, KAN-1464, 2026-09-16)
+
+- **`ImageOverlay`** (`components.py`): a base image `source` (like `Image`) plus
+  reactive `boxes` / `points` / `masks`, coordinates as fractions in `[0, 1]`.
+  Streaming a model's per-frame output replaces the `boxes` prop over the existing
+  `patch` op - no `protocol_version` bump.
+- **Renderer** (`Node.svelte`): a `position: relative` wrapper over the `<img>` with
+  boxes/points as absolutely-positioned HTML elements at percent offsets, and masks as
+  overlay images with opacity. Percent positioning (not a canvas) keeps labels crisp
+  and scales with the responsive image, no aspect-ratio math.
+- **Step 2 (interactive annotation) remains deferred** - this is the read-only display
+  path that unblocks the detection / segmentation / video demos.
+- `imageoverlay` in `BUILTIN_TYPES`; documented in `docs/protocol.md`; guarded by unit
+  tests + a browser e2e (boxes render at fractional positions, a streamed detection
+  appears live).

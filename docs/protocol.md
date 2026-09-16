@@ -168,6 +168,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `upload` | input | `label`, `accept`, `multiple` | file(s) via `POST /api/upload` (not the event path) |
 | `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |
 | `image` | display | `src`, `alt` | — |
+| `imageoverlay` | display | `src`, `alt`, `boxes:[{x,y,w,h,label?,color?,score?}]`, `points:[{x,y,label?,color?}]`, `masks:[{src,opacity}]` (coords in `[0,1]`) | — |
 | `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?}]`, `title`, `xLabel`, `yLabel`, `height`, `points`, `label` | — (grows via `append` patches) |
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
@@ -186,7 +187,19 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |
 
 `Plot` serialises to an `image` node whose `src` is a PNG `data:` URI rendered on
-the Python side, so the shell needs nothing extra to show it. Charting is **hybrid**
+the Python side, so the shell needs nothing extra to show it.
+
+`imageoverlay` draws model output over an image: detection `boxes`, keypoint
+`points`, and segmentation `masks`. All coordinates are **fractions of the image**
+(`[0, 1]`), so they line up at any rendered size (the shell positions them as a
+percentage of the displayed image). `boxes` and `points` carry an optional `label`
+and `color` (a box also an optional `score`); `masks` are overlay images
+(`{src, opacity}`) drawn over the base image. The shapes are ordinary reactive props,
+so streaming a model's per-frame output is a `props` update over the existing `patch`
+op - no new op, no version bump. It is display-only; interactive annotation (the user
+*drawing* shapes) is a planned follow-up (ADR-0020).
+
+Charting is **hybrid**
 (ADR-0018): `Plot` stays the zero-JS static path (a server PNG, good for static
 figures, heatmaps, and spectrograms), while `chart` is the interactive/real-time
 path — a client-side chart the pre-built shell draws with a bundled library (uPlot,
