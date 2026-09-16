@@ -4,9 +4,9 @@
 single-port, no Node required.**
 
 Build an interactive UI from a single Python file and launch it straight from a
-Colab or Runpod cell. indah keeps Streamlit's zero-config, single-port startup,
-adds the async performance of a real full-stack app, and ships its frontend
-pre-built so there is no Node, npm, or bun anywhere at install or runtime.
+Colab or Runpod cell. indah gives you zero-config, single-port startup with the async
+performance of a real full-stack app, and ships its frontend pre-built so there is no
+Node, npm, or bun anywhere at install or runtime.
 
 ```python
 import indah
@@ -48,19 +48,20 @@ Colab, embedded right in the cell:
 A streaming chatbot, a live training dashboard, an image generator, a poster
 generator, and interactive charts - all in a Colab notebook or as a standalone app.
 
-## Why another one
+## What you get
 
-| Pain | indah's answer |
-|------|----------------|
-| Streamlit reruns the whole script on every interaction | Reactive signals: only the affected components update |
-| Gradio's layout and state model get awkward past a demo | Plain Python components bound to state, custom layouts |
-| Reflex needs a Node build step that breaks in transient containers | Frontend ships pre-built in the wheel; zero runtime Node |
-| Colab's proxy does not support WebSockets | SSE + HTTP POST transport that passes the proxy |
+- **Reactive, not rerun.** Mutate a signal and only the components that read it update
+  - no full-script rerun on every interaction.
+- **One port, no Node.** The frontend ships pre-built in the wheel, so there is nothing
+  to build at install or runtime and it starts cleanly inside a transient Colab or
+  Runpod container.
+- **Notebook-native and proxy-friendly.** SSE plus HTTP POST over a single port passes
+  the network proxies of Colab and Runpod - no WebSocket and no tunnel.
+- **Plain Python components bound to state**, with custom layouts and a
+  custom-component seam for when you outgrow the built-in set.
 
-indah is **SSE-first** - the same architecture Google's Mesop bet on before it was
-retired - carried forward and made notebook-native. Reach for indah when you want a
-reactive app (not a full-script rerun) that runs inline in Colab or Runpod today and
-deploys as a standalone app tomorrow, with no Node anywhere.
+Reach for indah when you want a reactive app that runs inline in Colab or Runpod today
+and deploys as a standalone app tomorrow, with no Node anywhere.
 
 ## How it works
 
