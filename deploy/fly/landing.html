@@ -1,0 +1,278 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>indah demos</title>
+<meta name="description" content="Live demos of indah, a reactive Python UI framework for ephemeral cloud notebooks (Colab, Runpod). Single port, no Node, streaming.">
+<link rel="icon" href="%%FAVICON%%">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #faf6f0; --surface: #fffdf9; --surface-2: #f3ebe0; --surface-3: #ece0d1;
+    --text: #241c22; --muted: #6e6169; --outline: #e0d4c6; --outline-soft: #eee3d6;
+    --primary: #b5296b; --on-primary: #fff; --primary-container: #ffd9e7;
+    --secondary: #2e6d62; --secondary-container: #c9ece4;
+    --shadow: 0 2px 5px -2px rgba(90,20,55,.16), 0 14px 34px -20px rgba(90,20,55,.30);
+    --radius: 14px; --radius-sm: 10px; --radius-pill: 24px;
+    --display: "Bricolage Grotesque", system-ui, sans-serif;
+    --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #191319; --surface: #221b22; --surface-2: #271f27; --surface-3: #2f2630;
+      --text: #f3e6de; --muted: #b3a3ab; --outline: #3a2f3a; --outline-soft: #322833;
+      --primary: #f078a9; --on-primary: #2a0c1a; --primary-container: #4a1230;
+      --secondary: #7fc9bb; --secondary-container: #143a34;
+      --shadow: 0 2px 6px -2px rgba(0,0,0,.5), 0 16px 36px -20px rgba(0,0,0,.7);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--body);
+    line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  h1, h2, h3 { font-family: var(--display); letter-spacing: -0.02em; line-height: 1.1;
+    margin: 0; }
+  .mark { display: block; flex: none; }
+
+  /* Nav */
+  nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--outline-soft); }
+  nav .wrap { display: flex; align-items: center; gap: 0.6rem; height: 60px;
+    padding-top: env(safe-area-inset-top, 0px); }
+  .brand { display: inline-flex; align-items: center; gap: 0.55rem; text-decoration: none;
+    font-family: var(--display); font-weight: 700; font-size: 1.25rem; }
+  nav .links { margin-left: auto; display: flex; align-items: center; gap: 0.4rem; }
+  nav .links a { text-decoration: none; color: var(--muted); font-weight: 500;
+    font-size: 0.92rem; padding: 0.45rem 0.7rem; border-radius: var(--radius-pill); }
+  nav .links a:hover { color: var(--text); background: var(--surface-2); }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 600;
+    font-size: 0.95rem; text-decoration: none; padding: 0.7rem 1.2rem;
+    border-radius: var(--radius-pill); border: 1px solid transparent; cursor: pointer; }
+  .btn.primary { background: var(--primary); color: var(--on-primary); box-shadow: var(--shadow); }
+  .btn.primary:hover { filter: brightness(1.05); }
+  .btn.ghost { background: transparent; color: var(--text); border-color: var(--outline); }
+  .btn.ghost:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* Hero */
+  .hero { text-align: center; padding: 4.5rem 0 3rem; }
+  .hero .mark { margin: 0 auto 1.4rem; filter: drop-shadow(0 8px 18px rgba(181,41,107,.25)); }
+  .hero h1 { font-size: clamp(2.2rem, 6vw, 3.6rem); }
+  .hero .tagline { max-width: 40rem; margin: 1rem auto 0; color: var(--muted);
+    font-size: clamp(1.02rem, 2.4vw, 1.2rem); }
+  .hero .cta { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center;
+    margin-top: 1.8rem; }
+  .pill { display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 1.6rem;
+    font-family: var(--mono); font-size: 0.9rem; color: var(--text);
+    background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius-pill);
+    padding: 0.5rem 0.9rem; }
+  .pill b { color: var(--primary); font-weight: 600; }
+
+  /* Sections */
+  section { padding: 3rem 0; }
+  .section-head { text-align: center; margin-bottom: 2rem; }
+  .section-head h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+  .section-head p { color: var(--muted); margin: 0.6rem auto 0; max-width: 38rem; }
+  .eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--primary); font-weight: 500; }
+
+  /* Get started */
+  .start .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; align-items: start; }
+  .start .copy { padding-top: 0.4rem; }
+  .start ol { margin: 1rem 0 0; padding-left: 1.1rem; color: var(--muted); }
+  .start ol li { margin: 0.5rem 0; }
+  pre { margin: 0; background: var(--surface); border: 1px solid var(--outline);
+    border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.1rem 1.2rem;
+    overflow-x: auto; font-family: var(--mono); font-size: 0.85rem; line-height: 1.6;
+    color: var(--text); }
+  .code-head { display: flex; gap: 0.4rem; padding: 0 0 0.8rem; }
+  .code-head i { width: 11px; height: 11px; border-radius: 50%; display: block;
+    background: var(--outline); }
+
+  /* Principles */
+  .cards4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .feature { background: var(--surface); border: 1px solid var(--outline);
+    border-radius: var(--radius); padding: 1.3rem; box-shadow: var(--shadow); }
+  .feature .ic { width: 40px; height: 40px; border-radius: var(--radius-sm);
+    display: grid; place-items: center; background: var(--primary-container);
+    color: var(--primary); margin-bottom: 0.9rem; }
+  .feature h3 { font-size: 1.08rem; }
+  .feature p { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.92rem; }
+
+  /* Gallery */
+  .gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
+  .card { display: flex; flex-direction: column; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius);
+    overflow: hidden; box-shadow: var(--shadow); transition: transform .12s ease, border-color .12s ease; }
+  .card:hover { transform: translateY(-3px); border-color: var(--primary); }
+  .thumb { position: relative; aspect-ratio: 16 / 10; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--primary-container), var(--secondary-container)); }
+  .thumb-dots { position: absolute; top: 12px; left: 14px; width: 42px; height: 8px;
+    border-radius: 4px; background:
+      radial-gradient(circle 4px at 4px 4px, rgba(0,0,0,.18) 99%, transparent 0) 0 0/16px 8px repeat-x; }
+  .thumb-emoji { font-size: 3rem; filter: drop-shadow(0 4px 10px rgba(0,0,0,.18)); }
+  .card-body { padding: 1rem 1.15rem 1.2rem; }
+  .card-title { display: flex; align-items: center; gap: 0.5rem; font-family: var(--display);
+    font-weight: 700; font-size: 1.05rem; }
+  .live { font-family: var(--body); font-weight: 600; font-size: 0.66rem; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--secondary); background: var(--secondary-container);
+    padding: 0.12rem 0.45rem; border-radius: var(--radius-pill); }
+  .card-blurb { display: block; margin-top: 0.35rem; color: var(--muted); font-size: 0.9rem; }
+
+  /* Compare */
+  .compare-scroll { overflow-x: auto; border: 1px solid var(--outline); border-radius: var(--radius);
+    box-shadow: var(--shadow); }
+  table.compare { width: 100%; border-collapse: collapse; background: var(--surface);
+    font-size: 0.92rem; min-width: 640px; }
+  table.compare th, table.compare td { padding: 0.85rem 1rem; text-align: left;
+    border-bottom: 1px solid var(--outline-soft); }
+  table.compare thead th { font-family: var(--display); font-size: 1rem; }
+  table.compare tbody th { font-weight: 500; color: var(--text); }
+  table.compare .col-indah { background: var(--primary-container);
+    color: var(--text); font-weight: 700; }
+  table.compare td.yes { color: var(--secondary); font-weight: 600; }
+  table.compare td.no { color: var(--muted); }
+  table.compare td.mid { color: var(--muted); }
+  table.compare tr:last-child th, table.compare tr:last-child td { border-bottom: 0; }
+
+  /* Footer */
+  footer { border-top: 1px solid var(--outline-soft); padding: 2.5rem 0 3.5rem;
+    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)); }
+  footer .row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+  footer .row a { color: var(--muted); text-decoration: none; font-size: 0.92rem; }
+  footer .row a:hover { color: var(--primary); }
+  footer .muted { margin-left: auto; color: var(--muted); font-size: 0.85rem; }
+
+  @media (max-width: 800px) {
+    .start .grid2 { grid-template-columns: 1fr; }
+    .cards4 { grid-template-columns: repeat(2, 1fr); }
+    .gallery-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 520px) {
+    nav .links a.hide-sm { display: none; }
+    .cards4, .gallery-grid { grid-template-columns: 1fr; }
+    footer .muted { margin-left: 0; width: 100%; }
+  }
+</style></head><body>
+<nav><div class="wrap">
+  <a class="brand" href="/">%%LOGO_NAV%% indah</a>
+  <div class="links">
+    <a href="#gallery">Demos</a>
+    <a class="hide-sm" href="%%DOCS%%">Docs</a>
+    <a href="%%GITHUB%%">GitHub</a>
+  </div>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  %%LOGO_HERO%%
+  <h1>Reactive Python UIs,<br>straight from a notebook</h1>
+  <p class="tagline">indah turns a single Python file into a live, interactive app you
+  launch from a Colab or Runpod cell. Reactive, single-port, streaming - and no Node
+  anywhere, at install or runtime.</p>
+  <div class="cta">
+    <a class="btn primary" href="#gallery">Explore the demos</a>
+    <a class="btn ghost" href="%%DOCS%%">Read the docs</a>
+    <a class="btn ghost" href="%%GITHUB%%">GitHub</a>
+  </div>
+  <div class="pill"><b>pip install indah</b></div>
+</div></header>
+
+<section class="start"><div class="wrap">
+  <div class="grid2">
+    <div class="copy">
+      <div class="eyebrow">Get started</div>
+      <h2>One file. One command.</h2>
+      <ol>
+        <li><code>pip install indah</code> - a pure-Python wheel, no Node toolchain.</li>
+        <li>Describe your UI as components bound to reactive signals.</li>
+        <li><code>launch()</code> prints a URL and embeds the app inline in a Colab or
+        Runpod cell. Mutate a signal and only what reads it re-renders.</li>
+      </ol>
+    </div>
+    <div>
+      <div class="code-head"><i></i><i></i><i></i></div>
+      <pre>import indah
+from indah import Signal, computed, Column, Slider, Text, Session
+
+a, b = Signal(2), Signal(3)
+total = computed(lambda: f"a + b = {a.value + b.value}")
+
+page = Column(children=[
+    Slider(a, min=0, max=10, label="a"),
+    Slider(b, min=0, max=10, label="b"),
+    Text(total),
+])
+
+indah.launch(indah.create_app(session=Session(page)))</pre>
+    </div>
+  </div>
+</div></section>
+
+<section class="principles"><div class="wrap">
+  <div class="section-head">
+    <div class="eyebrow">Why indah</div>
+    <h2>Built for ephemeral cloud notebooks</h2>
+    <p>The design that lets it start clean in a throwaway container and stay live.</p>
+  </div>
+  <div class="cards4">
+    <div class="feature">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg></div>
+      <h3>Reactive, not rerun</h3>
+      <p>Mutate a signal and only the components that read it update. No full-script
+      rerun on every click.</p>
+    </div>
+    <div class="feature">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div>
+      <h3>No Node, ever</h3>
+      <p>The frontend ships pre-built in the wheel. Nothing to build at install or
+      runtime, so it starts clean in any container.</p>
+    </div>
+    <div class="feature">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8"/></svg></div>
+      <h3>Single port, proxy-safe</h3>
+      <p>SSE plus HTTP POST over one port passes the Colab and Runpod proxies. No
+      WebSocket, no tunnel.</p>
+    </div>
+    <div class="feature">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></div>
+      <h3>Streams by default</h3>
+      <p>Tokens and data points arrive over SSE as they are produced, so long runs stay
+      cheap and the page never freezes.</p>
+    </div>
+  </div>
+</div></section>
+
+<section id="gallery" class="gallery"><div class="wrap">
+  <div class="section-head">
+    <div class="eyebrow">Gallery</div>
+    <h2>See it running</h2>
+    <p>Every demo below is live - no install, no clone. Open one and start clicking.</p>
+  </div>
+  <div class="gallery-grid">%%CARDS%%</div>
+</div></section>
+
+<section class="compare"><div class="wrap">
+  <div class="section-head">
+    <div class="eyebrow">How it compares</div>
+    <h2>Where indah fits</h2>
+    <p>indah is the reactive, no-build, notebook-native option.</p>
+  </div>
+  <div class="compare-scroll"><table class="compare">
+    <thead><tr><th scope="col">Feature</th><th scope="col" class="col-indah">indah</th>
+      <th scope="col">Streamlit</th><th scope="col">Gradio</th><th scope="col">Reflex</th></tr></thead>
+    <tbody>%%COMPARE%%</tbody>
+  </table></div>
+</div></section>
+
+<footer><div class="wrap"><div class="row">
+  <a class="brand" href="/">%%LOGO_NAV%% indah</a>
+  <a href="%%GITHUB%%">GitHub</a>
+  <a href="%%DOCS%%">Docs</a>
+  <span class="muted">Apache-2.0 - built with indah</span>
+</div></div></footer>
+</body></html>
