@@ -1,5 +1,10 @@
 # indah
 
+[![PyPI version](https://img.shields.io/pypi/v/indah.svg)](https://pypi.org/project/indah/)
+[![Python versions](https://img.shields.io/pypi/pyversions/indah.svg)](https://pypi.org/project/indah/)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/leejianrong/indah/actions/workflows/ci.yml/badge.svg)](https://github.com/leejianrong/indah/actions/workflows/ci.yml)
+
 **A Python UI framework for ephemeral cloud notebooks (Colab, Runpod). Reactive,
 single-port, no Node required.**
 
@@ -7,6 +12,9 @@ Build an interactive UI from a single Python file and launch it straight from a
 Colab or Runpod cell. It keeps Streamlit's zero-config, single-port startup, adds
 the async performance of a real full-stack app, and ships its frontend pre-built
 so there is no Node, npm, or bun anywhere at install or runtime.
+
+**[See it running in your browser](https://indah-demos.fly.dev)** - the full demo
+gallery, live, no install and no clone.
 
 > **Status: 0.2.0 - Milestone 1 components shipped.** On top of the MVP (reactive
 > core, SSE transport, streaming, custom-component seam) it adds the full input set
@@ -115,6 +123,12 @@ The starter set covers a typical AI demo (input, run, streamed output):
 | `StreamText` | a container that grows token by token over SSE |
 | `Column` | a vertical layout container |
 
+That is the starter subset. 0.2.0 also ships layout containers (`Row`, `Grid`, `Card`,
+`Tabs`, `Sidebar`, `Expander`), more inputs (`Checkbox`, `Number`, `Radio`,
+`MultiSelect`, `Date`), charting (`Chart`, `Heatmap`, `Table`, `Stat`, `ImageOverlay`),
+data-driven `List` / `Chat` / `Gallery`, and file `Upload` / `Download` - see the full
+[Components reference](https://leejianrong.github.io/indah/components/).
+
 Need something the set does not cover? Register a custom component against the
 public JSON protocol, no framework fork and no Node build:
 
@@ -140,17 +154,18 @@ is a documented, versioned public contract: see [`docs/protocol.md`](docs/protoc
 
 ## Examples
 
-Each demo runs in one click in Colab (no install, no clone), or as a script. A live
-hosted gallery is coming (Hugging Face Spaces, [ADR-0023](docs/adr/0023-demo-hosting.md)).
+Every demo is live in the **[demo gallery](https://indah-demos.fly.dev)** (no install,
+no clone), opens in one click in Colab, and is a single Python file you can run as a
+script ([ADR-0023](docs/adr/0023-demo-hosting.md)).
 
-| Demo | Try it | Source |
-|------|--------|--------|
-| Streaming LLM chatbot | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/chatbot.ipynb) | [`chatbot.py`](examples/chatbot.py) |
-| Live training dashboard (Runpod) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/training-dashboard.ipynb) | [`training_dashboard.py`](examples/training_dashboard.py) |
-| Image generation (streamed progress) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/diffusion.ipynb) | [`diffusion.py`](examples/diffusion.py) |
-| Poster / artifact generator | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/poster.ipynb) | [`poster.py`](examples/poster.py) |
-| Image classify (upload → predict → show) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/image-classify.ipynb) | [`upload_classify.py`](examples/upload_classify.py) |
-| Hybrid charting (client chart + server plot + heatmap) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/charts.ipynb) | [`charts.py`](examples/charts.py) |
+| Demo | Live | Colab | Source |
+|------|------|-------|--------|
+| Streaming chatbot | [Open](https://indah-demos.fly.dev/chatbot/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/chatbot.ipynb) | [`chatbot.py`](examples/chatbot.py) |
+| Live training dashboard | [Open](https://indah-demos.fly.dev/training-dashboard/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/training-dashboard.ipynb) | [`training_dashboard.py`](examples/training_dashboard.py) |
+| Image generation | [Open](https://indah-demos.fly.dev/diffusion/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/diffusion.ipynb) | [`diffusion.py`](examples/diffusion.py) |
+| Poster generator | [Open](https://indah-demos.fly.dev/poster/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/poster.ipynb) | [`poster.py`](examples/poster.py) |
+| Image classifier | [Open](https://indah-demos.fly.dev/image-classify/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/image-classify.ipynb) | [`upload_classify.py`](examples/upload_classify.py) |
+| Hybrid charting | [Open](https://indah-demos.fly.dev/charts/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/charts.ipynb) | [`charts.py`](examples/charts.py) |
 
 Also: [`examples/starter_components.py`](examples/starter_components.py) (a ~20-line
 tour of the component set) and [`examples/demo.ipynb`](examples/demo.ipynb) (the

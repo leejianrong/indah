@@ -196,7 +196,7 @@ def build_session(stream_fn, tokenizer=None, model=None, *, max_new_tokens: int 
 
     page = Column(
         children=[
-            Text("indah chatbot: a small local LLM, streaming into message bubbles"),
+            Text("indah chatbot: replies stream in token by token as message bubbles"),
             Chat(messages, pending=pending, label="Conversation"),
             TextInput(
                 prompt,

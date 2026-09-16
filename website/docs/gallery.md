@@ -1,30 +1,32 @@
 # Demo gallery
 
-Real apps built with indah. Each runs in **one click in Colab** - no install, no
-clone, it embeds right in the notebook cell. An always-on hosted gallery (Fly.io) is
-on the way; until then, the Colab button is the fastest way to try one. Every demo's
-source is a single Python file in
+Real apps built with indah. Every demo is **running live** in the
+[hosted gallery](https://indah-demos.fly.dev) - no install, no clone, just open it in
+your browser. Each also runs in **one click in Colab**, embedded right in the notebook
+cell. Every demo's source is a single Python file in
 [`examples/`](https://github.com/leejianrong/indah/tree/main/examples).
+
+[Open the live gallery :material-arrow-right:](https://indah-demos.fly.dev){ .md-button .md-button--primary }
 
 ## Notebook-native (the Gradio lane)
 
 Model behind a UI, inline in a cell, over a single proxy-friendly port.
 
-| Demo | Try it | What it shows |
-|------|--------|---------------|
-| **Streaming chatbot** | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/chatbot.ipynb) | A chat reply streamed token-by-token into role bubbles over SSE. Swap the mock for a real model; the UI never freezes. |
-| **Image generation** | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/diffusion.ipynb) | A prompt-to-image sampler whose picture refines from noise to a finished frame with live progress - a natural Runpod-GPU fit. |
-| **Image classifier** | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/image-classify.ipynb) | The classic upload -> predict -> show, with a downloadable report. Per-session, so viewers do not collide. |
+| Demo | Live | Colab | What it shows |
+|------|------|-------|---------------|
+| **Streaming chatbot** | [Open](https://indah-demos.fly.dev/chatbot/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/chatbot.ipynb) | A chat reply streamed token-by-token into role bubbles over SSE. The demo uses a mock reply; swap in a real model and the UI never freezes. |
+| **Image generation** | [Open](https://indah-demos.fly.dev/diffusion/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/diffusion.ipynb) | A prompt-to-image sampler whose picture refines from noise to a finished frame with live progress. The demo replays a mock sampler; a real pipeline drops in behind the same shape. |
+| **Image classifier** | [Open](https://indah-demos.fly.dev/image-classify/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/image-classify.ipynb) | The classic upload -> predict -> show, with a downloadable report. The demo uses a mock classifier; per-session, so viewers do not collide. |
 
 ## Standalone apps (the Streamlit lane)
 
 Real apps you run and deploy - dashboards, explorers, generators.
 
-| Demo | Try it | What it shows |
-|------|--------|---------------|
-| **Live training dashboard** | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/training-dashboard.ipynb) | Loss curves streaming in real time (train + val) via the append op at O(point), with a progress bar and a run-history table. The demo indah is built for on Runpod. |
-| **Poster generator** | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/poster.ipynb) | Tweak controls, watch a striking poster re-render live (reactive - only the image patches), then download it. The prettymapp archetype. |
-| **Hybrid charting** | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/charts.ipynb) | An interactive client chart (zoom, hover, live points) beside a static Matplotlib plot and a heatmap - the hybrid charting story. |
+| Demo | Live | Colab | What it shows |
+|------|------|-------|---------------|
+| **Live training dashboard** | [Open](https://indah-demos.fly.dev/training-dashboard/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/training-dashboard.ipynb) | Loss curves streaming in real time (train + val) via the append op at O(point), with a progress bar and a run-history table. The demo indah is built for on Runpod. |
+| **Poster generator** | [Open](https://indah-demos.fly.dev/poster/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/poster.ipynb) | Tweak controls, watch a striking poster re-render live (reactive - only the image patches), then download it. |
+| **Hybrid charting** | [Open](https://indah-demos.fly.dev/charts/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/charts.ipynb) | An interactive client chart (zoom, hover, live points) beside a static Matplotlib plot and a heatmap - the hybrid charting story. |
 
 ## Run one locally instead
 

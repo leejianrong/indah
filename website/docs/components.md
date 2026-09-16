@@ -1,21 +1,76 @@
 # Components
 
-The starter set covers a typical AI demo: take input, run something, stream the
-output. Every component is a Python object you place in a tree and bind to a
-signal.
+Every component is a Python object you place in a tree and bind to a signal. The
+sections below walk through the common ones with runnable snippets; this is the full
+set shipped in 0.2.0.
+
+### Text and display
 
 | Component | Use |
 |-----------|-----|
 | `Text` | a label bound to a signal, computed, or string |
-| `Button` | an `on_click` handler (sync or `async def`) |
-| `Slider` | a numeric input two-way bound to a `Signal` |
-| `TextInput` | a single-line text box two-way bound to a `Signal` |
-| `Select` | a dropdown two-way bound to a `Signal` |
 | `Image` | a URL, `data:` URI, or raw PNG bytes |
-| `Plot` | a Matplotlib figure, rasterised to a PNG on the Python side |
+| `ImageOverlay` | an image with read-only vector overlays (boxes, masks, keypoints) |
+
+### Inputs (two-way bound to a signal)
+
+| Component | Use |
+|-----------|-----|
+| `Slider` | a numeric input on a track |
+| `Number` | a plain numeric input with optional bounds |
+| `TextInput` | a single-line text box |
+| `Select` | a single-choice dropdown |
+| `MultiSelect` | a multi-choice select |
+| `Radio` | a radio group |
+| `Checkbox` | a boolean checkbox |
+| `Date` | a date picker (ISO `YYYY-MM-DD`) |
+
+### Actions
+
+| Component | Use |
+|-----------|-----|
+| `Button` | an `on_click` handler (sync or `async def`) |
+
+### Layout
+
+| Component | Use |
+|-----------|-----|
+| `Column` | a vertical stack |
+| `Row` | a horizontal flex row that wraps |
+| `Grid` | an N-column grid that collapses to one column on phones |
+| `Card` | a titled surface panel |
+| `Tabs` | a tabbed container, one panel at a time |
+| `Sidebar` | a persistent side region plus a main region |
+| `Expander` | a collapsible labelled section |
+
+### Charts and data
+
+| Component | Use |
+|-----------|-----|
+| `Plot` | a Matplotlib figure rasterised to a PNG on the Python side |
+| `Chart` | an interactive client-side chart (zoom, hover, live points) |
+| `Heatmap` | a client-side heatmap / 2-D field |
 | `DataFrame` | a pandas frame, a `{columns, rows}` dict, or record dicts |
-| `StreamText` | a container that grows token by token over SSE |
-| `Column` | a vertical layout container |
+| `Table` | an interactive table: sort, page, and select |
+| `Stat` | a metric / KPI card: a big value with a label and optional delta |
+
+### Streaming and data-driven lists
+
+| Component | Use |
+|-----------|-----|
+| `StreamText` | a string that grows token by token over SSE |
+| `List` | a data-driven list bound to a `Signal[list]` |
+| `Chat` | a chat transcript of role bubbles bound to a `Signal[list]` |
+| `Gallery` | an image grid bound to a `Signal[list]` |
+
+### Files and feedback
+
+| Component | Use |
+|-----------|-----|
+| `Upload` | a file input (image / audio / any file) |
+| `Download` | a link that hands the user a file back |
+| `Progress` | a progress bar bound to a source |
+| `Spinner` | an indeterminate busy indicator |
 
 ## Display
 
