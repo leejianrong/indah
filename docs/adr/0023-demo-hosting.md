@@ -47,10 +47,27 @@ step (no secrets in the repo, ADR/AGENTS rule).
 | In-browser WASM (Shinylive/Panel-style) | indah is a server (SSE + POST); running fully client-side is a large rewrite with no near-term payoff. Parked |
 | Streamlit Community Cloud / Gradio Spaces SDK | Those SDKs host *their* frameworks; indah rides HF Spaces as a generic **Docker** app instead |
 
+## Update: HF Docker Spaces now require PRO -> host on Fly.io (2026-09-16)
+
+Deploying a Docker Space returned **402 Payment Required**: HF now hosts Gradio and
+Docker Spaces on free CPU only with a **PRO** subscription (static Spaces are the only
+free tier, and indah is a server, so it cannot be static). We took the ADR's named
+fallback and **host on Fly.io** instead, as **one app for the whole gallery**:
+`deploy/fly/gallery_app.py` mounts each demo's indah app under `/<slug>` and serves a
+gallery index at `/`. This works because the indah shell uses document-relative URLs,
+so it runs under a base path - the same property that carries it through Colab's and
+Runpod's proxies (ADR-0001), pinned by `tests/integration/test_gallery_mount.py`
+(base-path serving + per-demo isolation). One machine (auto-stopping when idle, so
+~zero cost at rest), one domain - cheaper than a Space/app per demo, and it dogfoods
+indah's single-port/base-path design. The recipe is `deploy/fly/deploy_fly.sh`. The
+HF path (`deploy/spaces/deploy_hf.py`) is kept for anyone with HF PRO. Colab one-click
+stays the free baseline, unchanged.
+
 ## Consequences
 
 - Every demo is tryable two ways: one-click into the visitor's own Colab (free,
-  on-brand) and a persistent HF Space (always-on, no install).
+  on-brand) and a persistent **Fly.io** gallery - one app serving all demos under
+  sub-paths (auto-stops when idle, no install).
 - The repo gains per-demo Colab notebooks and a `deploy/spaces/` Docker recipe +
   deploy script; the final HF push is an owner step (needs HF credentials).
 - HF Spaces free tier sleeps on idle (cold start on first hit) and caps resources -

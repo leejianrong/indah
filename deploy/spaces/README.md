@@ -1,5 +1,10 @@
 # Hosting the indah demos on Hugging Face Spaces
 
+> **Heads up (2026-09-16):** HF now requires a **PRO** subscription to run Docker
+> Spaces on free CPU - deploying returns `402 Payment Required`. The default free
+> host is therefore **Fly.io** (`deploy/fly/`, same Docker image); this HF path is
+> kept for anyone with HF PRO.
+
 The persistent "try-it-now" gallery (ADR-0023): one **Docker Space** per demo,
 running the example's indah ASGI `app` under uvicorn. Free tier, persistent URL, and
 it plants indah on the same turf as the Gradio/Streamlit demos. The free-tier Space

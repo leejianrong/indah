@@ -210,10 +210,14 @@ the decision to make.
   - **In-browser WASM (Shinylive/Panel-style)** — not viable near-term: indah is a
     server (SSE + POST), so this would need a substantial rework. Note and park.
 
-**Decided (owner, 2026-09-16):** Colab one-click on every demo **+ Hugging Face
-Spaces (a Docker Space per demo)** for the always-on "click and it runs" gallery.
-Self-hosting (Fly/VPS) stays the fallback if HF's free-tier limits bite; WASM is
-parked. See **ADR-0023**. The Space Dockerfile + deploy script live in `deploy/spaces/`;
-the final push to HF is an owner step (needs HF credentials).
+**Decided (owner, 2026-09-16):** Colab one-click on every demo **+ a persistent
+self-hosted gallery on Fly.io** - **one app** that mounts every demo under a sub-path
+(`.../poster`, `.../chatbot`, ...) with a gallery index at `/`, on a machine that
+auto-stops when idle. We first chose HF Spaces, but HF now requires **PRO** for Docker
+Spaces (`402`), so we took the ADR's Fly fallback (the same Docker image). The
+single-app design works because the indah shell is base-path-safe (ADR-0001; pinned by
+`test_gallery_mount.py`) and dogfoods that story. WASM is parked. See **ADR-0023**. The
+Fly recipe is in `deploy/fly/`; the HF per-demo path (`deploy/spaces/`) is kept for
+anyone with PRO. The deploy is an owner step (needs a Fly account).
 
 Tracked on board 30 as **EPIC-220 (landing page & hosted demos)**.

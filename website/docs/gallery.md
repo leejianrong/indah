@@ -1,9 +1,9 @@
 # Demo gallery
 
 Real apps built with indah. Each runs in **one click in Colab** - no install, no
-clone, it embeds right in the notebook cell. An always-on hosted gallery (Hugging
-Face Spaces) is on the way; until then, the Colab button is the fastest way to try
-one. Every demo's source is a single Python file in
+clone, it embeds right in the notebook cell. An always-on hosted gallery (Fly.io) is
+on the way; until then, the Colab button is the fastest way to try one. Every demo's
+source is a single Python file in
 [`examples/`](https://github.com/leejianrong/indah/tree/main/examples).
 
 ## Notebook-native (the Gradio lane)
