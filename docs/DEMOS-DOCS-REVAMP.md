@@ -235,19 +235,24 @@ Landed on `main` (each its own squash-merged PR):
 - **#62** Colab demos: `pip install indah` from PyPI + full source inline (no clone/wget).
 - **#63** Docs nav grouped into Get started / Guides / Reference.
 
-Not the live site yet: the landing page, demo chrome, dashboard, and chat fix reach
-`indah-demos.fly.dev` only after a **Fly redeploy** (owner step), and PyPI users need a
-**0.2.1** (owner: PyPI token). Batch the chat fix + this wave into one 0.2.1.
+- **#64** This status record.
+- **#65** `TextInput(password=True)` — masked field for API keys (keyed-demo prerequisite).
+- **#66** Release 0.2.1 prep (version bump + de-versioned status banners).
+- **#67** Keyed chatbot: real replies via **Google Gemini (BYOK)** — mock by default, a
+  free key streams a real reply; stdlib-only, key held per-session, never logged.
+- **#68** New demo: **stock peer analysis** (mock data; Table selection -> Stat cards + Chart).
+- **#69** New demo: **pretty map** (prettymapp-style generated-art city map, download SVG).
 
-Remaining — needs a decision or an asset I can't produce solo:
+Owner decisions taken (2026-09-16): Gemini Flash for the keyed chatbot (BYOK-only, no
+shared key); new demos built now with mock data; prep 0.2.1 (done, #66).
 
-- **Keyed real chatbot (BYOK).** Needs: a `SecretInput`/`TextInput(password=True)`
-  component (buildable now), a provider choice (most free usage/availability), and a real
-  key to test. Decision: provider + confirm BYOK-only (no embedded shared key).
-- **New demos (stocks peer analysis, prettymapp).** The owner referenced specific
-  Streamlit apps to match *visually*; building blind risks missing the mark. Need the
-  owner's eye or acceptance of a mock-data interpretation.
-- **Real screenshots** (gallery thumbnails currently styled placeholders) and a **hero
-  video/GIF** — need browser/screen capture.
+Not the live site yet: everything above reaches `indah-demos.fly.dev` only after a
+**Fly redeploy** (owner step), and PyPI users need the **0.2.1** publish (owner: PyPI
+token; notes drafted in #66).
+
+Remaining — needs an asset I can't produce solo, or roadmapped:
+
+- **Real screenshots** (gallery thumbnails are styled placeholder tiles) and a **hero
+  video/GIF** — need browser/screen capture of the running demos.
 - **Diffusion pre-recorded real steps** — need a real diffusion run to record frames.
-- **Playground** — Pyodide spike, roadmapped.
+- **Playground** — Pyodide spike, roadmapped (feasibility analysis above).
