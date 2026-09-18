@@ -481,6 +481,57 @@ def test_image_overlay_hover_label_mode_uses_a_title_not_a_visible_span():
 
 
 @pytest.mark.e2e
+def test_image_overlay_wheel_zooms_drag_pans_and_reset_restores_identity():
+    """Scroll-wheel zooms toward the cursor, dragging while zoomed pans, and the
+    reset button snaps back to identity - all via a single transform on .ov-content,
+    so boxes/points (percent-positioned within it) move in lockstep (indah#77)."""
+    handle = launch(_overlay_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                wrap = page.locator(".overlay-wrap")
+                content = page.locator(".ov-content")
+                expect(wrap).to_be_visible()
+                assert content.evaluate("el => el.style.transform") == (
+                    "translate(0px, 0px) scale(1)"
+                )
+                expect(page.locator(".ov-reset-btn")).to_have_count(0)
+
+                # Scroll-wheel zooms in toward the cursor.
+                box = wrap.bounding_box()
+                cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+                page.mouse.move(cx, cy)
+                page.mouse.wheel(0, -1000)
+                zoomed = content.evaluate("el => el.style.transform")
+                scale = float(re.search(r"scale\(([\d.]+)\)", zoomed).group(1))
+                assert scale > 1
+                expect(wrap).to_have_class(re.compile(r"\bzoomed\b"))
+                expect(page.locator(".ov-reset-btn")).to_be_visible()
+
+                # Dragging while zoomed pans (translate changes).
+                page.mouse.down()
+                page.mouse.move(cx - 30, cy - 20, steps=5)
+                page.mouse.up()
+                panned = content.evaluate("el => el.style.transform")
+                assert panned != zoomed
+
+                # Reset view snaps back to identity.
+                page.locator(".ov-reset-btn").click()
+                expect(content).to_have_js_property(
+                    "style.transform", "translate(0px, 0px) scale(1)"
+                )
+                expect(page.locator(".ov-reset-btn")).to_have_count(0)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
 def test_image_overlay_clips_out_of_range_content_and_point_tooltip_works():
     """An out-of-[0,1] box can't bleed outside the image (overflow: hidden on
     .overlay-wrap), and a point's native title tooltip is a real hover target now
