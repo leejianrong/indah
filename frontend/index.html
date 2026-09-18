@@ -417,7 +417,10 @@
 
       .image { max-width: 100%; border-radius: var(--radius-sm); display: block; }
       /* Image overlay (ADR-0020): boxes/masks/keypoints over an image, in % coords. */
-      .overlay-wrap { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+      /* overflow: hidden so a caller's out-of-[0,1] box, or a label pushed above a
+         box near the top edge, is clipped to the image rather than bleeding into
+         surrounding page content. */
+      .overlay-wrap { position: relative; display: inline-block; max-width: 100%; line-height: 0; overflow: hidden; }
       .overlay-wrap .image { width: 100%; }
       .ov-mask {
         position: absolute; inset: 0; width: 100%; height: 100%;
@@ -427,6 +430,9 @@
         position: absolute; border: 2px solid var(--primary); border-radius: 3px;
         box-sizing: border-box; pointer-events: none;
       }
+      /* label_mode="hover": no permanent .ov-label span, just a native `title`
+         tooltip - needs pointer-events re-enabled to actually be a hover target. */
+      .ov-box--hover { pointer-events: auto; cursor: default; }
       .ov-label {
         position: absolute; top: 0; left: 0; transform: translateY(-100%);
         font: 600 0.72rem/1.4 var(--font-body); color: #fff; padding: 0 0.35rem;
@@ -434,7 +440,7 @@
       }
       .ov-point {
         position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px;
-        border: 2px solid #fff; border-radius: 50%; pointer-events: none;
+        border: 2px solid #fff; border-radius: 50%; pointer-events: auto;
         box-shadow: 0 0 0 1px rgba(0,0,0,0.3);
       }
       /* Client chart (uPlot, ADR-0018). Draw it on a surface and pull uPlot's

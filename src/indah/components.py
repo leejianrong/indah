@@ -17,7 +17,7 @@ import inspect
 import io
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from .markdown import to_blocks
 from .protocol import RenderSpec
@@ -552,6 +552,11 @@ class ImageOverlay(Component):
     - ``boxes``: ``{x, y, w, h, label?, color?, score?}`` (or an ``(x, y, w, h)`` tuple).
     - ``points``: ``{x, y, label?, color?}`` (or an ``(x, y)`` tuple).
     - ``masks``: an overlay image (URL / ``data:`` / bytes) or ``{src, opacity?}``.
+
+    ``label_mode`` controls how a box's ``label``/``score`` are shown: ``"always"``
+    (the default) draws a permanent tag above the box; ``"hover"`` shows nothing
+    until the box is hovered, as a tooltip - useful once a frame has enough boxes
+    that always-on labels overlap each other and the image underneath.
     """
 
     type = "imageoverlay"
@@ -564,6 +569,7 @@ class ImageOverlay(Component):
         points: Source = None,
         masks: Source = None,
         alt: str = "",
+        label_mode: Literal["always", "hover"] = "always",
     ) -> None:
         super().__init__()
         self._source = source
@@ -571,9 +577,10 @@ class ImageOverlay(Component):
         self._points = points
         self._masks = masks
         self._alt = alt
+        self._label_mode = label_mode
 
     def static_props(self) -> dict[str, Any]:
-        return {"alt": self._alt}
+        return {"alt": self._alt, "labelMode": self._label_mode}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         props: dict[str, Callable[[], Any]] = {

@@ -60,6 +60,17 @@ def test_mask_bytes_become_a_data_uri_overlay():
 
 
 @pytest.mark.unit
+def test_label_mode_defaults_to_always_and_is_threaded_through():
+    always = ImageOverlay("x")
+    Session(Column(children=[always]))
+    assert always.to_json()["props"]["labelMode"] == "always"
+
+    hover = ImageOverlay("x", label_mode="hover")
+    Session(Column(children=[hover]))
+    assert hover.to_json()["props"]["labelMode"] == "hover"
+
+
+@pytest.mark.unit
 def test_streaming_detections_replace_boxes_over_the_patch_op():
     detections: Signal[list] = Signal([])
     ov = ImageOverlay("x", boxes=lambda: detections.value)

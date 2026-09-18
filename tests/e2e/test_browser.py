@@ -384,7 +384,7 @@ def test_client_chart_renders_and_streams_points(tmp_path):
         handle.stop()
 
 
-def _overlay_app():
+def _overlay_app(label_mode="always"):
     """An ImageOverlay with detection boxes from a signal + a button that adds one -
     the read-only overlay path (ADR-0020), streaming detections as a prop update."""
     from indah import Button, Column, ImageOverlay, Session, Signal, create_app
@@ -399,7 +399,32 @@ def _overlay_app():
         boxes.set(boxes.value + [{"x": 0.5, "y": 0.5, "w": 0.2, "h": 0.2, "label": "dog"}])
 
     root = Column(
-        children=[ImageOverlay(img, boxes=boxes, alt="scene"), Button("add", on_click=add)]
+        children=[
+            ImageOverlay(img, boxes=boxes, alt="scene", label_mode=label_mode),
+            Button("add", on_click=add),
+        ]
+    )
+    return create_app(session=Session(root))
+
+
+def _overlay_overflow_app():
+    """A box outside [0,1] and a labeled point - overflow: hidden on .overlay-wrap
+    must keep the box from bleeding outside the image (indah#78)."""
+    from indah import Column, ImageOverlay, Session, create_app
+
+    img = (
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' "
+        "height='100'%3E%3Crect width='200' height='100' fill='%23ccc'/%3E%3C/svg%3E"
+    )
+    root = Column(
+        children=[
+            ImageOverlay(
+                img,
+                boxes=[{"x": 1.5, "y": 1.5, "w": 0.3, "h": 0.3, "label": "offscreen"}],
+                points=[{"x": 0.5, "y": 0.5, "label": "center"}],
+                alt="scene",
+            )
+        ]
     )
     return create_app(session=Session(root))
 
@@ -426,6 +451,56 @@ def test_image_overlay_draws_boxes_and_streams_detections():
                 page.locator("button", has_text="add").click()
                 expect(boxes).to_have_count(2)
                 expect(page.locator(".ov-label", has_text="dog")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_image_overlay_hover_label_mode_uses_a_title_not_a_visible_span():
+    """label_mode="hover" swaps the permanent .ov-label for a native title tooltip,
+    and re-enables pointer-events so the box is actually a hover target (indah#78)."""
+    handle = launch(_overlay_app(label_mode="hover"), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                box = page.locator(".overlay-wrap .ov-box").first
+                expect(box).to_be_visible()
+                expect(page.locator(".ov-label")).to_have_count(0)
+                assert box.evaluate("el => el.title") == "cat 90%"
+                assert box.evaluate("el => getComputedStyle(el).pointerEvents") == "auto"
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_image_overlay_clips_out_of_range_content_and_point_tooltip_works():
+    """An out-of-[0,1] box can't bleed outside the image (overflow: hidden on
+    .overlay-wrap), and a point's native title tooltip is a real hover target now
+    that pointer-events is re-enabled (indah#78)."""
+    handle = launch(_overlay_overflow_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                wrap = page.locator(".overlay-wrap")
+                expect(wrap).to_be_visible()
+                assert wrap.evaluate("el => getComputedStyle(el).overflow") == "hidden"
+
+                point = page.locator(".ov-point").first
+                expect(point).to_be_visible()
+                assert point.evaluate("el => el.title") == "center"
+                assert point.evaluate("el => getComputedStyle(el).pointerEvents") == "auto"
             finally:
                 browser.close()
     finally:

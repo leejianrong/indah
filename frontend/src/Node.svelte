@@ -46,6 +46,13 @@
     if (inputEl && document.activeElement !== inputEl) syncFromServer();
   });
 
+  // ImageOverlay, label_mode="hover" (ADR-0020/#78): the same text the always-on
+  // .ov-label span would show, used as a `title` tooltip instead.
+  function boxLabel(b) {
+    if (b.label == null) return null;
+    return b.score != null ? `${b.label} ${(b.score * 100).toFixed(0)}%` : b.label;
+  }
+
   // Keep a chat pinned to the newest message. The dependency array is re-created
   // whenever messages/pending change, so the action's update() runs and scrolls.
   function autoscroll(node) {
@@ -378,10 +385,12 @@
     {#each props.boxes ?? [] as b, i (i)}
       <div
         class="ov-box"
+        class:ov-box--hover={props.labelMode === "hover"}
         style="left: {(b.x ?? 0) * 100}%; top: {(b.y ?? 0) * 100}%; width: {(b.w ?? 0) *
           100}%; height: {(b.h ?? 0) * 100}%; border-color: {b.color ?? 'var(--primary)'};"
+        title={props.labelMode === "hover" ? boxLabel(b) : null}
       >
-        {#if b.label != null}
+        {#if b.label != null && props.labelMode !== "hover"}
           <span class="ov-label" style="background: {b.color ?? 'var(--primary)'};"
             >{b.label}{#if b.score != null}&nbsp;{(b.score * 100).toFixed(0)}%{/if}</span
           >
