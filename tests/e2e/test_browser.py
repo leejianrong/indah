@@ -85,6 +85,35 @@ def test_shell_renders_and_patches_in_a_real_browser():
         handle.stop()
 
 
+@pytest.mark.e2e
+def test_shell_still_mounts_with_a_malformed_browser_locale():
+    """A malformed navigator.language (e.g. Chromium under LANG=C.UTF-8 reporting
+    "en-US@posix") must not crash the shell's bootstrap - uPlot constructs an
+    Intl.NumberFormat from it at module load time, before the SSE connection even
+    opens (indah#76). Force the malformed tag via an init script so the repro is
+    deterministic regardless of the test runner's own locale."""
+    handle = launch(block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            context = browser.new_context()
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'language', { get: () => 'en-US@posix' });"
+            )
+            page = context.new_page()
+            errors = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator(".markdown h1", has_text="indah Studio")).to_be_visible()
+                assert not errors, f"page errors: {errors}"
+            finally:
+                context.close()
+                browser.close()
+    finally:
+        handle.stop()
+
+
 def _shared_signal_app(control):
     """An app whose input and a button both write the same signal, so a button
     click is a server-side change to the (still-focused) input's value - the exact
