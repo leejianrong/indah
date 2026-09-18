@@ -416,12 +416,28 @@
       .download.disabled { color: var(--muted); opacity: 0.6; }
 
       .image { max-width: 100%; border-radius: var(--radius-sm); display: block; }
-      /* Image overlay (ADR-0020): boxes/masks/keypoints over an image, in % coords. */
-      /* overflow: hidden so a caller's out-of-[0,1] box, or a label pushed above a
-         box near the top edge, is clipped to the image rather than bleeding into
-         surrounding page content. */
-      .overlay-wrap { position: relative; display: inline-block; max-width: 100%; line-height: 0; overflow: hidden; }
+      /* Image overlay (ADR-0020): boxes/masks/keypoints over an image, in % coords.
+         .overlay-wrap is a fixed-size, overflow:hidden viewport (so a caller's
+         out-of-[0,1] box, or a label pushed above a box near the top edge, is
+         clipped rather than bleeding into surrounding page content); .ov-content is
+         the one layer that gets scaled/panned for zoom (#77), so box/point percent
+         coordinates need no adjustment at any zoom level. */
+      .overlay-wrap {
+        position: relative; display: inline-block; max-width: 100%; line-height: 0;
+        overflow: hidden; touch-action: none;
+      }
+      .overlay-wrap.zoomed { cursor: grab; }
+      .overlay-wrap.dragging { cursor: grabbing; }
+      .ov-content { display: inline-block; }
       .overlay-wrap .image { width: 100%; }
+      .ov-reset-btn {
+        position: absolute; top: 0.5rem; right: 0.5rem; z-index: 1;
+        font: 600 0.72rem/1 var(--font-body); padding: 0.35rem 0.6rem;
+        border: 1px solid var(--outline); border-radius: var(--radius-sm);
+        background: var(--surface); color: var(--text); cursor: pointer;
+        box-shadow: var(--shadow);
+      }
+      .ov-reset-btn:hover { border-color: var(--primary); color: var(--primary); }
       .ov-mask {
         position: absolute; inset: 0; width: 100%; height: 100%;
         border-radius: var(--radius-sm); pointer-events: none;
