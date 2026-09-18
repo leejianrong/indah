@@ -305,7 +305,7 @@ async def openrouter_chat_stream(
                     if text:
                         q.put(text)
         except urllib.error.HTTPError as exc:
-            q.put(f"\n[OpenRouter error {exc.code}: check the API key or model.]")
+            q.put(_openrouter_error_message(exc))
         except (urllib.error.URLError, OSError) as exc:
             q.put(f"\n[Could not reach OpenRouter: {exc}]")
         finally:
@@ -317,6 +317,50 @@ async def openrouter_chat_stream(
         if item is done:
             break
         yield item
+
+
+def _openrouter_error_message(exc) -> str:
+    """Turn an OpenRouter HTTP error into a chat message that actually explains it.
+
+    ``exc.code`` alone hides the real cause -- OpenRouter puts it in the JSON body
+    (``{"error": {"message": ...}}``), so we read and surface that. Two failure modes
+    are common enough with **free** (``:free``) models specifically to call out by
+    name, since they leave paid models unaffected and are otherwise a confusing
+    "free doesn't work, paid does" symptom:
+
+    - **404 "no endpoints match your data policy"** -- OpenRouter only routes to a
+      free model if the account has opted in to prompt training/"free model
+      publication" at https://openrouter.ai/settings/privacy. Paid models have no
+      such requirement, so they keep working while every free model 404s.
+    - **429 upstream rate limit** -- free models share a heavily-throttled pool; the
+      backing provider (e.g. Chutes) rejects bursts. Transient; retrying shortly or
+      picking a different model usually clears it.
+    """
+    import json
+
+    try:
+        body = exc.read().decode("utf-8", errors="replace")
+    except Exception:  # noqa: BLE001 - reading the error body is best-effort
+        body = ""
+    detail = ""
+    if body:
+        try:
+            detail = json.loads(body).get("error", {}).get("message", "") or body
+        except (ValueError, AttributeError):
+            detail = body
+
+    if exc.code == 404 and "data policy" in detail.lower():
+        return (
+            f"\n[OpenRouter error 404: {detail} Free models need "
+            "'Free model publication' enabled at openrouter.ai/settings/privacy -- "
+            "paid models don't need it, which is why only paid replies were working.]"
+        )
+    if exc.code == 429:
+        return (
+            f"\n[OpenRouter error 429: {detail or 'rate-limited upstream'}. Free "
+            "models share a throttled pool; wait a bit or try a different model.]"
+        )
+    return f"\n[OpenRouter error {exc.code}: {detail or 'check the API key or model.'}]"
 
 
 # --- the indah layer: wire the stream into a UI ------------------------------
@@ -436,7 +480,10 @@ def build_session(
         settings.append(
             Text(
                 "The default model is free -- no cost. Get a free key at openrouter.ai. "
-                "Your key is used only for this session and is never stored."
+                "Your key is used only for this session and is never stored. Free "
+                "models need 'Free model publication' enabled at "
+                "openrouter.ai/settings/privacy, or replies will fail; the paid "
+                "picks above have no such requirement."
             )
         )
         children.append(Expander(settings, label="Settings", open=False))

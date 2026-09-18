@@ -180,6 +180,69 @@ async def test_byok_falls_back_to_the_mock_when_the_key_is_blank():
     assert "hello there" in reply  # the mock echoes the question
 
 
+class _FakeHTTPError:
+    """A stand-in for ``urllib.error.HTTPError`` -- just ``.code`` and ``.read()``."""
+
+    def __init__(self, code: int, body: bytes) -> None:
+        self.code = code
+        self._body = body
+
+    def read(self) -> bytes:
+        return self._body
+
+
+@pytest.mark.unit
+def test_openrouter_free_model_data_policy_404_names_the_privacy_setting():
+    """The classic 'free works nowhere, paid works everywhere' symptom: OpenRouter
+    404s a free model until 'Free model publication' is enabled in the account's
+    privacy settings. Paid models carry no such requirement. The surfaced message
+    must say so, not just print the bare status code (KAN-1502)."""
+    chatbot = _load_example()
+    body = (
+        b'{"error": {"message": "No endpoints found matching your data policy '
+        b"(Free model publication). Enable prompt training here: "
+        b'https://openrouter.ai/settings/privacy", "code": 404}}'
+    )
+    exc = _FakeHTTPError(404, body)
+
+    message = chatbot._openrouter_error_message(exc)
+
+    assert "data policy" in message.lower()
+    assert "openrouter.ai/settings/privacy" in message
+    assert "paid" in message.lower()  # explains why paid models were unaffected
+
+
+@pytest.mark.unit
+def test_openrouter_free_model_429_names_the_shared_pool():
+    """Free models sit on a shared, upstream-throttled pool; a 429 there is usually
+    transient, not a broken key. Say so instead of a bare status code."""
+    chatbot = _load_example()
+    body = (
+        b'{"error": {"message": "deepseek/deepseek-chat-v3.1:free is temporarily '
+        b'rate-limited upstream.", "code": 429}}'
+    )
+    exc = _FakeHTTPError(429, body)
+
+    message = chatbot._openrouter_error_message(exc)
+
+    assert "429" in message
+    assert "rate-limited upstream" in message
+    assert "throttled pool" in message.lower()
+
+
+@pytest.mark.unit
+def test_openrouter_error_falls_back_when_the_body_is_unreadable():
+    """A body that isn't JSON (or can't be read at all) must not crash the stream --
+    fall back to a plain message instead of raising."""
+    chatbot = _load_example()
+    exc = _FakeHTTPError(401, b"not json")
+
+    message = chatbot._openrouter_error_message(exc)
+
+    assert "401" in message
+    assert "not json" in message  # the raw body, since it wasn't parseable JSON
+
+
 @pytest.mark.integration
 async def test_settings_key_and_model_live_in_a_collapsed_expander():
     """The API key + model Select are tucked into a collapsed Settings Expander, not
