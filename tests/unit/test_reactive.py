@@ -3,6 +3,25 @@ import pytest
 from indah.reactive import Signal, batch, computed, effect
 
 
+class ShapedValue:
+    """Stands in for a numpy array: `==`/`!=` raise on a shape mismatch instead
+    of returning a plain bool (issue #84)."""
+
+    def __init__(self, shape):
+        self.shape = shape
+
+    def __eq__(self, other):
+        if not isinstance(other, ShapedValue):
+            return NotImplemented
+        if self.shape != other.shape:
+            raise ValueError("operands could not be broadcast together")
+        return self.shape == other.shape
+
+    def __ne__(self, other):
+        eq = self.__eq__(other)
+        return eq if eq is NotImplemented else not eq
+
+
 @pytest.mark.unit
 def test_effect_runs_once_immediately():
     s = Signal(1)
@@ -82,3 +101,22 @@ def test_batch_coalesces_into_single_rerun():
     effect(lambda: runs.append((a.value, b.value)))
     batch(lambda: (a.set(2), b.set(3)))
     assert runs == [(1, 1), (2, 3)]  # one rerun after the batch, not two
+
+
+@pytest.mark.unit
+def test_signal_set_survives_a_raising_inequality_check():
+    s = Signal(ShapedValue((50, 100)))
+    seen = []
+    effect(lambda: seen.append(s.value.shape))
+    s.set(ShapedValue((60, 110)))  # differently "shaped" -> != raises internally
+    assert seen == [(50, 100), (60, 110)]
+
+
+@pytest.mark.unit
+def test_computed_survives_a_raising_inequality_check():
+    selected = Signal(ShapedValue((50, 100)))
+    crop = computed(lambda: selected.value)
+    seen = []
+    effect(lambda: seen.append(crop.value.shape))
+    selected.set(ShapedValue((60, 110)))  # differently "shaped" recompute
+    assert seen == [(50, 100), (60, 110)]
