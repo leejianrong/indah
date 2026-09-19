@@ -79,8 +79,8 @@ def _nudge(page, kind: str | None) -> None:
             page.get_by_role("button", name="Start training").click(timeout=2000)
             page.wait_for_timeout(2000)  # let a couple of epochs stream in
         elif kind == "generate":
-            page.get_by_role("button").first.click(timeout=2000)
-            page.wait_for_timeout(1800)
+            page.get_by_role("button", name="Play").click(timeout=2000)
+            page.wait_for_timeout(2800)  # the ~32-frame sequence finishing on a real image
         elif kind == "chat":
             box = page.get_by_placeholder("Type a message, then press Enter or click Send")
             box.fill("What can indah do?", timeout=2000)

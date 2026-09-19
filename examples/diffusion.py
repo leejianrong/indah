@@ -1,22 +1,19 @@
-"""Image generation with streamed progress: watch a real diffusion model denoise, and
-watch the reverse (noising) process too.
+"""Watch a real diffusion model step through noise, frame by frame, forwards or back.
 
-The Gradio "diffusion progress" archetype, done on indah: pick a prompt, hit Generate,
-and the image refines from noise to a finished frame while a progress bar fills - all
-live over SSE, the UI never freezing. Unlike the other demos here, this one does not
-run a model live: diffusion needs a GPU indah's hosted Fly gallery does not have, so the
-frames are pre-recorded (captured once with real ``diffusers`` inference on a rented
-GPU) and replayed here over the exact same streamed-progress UI (ADR-0009) a live
-sampler would use -- swap ``_frames_for`` for a real
-``for image in pipe(prompt, callback=...)`` loop and nothing else about the app changes.
+Diffusion needs a GPU, and indah's hosted gallery doesn't have one, so nothing runs
+live here. The frames come from a real ``diffusers`` pipeline (stable-diffusion-v1-5),
+captured once on a rented GPU and replayed over the same streamed UI a live sampler
+would use. Swap ``_frames_for`` for a real ``for image in pipe(prompt, callback=...)``
+loop and the rest of the app doesn't change.
 
-Both directions of the real process are captured, not just the usual "denoise" demo:
-**reverse** (denoising: noise -> image) is the real ``diffusers`` sampler's own
-intermediate latents, VAE-decoded at each step; **forward** (noising: image -> noise) is
-the actual forward diffusion SDE -- the finished image's clean latent with
-``scheduler.add_noise()`` applied at increasing timesteps, the same math that trains a
-diffusion model, not a fake reverse-and-relabel of the sampler's frames. Two prompts are
-pre-baked (a couple is enough to show the process; the asset stays under 1.5 MB).
+Both directions are the genuine process, not a demo trick. Reverse (denoising, noise
+to image) is the sampler's own intermediate latents, decoded at every step. Forward
+(noising, image to noise) is the actual diffusion math run on the finished image's
+latent at increasing noise levels - the same thing a diffusion model trains on, not
+a relabeled copy of the reverse frames.
+
+Two prompts are pre-baked, since a free-text prompt needs a live model to answer.
+Step through frames with the arrow buttons, or hit play and let it run.
 
 Run it with:  python examples/diffusion.py   (prints a URL; embeds inline in a cell).
 """
@@ -199,31 +196,47 @@ def _prompt_label(slug: str) -> str:
 def build() -> indah.Session:
     prompt_choice = indah.Signal(PROMPTS[0][0])
     process = indah.Signal(PROCESSES[0][0])
-    busy = indah.Signal(False)
+    playing = indah.Signal(False)
+    frame_index = indah.Signal(0)
     image = indah.Signal(_frames_for(PROMPTS[0][0], PROCESSES[0][0])[0])
-    console = indah.StreamText(label="Sampler log")
+    console = indah.StreamText(label="Log")
 
-    async def generate() -> None:
-        if busy.value:
-            return
-        busy.set(True)
-        slug, process_name = prompt_choice.value, process.value
-        frames = _frames_for(slug, process_name)
-        n = len(frames)
+    def current_frames() -> list[str]:
+        return _frames_for(prompt_choice.value, process.value)
+
+    def show(index: int) -> None:
+        frame_index.set(index)
+        image.set(current_frames()[index])
+
+    # A prompt or direction change always jumps back to frame 0 and stops any playback
+    # in progress -- switching mid-play would otherwise carry on with the old sequence.
+    def on_selection_change() -> None:
+        playing.set(False)
         console.reset()
-        console.feed(
-            f"> replaying real stable-diffusion-v1-5 {process_name} for "
-            f"'{_prompt_label(slug)}' ({n} frames, captured offline on a rented GPU)\n"
-        )
+        console.feed(f"> showing {process.value} for '{_prompt_label(prompt_choice.value)}'\n")
+        show(0)
+
+    indah.effect(on_selection_change)
+
+    async def toggle_play() -> None:
+        if playing.value:
+            playing.set(False)
+            return
+        playing.set(True)
+        frames = current_frames()
         try:
-            for i, frame in enumerate(frames):
-                image.set(frame)
-                if i % max(1, n // 8) == 0 or i == n - 1:
-                    console.feed(f"> frame {i + 1}/{n}\n")
+            while playing.value and frame_index.value < len(frames) - 1:
+                show(frame_index.value + 1)
                 await asyncio.sleep(0.08)  # a live sampler step runs on the GPU here
-            console.feed("> done\n")
+            if frame_index.value == len(frames) - 1:
+                console.feed("> done\n")
         finally:
-            busy.set(False)
+            playing.set(False)
+
+    def step(delta: int) -> None:
+        playing.set(False)
+        frames = current_frames()
+        show(max(0, min(len(frames) - 1, frame_index.value + delta)))
 
     controls = indah.Card(
         title="Prompt",
@@ -234,24 +247,43 @@ def build() -> indah.Session:
                 label="Prompt",
             ),
             indah.Select(process, options=PROCESSES, label="Direction"),
-            indah.Button("Generate", on_click=generate),
-            indah.Spinner(active=busy, label="replaying..."),
+            indah.Row(
+                children=[
+                    indah.Button("Prev", on_click=lambda: step(-1)),
+                    indah.Button(
+                        lambda: "Pause" if playing.value else "Play", on_click=toggle_play
+                    ),
+                    indah.Button("Next", on_click=lambda: step(1)),
+                ],
+                gap="0.5rem",
+            ),
         ],
     )
 
-    workspace = indah.Column(
+    workspace = indah.Card(
         children=[
-            indah.Card(children=[indah.Image(image, alt="diffusion frame")]),
-            indah.Expander(label="Sampler log", children=[console]),
+            indah.Row(
+                children=[
+                    indah.Image(image, alt="diffusion frame"),
+                    indah.Column(
+                        children=[
+                            indah.Text(
+                                lambda: f"Frame {frame_index.value + 1} of {len(current_frames())}"
+                            ),
+                            console,
+                        ]
+                    ),
+                ],
+                gap="1rem",
+            )
         ]
     )
 
     intro = indah.Text(
-        "# Image generation with streamed progress\n\n"
-        "Pick a prompt and a direction, then hit **Generate** - real "
-        "stable-diffusion-v1-5 frames (captured offline; no GPU here) replay live over "
-        "SSE, without freezing the page. A live pipeline drops in behind the same shape "
-        "(ADR-0009).",
+        "# Watch a diffusion model think\n\n"
+        "Pick a prompt and a direction, then step through it or hit play. These are "
+        "real stable-diffusion-v1-5 frames, captured offline since there's no GPU "
+        "here to run one live.",
         markdown=True,
     )
     return indah.Session(
