@@ -6,10 +6,14 @@ Colab runtime: a small instruct model loaded with
 token by token into an indah page. No Node, no separate server, no GPU required
 (though a free T4 makes it snappier).
 
-The full example is in the repo:
-
-- [`examples/chatbot_colab.ipynb`](https://github.com/leejianrong/indah/blob/main/examples/chatbot_colab.ipynb) - the self-contained Colab notebook.
-- [`examples/chatbot.py`](https://github.com/leejianrong/indah/blob/main/examples/chatbot.py) - the same app as a script, with a `--mock` mode that runs with no model or GPU.
+This walkthrough has its own notebook,
+[`examples/chatbot_colab.ipynb`](https://github.com/leejianrong/indah/blob/main/examples/chatbot_colab.ipynb)
+(open it directly in Colab - no setup) - a step-by-step build of the transformers
+model layer. It's different from the **Streaming chatbot** in the
+[gallery](gallery.md#notebook-native): that one is a ready-to-click demo (mock reply
+or bring-your-own-key via OpenRouter); this guide builds the real-model version from
+scratch. The source behind both lives in
+[`examples/chatbot.py`](https://github.com/leejianrong/indah/blob/main/examples/chatbot.py).
 
 ## The two layers
 
@@ -178,15 +182,11 @@ two, the page stays fully responsive while the model works.
 
 ## Run it without a model
 
-The script mirror of this app has a `--mock` mode - canned replies with the same
-streaming shape, needing only indah - so you can run and test the wiring with no
-model, no downloads, and no GPU:
-
-```bash
-python examples/chatbot.py --mock            # no model/GPU
-python examples/chatbot.py                    # Qwen2.5-0.5B-Instruct
-python examples/chatbot.py --model unsloth/Llama-3.2-1B-Instruct
-```
+[`examples/chatbot.py`](https://github.com/leejianrong/indah/blob/main/examples/chatbot.py)
+has a `--mock` mode - canned replies with the same streaming shape, needing only
+indah - so you can test the wiring with no model, no downloads, and no GPU. Save it
+locally and run `python chatbot.py --mock`, or pick `--model unsloth/Llama-3.2-1B-Instruct`
+for a bigger model than the default.
 
 ## Next
 
