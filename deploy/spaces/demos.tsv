@@ -5,7 +5,7 @@ chatbot	chatbot.py	Chatbot (streaming)	💬	-
 training-dashboard	training_dashboard.py	Live training dashboard	📈	-
 diffusion	diffusion.py	Image generation	🎨	-
 poster	poster.py	Poster generator	🖼️	-
-image-classify	upload_classify.py	Image classifier	🔍	-
+image-classify	upload_classify.py	Image classifier	🔍	onnxruntime pillow huggingface_hub
 object-detection	object_detection.py	Object detection	🎯	-
 charts	charts.py	Hybrid charting	📊	matplotlib
 stocks	stocks.py	Stock peer analysis	💹	-
