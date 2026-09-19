@@ -6,6 +6,7 @@
   import Markdown from "./Markdown.svelte";
   import Chart from "./Chart.svelte";
   import Heatmap from "./Heatmap.svelte";
+  import MapView from "./Map.svelte";
   import Table from "./Table.svelte";
   import ImageOverlay from "./ImageOverlay.svelte";
 
@@ -367,6 +368,11 @@
   <div class="field">
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}
     <Heatmap {props} />
+  </div>
+{:else if node.type === "map"}
+  <div class="field">
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    <MapView {props} />
   </div>
 {:else if node.type === "image"}
   <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />

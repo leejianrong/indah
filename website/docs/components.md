@@ -51,6 +51,7 @@ set shipped in 0.2.0.
 | `Plot` | a Matplotlib figure rasterised to a PNG on the Python side |
 | `Chart` | an interactive client-side chart (zoom, hover, live points) |
 | `Heatmap` | a client-side heatmap / 2-D field |
+| `Map` | an interactive client-side map (Leaflet): pan/zoom, markers, polygons |
 | `DataFrame` | a pandas frame, a `{columns, rows}` dict, or record dicts |
 | `Table` | an interactive table: sort, page, and select |
 | `Stat` | a metric / KPI card: a big value with a label and optional delta |

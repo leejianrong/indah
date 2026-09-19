@@ -11,6 +11,7 @@ from indah.components import (
     Expander,
     Grid,
     Image,
+    Map,
     MultiSelect,
     Number,
     Plot,
@@ -195,6 +196,54 @@ def test_audio_reacts_to_signal():
     assert clip.reactive_props()["src"]() == "a.mp3"
     src.set("b.mp3")
     assert clip.reactive_props()["src"]() == "b.mp3"
+
+
+# -- Map -------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_map_center_accepts_a_plain_tuple():
+    m = Map((1.35, 103.8), zoom=11)
+    assert m.reactive_props()["center"]() == [1.35, 103.8]
+    assert m.reactive_props()["zoom"]() == 11
+
+
+@pytest.mark.unit
+def test_map_markers_normalise_dicts_and_tuples():
+    m = Map((0, 0), markers=[{"lat": 1.3, "lon": 103.8, "label": "here"}, (1.4, 103.9)])
+    markers = m.reactive_props()["markers"]()
+    assert markers[0] == {"lat": 1.3, "lon": 103.8, "label": "here"}
+    assert markers[1] == {"lat": 1.4, "lon": 103.9}
+
+
+@pytest.mark.unit
+def test_map_markers_skip_an_entry_missing_lat_or_lon():
+    m = Map((0, 0), markers=[{"lat": 1.3}, {"lat": 1.3, "lon": 103.8}])
+    markers = m.reactive_props()["markers"]()
+    assert markers == [{"lat": 1.3, "lon": 103.8}]
+
+
+@pytest.mark.unit
+def test_map_polygons_normalise_points_and_style():
+    m = Map((0, 0), polygons=[{"points": [(1.3, 103.8), (1.31, 103.81)], "color": "#2e6d62"}])
+    polygons = m.reactive_props()["polygons"]()
+    assert polygons == [{"points": [[1.3, 103.8], [1.31, 103.81]], "color": "#2e6d62"}]
+
+
+@pytest.mark.unit
+def test_map_reacts_to_a_center_signal():
+    center = Signal((1.3, 103.8))
+    m = Map(center)
+    assert m.reactive_props()["center"]() == [1.3, 103.8]
+    center.set((1.4, 103.9))
+    assert m.reactive_props()["center"]() == [1.4, 103.9]
+
+
+@pytest.mark.unit
+def test_map_defaults_to_no_markers_or_polygons():
+    m = Map((0, 0))
+    assert m.reactive_props()["markers"]() == []
+    assert m.reactive_props()["polygons"]() == []
 
 
 class _FakeFigure:

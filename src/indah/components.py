@@ -919,6 +919,122 @@ class Heatmap(Component):
             self._session.emit_props(self.id, {"z": []})
 
 
+DEFAULT_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+DEFAULT_ATTRIBUTION = "© OpenStreetMap contributors"
+
+
+def _to_latlon(value: Any) -> list[float]:
+    if value is None:
+        return [0.0, 0.0]
+    lat, lon = value
+    return [_num(lat), _num(lon)]
+
+
+def _to_markers(value: Any) -> list[dict[str, Any]]:
+    """Coerce a source value to ``[{lat, lon, label?, color?, radius?}, ...]``."""
+    if value is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for m in value:
+        if isinstance(m, dict):
+            if "lat" not in m or "lon" not in m:
+                continue
+            entry = {"lat": _num(m["lat"]), "lon": _num(m["lon"])}
+            for key in ("label", "color", "radius"):
+                if m.get(key) is not None:
+                    entry[key] = m[key]
+        else:
+            lat, lon = m
+            entry = {"lat": _num(lat), "lon": _num(lon)}
+        out.append(entry)
+    return out
+
+
+def _to_polygons(value: Any) -> list[dict[str, Any]]:
+    """Coerce a source value to ``[{points, label?, color?, fillOpacity?}, ...]``."""
+    if value is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for p in value:
+        points = p["points"] if isinstance(p, dict) else p
+        rings = [[_num(lat), _num(lon)] for lat, lon in points]
+        entry: dict[str, Any] = {"points": rings}
+        if isinstance(p, dict):
+            for key in ("label", "color", "fillOpacity"):
+                if p.get(key) is not None:
+                    entry[key] = p[key]
+        out.append(entry)
+    return out
+
+
+class Map(Component):
+    """An interactive client-side map (Leaflet, ADR-0019-style hybrid: G5).
+
+    ``center`` is a ``(lat, lon)`` pair and ``zoom`` a Leaflet zoom level (typically
+    0-19); both are reactive sources -- set them from Python (e.g. "fly to" a new
+    place) and the existing map instance re-views there, without resetting whatever
+    pan/zoom the viewer is currently at from an unrelated prop update. ``markers``
+    (``{lat, lon, label?, color?, radius?}``) and ``polygons``
+    (``{points:[(lat,lon),...], label?, color?, fillOpacity?}``) are reactive lists
+    redrawn wholesale on change -- the same "no structural children op, ship a plain
+    list prop" shape as ``ImageOverlay``'s boxes/points.
+
+    Markers/polygons render as Leaflet vector layers (circle markers, polygons), not
+    the classic pin icon, which needs image assets incompatible with the shell's
+    no-external-requests singlefile build (ADR-0004). This is display plus native
+    pan/zoom; the viewer's own pan/zoom is not reported back to Python (matching
+    ``ImageOverlay``'s zoom/pan, which is client-side only).
+
+    Tiles load live from ``tile_url`` in the **viewer's own browser** (never
+    indah's server) -- the same as any Leaflet map on any website, and not the kind
+    of server-side scraping the map-poster/prettymap demos avoid for a public
+    deployment. The default is OpenStreetMap's public tile server, whose usage
+    policy asks non-trivial-traffic sites to run their own tiles or use a
+    commercial provider; swap ``tile_url``/``attribution`` for that when it matters
+    -- it's a per-deployment concern, not indah's.
+    """
+
+    type = "map"
+
+    def __init__(
+        self,
+        center: Source,
+        *,
+        zoom: Source = 12,
+        markers: Source = None,
+        polygons: Source = None,
+        height: int = 320,
+        tile_url: str = DEFAULT_TILE_URL,
+        attribution: str = DEFAULT_ATTRIBUTION,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._center = center
+        self._zoom = zoom
+        self._markers = markers
+        self._polygons = polygons
+        self._height = int(height)
+        self._tile_url = tile_url
+        self._attribution = attribution
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {
+            "height": self._height,
+            "tileUrl": self._tile_url,
+            "attribution": self._attribution,
+            "label": self._label,
+        }
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {
+            "center": lambda: _to_latlon(_read(self._center)),
+            "zoom": lambda: _read(self._zoom),
+            "markers": lambda: _to_markers(_read(self._markers)),
+            "polygons": lambda: _to_polygons(_read(self._polygons)),
+        }
+
+
 class DataFrame(Component):
     """A tabular display bound to a source (R5).
 

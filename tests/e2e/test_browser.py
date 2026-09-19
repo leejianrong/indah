@@ -667,6 +667,63 @@ def test_client_heatmap_renders_and_streams_columns():
         handle.stop()
 
 
+_BLANK_TILE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+
+
+def _map_app():
+    """An interactive Map bound to a center signal, with a marker and a polygon,
+    plus a button that flies to a new place (G5). Uses a data: URI as the tile
+    source (Leaflet's {z}/{x}/{y} substitution is a no-op on it) so the test never
+    makes a real network request to a tile server."""
+    from indah import Button, Column, Map, Session, Signal, create_app
+
+    center = Signal((1.35, 103.82))
+    markers = [{"lat": 1.35, "lon": 103.82, "label": "here"}]
+    polygons = [{"points": [(1.34, 103.81), (1.36, 103.81), (1.35, 103.83)]}]
+
+    def fly():
+        center.set((51.5, -0.12))
+
+    m = Map(center, zoom=11, markers=markers, polygons=polygons, tile_url=_BLANK_TILE, height=300)
+    root = Column(children=[m, Button("fly", on_click=fly)])
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_map_renders_markers_and_flies_to_a_new_center():
+    """The map mounts a real Leaflet instance with its marker and polygon, and
+    Python setting a new center flies the existing map there (G5)."""
+    handle = launch(_map_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                container = page.locator(".map.leaflet-container")
+                expect(container).to_be_visible()
+                # The circle marker + the polygon are both SVG vector layers.
+                expect(page.locator(".map path.leaflet-interactive")).to_have_count(2)
+
+                def center():
+                    return container.evaluate(
+                        "el => { const c = el.__map.getCenter(); "
+                        "return [Math.round(c.lat * 100) / 100, Math.round(c.lng * 100) / 100]; }"
+                    )
+
+                assert center() == [1.35, 103.82]
+                page.locator("button", has_text="fly").click()
+                page.wait_for_function(
+                    "() => Math.round(document.querySelector('.map').__map.getCenter().lat) === 52"
+                )
+                assert center() == [51.5, -0.12]
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
 def _audio_app():
     """An Audio player bound to a signal, plus a button that swaps the clip - both a
     URL and raw bytes (base64 data: URI) round-trip through the same node (G8)."""
