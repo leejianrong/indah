@@ -42,6 +42,7 @@ MANIFEST: list[tuple[str, str, str, str]] = [
     ("charts", "Hybrid charting", "📊", "charts"),
     ("stocks", "Stock peer analysis", "💹", "stocks"),
     ("prettymap", "Pretty map", "🗺️", "prettymap"),
+    ("map-poster", "Map poster", "🗾", "map_poster"),
 ]
 
 # One-line blurb per demo for the gallery cards (keyed by slug).
@@ -55,6 +56,7 @@ BLURBS: dict[str, str] = {
     "charts": "An interactive client chart beside a server plot and a heatmap.",
     "stocks": "Pick peers and a horizon; see who's beating the group average.",
     "prettymap": "Restyle a generated city map and download it as SVG.",
+    "map-poster": "A real OpenStreetMap neighborhood, restyled as a poster.",
 }
 
 # The Bunga mark (two magenta petals, two teal), inlined so the gallery needs no assets.
