@@ -8,7 +8,7 @@ at runtime.
 import indah
 
 # A custom component: a native colour picker the pre-built shell renders from this
-# declarative spec, with no shell rebuild (ADR-0012).
+# declarative spec, with no shell rebuild.
 indah.register_component(
     "colorpicker",
     render={

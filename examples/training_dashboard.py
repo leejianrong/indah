@@ -2,8 +2,8 @@
 
 The demo indah is built for on Runpod - watch a model train in real time from a
 notebook cell. A mock training loop stands in for the real thing (no ML dependency);
-a real loop drops straight in behind the same shape (ADR-0009): call ``monitor.step``
-from inside your epoch/step loop and everything streams to the browser over SSE.
+a real loop drops straight in behind the same shape: call ``monitor.step`` from
+inside your epoch/step loop and everything streams to the browser over SSE.
 
 What it shows off:
 - a **Chart** with two streaming series (train + val loss) that grows point-by-point
@@ -39,7 +39,7 @@ class TrainingMonitor:
 
     Split out as a plain object so the training loop reads like real code: it just
     calls ``self.step(...)`` and ``self.epoch_end(...)`` - no indah-specific plumbing
-    in the loop body (ADR-0009)."""
+    in the loop body."""
 
     def __init__(self) -> None:
         self.curves = indah.Chart(

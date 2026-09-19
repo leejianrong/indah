@@ -9,8 +9,8 @@ diffusion image behind the same controls.
 What it shows off:
 - **reactive rendering** - the preview recomputes from the inputs with no rerun, only
   the image node patches;
-- **file-out** - the finished poster downloads as an SVG via the ``Download`` component
-  (ADR-0017), served per session.
+- **file-out** - the finished poster downloads as an SVG via the ``Download``
+  component, served per session.
 
 Run it with:  python examples/poster.py   (prints a URL; embeds inline in a cell).
 """
@@ -149,7 +149,7 @@ def build() -> indah.Session:
         "# Poster generator\n\n"
         "Tweak the controls and the poster re-renders live (reactive - only the image "
         "patches, no rerun), then **download** it. Swap the generator for prettymapp, "
-        "matplotlib, or a diffusion image behind the same controls (ADR-0009).",
+        "matplotlib, or a diffusion image and the controls stay exactly the same.",
         markdown=True,
     )
     return indah.Session(

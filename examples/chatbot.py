@@ -1,19 +1,19 @@
 """A streaming LLM chatbot in indah, runnable end to end in a Colab cell.
 
-The example is deliberately in two layers, kept apart (ADR-0009):
+The example is deliberately in two layers, kept apart:
 
 - ``chat_stream`` is plain Python with no indah imports. It loads a small
   instruct model with transformers and yields the reply token by token. A real
-  app drops its own model behind the same shape; on graduation the function lifts
-  out of indah unchanged.
+  app drops its own model behind the same shape and the function never has to
+  change to fit indah.
 - the indah layer (``build_session``) wires that stream into a UI: a message box,
   a Send button, and a ``Chat`` of role bubbles whose in-flight reply streams into
-  a live pending bubble (ADR-0016).
+  a live pending bubble.
 
 Generation runs on a background thread and is pulled token by token with
 ``asyncio.to_thread``, so the event loop is never blocked and the rest of the UI
 stays live while the model generates - the same non-blocking guarantee the demo's
-mock LLM shows (R3, ADR-0011).
+mock LLM shows.
 
 Run it::
 
@@ -63,7 +63,7 @@ DEFAULT_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 Message = dict[str, str]
 
 
-# --- the model layer: plain Python, no indah imports (ADR-0009) --------------
+# --- the model layer: plain Python, no indah imports --------------------------
 
 
 def load_model(model_name: str = DEFAULT_MODEL):
@@ -160,8 +160,8 @@ async def gemini_chat_stream(
 ) -> AsyncIterator[str]:
     """Stream a real reply from Google Gemini, token by token (bring your own key).
 
-    Plain Python, no indah imports (ADR-0009): given a free Google AI Studio API key
-    and a chat ``messages`` list, it yields the model's reply as it arrives. It hits
+    Plain Python, no indah imports: given a free Google AI Studio API key and a
+    chat ``messages`` list, it yields the model's reply as it arrives. It hits
     the REST ``streamGenerateContent`` endpoint (server-sent events) over stdlib
     ``urllib`` on a background thread, pulled with ``asyncio.to_thread`` so the event
     loop never blocks. The key is used only for this request and never stored or
@@ -249,7 +249,7 @@ async def openrouter_chat_stream(
 ) -> AsyncIterator[str]:
     """Stream a real reply from OpenRouter, token by token (bring your own key).
 
-    Plain Python, no indah imports (ADR-0009). OpenRouter is OpenAI-compatible: we POST
+    Plain Python, no indah imports. OpenRouter is OpenAI-compatible: we POST
     to ``/chat/completions`` with ``stream: true`` and read the server-sent ``data:``
     lines over stdlib ``urllib`` on a background thread, pulled with ``asyncio.to_thread``
     so the event loop never blocks. ``model`` picks which OpenRouter model answers; the
@@ -366,7 +366,7 @@ def _openrouter_error_message(exc) -> str:
 # --- the indah layer: wire the stream into a UI ------------------------------
 
 # Coalesce a few tokens per SSE frame. Each StreamText.feed() emits one frame, and
-# today every frame carries ~8 KB of proxy-flush padding (ADR-0002), so batching a
+# today every frame carries ~8 KB of proxy-flush padding, so batching a
 # handful of tokens per frame cuts the wire overhead several-fold with no
 # perceptible loss of the streaming feel. A framework-level coalescing/debounce fix
 # is tracked as a follow-up (see docs/QUESTIONS.md); this is the userland
@@ -403,8 +403,8 @@ def build_session(
     """Build the chat UI around a ``stream_fn(tokenizer, model, messages)``.
 
     The conversation is a ``Signal[list]`` of ``{"role","content"}`` messages
-    rendered as ``Chat`` bubbles (ADR-0016); the in-flight reply streams token by
-    token into a ``pending`` signal so it shows as a live, growing assistant bubble,
+    rendered as ``Chat`` bubbles; the in-flight reply streams token by token into
+    a ``pending`` signal so it shows as a live, growing assistant bubble,
     then commits to the list when done. Growing the transcript is an ordinary prop
     change over the existing patch op - no dynamic-children protocol op needed.
 
@@ -417,7 +417,7 @@ def build_session(
     **Settings** ``Expander`` -- out of the way, not clutter above the chat. When the key
     field holds a key, a send routes to ``keyed_stream_fn`` (a real model, using the chosen
     ``model_choice``); left blank it falls back to ``stream_fn`` (the mock). The key lives
-    only in this session's signal and is never logged (ADR-0010).
+    only in this session's signal and is never logged.
 
     The empty state is a row of clickable suggestion chips (``suggestions``) that seed and
     send a prompt -- no explainer text, and the live streaming bubble is the only status.
@@ -539,8 +539,8 @@ def main() -> None:
     indah.launch(indah.create_app(session=session))
 
 
-# Module-level ASGI app for hosting (HF Spaces / uvicorn, ADR-0023): the mock
-# chatbot, so a hosted demo needs no model weights or GPU. `python examples/chatbot.py`
+# Module-level ASGI app for hosting: the mock chatbot, so a hosted demo needs no
+# model weights or GPU. `python examples/chatbot.py`
 # (main) still runs the real model by default; pass --mock for the same as here.
 # The hosted demo: mock by default, but bring your own OpenRouter key for a real reply,
 # choosing a model (a free one by default). A fresh api_key + model signal per session

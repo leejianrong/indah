@@ -1,19 +1,19 @@
-"""Upload -> detect -> show boxes: object detection, indah-style (ADR-0020).
+"""Upload -> detect -> show boxes: object detection, indah-style.
 
 Upload an image; a (mock) detector finds a handful of objects and draws labeled
 boxes over the image via ``ImageOverlay``. The "model" here is a deterministic
-stand-in with no heavy deps, but it is a plain function behind a plain handler
-(ADR-0009), so a real detector (e.g. an onnxruntime/YOLO call) drops straight in
-- the rest of the app is unchanged.
+stand-in with no heavy deps, but it is a plain function behind a plain handler,
+so a real detector (e.g. an onnxruntime/YOLO call) drops straight in - the rest
+of the app is unchanged.
 
 Boxes use ``label_mode="hover"``: with several detections on one image, a
 permanent label per box gets noisy fast, so labels show as a tooltip on hover
 instead (indah#78). Scroll to zoom into a small detection, drag to pan once
 zoomed - both come from ``ImageOverlay`` itself (indah#77), no code here.
 
-Each viewer gets an isolated session (``session_factory``, ADR-0010), so one
-person's upload and detections are private to their tab. Runs on Tier 0 (SSE +
-POST), so it works behind Colab's proxy.
+Each viewer gets an isolated session (``session_factory``), so one person's
+upload and detections are private to their tab. Runs on Tier 0 (SSE + POST),
+so it works behind Colab's proxy.
 
 Run it with:  python examples/object_detection.py
 Then open the URL and upload an image. No Node, at install or at runtime.
@@ -54,8 +54,8 @@ def detect(data: bytes) -> list[dict]:
     """A deterministic mock detector: same bytes -> same boxes.
 
     Stands in for a real detector call. Replace the body with an inference call
-    and the rest of the app does not change (ADR-0009). Coordinates are
-    fractions of the image ([0, 1]), the convention ``ImageOverlay`` expects.
+    and the rest of the app does not change. Coordinates are fractions of the
+    image ([0, 1]), the convention ``ImageOverlay`` expects.
     """
     digest = hashlib.sha256(data).digest()
     count = 3 + digest[0] % 4  # 3-6 boxes - enough for hover-only labels to matter
@@ -135,7 +135,7 @@ def build_session() -> Session:
     )
 
 
-# Module-level ASGI app for hosting (HF Spaces / uvicorn, ADR-0023).
+# Module-level ASGI app for hosting.
 app = create_app(session_factory=build_session)
 
 
