@@ -53,7 +53,7 @@ BLURBS: dict[str, str] = {
     "image-classify": "Pick a sample photo or upload your own, and see the top predictions.",
     "object-detection": "Upload an image; hover a box to read what a mock detector found.",
     "charts": "An interactive client chart beside a server plot and a heatmap.",
-    "stocks": "Compare a peer group's price, valuation, and 1-year return.",
+    "stocks": "Pick peers and a horizon; see who's beating the group average.",
     "prettymap": "Restyle a generated city map and download it as SVG.",
 }
 
