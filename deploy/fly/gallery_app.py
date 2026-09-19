@@ -50,7 +50,7 @@ BLURBS: dict[str, str] = {
     "training-dashboard": "Loss curves and live KPI cards while a model trains.",
     "diffusion": "A prompt-to-image sampler refining from noise, with live progress.",
     "poster": "Tweak controls, watch a poster re-render live, then download it.",
-    "image-classify": "Upload an image, get a prediction and a downloadable report.",
+    "image-classify": "Pick a sample photo or upload your own, and see the top predictions.",
     "object-detection": "Upload an image; hover a box to read what a mock detector found.",
     "charts": "An interactive client chart beside a server plot and a heatmap.",
     "stocks": "Compare a peer group's price, valuation, and 1-year return.",
