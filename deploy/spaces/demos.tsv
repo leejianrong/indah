@@ -11,3 +11,4 @@ charts	charts.py	Hybrid charting	📊	matplotlib
 stocks	stocks.py	Stock peer analysis	💹	-
 prettymap	prettymap.py	Pretty map	🗺️	-
 map-poster	map_poster.py	Map poster	🗾	matplotlib
+grc-map	grc_map.py	GRC map	🇸🇬	matplotlib
