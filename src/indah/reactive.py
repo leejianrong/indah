@@ -19,6 +19,22 @@ from typing import Any, Generic, TypeVar
 
 T = TypeVar("T")
 
+
+def _changed(new: Any, old: Any) -> bool:
+    """Best-effort inequality check that never raises.
+
+    Some values (e.g. numpy arrays) don't support a clean bool ``!=``: the
+    comparison itself can raise (mismatched shapes), or return a non-bool that
+    raises when coerced to bool (an elementwise result). Either way, treat the
+    value as changed rather than let the reactive graph crash - the dirty-check
+    is only an optimization, never required for correctness.
+    """
+    try:
+        return bool(new != old)
+    except (ValueError, TypeError):
+        return True
+
+
 # The computation currently running, so signal reads can auto-subscribe it.
 _current: Computation | None = None
 
@@ -49,7 +65,7 @@ class Signal(Generic[T]):
         self.set(new)
 
     def set(self, new: T) -> None:
-        if new == self._value:
+        if not _changed(new, self._value):
             return
         self._value = new
         self._notify()
@@ -102,7 +118,7 @@ class Computed(Signal[T]):
 
     def _recompute(self) -> None:
         new = self._fn()
-        if new != self._value:
+        if _changed(new, self._value):
             self._value = new
             self._notify()
 
