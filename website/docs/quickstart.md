@@ -9,14 +9,6 @@ frontend ships pre-built inside the wheel.
 pip install indah
 ```
 
-Prefer to run from a clone:
-
-```bash
-git clone https://github.com/leejianrong/indah && cd indah
-uv sync --extra dev
-make demo            # prints a URL; binds the first free port from 8000
-```
-
 ## Your first app
 
 An app is a tree of components bound to reactive signals. Mutate a signal and only

@@ -39,10 +39,10 @@ inline in the cell.
 
 ## See it in one click
 
-Every demo is running live in your browser - no install, no clone - and also opens in
+Every demo runs in your browser - no install, no clone - and also opens in
 Colab, embedded right in the cell:
 
-[Open the live demo gallery :material-arrow-right:](https://indah-demos.fly.dev){ .md-button .md-button--primary }
+[Open the demo gallery :material-arrow-right:](https://indah-demos.fly.dev){ .md-button .md-button--primary }
 [Browse the demos here :material-arrow-right:](gallery.md){ .md-button }
 
 A streaming chatbot, a live training dashboard, an image generator, a poster
