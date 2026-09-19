@@ -1,4 +1,4 @@
-"""Per-session state: two browser tabs, independent state on one app (ADR-0010).
+"""Per-session state: two browser tabs, independent state on one app.
 
 Each viewer gets its own reactive graph, so what you do in one tab never leaks into
 another. This app builds a fresh graph per session (a `session_factory`), so open

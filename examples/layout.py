@@ -1,4 +1,4 @@
-"""A multi-panel indah app built from the Slice A layout containers (ADR-0015).
+"""A multi-panel indah app built from indah's layout containers.
 
 Shows the classic "inputs left, output right" split (Sidebar), a Row and a Grid of
 cards, a Tabs section, and a collapsible Expander -- all arranging ordinary

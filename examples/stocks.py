@@ -6,7 +6,7 @@ normalized 1-year price path so relative performance reads at a glance.
 
 All numbers are illustrative **mock data** - there is no market feed. A real app swaps
 the ``PEERS`` block (and ``_series``) for a data source behind the same shape, and the
-rest of the UI is unchanged (ADR-0009). Needs only indah (no extra deps).
+rest of the UI is unchanged. Needs only indah (no extra deps).
 
 Run it with:  python examples/stocks.py   (prints a URL; embeds inline in a cell).
 """

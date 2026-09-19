@@ -1,4 +1,4 @@
-"""Hybrid charting (ADR-0018): a live client chart beside static server plots.
+"""Hybrid charting: a live client chart beside static server plots.
 
 Three ways to draw, side by side:
 
@@ -126,8 +126,8 @@ def build() -> indah.Session:
     intro = indah.Text(
         "# Hybrid charting\n\n"
         "Client-side **Chart** (interactive, live-updating) alongside server-PNG "
-        "**Plot** (static, zero-JS). Both ride the same reactive props -- no wire "
-        "change (ADR-0018).",
+        "**Plot** (static, zero-JS). Both ride the same reactive props, so nothing "
+        "about the wiring changes between them.",
         markdown=True,
     )
     return indah.Session(indah.Column(children=[intro, indah.Sidebar(children=[controls, charts])]))

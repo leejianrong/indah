@@ -3,14 +3,14 @@
 The prettymapp-style showcase: a handful of controls drive a striking, framed "map"
 you can download. Here the map is procedurally generated art - streets, blocks, water,
 and parks laid down from a seed (no geodata or heavy dependency, so it runs on indah
-alone). The pattern is identical to wrapping real prettymapp / OSM data behind the same
-controls (ADR-0009).
+alone). The pattern is identical to wrapping real prettymapp / OSM data behind the
+same controls.
 
 What it shows off:
 - **reactive rendering** - the preview recomputes from the inputs with no rerun, only
   the image node patches;
-- **file-out** - the finished map downloads as an SVG via the ``Download`` component
-  (ADR-0017), served per session.
+- **file-out** - the finished map downloads as an SVG via the ``Download`` component,
+  served per session.
 
 Run it with:  python examples/prettymap.py   (prints a URL; embeds inline in a cell).
 """
@@ -198,7 +198,7 @@ def build() -> indah.Session:
         "# Pretty map generator\n\n"
         "Restyle the map with the controls and it re-renders live (reactive - only the "
         "image patches, no rerun), then **download** it. The map is generated art; wrap "
-        "real prettymapp / OSM data behind the same controls (ADR-0009).",
+        "real prettymapp / OSM data behind the same controls to make it a real one.",
         markdown=True,
     )
     return indah.Session(
