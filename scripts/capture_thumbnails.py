@@ -50,6 +50,7 @@ DEMOS = [
     ("stocks", "stocks", None),
     ("prettymap", "prettymap", None),
     ("map-poster", "map_poster", None),
+    ("grc-map", "grc_map", None),
 ]
 
 VIEWPORT = {"width": 900, "height": 640}  # ~14:10, matches the card's aspect ratio
