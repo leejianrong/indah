@@ -11,6 +11,7 @@ set shipped in 0.2.0.
 | `Text` | a label bound to a signal, computed, or string |
 | `Image` | a URL, `data:` URI, or raw PNG bytes |
 | `ImageOverlay` | an image with read-only vector overlays (boxes, masks, keypoints) |
+| `Audio` | a URL, `data:` URI, or raw audio bytes, played with native browser controls |
 
 ### Inputs (two-way bound to a signal)
 

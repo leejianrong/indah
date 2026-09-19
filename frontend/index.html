@@ -416,6 +416,12 @@
       .download.disabled { color: var(--muted); opacity: 0.6; }
 
       .image { max-width: 100%; border-radius: var(--radius-sm); display: block; }
+      .audio { max-width: 100%; width: 100%; display: block; }
+      .audio-empty {
+        display: inline-block; padding: 0.5rem 0.8rem; color: var(--muted);
+        background: var(--surface-2); border: 1px dashed var(--outline);
+        border-radius: var(--radius-sm); font-size: 0.9rem;
+      }
       /* Image overlay (ADR-0020): boxes/masks/keypoints over an image, in % coords.
          .overlay-wrap is a fixed-size, overflow:hidden viewport (so a caller's
          out-of-[0,1] box, or a label pushed above a box near the top edge, is

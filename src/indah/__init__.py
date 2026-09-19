@@ -5,13 +5,15 @@ SSE transport it ships: the reactive core (signals, computeds, effects); the ful
 input set and layout containers (Row/Grid/Tabs/Sidebar/Expander); data-driven lists
 (List/Chat/Gallery); charting (server-PNG Plot plus the client-side Chart and
 Heatmap); an interactive Table and Stat cards; ImageOverlay for boxes/masks/keypoints;
-file upload/download; async handlers and LLM token streaming; per-session state; and
+native Audio playback; file upload/download; async handlers and LLM token streaming;
+per-session state; and
 the register_component() seam for custom components. The wire protocol is a versioned
 public contract (docs/protocol.md). See https://github.com/leejianrong/indah.
 """
 
 from .app import build_demo_session, create_app, mock_llm
 from .components import (
+    Audio,
     Button,
     Card,
     Chart,
@@ -100,6 +102,7 @@ __all__ = [
     "Date",
     "Image",
     "ImageOverlay",
+    "Audio",
     "Plot",
     "Chart",
     "Heatmap",

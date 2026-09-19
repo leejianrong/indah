@@ -667,6 +667,68 @@ def test_client_heatmap_renders_and_streams_columns():
         handle.stop()
 
 
+def _audio_app():
+    """An Audio player bound to a signal, plus a button that swaps the clip - both a
+    URL and raw bytes (base64 data: URI) round-trip through the same node (G8)."""
+    from indah import Audio, Button, Column, Session, Signal, create_app
+
+    clip = Signal("https://example.com/a.mp3")
+
+    def swap():
+        clip.set(b"RIFFtinywavbytes")
+
+    root = Column(children=[Audio(clip, media_type="audio/wav"), Button("swap", on_click=swap)])
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_audio_renders_and_swaps_source_live():
+    """A URL source renders as a native <audio controls> element; swapping to raw
+    bytes (a data: URI) updates its src live over SSE, no full reload (G8)."""
+    handle = launch(_audio_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                audio = page.locator("audio.audio")
+                expect(audio).to_have_attribute("src", "https://example.com/a.mp3")
+                assert audio.evaluate("el => el.hasAttribute('controls')")
+
+                page.locator("button", has_text="swap").click()
+                expect(audio).to_have_attribute("src", re.compile(r"^data:audio/wav;base64,"))
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_audio_with_no_source_shows_a_placeholder():
+    """A `None` source renders the empty-state span, not a broken <audio> tag."""
+    from indah import Audio, Column, Session, create_app
+
+    handle = launch(
+        create_app(session=Session(Column(children=[Audio(None)]))),
+        block=False,
+        open_inline=False,
+    )
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator(".audio-empty")).to_have_text("No audio")
+                expect(page.locator("audio")).to_have_count(0)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
 def _session_counter_app():
     """A per-viewer counter over a session_factory, so each tab gets its own signal.
     This is the shape of examples/session_state.py, trimmed to one counter."""

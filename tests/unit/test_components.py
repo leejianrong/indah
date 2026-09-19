@@ -1,6 +1,7 @@
 import pytest
 
 from indah.components import (
+    Audio,
     Button,
     Card,
     Checkbox,
@@ -164,6 +165,36 @@ def test_image_reacts_to_signal():
     assert img.reactive_props()["src"]() == "a.png"
     src.set("b.png")
     assert img.reactive_props()["src"]() == "b.png"
+
+
+# -- Audio ---------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_audio_string_source_passes_through():
+    clip = Audio("https://example.com/clip.mp3")
+    assert clip.reactive_props()["src"]() == "https://example.com/clip.mp3"
+
+
+@pytest.mark.unit
+def test_audio_bytes_source_becomes_data_uri_with_media_type():
+    clip = Audio(b"RIFF...", media_type="audio/wav")
+    assert clip.reactive_props()["src"]().startswith("data:audio/wav;base64,")
+
+
+@pytest.mark.unit
+def test_audio_none_source_is_empty_string():
+    clip = Audio(None)
+    assert clip.reactive_props()["src"]() == ""
+
+
+@pytest.mark.unit
+def test_audio_reacts_to_signal():
+    src = Signal("a.mp3")
+    clip = Audio(src)
+    assert clip.reactive_props()["src"]() == "a.mp3"
+    src.set("b.mp3")
+    assert clip.reactive_props()["src"]() == "b.mp3"
 
 
 class _FakeFigure:

@@ -169,6 +169,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |
 | `image` | display | `src`, `alt` | — |
 | `imageoverlay` | display | `src`, `alt`, `boxes:[{x,y,w,h,label?,color?,score?}]`, `points:[{x,y,label?,color?}]`, `masks:[{src,opacity}]` (coords in `[0,1]`) | — |
+| `audio` | display | `src` (a URL or `data:` URI) | — |
 | `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?}]`, `title`, `xLabel`, `yLabel`, `height`, `points`, `label` | — (grows via `append` patches) |
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
