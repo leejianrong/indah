@@ -38,6 +38,7 @@ MANIFEST: list[tuple[str, str, str, str]] = [
     ("diffusion", "Image generation", "🎨", "diffusion"),
     ("poster", "Poster generator", "🖼️", "poster"),
     ("image-classify", "Image classifier", "🔍", "upload_classify"),
+    ("object-detection", "Object detection", "🎯", "object_detection"),
     ("charts", "Hybrid charting", "📊", "charts"),
     ("stocks", "Stock peer analysis", "💹", "stocks"),
     ("prettymap", "Pretty map", "🗺️", "prettymap"),
@@ -50,6 +51,7 @@ BLURBS: dict[str, str] = {
     "diffusion": "A prompt-to-image sampler refining from noise, with live progress.",
     "poster": "Tweak controls, watch a poster re-render live, then download it.",
     "image-classify": "Upload an image, get a prediction and a downloadable report.",
+    "object-detection": "Upload an image; hover a box to read what a mock detector found.",
     "charts": "An interactive client chart beside a server plot and a heatmap.",
     "stocks": "Compare a peer group's price, valuation, and 1-year return.",
     "prettymap": "Restyle a generated city map and download it as SVG.",
@@ -93,8 +95,7 @@ def _card(d: dict[str, Any]) -> str:
     # Relative link (trailing slash) so it resolves under any base path.
     return (
         f'<a class="card" href="{slug}/">{thumb}'
-        f'<span class="card-body"><span class="card-title">{title}'
-        f'<span class="live">live</span></span>'
+        f'<span class="card-body"><span class="card-title">{title}</span>'
         f'<span class="card-blurb">{blurb}</span></span></a>'
     )
 

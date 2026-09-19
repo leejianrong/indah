@@ -27,13 +27,25 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "examples"))
 OUT = ROOT / "deploy" / "fly" / "thumbnails"
 
-# slug, example module, optional nudge ("train" / "generate" / "chat" / None).
+# A small SVG scene, just visible enough that a detection demo's boxes render over
+# actual content in the screenshot rather than a blank/invisible upload.
+_DEMO_SCENE_SVG = (
+    b"<svg xmlns='http://www.w3.org/2000/svg' width='480' height='300'>"
+    b"<rect width='480' height='300' fill='#d8d2c8'/>"
+    b"<circle cx='150' cy='160' r='70' fill='#8a8590'/>"
+    b"<rect x='280' y='70' width='140' height='95' rx='8' fill='#b5296b'/>"
+    b"<circle cx='400' cy='230' r='30' fill='#2e6d62'/>"
+    b"</svg>"
+)
+
+# slug, example module, optional nudge ("train" / "generate" / "chat" / "upload" / None).
 DEMOS = [
     ("chatbot", "chatbot", "chat"),
     ("training-dashboard", "training_dashboard", "train"),
     ("diffusion", "diffusion", "generate"),
     ("poster", "poster", None),
     ("image-classify", "upload_classify", None),
+    ("object-detection", "object_detection", "upload"),
     ("charts", "charts", None),
     ("stocks", "stocks", None),
     ("prettymap", "prettymap", None),
@@ -73,6 +85,12 @@ def _nudge(page, kind: str | None) -> None:
             box = page.get_by_placeholder("Type a message, then press Enter or click Send")
             box.fill("What can indah do?", timeout=2000)
             page.get_by_role("button", name="Send").click(timeout=2000)
+            page.wait_for_timeout(1500)
+        elif kind == "upload":
+            page.locator("input[type=file]").set_input_files(
+                {"name": "demo.svg", "mimeType": "image/svg+xml", "buffer": _DEMO_SCENE_SVG},
+                timeout=2000,
+            )
             page.wait_for_timeout(1500)
     except Exception as exc:  # noqa: BLE001 - a nudge is optional, never fatal
         print(f"    (nudge {kind!r} skipped: {exc})")
