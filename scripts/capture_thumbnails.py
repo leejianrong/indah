@@ -38,13 +38,13 @@ _DEMO_SCENE_SVG = (
     b"</svg>"
 )
 
-# slug, example module, optional nudge ("train" / "generate" / "chat" / "upload" / None).
+# slug, example module, optional nudge ("train" / "generate" / "chat" / "upload" / "sample" / None).
 DEMOS = [
     ("chatbot", "chatbot", "chat"),
     ("training-dashboard", "training_dashboard", "train"),
     ("diffusion", "diffusion", "generate"),
     ("poster", "poster", None),
-    ("image-classify", "upload_classify", None),
+    ("image-classify", "upload_classify", "sample"),
     ("object-detection", "object_detection", "upload"),
     ("charts", "charts", None),
     ("stocks", "stocks", None),
@@ -91,6 +91,11 @@ def _nudge(page, kind: str | None) -> None:
                 {"name": "demo.svg", "mimeType": "image/svg+xml", "buffer": _DEMO_SCENE_SVG},
                 timeout=2000,
             )
+            page.wait_for_timeout(1500)
+        elif kind == "sample":
+            # Click a bundled real sample photo, not the generic shapes SVG above --
+            # a real classifier's boxes/bars over synthetic shapes would be meaningless.
+            page.get_by_role("button", name="Zebra").click(timeout=2000)
             page.wait_for_timeout(1500)
     except Exception as exc:  # noqa: BLE001 - a nudge is optional, never fatal
         print(f"    (nudge {kind!r} skipped: {exc})")
