@@ -48,6 +48,7 @@ BUILTIN_TYPES = frozenset(
         "select",
         "image",
         "imageoverlay",
+        "audio",
         "chart",
         "heatmap",
         "dataframe",
@@ -68,6 +69,8 @@ BUILTIN_TYPES = frozenset(
         "tabs",
         "sidebar",
         "expander",
+        "upload",
+        "download",
     }
 )
 

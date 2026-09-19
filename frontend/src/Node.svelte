@@ -370,6 +370,12 @@
   </div>
 {:else if node.type === "image"}
   <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />
+{:else if node.type === "audio"}
+  {#if props.src}
+    <audio class="audio" controls src={props.src}></audio>
+  {:else}
+    <span class="audio audio-empty">No audio</span>
+  {/if}
 {:else if node.type === "imageoverlay"}
   <ImageOverlay {props} />
 {:else if node.type === "table"}

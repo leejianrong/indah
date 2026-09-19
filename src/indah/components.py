@@ -468,6 +468,43 @@ def _image_src(value: Any) -> str:
     return str(value)
 
 
+class Audio(Component):
+    """An audio player bound to a source that yields a URL or a ``data:`` URI (G8).
+
+    The source is a signal/string/callable; set it from Python (after loading or
+    generating a clip) and the player updates. Raw ``bytes`` are encoded as a
+    ``data:`` URI using ``media_type`` (default ``audio/wav``) -- pass the type that
+    matches your bytes (e.g. ``"audio/mpeg"`` for MP3). Playback is native browser
+    controls; there is no waveform/spectrogram here (pair with ``Plot``/``Heatmap``
+    for that).
+    """
+
+    type = "audio"
+
+    def __init__(self, source: Source, *, media_type: str = "audio/wav") -> None:
+        super().__init__()
+        self._source = source
+        self._media_type = media_type
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"src": lambda: _audio_src(_read(self._source), self._media_type)}
+
+
+def _audio_src(value: Any, media_type: str) -> str:
+    """Coerce a source value to something an ``<audio src>`` accepts.
+
+    A string (URL or ``data:`` URI) passes through; raw ``bytes`` are encoded as a
+    ``data:`` URI tagged with ``media_type`` so a caller can hand over audio bytes
+    directly, whatever the encoding.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, (bytes, bytearray)):
+        encoded = base64.b64encode(bytes(value)).decode("ascii")
+        return f"data:{media_type};base64,{encoded}"
+    return str(value)
+
+
 def _num(v: Any, default: float = 0.0) -> float:
     try:
         return float(v)

@@ -90,9 +90,10 @@ def test_register_rejects_a_disallowed_tag():
 
 
 @pytest.mark.unit
-def test_register_rejects_a_builtin_type_collision():
+@pytest.mark.parametrize("builtin", ["slider", "audio", "upload", "download"])
+def test_register_rejects_a_builtin_type_collision(builtin):
     with pytest.raises(ValueError):
-        register_component("slider", render={"tag": "div"})
+        register_component(builtin, render={"tag": "div"})
 
 
 @pytest.mark.unit
