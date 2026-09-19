@@ -93,8 +93,7 @@ def _card(d: dict[str, Any]) -> str:
     # Relative link (trailing slash) so it resolves under any base path.
     return (
         f'<a class="card" href="{slug}/">{thumb}'
-        f'<span class="card-body"><span class="card-title">{title}'
-        f'<span class="live">live</span></span>'
+        f'<span class="card-body"><span class="card-title">{title}</span>'
         f'<span class="card-blurb">{blurb}</span></span></a>'
     )
 
