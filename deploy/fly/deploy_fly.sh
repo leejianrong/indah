@@ -23,4 +23,4 @@ fly deploy "$out" --config "$out/fly.toml" --ha=false
 
 echo
 echo "Live at https://$app.fly.dev  (landing page + demos at /chatbot, /training-dashboard,"
-echo "  /diffusion, /poster, /image-classify, /charts, /stocks, /prettymap)."
+echo "  /diffusion, /poster, /image-classify, /object-detection, /charts, /stocks, /prettymap)."
