@@ -75,7 +75,7 @@ _BUNGA = (
 _FAVICON_SVG = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">{_BUNGA}</svg>'
 _FAVICON_URI = "data:image/svg+xml;base64," + base64.b64encode(_FAVICON_SVG.encode()).decode()
 GITHUB_URL = "https://github.com/leejianrong/indah"
-DOCS_URL = "https://leejianrong.github.io/indah/"
+DOCS_URL = "https://indah.abangai.dev/docs/"
 
 
 def _mark(size: int) -> str:

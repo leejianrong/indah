@@ -127,7 +127,7 @@ That is the starter subset. 0.2.0 also ships layout containers (`Row`, `Grid`, `
 `Tabs`, `Sidebar`, `Expander`), more inputs (`Checkbox`, `Number`, `Radio`,
 `MultiSelect`, `Date`), charting (`Chart`, `Heatmap`, `Table`, `Stat`, `ImageOverlay`),
 data-driven `List` / `Chat` / `Gallery`, and file `Upload` / `Download` - see the full
-[Components reference](https://leejianrong.github.io/indah/components/).
+[Components reference](https://indah.abangai.dev/docs/components/).
 
 Need something the set does not cover? Register a custom component against the
 public JSON protocol, no framework fork and no Node build:
@@ -173,7 +173,7 @@ script ([ADR-0023](docs/adr/0023-demo-hosting.md)).
 Also: [`examples/starter_components.py`](examples/starter_components.py) (a ~20-line
 tour of the component set) and [`examples/demo.ipynb`](examples/demo.ipynb) (the
 built-in demo inline in a notebook). The chatbot is walked through step by step in
-the docs: [Build a chatbot](https://leejianrong.github.io/indah/chatbot/).
+the docs: [Build a chatbot](https://indah.abangai.dev/docs/chatbot/).
 
 The Colab notebooks are generated from the demo manifest by
 [`deploy/colab/make_colab.py`](deploy/colab/make_colab.py); regenerate them after

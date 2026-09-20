@@ -92,3 +92,23 @@ these limits on (`deploy/fly/gallery_app.py`); nothing else does.
 - Cloudflare and a hardened CSP remain real gaps until a custom domain exists and the
   shell's asset origins are audited; both are written down here rather than silently
   dropped.
+
+## Update (2026-09-21): Cloudflare wiring done, as a path-proxy rather than a bare proxied CNAME
+
+A domain now exists (`abangai.dev`, owner's Cloudflare account, part of a portfolio-wide
+migration off `leejianrong.github.io`/Netlify/Fly.io URLs). `indah.abangai.dev` is wired
+up, but not as this ADR's original one-line sketch (a plain proxied CNAME straight to
+`indah-demos.fly.dev`) — the owner also wants the Zensical docs site reachable under the
+same subdomain (`indah.abangai.dev/docs`), and DNS can only route a whole hostname to one
+origin. The actual shape: a Cloudflare Worker (`deploy/cloudflare/indah-proxy-worker.js`,
+see its README) sits behind the proxied DNS record and picks an origin per path — `/docs*`
+to GitHub Pages, everything else to the Fly gallery. This still gets the edge-layer benefit
+this ADR wanted (Cloudflare in front, before Fly-proxy) and adds nothing the app itself
+needs to know about.
+
+Still deferred, unchanged from above: **origin-IP hiding**. The Worker's `fetch()` still
+reaches `indah-demos.fly.dev` at its own public IP, so that hostname (and the bare Fly IP)
+stays directly reachable, bypassing the edge entirely. Same fix as before — a Cloudflare
+Tunnel or an app-level shared-secret header check — still not built. Also still not done:
+Bot Fight Mode and an edge rate-limiting rule (`deploy/fly/README.md`'s step 3), now that
+there's a real zone to add them to.
