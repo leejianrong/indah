@@ -42,30 +42,19 @@ names are **global**, so if `indah-demos` is taken set your own: `FLY_APP=indah-
 Then add the URLs to the gallery (`website/docs/gallery.md`) next to each demo's
 "Open in Colab" badge.
 
-## Front the gallery with Cloudflare (optional, owner step - ADR-0024)
+## Fronted with Cloudflare at indah.abangai.dev (ADR-0024's update)
 
-The gallery is public and unauthenticated, so it's worth putting a free edge layer in
-front of it once there's a domain to do it with. `indah-demos.fly.dev` is a Fly-owned
-subdomain, not ours to add to Cloudflare directly - this needs a domain the owner
-controls in Cloudflare's DNS first. Once one exists:
+Done, as of 2026-09-21 — not the plain proxied CNAME this section originally sketched,
+because the gallery now shares its subdomain with the docs site (`/docs`). See
+[`../cloudflare/README.md`](../cloudflare/README.md) for the actual DNS record, the
+Worker that does the path-splitting, and how to redeploy it. `fly certs add` is **not**
+used here: Cloudflare's edge terminates TLS for visitors, and the Worker's `fetch()`
+reaches this app at its own `indah-demos.fly.dev` hostname, which already has a valid
+Fly-issued cert with no custom-domain setup needed on Fly's side.
 
-1. Add the domain to Cloudflare and switch its nameservers to Cloudflare's.
-2. Create a `CNAME` (or `A`) record pointing a subdomain (e.g. `demos.yourdomain.com`)
-   at `indah-demos.fly.dev`, proxied (orange-cloud on) so traffic routes through
-   Cloudflare's edge.
-3. In the Cloudflare dashboard: turn on **Bot Fight Mode** (free), and add a
-   **rate-limiting rule** on `/*/api/*` (a low per-IP request rate is plenty - the app
-   itself also rate-limits, see ADR-0024).
-4. Run `fly certs add demos.yourdomain.com` so Fly issues a TLS cert for the new
-   hostname, then update the gallery/docs links (`website/docs/gallery.md`,
-   `website/docs/index.md`) to the new domain.
-
-**Caveat:** proxying through Cloudflare does not hide the origin by itself - Fly's
-machine still has a directly reachable public IP, so `indah-demos.fly.dev` (or the
-bare Fly IP) stays reachable even after the custom domain is proxied. Real origin
-hiding needs either a Cloudflare Tunnel (`cloudflared`) fronting the app instead of a
-plain proxied DNS record, or an app-level check that requests carry a shared
-Cloudflare secret header. Neither is built yet (see ADR-0024's deferred list).
+Still open (ADR-0024's deferred list, unchanged): origin-IP hiding (this app's Fly IP
+and `indah-demos.fly.dev` are still directly reachable, bypassing the edge), Bot Fight
+Mode, and an edge rate-limiting rule.
 
 ## Notes
 

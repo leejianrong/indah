@@ -1,6 +1,6 @@
 [project]
 site_name = "indah"
-site_url = "https://leejianrong.github.io/indah/"
+site_url = "https://indah.abangai.dev/docs/"
 site_description = "A Python UI framework for ephemeral cloud notebooks (Colab, Runpod). Reactive, single-port, no Node required."
 site_author = "Jian Lee"
 copyright = "Copyright &copy; 2026 Jian Lee - Apache-2.0"
