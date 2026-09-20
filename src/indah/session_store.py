@@ -23,6 +23,8 @@ the backend, not designed now.
 
 from __future__ import annotations
 
+import time
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -72,13 +74,49 @@ class InMemorySessionStore:
     new reactive graph -- new signals -- every call, so sessions never share state)
     and binds it to a fresh ``Hub``. State lives only in this process and does not
     outlive it; surviving a restart or spanning replicas is a later backend's job.
+
+    ``max_sessions`` and ``idle_timeout_seconds`` are optional bounds (ADR-0024) for
+    a public deployment: both default to ``None`` (unbounded), which is today's
+    behaviour and what every notebook/test use keeps. When set, ``get_or_create``
+    lazily reaps -- on each call, idle-timed-out entries are dropped first, then the
+    least-recently-used entry if the store is still over ``max_sessions`` -- so an
+    abandoned browser tab does not grow the store forever. There is no background
+    sweep: an idle deployment with no incoming requests will not reap until the next
+    one arrives, which is fine since there is no resource pressure without traffic.
+    Eviction calls ``discard``, which cancels the session's background tasks too.
     """
 
-    def __init__(self, factory: Callable[[], Session]) -> None:
+    def __init__(
+        self,
+        factory: Callable[[], Session],
+        *,
+        max_sessions: int | None = None,
+        idle_timeout_seconds: float | None = None,
+    ) -> None:
         self._factory = factory
-        self._handles: dict[str, SessionHandle] = {}
+        self.max_sessions = max_sessions
+        self.idle_timeout_seconds = idle_timeout_seconds
+        self._handles: OrderedDict[str, SessionHandle] = OrderedDict()
+        self._last_seen: dict[str, float] = {}
+
+    def _touch(self, session_id: str) -> None:
+        if session_id in self._handles:  # not true if max_sessions evicted it below
+            self._handles.move_to_end(session_id)
+        self._last_seen[session_id] = time.monotonic()
+
+    def _reap_idle(self) -> None:
+        if self.idle_timeout_seconds is None:
+            return
+        now = time.monotonic()
+        # Oldest-touched first (front of the OrderedDict); stop at the first entry
+        # still within the timeout, since everything after it is more recent.
+        for session_id in list(self._handles):
+            if now - self._last_seen[session_id] <= self.idle_timeout_seconds:
+                break
+            self.discard(session_id)
 
     def get_or_create(self, session_id: str) -> SessionHandle:
+        self._reap_idle()
         handle = self._handles.get(session_id)
         if handle is None:
             session = self._factory()
@@ -87,13 +125,23 @@ class InMemorySessionStore:
             session.bind_hub(hub)
             handle = SessionHandle(session=session, hub=hub)
             self._handles[session_id] = handle
+            if self.max_sessions is not None:
+                while len(self._handles) > self.max_sessions:
+                    self.discard(next(iter(self._handles)))  # least-recently-used
+        self._touch(session_id)
         return handle
 
     def get(self, session_id: str) -> SessionHandle | None:
-        return self._handles.get(session_id)
+        handle = self._handles.get(session_id)
+        if handle is not None:
+            self._touch(session_id)
+        return handle
 
     def discard(self, session_id: str) -> None:
-        self._handles.pop(session_id, None)
+        handle = self._handles.pop(session_id, None)
+        self._last_seen.pop(session_id, None)
+        if handle is not None:
+            handle.session.cancel_tasks()
 
     def __len__(self) -> int:
         return len(self._handles)
