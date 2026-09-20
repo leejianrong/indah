@@ -118,6 +118,50 @@ async def test_uploading_an_image_classifies_it_and_offers_a_report():
 
 
 @pytest.mark.integration
+async def test_non_image_upload_is_rejected_without_classifying():
+    """ADR-0024: the public demo only ever needs a still image, so a disallowed
+    content type is rejected before it reaches the classifier."""
+    example = _load_example()
+    session = example.build_session()
+    session.session_id = "tab-c"
+    hub = Hub()
+    session.bind_hub(hub)
+
+    upload = _node(session, "upload")
+
+    # ``result``'s Text is rendered with markdown=True, so its reactive prop is
+    # "blocks" (a parsed tree), not "text" -- find it by its initial rendered content.
+    def _blocks_text(c):
+        blocks = c.reactive_props().get("blocks")
+        return str(blocks()) if blocks is not None else ""
+
+    result_text = next(
+        c
+        for c in session._by_id.values()
+        if c.type == "text" and "No prediction yet" in _blocks_text(c)
+    )
+
+    result = session.dispatch(
+        upload.id,
+        "upload",
+        {"files": [UploadedFile("payload.svg", "image/svg+xml", b"<svg></svg>")]},
+    )
+    assert result is not None and result.coro is not None  # async handler
+    await result.coro
+
+    assert "Unsupported file type" in str(result_text.reactive_props()["blocks"]())
+    image = _image_node(session)
+    assert image.reactive_props()["src"]() == ""  # preview untouched, nothing classified
+
+
+@pytest.mark.integration
+def test_public_deploy_caps_uploads_at_4mb():
+    """ADR-0024: lower than the framework's 25 MB default for this public demo."""
+    example = _load_example()
+    assert example.app.state.max_upload_bytes == 4 * 1024 * 1024
+
+
+@pytest.mark.integration
 async def test_clicking_a_sample_classifies_it_too():
     example = _load_example()
     session = example.build_session()

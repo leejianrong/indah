@@ -145,6 +145,23 @@ async def test_subpath_without_trailing_slash_redirects():
 
 
 @pytest.mark.integration
+async def test_security_headers_on_the_index_and_every_mounted_demo():
+    """ADR-0024: baseline headers apply gallery-wide, including under a demo's
+    sub-path - proves the wrapping middleware reaches mounted apps, not just `/`."""
+    build_gallery = _build_gallery()
+    gallery = build_gallery([{"slug": "a", "title": "A", "emoji": "🅰️", "app": _counter_app()}])
+    async with _client(gallery) as client:
+        index = await client.get("/")
+        demo = await client.get("/a/")
+        event = await client.post("/a/api/event", json={"component": "n1", "event": "click"})
+
+    for r in (index, demo, event):
+        assert r.headers["x-content-type-options"] == "nosniff"
+        assert r.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+        assert r.headers["x-frame-options"] == "DENY"
+
+
+@pytest.mark.integration
 def test_build_gallery_script_copies_every_manifest_module():
     """build_gallery.sh's ``examples=(...)`` array must list every module
     ``create_gallery()`` imports (MANIFEST's 4th column) - otherwise the Fly image
