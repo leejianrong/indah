@@ -66,6 +66,14 @@ primary_region = "$region"
   auto_start_machines = true
   min_machines_running = 0
 
+  # Bound simultaneous SSE connections on this one machine (deploy_fly.sh runs with
+  # --ha=false, so Fly never provisions a second machine under load - this is what
+  # keeps a connection flood from OOMing the box instead). ADR-0024.
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 20
+    hard_limit = 25
+
 [[vm]]
   size = "shared-cpu-1x"
   memory = "1gb"

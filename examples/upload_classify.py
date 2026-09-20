@@ -183,6 +183,11 @@ _MODEL_FILE = "mobilenetv2-12.onnx"
 _IMAGENET_MEAN = (0.485, 0.456, 0.406)
 _IMAGENET_STD = (0.229, 0.224, 0.225)
 
+# Server-side content-type allowlist for uploads (ADR-0024): the classifier only ever
+# needs a still image, and this is a public demo, so reject anything else before it's
+# decoded rather than trusting the client-supplied Content-Type alone for identity.
+_ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
 _session = None  # lazily-loaded onnxruntime.InferenceSession, cached across calls
 
 
@@ -334,6 +339,12 @@ def build_session() -> Session:
         busy.set(False)
 
     async def on_upload(file: UploadedFile) -> None:
+        if file.content_type not in _ALLOWED_UPLOAD_TYPES:
+            result.set(
+                f"_Unsupported file type '{file.content_type}' - "
+                "upload a JPEG, PNG, or WebP image._"
+            )
+            return
         await _run(file.data, _data_uri(file), f"uploaded file '{file.filename}'")
 
     async def on_sample(slug: str) -> None:
@@ -392,8 +403,9 @@ def build_session() -> Session:
     )
 
 
-# Module-level ASGI app for hosting.
-app = create_app(session_factory=build_session)
+# Module-level ASGI app for hosting. A lower cap than the framework's 25 MB default
+# (ADR-0024): sample photos are small and a classifier has no use for a large upload.
+app = create_app(session_factory=build_session, max_upload_mb=4)
 
 
 if __name__ == "__main__":
