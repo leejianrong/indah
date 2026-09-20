@@ -6,6 +6,7 @@ that lets indah run behind Colab's/Runpod's proxies (ADR-0001), exercised locall
 """
 
 import importlib.util
+import re
 from pathlib import Path
 
 import httpx
@@ -16,7 +17,8 @@ from indah.components import Button, Column, Text
 from indah.reactive import Signal
 from indah.session import Session
 
-_GALLERY = Path(__file__).resolve().parents[2] / "deploy" / "fly" / "gallery_app.py"
+_DEPLOY_FLY = Path(__file__).resolve().parents[2] / "deploy" / "fly"
+_GALLERY = _DEPLOY_FLY / "gallery_app.py"
 
 
 def _build_gallery():
@@ -140,3 +142,25 @@ async def test_subpath_without_trailing_slash_redirects():
         # Starlette redirects a Mount root to its trailing-slash form.
         assert r.status_code in (307, 308)
         assert r.headers["location"].endswith("/a/")
+
+
+@pytest.mark.integration
+def test_build_gallery_script_copies_every_manifest_module():
+    """build_gallery.sh's ``examples=(...)`` array must list every module
+    ``create_gallery()`` imports (MANIFEST's 4th column) - otherwise the Fly image
+    is missing a demo's source file and the whole gallery fails to import at
+    container startup. Caught for real once: MANIFEST grew map_poster/grc_map
+    (R2-8/R2-10) but the script's hardcoded array wasn't updated to match."""
+    spec = importlib.util.spec_from_file_location("gallery_app_manifest", _GALLERY)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    manifest_modules = {mod for _slug, _title, _emoji, mod in module.MANIFEST}
+
+    script = (_DEPLOY_FLY / "build_gallery.sh").read_text(encoding="utf-8")
+    match = re.search(r"^examples=\(([^)]*)\)", script, re.MULTILINE)
+    assert match, "build_gallery.sh's examples=(...) array not found"
+    script_modules = set(match.group(1).split())
+
+    assert manifest_modules <= script_modules, (
+        f"missing from build_gallery.sh's examples=(...): {manifest_modules - script_modules}"
+    )
