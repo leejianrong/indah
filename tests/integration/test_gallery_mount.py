@@ -16,16 +16,21 @@ from indah.app import create_app
 from indah.components import Button, Column, Text
 from indah.reactive import Signal
 from indah.session import Session
+from indah.session_store import InMemorySessionStore
 
 _DEPLOY_FLY = Path(__file__).resolve().parents[2] / "deploy" / "fly"
 _GALLERY = _DEPLOY_FLY / "gallery_app.py"
 
 
-def _build_gallery():
+def _load_gallery_module():
     spec = importlib.util.spec_from_file_location("gallery_app", _GALLERY)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.build_gallery
+    return module
+
+
+def _build_gallery():
+    return _load_gallery_module().build_gallery
 
 
 def _counter_app():
@@ -34,6 +39,23 @@ def _counter_app():
         children=[Button("inc", on_click=lambda: n.set(n.value + 1)), Text(lambda: str(n.value))]
     )
     return create_app(session=Session(root))
+
+
+def _counter_app_with_store():
+    """An app backed by ``InMemorySessionStore`` (``session=`` above uses the shared
+    store instead, which ``apply_public_session_limits`` is a no-op for)."""
+
+    def factory() -> Session:
+        n = Signal(0)
+        root = Column(
+            children=[
+                Button("inc", on_click=lambda: n.set(n.value + 1)),
+                Text(lambda: str(n.value)),
+            ]
+        )
+        return Session(root)
+
+    return create_app(session_factory=factory)
 
 
 def _client(app):
@@ -159,6 +181,59 @@ async def test_security_headers_on_the_index_and_every_mounted_demo():
         assert r.headers["x-content-type-options"] == "nosniff"
         assert r.headers["referrer-policy"] == "strict-origin-when-cross-origin"
         assert r.headers["x-frame-options"] == "DENY"
+
+
+@pytest.mark.integration
+async def test_rate_limiter_trips_per_ip_on_the_expensive_routes():
+    """ADR-0024: a burst from one IP on /api/event gets a 429 once its bucket is
+    empty, while a different IP is unaffected (per-IP, not a global limit)."""
+    gallery_app = _load_gallery_module()
+    build_gallery = gallery_app.build_gallery
+    gallery = build_gallery([{"slug": "a", "title": "A", "emoji": "🅰️", "app": _counter_app()}])
+    # The gallery is wrapped SecurityHeaders(RateLimit(app)) - read the limiter's
+    # capacity off the live instance rather than hardcoding the production default,
+    # so this test doesn't silently stop covering anything if that default changes.
+    assert isinstance(gallery.app, gallery_app._RateLimitMiddleware)
+    capacity = gallery.app.capacity
+
+    async with _client(gallery) as client:
+        payload = {"component": "n1", "event": "click"}
+        responses = [
+            await client.post(
+                "/a/api/event", json=payload, headers={"Fly-Client-IP": "203.0.113.1"}
+            )
+            for _ in range(capacity + 1)
+        ]
+        blocked = [r for r in responses if r.status_code == 429]
+        assert blocked, "expected the burst to exhaust the bucket and trip the limiter"
+
+        # A different client IP has its own bucket - unaffected by the first's burst.
+        other = await client.post(
+            "/a/api/event", json=payload, headers={"Fly-Client-IP": "203.0.113.2"}
+        )
+        assert other.status_code == 200
+
+
+@pytest.mark.integration
+def test_apply_public_session_limits_bounds_an_in_memory_store():
+    gallery_app = _load_gallery_module()
+    app = _counter_app_with_store()
+    assert isinstance(app.state.store, InMemorySessionStore)
+    assert app.state.store.max_sessions is None  # default: unbounded, like a notebook
+    assert app.state.store.idle_timeout_seconds is None
+
+    gallery_app.apply_public_session_limits(app)
+
+    assert app.state.store.max_sessions == gallery_app._PUBLIC_MAX_SESSIONS
+    assert app.state.store.idle_timeout_seconds == gallery_app._PUBLIC_SESSION_IDLE_TIMEOUT_SECONDS
+
+
+@pytest.mark.integration
+def test_apply_public_session_limits_ignores_a_shared_store():
+    """A shared-session app (``session=``) has nothing to bound - no-op, not an error."""
+    gallery_app = _load_gallery_module()
+    app = _counter_app()  # built with session=, so its store is SharedSessionStore
+    gallery_app.apply_public_session_limits(app)  # must not raise
 
 
 @pytest.mark.integration

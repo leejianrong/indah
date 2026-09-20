@@ -6,6 +6,8 @@ state, and distinct ids are isolated -- neither a signal write nor a hub patch i
 one leaks into another.
 """
 
+import asyncio
+
 import pytest
 
 from indah.components import Column, Text
@@ -89,6 +91,83 @@ def test_a_handle_binds_its_own_hub_to_its_own_session():
     # A live emit from the session lands on the handle's hub, not elsewhere.
     handle.session.emit_props("n0", {"text": "hi"})
     assert handle.hub.current_offset == 1
+
+
+@pytest.mark.unit
+def test_bounds_default_to_unbounded_like_before_adr_0024():
+    """No behaviour change for notebook/test use: nothing evicts unless a public
+    deployment opts in (ADR-0024)."""
+    store = InMemorySessionStore(_counter_factory())
+    for i in range(50):
+        store.get_or_create(f"tab-{i}")
+    assert len(store) == 50
+
+
+@pytest.mark.unit
+def test_idle_timeout_evicts_sessions_idle_longer_than_the_limit(monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr("indah.session_store.time.monotonic", lambda: now[0])
+    store = InMemorySessionStore(_counter_factory(), idle_timeout_seconds=60)
+    store.get_or_create("tab-a")
+
+    now[0] += 61
+    store.get_or_create("tab-b")  # any call lazily reaps first
+
+    assert store.get("tab-a") is None
+    assert store.get("tab-b") is not None
+    assert len(store) == 1
+
+
+@pytest.mark.unit
+def test_idle_timeout_resets_on_access(monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr("indah.session_store.time.monotonic", lambda: now[0])
+    store = InMemorySessionStore(_counter_factory(), idle_timeout_seconds=60)
+
+    store.get_or_create("tab-a")
+    now[0] += 30
+    store.get("tab-a")  # touched before the timeout -> the clock resets
+    now[0] += 40  # 40s since the touch, still < 60s
+    store.get_or_create("tab-b")
+
+    assert store.get("tab-a") is not None
+
+
+@pytest.mark.unit
+def test_max_sessions_evicts_the_least_recently_used():
+    store = InMemorySessionStore(_counter_factory(), max_sessions=2)
+    store.get_or_create("tab-a")
+    store.get_or_create("tab-b")
+    store.get("tab-a")  # touch a, so b becomes the LRU
+
+    store.get_or_create("tab-c")  # over the cap: evicts b
+
+    assert store.get("tab-b") is None
+    assert store.get("tab-a") is not None
+    assert store.get("tab-c") is not None
+    assert len(store) == 2
+
+
+@pytest.mark.unit
+async def test_evicting_a_session_cancels_its_running_tasks():
+    """ADR-0024: dropping the dict entry alone would leave an abandoned session's
+    background loop (chatbot generation, a diffusion/training loop) running with
+    nowhere to deliver patches -- eviction must cancel it."""
+    store = InMemorySessionStore(_counter_factory())
+    handle = store.get_or_create("tab-a")
+    started = asyncio.Event()
+
+    async def forever():
+        started.set()
+        await asyncio.sleep(100)
+
+    task = handle.session.spawn(forever())
+    await started.wait()
+
+    store.discard("tab-a")
+    await asyncio.sleep(0)  # let the cancellation land
+
+    assert task.cancelled()
 
 
 @pytest.mark.unit

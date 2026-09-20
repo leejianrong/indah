@@ -214,3 +214,13 @@ class Session:
             await coro
         except Exception as exc:
             self._report_error(exc)
+
+    def cancel_tasks(self) -> None:
+        """Cancel every running async-handler task (ADR-0024).
+
+        Called when a session is evicted (idle-timeout/LRU) so an abandoned
+        background loop -- a chatbot generation, a diffusion/training loop --
+        actually stops instead of running forever with nowhere to deliver patches.
+        """
+        for task in list(self._tasks):
+            task.cancel()
