@@ -59,7 +59,7 @@ BLURBS: dict[str, str] = {
     "diffusion": "A prompt-to-image sampler refining from noise, with live progress.",
     "poster": "Tweak controls, watch a poster re-render live, then download it.",
     "image-classify": "Pick a sample photo or upload your own, and see the top predictions.",
-    "object-detection": "Upload an image; hover a box to read what a mock detector found.",
+    "object-detection": "Pick a sample photo or upload your own; hover a box for its label.",
     "charts": "An interactive client chart beside a server plot and a heatmap.",
     "stocks": "Pick peers and a horizon; see who's beating the group average.",
     "prettymap": "Restyle a generated city map and download it as SVG.",

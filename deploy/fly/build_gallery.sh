@@ -34,9 +34,9 @@ done
   echo "$INDAH_REQ"
   echo "uvicorn[standard]"
   echo "matplotlib"          # charts.py uses it (duck-typed); the rest need only indah
-  echo "onnxruntime"         # upload_classify.py's real MobileNetV2 classifier (CPU)
-  echo "pillow"              # upload_classify.py's image decode/resize
-  echo "huggingface_hub"     # upload_classify.py: download + cache the ONNX weights
+  echo "onnxruntime"         # upload_classify.py/object_detection.py's real ONNX models (CPU)
+  echo "pillow"              # upload_classify.py/object_detection.py's image decode/resize
+  echo "huggingface_hub"     # download + cache both demos' ONNX weights
   echo "numpy"               # audio_analysis.py: waveform synthesis + numpy.fft spectrogram
 } > "$out/requirements.txt"
 
