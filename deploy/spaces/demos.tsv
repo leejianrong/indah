@@ -6,7 +6,7 @@ training-dashboard	training_dashboard.py	Live training dashboard	📈	-
 diffusion	diffusion.py	Image generation	🎨	-
 poster	poster.py	Poster generator	🖼️	-
 image-classify	upload_classify.py	Image classifier	🔍	onnxruntime pillow huggingface_hub matplotlib
-object-detection	object_detection.py	Object detection	🎯	-
+object-detection	object_detection.py	Object detection	🎯	onnxruntime pillow huggingface_hub
 charts	charts.py	Hybrid charting	📊	matplotlib
 stocks	stocks.py	Stock peer analysis	💹	-
 prettymap	prettymap.py	Pretty map	🗺️	-
