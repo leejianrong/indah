@@ -48,6 +48,7 @@ MANIFEST: list[tuple[str, str, str, str]] = [
     ("prettymap", "Pretty map", "🗺️", "prettymap"),
     ("map-poster", "Map poster", "🗾", "map_poster"),
     ("grc-map", "GRC map", "🇸🇬", "grc_map"),
+    ("audio-analysis", "Audio analysis", "🎧", "audio_analysis"),
 ]
 
 # One-line blurb per demo for the gallery cards (keyed by slug).
@@ -63,6 +64,7 @@ BLURBS: dict[str, str] = {
     "prettymap": "Restyle a generated city map and download it as SVG.",
     "map-poster": "A real OpenStreetMap neighborhood, restyled as a poster.",
     "grc-map": "Singapore's electoral divisions, shaded by electorate, over 4 elections.",
+    "audio-analysis": "Synthesized vowels and instrument notes, streamed into a live spectrogram.",
 }
 
 # The Bunga mark (two magenta petals, two teal), inlined so the gallery needs no assets.

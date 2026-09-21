@@ -169,6 +169,7 @@ script ([ADR-0023](docs/adr/0023-demo-hosting.md)).
 | Hybrid charting | [Open](https://indah-demos.fly.dev/charts/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/charts.ipynb) | [`charts.py`](examples/charts.py) |
 | Stock peer analysis | [Open](https://indah-demos.fly.dev/stocks/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/stocks.ipynb) | [`stocks.py`](examples/stocks.py) |
 | Pretty map | [Open](https://indah-demos.fly.dev/prettymap/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/prettymap.ipynb) | [`prettymap.py`](examples/prettymap.py) |
+| Audio analysis | [Open](https://indah-demos.fly.dev/audio-analysis/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/audio-analysis.ipynb) | [`audio_analysis.py`](examples/audio_analysis.py) |
 
 Also: [`examples/starter_components.py`](examples/starter_components.py) (a ~20-line
 tour of the component set) and [`examples/demo.ipynb`](examples/demo.ipynb) (the

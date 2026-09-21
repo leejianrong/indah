@@ -14,7 +14,7 @@ app="${FLY_APP:-indah-demos}"
 region="${FLY_REGION:-sin}"
 
 # Example modules the gallery mounts (must match MANIFEST in gallery_app.py).
-examples=(chatbot training_dashboard diffusion poster upload_classify object_detection charts stocks prettymap map_poster grc_map)
+examples=(chatbot training_dashboard diffusion poster upload_classify object_detection charts stocks prettymap map_poster grc_map audio_analysis)
 
 # Install the published wheel from PyPI (the python:3.12-slim base has no git, and a
 # PyPI install is what a user would run). Bump this when the gallery should track a new
@@ -37,6 +37,7 @@ done
   echo "onnxruntime"         # upload_classify.py's real MobileNetV2 classifier (CPU)
   echo "pillow"              # upload_classify.py's image decode/resize
   echo "huggingface_hub"     # upload_classify.py: download + cache the ONNX weights
+  echo "numpy"               # audio_analysis.py: waveform synthesis + numpy.fft spectrogram
 } > "$out/requirements.txt"
 
 cat > "$out/Dockerfile" <<'DOCKER'
