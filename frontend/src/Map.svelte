@@ -5,9 +5,12 @@
   // load live from the configured tile server, in the *viewer's* browser (not
   // indah's server) -- the same as any Leaflet map on any website.
   //
-  // Markers/polygons are Leaflet vector layers (circleMarker/polygon), not the
-  // classic pin icon, which needs image assets Leaflet ships as separate files --
-  // incompatible with the no-external-requests singlefile build (ADR-0004).
+  // Markers/polygons/polylines are Leaflet vector layers (circleMarker/polygon/
+  // polyline), not the classic pin icon, which needs image assets Leaflet ships as
+  // separate files -- incompatible with the no-external-requests singlefile build
+  // (ADR-0004). polylines is an *open* path (not auto-closed, not filled) -- the
+  // right shape for a real route/track, where polygons' auto-closing segment back
+  // to the start point would visibly cut across the map.
   import L from "leaflet";
   import "leaflet/dist/leaflet.css";
   import { untrack } from "svelte";
@@ -39,6 +42,14 @@
       });
       if (p.label) poly.bindTooltip(String(p.label));
       poly.addTo(layers);
+    }
+    for (const l of props.polylines ?? []) {
+      const line = L.polyline(l.points ?? [], {
+        color: l.color ?? "#2e6d62",
+        weight: l.weight ?? 3,
+      });
+      if (l.label) line.bindTooltip(String(l.label));
+      line.addTo(layers);
     }
   }
 
@@ -86,6 +97,7 @@
   $effect(() => {
     void props.markers;
     void props.polygons;
+    void props.polylines;
     if (map) untrack(drawLayers);
   });
 

@@ -172,7 +172,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `audio` | display | `src` (a URL or `data:` URI) | — |
 | `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?}]`, `title`, `xLabel`, `yLabel`, `height`, `points`, `label` | — (grows via `append` patches) |
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
-| `map` | display | `center:[lat,lon]`, `zoom`, `markers:[{lat,lon,label?,color?,radius?}]`, `polygons:[{points:[[lat,lon],...],label?,color?,fillOpacity?}]`, `tileUrl`, `attribution`, `height`, `label` | — (pan/zoom is client-side only, not reported back) |
+| `map` | display | `center:[lat,lon]`, `zoom`, `markers:[{lat,lon,label?,color?,radius?}]`, `polygons:[{points:[[lat,lon],...],label?,color?,fillOpacity?}]`, `polylines:[{points:[[lat,lon],...],label?,color?,weight?}]`, `tileUrl`, `attribution`, `height`, `label` | — (pan/zoom is client-side only, not reported back) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
 | `table` | display/input | `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index) | `select` `{index}` |
 | `stat` | display | `value`, `label`, `delta`, `help` | — |
@@ -204,9 +204,12 @@ op - no new op, no version bump. It is display-only; interactive annotation (the
 `map` is a client-side Leaflet map (G5): the shell fetches raster tiles from
 `tileUrl` directly in the **viewer's browser**, not through indah's server. `center`/
 `zoom` are the map's initial (and, on a later Python-driven change, its "fly to")
-view - the viewer's own pan/zoom is not reported back. `markers` and `polygons` are
-plain reactive lists, redrawn wholesale on change, same shape as `imageoverlay`'s
-boxes/points; no protocol change to add a marker, since it's still one prop update.
+view - the viewer's own pan/zoom is not reported back. `markers`, `polygons`, and
+`polylines` are plain reactive lists, redrawn wholesale on change, same shape as
+`imageoverlay`'s boxes/points; no protocol change to add a marker, since it's still
+one prop update. `polylines` renders as an open Leaflet `L.polyline` (not
+auto-closed, not filled) - the shape a real route/track needs; `polygons` closes
+back to its first point and fills, for a closed area instead.
 
 Charting is **hybrid**
 (ADR-0018): `Plot` stays the zero-JS static path (a server PNG, good for static
