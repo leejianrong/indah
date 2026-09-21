@@ -13,3 +13,4 @@ prettymap	prettymap.py	Pretty map	🗺️	-
 map-poster	map_poster.py	Map poster	🗾	matplotlib
 grc-map	grc_map.py	GRC map	🇸🇬	matplotlib
 audio-analysis	audio_analysis.py	Audio analysis	🎧	numpy
+gpx-viewer	gpx_viewer.py	GPX viewer	🥾	-

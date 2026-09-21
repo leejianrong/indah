@@ -967,6 +967,23 @@ def _to_polygons(value: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _to_polylines(value: Any) -> list[dict[str, Any]]:
+    """Coerce a source value to ``[{points, label?, color?, weight?}, ...]``."""
+    if value is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for p in value:
+        points = p["points"] if isinstance(p, dict) else p
+        path = [[_num(lat), _num(lon)] for lat, lon in points]
+        entry: dict[str, Any] = {"points": path}
+        if isinstance(p, dict):
+            for key in ("label", "color", "weight"):
+                if p.get(key) is not None:
+                    entry[key] = p[key]
+        out.append(entry)
+    return out
+
+
 class Map(Component):
     """An interactive client-side map (Leaflet, ADR-0019-style hybrid: G5).
 
@@ -974,16 +991,21 @@ class Map(Component):
     0-19); both are reactive sources -- set them from Python (e.g. "fly to" a new
     place) and the existing map instance re-views there, without resetting whatever
     pan/zoom the viewer is currently at from an unrelated prop update. ``markers``
-    (``{lat, lon, label?, color?, radius?}``) and ``polygons``
-    (``{points:[(lat,lon),...], label?, color?, fillOpacity?}``) are reactive lists
+    (``{lat, lon, label?, color?, radius?}``), ``polygons``
+    (``{points:[(lat,lon),...], label?, color?, fillOpacity?}``), and ``polylines``
+    (``{points:[(lat,lon),...], label?, color?, weight?}``) are reactive lists
     redrawn wholesale on change -- the same "no structural children op, ship a plain
-    list prop" shape as ``ImageOverlay``'s boxes/points.
+    list prop" shape as ``ImageOverlay``'s boxes/points. ``polylines`` is an *open*
+    path (Leaflet ``L.polyline``) -- unlike ``polygons``, it is not auto-closed back
+    to its first point and has no fill, which is what a real route/track (a GPX
+    trail, a path between two points) needs; use ``polygons`` for a closed, filled
+    area instead.
 
-    Markers/polygons render as Leaflet vector layers (circle markers, polygons), not
-    the classic pin icon, which needs image assets incompatible with the shell's
-    no-external-requests singlefile build (ADR-0004). This is display plus native
-    pan/zoom; the viewer's own pan/zoom is not reported back to Python (matching
-    ``ImageOverlay``'s zoom/pan, which is client-side only).
+    Markers/polygons/polylines render as Leaflet vector layers (circle markers,
+    polygons, polylines), not the classic pin icon, which needs image assets
+    incompatible with the shell's no-external-requests singlefile build (ADR-0004).
+    This is display plus native pan/zoom; the viewer's own pan/zoom is not reported
+    back to Python (matching ``ImageOverlay``'s zoom/pan, which is client-side only).
 
     Tiles load live from ``tile_url`` in the **viewer's own browser** (never
     indah's server) -- the same as any Leaflet map on any website, and not the kind
@@ -1003,6 +1025,7 @@ class Map(Component):
         zoom: Source = 12,
         markers: Source = None,
         polygons: Source = None,
+        polylines: Source = None,
         height: int = 320,
         tile_url: str = DEFAULT_TILE_URL,
         attribution: str = DEFAULT_ATTRIBUTION,
@@ -1013,6 +1036,7 @@ class Map(Component):
         self._zoom = zoom
         self._markers = markers
         self._polygons = polygons
+        self._polylines = polylines
         self._height = int(height)
         self._tile_url = tile_url
         self._attribution = attribution
@@ -1032,6 +1056,7 @@ class Map(Component):
             "zoom": lambda: _read(self._zoom),
             "markers": lambda: _to_markers(_read(self._markers)),
             "polygons": lambda: _to_polygons(_read(self._polygons)),
+            "polylines": lambda: _to_polylines(_read(self._polylines)),
         }
 
 

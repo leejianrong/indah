@@ -231,6 +231,27 @@ def test_map_polygons_normalise_points_and_style():
 
 
 @pytest.mark.unit
+def test_map_polylines_normalise_points_and_style():
+    m = Map((0, 0), polylines=[{"points": [(1.3, 103.8), (1.31, 103.81)], "color": "#b5296b"}])
+    polylines = m.reactive_props()["polylines"]()
+    assert polylines == [{"points": [[1.3, 103.8], [1.31, 103.81]], "color": "#b5296b"}]
+
+
+@pytest.mark.unit
+def test_map_polylines_accept_plain_point_lists_and_weight():
+    m = Map((0, 0), polylines=[[(1.3, 103.8), (1.31, 103.81), (1.32, 103.82)]])
+    polylines = m.reactive_props()["polylines"]()
+    assert polylines == [{"points": [[1.3, 103.8], [1.31, 103.81], [1.32, 103.82]]}]
+
+    m = Map(
+        (0, 0),
+        polylines=[{"points": [(1.3, 103.8), (1.31, 103.81)], "weight": 5, "label": "track"}],
+    )
+    polylines = m.reactive_props()["polylines"]()
+    assert polylines == [{"points": [[1.3, 103.8], [1.31, 103.81]], "weight": 5, "label": "track"}]
+
+
+@pytest.mark.unit
 def test_map_reacts_to_a_center_signal():
     center = Signal((1.3, 103.8))
     m = Map(center)
@@ -240,10 +261,11 @@ def test_map_reacts_to_a_center_signal():
 
 
 @pytest.mark.unit
-def test_map_defaults_to_no_markers_or_polygons():
+def test_map_defaults_to_no_markers_polygons_or_polylines():
     m = Map((0, 0))
     assert m.reactive_props()["markers"]() == []
     assert m.reactive_props()["polygons"]() == []
+    assert m.reactive_props()["polylines"]() == []
 
 
 class _FakeFigure:

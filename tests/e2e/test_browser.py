@@ -671,28 +671,37 @@ _BLANK_TILE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUw
 
 
 def _map_app():
-    """An interactive Map bound to a center signal, with a marker and a polygon,
-    plus a button that flies to a new place (G5). Uses a data: URI as the tile
-    source (Leaflet's {z}/{x}/{y} substitution is a no-op on it) so the test never
-    makes a real network request to a tile server."""
+    """An interactive Map bound to a center signal, with a marker, a polygon, and a
+    polyline, plus a button that flies to a new place (G5). Uses a data: URI as the
+    tile source (Leaflet's {z}/{x}/{y} substitution is a no-op on it) so the test
+    never makes a real network request to a tile server."""
     from indah import Button, Column, Map, Session, Signal, create_app
 
     center = Signal((1.35, 103.82))
     markers = [{"lat": 1.35, "lon": 103.82, "label": "here"}]
     polygons = [{"points": [(1.34, 103.81), (1.36, 103.81), (1.35, 103.83)]}]
+    polylines = [{"points": [(1.34, 103.80), (1.345, 103.805), (1.35, 103.81)], "weight": 4}]
 
     def fly():
         center.set((51.5, -0.12))
 
-    m = Map(center, zoom=11, markers=markers, polygons=polygons, tile_url=_BLANK_TILE, height=300)
+    m = Map(
+        center,
+        zoom=11,
+        markers=markers,
+        polygons=polygons,
+        polylines=polylines,
+        tile_url=_BLANK_TILE,
+        height=300,
+    )
     root = Column(children=[m, Button("fly", on_click=fly)])
     return create_app(session=Session(root))
 
 
 @pytest.mark.e2e
 def test_map_renders_markers_and_flies_to_a_new_center():
-    """The map mounts a real Leaflet instance with its marker and polygon, and
-    Python setting a new center flies the existing map there (G5)."""
+    """The map mounts a real Leaflet instance with its marker, polygon, and
+    polyline, and Python setting a new center flies the existing map there (G5)."""
     handle = launch(_map_app(), block=False, open_inline=False)
     try:
         with sync_playwright() as p:
@@ -703,8 +712,9 @@ def test_map_renders_markers_and_flies_to_a_new_center():
 
                 container = page.locator(".map.leaflet-container")
                 expect(container).to_be_visible()
-                # The circle marker + the polygon are both SVG vector layers.
-                expect(page.locator(".map path.leaflet-interactive")).to_have_count(2)
+                # The circle marker + the polygon + the polyline are all SVG vector
+                # layers; only the polygon's path auto-closes back to its first point.
+                expect(page.locator(".map path.leaflet-interactive")).to_have_count(3)
 
                 def center():
                     return container.evaluate(
@@ -718,6 +728,128 @@ def test_map_renders_markers_and_flies_to_a_new_center():
                     "() => Math.round(document.querySelector('.map').__map.getCenter().lat) === 52"
                 )
                 assert center() == [51.5, -0.12]
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+# A real subset of examples/data/gpx_viewer/southern-ridges-sg.json (points
+# 0, 30, 65, 100, -1 of the actual fetched/cached track), not synthetic coordinates.
+_GPX_POINTS = [
+    (1.278139, 103.813222),
+    (1.279891, 103.804978),
+    (1.280516, 103.794525),
+    (1.288247, 103.788487),
+    (1.296998, 103.772546),
+]
+_GPX_CURRENT_COLOR = "#b5296b"
+
+
+def _gpx_viewer_app():
+    """The shape of examples/gpx_viewer.py, trimmed to a handful of real trackpoints:
+    a Map with the track as a polyline plus a moving current-position marker,
+    scrubbed by a Slider bound to the same progress signal the real demo uses."""
+    from indah import Column, Map, Session, Signal, Slider, create_app
+
+    progress = Signal(0.0)
+
+    def current_point():
+        # Interpolate by point index (not haversine distance) - good enough for
+        # this trimmed-down e2e check; the real demo interpolates by distance.
+        t = (progress.value / 100.0) * (len(_GPX_POINTS) - 1)
+        i = min(int(t), len(_GPX_POINTS) - 2)
+        frac = t - i
+        lat = _GPX_POINTS[i][0] + (_GPX_POINTS[i + 1][0] - _GPX_POINTS[i][0]) * frac
+        lon = _GPX_POINTS[i][1] + (_GPX_POINTS[i + 1][1] - _GPX_POINTS[i][1]) * frac
+        return lat, lon
+
+    def markers():
+        lat, lon = current_point()
+        start_lat, start_lon = _GPX_POINTS[0]
+        end_lat, end_lon = _GPX_POINTS[-1]
+        return [
+            {"lat": start_lat, "lon": start_lon, "label": "Start", "color": "#2e6d62"},
+            {"lat": end_lat, "lon": end_lon, "label": "End", "color": "#8a3ffc"},
+            {
+                "lat": lat,
+                "lon": lon,
+                "label": "Current position",
+                "color": _GPX_CURRENT_COLOR,
+                "radius": 9,
+            },
+        ]
+
+    trail_map = Map(
+        (1.2867, 103.7936),
+        zoom=13,
+        markers=markers,
+        polylines=[{"points": _GPX_POINTS, "color": "#b5296b", "weight": 4}],
+        tile_url=_BLANK_TILE,
+        height=300,
+    )
+    scrubber = Slider(progress, min=0, max=100, step=1, label="Progress")
+    root = Column(children=[trail_map, scrubber])
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_gpx_viewer_shape_renders_track_and_syncs_scrubber_to_marker():
+    """The first demo to exercise the real interactive Map: the real-track polyline
+    (an open path, not auto-closed like a polygon) plus start/end/current markers
+    render as real Leaflet vector layers, and dragging the progress slider moves the
+    current-position marker along the track."""
+    handle = launch(_gpx_viewer_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+
+                container = page.locator(".map.leaflet-container")
+                expect(container).to_be_visible()
+                # 3 circleMarkers (start/end/current) + 1 open polyline, all SVG paths.
+                expect(page.locator(".map path.leaflet-interactive")).to_have_count(4)
+
+                # Find the current-position circleMarker by its distinctive color
+                # (options.color), rather than assuming draw/iteration order. `color`
+                # is passed in as an arg rather than f-string-interpolated, to keep
+                # the JS source short and injection-free.
+                find_by_color = """(color) => {
+                    let found = null;
+                    document.querySelector('.map').__map.eachLayer((l) => {
+                        if (l.getLatLng && l.options && l.options.color === color) found = l;
+                    });
+                    const p = found.getLatLng();
+                    return [p.lat, p.lng];
+                }"""
+
+                before = page.evaluate(find_by_color, _GPX_CURRENT_COLOR)
+                assert round(before[0], 4) == round(_GPX_POINTS[0][0], 4)
+
+                slider = page.locator("input[type=range]")
+                slider.evaluate(
+                    "el => { el.value = '100';"
+                    " el.dispatchEvent(new Event('input', { bubbles: true })); }"
+                )
+                page.wait_for_function(
+                    """([color, before]) => {
+                        let found = null;
+                        document.querySelector('.map').__map.eachLayer((l) => {
+                            if (l.getLatLng && l.options && l.options.color === color) found = l;
+                        });
+                        const p = found.getLatLng();
+                        return Math.abs(p.lat - before[0]) > 0.0001
+                            || Math.abs(p.lng - before[1]) > 0.0001;
+                    }""",
+                    arg=[_GPX_CURRENT_COLOR, before],
+                )
+                after = page.evaluate(find_by_color, _GPX_CURRENT_COLOR)
+                # At 100% progress the current marker should sit at the real track's
+                # end point.
+                assert round(after[0], 4) == round(_GPX_POINTS[-1][0], 4)
+                assert round(after[1], 4) == round(_GPX_POINTS[-1][1], 4)
             finally:
                 browser.close()
     finally:
