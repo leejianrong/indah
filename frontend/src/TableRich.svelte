@@ -386,6 +386,7 @@
   <div
     class="table-scroll rich"
     class:virtual={isVirtual}
+    data-density={props.density ?? null}
     style:max-height={props.height ?? null}
     style:height={isVirtual ? props.height : null}
     bind:this={scroller}

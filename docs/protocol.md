@@ -214,6 +214,8 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `grid` | container | `columns`, `gap` | — |
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
+| `splitpane` | container | `direction`, `initial`, `min`, `key`, `height` (exactly two children) | — (resize is client-side) |
+| `masterdetail` | container | `initial`, `min`, `key`, `title`, `open` (two children: master, detail) | `close` |
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |
 | `modal` | overlay | `open`, `title`, `size` (`sm`/`md`/`lg`) | `close` |
 | `drawer` | overlay | `open`, `title`, `side` (`left`/`right`) | `close` |
@@ -270,7 +272,7 @@ bottom). `colormap` picks a built-in ramp (`"magma"`, `"viridis"`, `"gray"`); `z
 delta is a list of new columns (`{"append": {"z": [[...]]}}`), so it costs O(column)
 on the wire. The snapshot carries the full field for a resume.
 
-The layout containers (`row`, `grid`, `tabs`, `sidebar`, `expander`) only arrange
+The layout containers (`row`, `grid`, `tabs`, `sidebar`, `expander`, `splitpane`) only arrange
 existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no
@@ -315,6 +317,8 @@ and the server answers through one reactive prop, `window` `{rows, total, offset
 rows, total and the window they belong to always arrive together. The shell shows a `window`
 only if its `seq` is at least the last `seq` it sent; the server drops a superseded query,
 clamps `limit` to 1..500, and pulls an offset past `total` back to the last window.
+A table may carry `density` (`comfortable`/`compact`), which sets `data-density` on it; the
+app-wide default is `data-density` on `<html>` (`create_app(density=)`, ADR-0014).
 `virtual: true` (needs `height`) renders only the rows in view plus an overscan between two
 spacer rows, at one fixed row height (`--row-h`, 36px). In remote mode the shell requests
 block-aligned windows as the viewer scrolls (the same `query`, `limit` up to 500), keeps the

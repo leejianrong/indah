@@ -109,3 +109,13 @@ user-selectable *theme switcher*: `create_app(theme=Theme(...), logo=...)` (IND-
   `title` alone still only renames the tab. Bundled fonts are unchanged: `font=` picks a
   stack, it does not load a file (ADR-0004).
 - No `protocol_version` change: this is presentation served in the HTML, not a message.
+
+## Amendment (IND-103): density tokens
+
+- Row height and cell padding are tokens too: `--row-h`, `--cell-pad-y`, `--cell-pad-x`,
+  `--table-font`. `:root` is the comfortable set; `[data-density="compact"]` swaps it. The
+  attribute goes on `<html>` for the whole app (`create_app(density="compact")`, injected into
+  the served page like the theme, so there is no flash) or on one table's scroller
+  (`Table(density=)`), and the cascade does the rest.
+- A virtual table's fixed row is the same `--row-h`, so compact mode also packs more rows
+  into the viewport. No user-facing density switch yet; the app chooses.

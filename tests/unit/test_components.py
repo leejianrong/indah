@@ -17,6 +17,7 @@ from indah.components import (
     Grid,
     Image,
     Map,
+    MasterDetail,
     Modal,
     MultiSelect,
     Number,
@@ -29,6 +30,7 @@ from indah.components import (
     Sidebar,
     Slider,
     Spinner,
+    SplitPane,
     Switch,
     Table,
     Tabs,
@@ -755,3 +757,57 @@ def test_actions_and_checked_need_the_rich_form():
         Table([{"a": 1}], actions=[RowAction("x", lambda k: None)])
     with pytest.raises(ValueError):  # keys are what actions and checks are about
         Table(rows=[{"a": 1}], columns=[Col("a")], checked=Signal([]))
+
+
+# -- SplitPane, MasterDetail, density (IND-103) ------------------------------
+
+
+@pytest.mark.unit
+def test_splitpane_serialises_and_validates():
+    a, b = Text("a"), Text("b")
+    sp = SplitPane(a, b, initial=0.3, min=0.15, key="log")
+    assert sp.type == "splitpane" and sp.children == [a, b]
+    assert sp.static_props() == {
+        "direction": "horizontal",
+        "initial": 0.3,
+        "min": 0.15,
+        "key": "log",
+    }
+    v = SplitPane(a, b, direction="vertical", height="20rem").static_props()
+    assert v["direction"] == "vertical" and v["height"] == "20rem"
+    assert "key" not in SplitPane(a, b).static_props()
+    assert sp.handle("anything", {}) is False  # purely client-side, no events
+    for bad in (
+        {"direction": "diagonal"},
+        {"initial": 0},
+        {"initial": 1},
+        {"min": 0.6},
+        {"min": 0},
+        {"initial": 0.1, "min": 0.2},  # initial outside [min, 1 - min]
+        {"height": "tall"},
+    ):
+        with pytest.raises(ValueError):
+            SplitPane(a, b, **bad)
+
+
+@pytest.mark.unit
+def test_masterdetail_open_signal_and_close_event():
+    flag = Signal(False)
+    md = MasterDetail(Text("list"), Text("detail"), open=flag, title="Call")
+    assert md.type == "masterdetail" and len(md.children) == 2
+    assert md.static_props() == {"initial": 0.4, "min": 0.2, "title": "Call"}
+    assert md.reactive_props()["open"]() is False
+    flag.set(True)
+    assert md.reactive_props()["open"]() is True
+    assert md.handle("close", {}) is True and flag.value is False
+    assert MasterDetail(Text("a"), Text("b")).reactive_props()["open"]() is False  # own signal
+
+
+@pytest.mark.unit
+def test_table_density_prop():
+    rows = [{"id": "a"}]
+    t = Table(rows=rows, columns=[Col("id")], key="id", density="compact")
+    assert t.static_props()["density"] == "compact"
+    assert "density" not in Table(rows=rows, columns=[Col("id")], key="id").static_props()
+    with pytest.raises(ValueError):
+        Table(rows=rows, columns=[Col("id")], key="id", density="tiny")

@@ -483,10 +483,19 @@
         image-rendering: pixelated; background: var(--surface-2);
       }
       .table-scroll { overflow-x: auto; }
-      .dataframe { border-collapse: collapse; font-size: 0.9rem; width: 100%; }
+      /* Density tokens: the app default comes from <html data-density>, one table can
+         override with its own data-density. --row-h is the fixed row of a virtual table. */
+      :root { --row-h: 36px; --cell-pad-y: 0.35rem; --cell-pad-x: 0.6rem; --table-font: 0.9rem; }
+      [data-density="compact"] {
+        --row-h: 26px; --cell-pad-y: 0.1rem; --cell-pad-x: 0.45rem; --table-font: 0.82rem;
+      }
+      [data-density="comfortable"] {
+        --row-h: 36px; --cell-pad-y: 0.35rem; --cell-pad-x: 0.6rem; --table-font: 0.9rem;
+      }
+      .dataframe { border-collapse: collapse; font-size: var(--table-font); width: 100%; }
       .dataframe th, .dataframe td {
         border: 1px solid var(--outline-soft);
-        padding: 0.35rem 0.6rem;
+        padding: var(--cell-pad-y) var(--cell-pad-x);
         text-align: left;
         white-space: nowrap;
       }
@@ -502,7 +511,7 @@
       .table th { padding: 0; }
       .table .th-sort {
         display: flex; align-items: center; gap: 0.4rem; width: 100%;
-        padding: 0.35rem 0.6rem; background: none; border: none; cursor: pointer;
+        padding: var(--cell-pad-y) var(--cell-pad-x); background: none; border: none; cursor: pointer;
         font: inherit; color: inherit; text-align: left;
       }
       .table .th-sort:hover { background: var(--surface-3); }
@@ -730,7 +739,7 @@
         border: 1px solid var(--outline);
         border-radius: 4px;
       }
-      .table-scroll.virtual { --row-h: 36px; overflow-y: auto; }
+      .table-scroll.virtual { overflow-y: auto; }
       .table-scroll.virtual table { table-layout: fixed; width: 100%; }
       .table-scroll.virtual tbody tr:not(.vspacer) { height: var(--row-h); }
       .table-scroll.virtual tbody td {

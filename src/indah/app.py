@@ -42,6 +42,7 @@ except Exception:  # pragma: no cover - starlette always ships these
     MultiPartException = Exception  # type: ignore[assignment,misc]
 
 from .components import (
+    DENSITIES,
     Button,
     Card,
     Chat,
@@ -482,6 +483,7 @@ def create_app(
     spa: bool = False,
     proxy_flush: bool = True,
     theme: Theme | None = None,
+    density: str = "comfortable",
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
     """Build the ASGI app.
@@ -511,11 +513,16 @@ def create_app(
     Colab's releases each frame (ADR-0002); a deployment with no such proxy -- a local
     container -- can turn it off and pay only payload plus framing.
 
+    ``density`` (``"comfortable"``, the default, or ``"compact"``) sets the row height and
+    cell padding of tables across the app; a ``Table(density=)`` overrides it for one table.
+
     ``theme`` overrides the shell's design tokens for this app (IND-88, see
     :class:`~indah.theme.Theme`). ``logo`` (an SVG/PNG/JPEG/WebP file path or bytes, up to
     512 KB) replaces the Bunga mark in the header and, with ``title``, the "indah"
     wordmark -- a rebranded app; ``title`` alone only renames the tab, as before.
     """
+    if density not in DENSITIES:
+        raise ValueError(f"density must be one of {DENSITIES}, got {density!r}")
     given = [
         name
         for name, val in (
@@ -559,6 +566,7 @@ def create_app(
     app.state.page_title = title
     app.state.home_url = home_url
     app.state.source_url = source_url
+    app.state.density = density
     app.state.theme_css = theme.css() if theme is not None else ""
     app.state.logo = _load_logo(logo) if logo is not None else None
     # Back-compat: a single-shared app still exposes .session/.hub for callers and
@@ -609,6 +617,10 @@ def _chrome_html(state: Any, base_href: str | None = None) -> str:
         "logoUrl": "api/brand/logo" if getattr(state, "logo", None) else None,
         "brandName": title if getattr(state, "logo", None) else None,
     }
+    if getattr(state, "density", "comfortable") != "comfortable":
+        html_text = html_text.replace(
+            '<html lang="en">', f'<html lang="en" data-density="{escape(state.density)}">', 1
+        )
     theme_css = getattr(state, "theme_css", "")
     if theme_css:
         html_text = html_text.replace(

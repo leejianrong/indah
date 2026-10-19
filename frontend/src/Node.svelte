@@ -12,6 +12,7 @@
   import Overlay from "./Overlay.svelte";
   import Tip from "./Tip.svelte";
   import Shortcuts from "./Shortcuts.svelte";
+  import SplitPane from "./SplitPane.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -23,6 +24,17 @@
   // keystrokes - the "missing letters" bug. So we sync the server value into the
   // element only when it does NOT have focus; while focused, the DOM owns it.
   let inputEl = $state();
+
+  // MasterDetail swaps the split for a drawer on a narrow viewport.
+  let narrow = $state(false);
+  $effect(() => {
+    if (node.type !== "masterdetail") return;
+    const mq = window.matchMedia("(max-width: 700px)");
+    narrow = mq.matches;
+    const on = (e) => (narrow = e.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  });
 
   // Button(confirm=...): the click is posted only after the user accepts the dialog.
   let confirming = $state(false);
@@ -129,6 +141,32 @@
       {/each}
     </div>
   </div>
+{:else if node.type === "splitpane"}
+  <SplitPane
+    id={node.id}
+    direction={props.direction}
+    initial={props.initial}
+    min={props.min}
+    storageKey={props.key}
+    height={props.height}
+  >
+    {#snippet first()}<Self node={node.children[0]} />{/snippet}
+    {#snippet second()}<Self node={node.children[1]} />{/snippet}
+  </SplitPane>
+{:else if node.type === "masterdetail"}
+  {#if narrow}
+    <Self node={node.children[0]} />
+    {#if props.open}
+      <Overlay kind="drawer" side="right" title={props.title} onclose={() => postEvent(node.id, "close")}>
+        <Self node={node.children[1]} />
+      </Overlay>
+    {/if}
+  {:else}
+    <SplitPane id={node.id} initial={props.initial} min={props.min} storageKey={props.key}>
+      {#snippet first()}<Self node={node.children[0]} />{/snippet}
+      {#snippet second()}<Self node={node.children[1]} />{/snippet}
+    </SplitPane>
+  {/if}
 {:else if node.type === "tabs"}
   <div class="tabs">
     <div class="tablist" role="tablist">
