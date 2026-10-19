@@ -1,6 +1,6 @@
-# ADR-0026: Server push: `Stream`, coalesced appends, and (next) `Topic`
+# ADR-0026: Server push: `Stream`, coalesced appends, and `Topic`
 
-- Status: Accepted (`Stream` and coalescing built in IND-90; `Topic` follows in IND-89)
+- Status: Accepted (`Stream` and coalescing built in IND-90; `Topic` in IND-89)
 - Date: 2026-10-19
 - Deciders: Jian (owner)
 
@@ -29,6 +29,14 @@ second, each padded up to the proxy's 8 KB window (ADR-0002).
   and unbatched: it is latency-sensitive and already coalesced by `sse_events`.
 - Inside a synchronous dispatch an append is folded into the response as a full replace
   (correct, and rare).
+- **`indah.Topic`** (IND-89): an app-level channel. Any task publishes (`publish` on the
+  event loop, `publish_threadsafe` from another thread, marshalled onto the loop the
+  subscribers live on); a session follows it through `ctx.latest(topic)` (a signal of the
+  newest item) or `ctx.tail(topic, limit)` (a `Stream` seeded from the topic's `replay`
+  history). Each session subscribes for itself, so per-tab state stays per tab, and
+  `ctx.on_close` releases the subscription on eviction. A raising subscriber is logged
+  and does not stop the others. Cross-process fan-out is out of scope; `Topic` is the
+  seam a Redis pub/sub backend would replace.
 - **`create_app(proxy_flush=True)`**: the SSE padding stays on by default (Colab needs it)
   but a deployment with no window-buffering proxy can turn it off.
 

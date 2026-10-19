@@ -57,6 +57,7 @@ from .context import ConnectionInfo, Context
 from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
 from .launch import LaunchHandle, launch
+from .push import Topic
 from .reactive import Computed, Signal, batch, computed, effect
 from .session import DispatchResult, Session
 from .session_store import (
@@ -79,6 +80,7 @@ __all__ = [
     "LaunchHandle",
     "Session",
     "Stream",
+    "Topic",
     "Context",
     "ConnectionInfo",
     "DispatchResult",
