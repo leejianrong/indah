@@ -1256,6 +1256,25 @@ class Col:
         return out
 
 
+@dataclass(frozen=True)
+class RowAction:
+    """A per-row button on a rich ``Table`` (IND-99). ``on_click(key)`` runs (sync or
+    async) with the row's key; ``confirm`` makes the shell ask first, like
+    ``Button(confirm=)`` -- a UX guard, not authorization. Rows can be stale by the time
+    a click lands, so a handler must tolerate a key that no longer exists."""
+
+    label: str
+    on_click: Callable[[Any], Any]
+    confirm: str | None = None
+    variant: str = "ghost"
+
+    def wire(self, index: int) -> dict[str, Any]:
+        out: dict[str, Any] = {"id": f"a{index}", "label": self.label, "variant": self.variant}
+        if self.confirm:
+            out["confirm"] = self.confirm
+        return out
+
+
 class Table(Component):
     """An interactive table (ADR-0021, ADR-0027): sort, page, and select.
 
@@ -1274,6 +1293,9 @@ class Table(Component):
     browser, so rows streaming in are filtered too); ``column_toggle=True`` lets the viewer
     hide columns (remembered in the browser); ``follow=True`` keeps the newest row in view
     while rows arrive and pauses when the viewer scrolls up (needs ``height``).
+    ``actions=[RowAction(...)]`` adds a button per row that calls back with the row key;
+    ``checked=`` (a ``Signal[list]`` of keys) adds a checkbox column plus select-all for
+    bulk operations. Both need the rich form with a ``key``.
 
     Sorting and paging are client-side; the data rides ordinary reactive props, so no
     ``protocol_version`` bump. Use ``DataFrame`` when you only need to show a table.
@@ -1295,15 +1317,25 @@ class Table(Component):
         search: bool = False,
         column_toggle: bool = False,
         follow: bool = False,
+        actions: list[RowAction] | None = None,
+        checked: Signal[list[Any]] | None = None,
     ) -> None:
         super().__init__()
         if rows is None and (
-            columns is not None or key is not None or search or column_toggle or follow
+            columns is not None
+            or key is not None
+            or search
+            or column_toggle
+            or follow
+            or actions
+            or checked is not None
         ):
             raise ValueError(
-                "Table columns=/key=/search=/column_toggle=/follow= go with rows=; "
-                "the classic form takes none of them"
+                "Table columns=/key=/search=/column_toggle=/follow=/actions=/checked= go "
+                "with rows=; the classic form takes none of them"
             )
+        if (actions or checked is not None) and key is None:
+            raise ValueError("Table actions=/checked= need key= (they refer to rows by key)")
         if follow and height is None:
             raise ValueError("Table follow=True needs height= (the body scrolls inside it)")
         if rows is None and source is None:
@@ -1322,6 +1354,8 @@ class Table(Component):
         self._search = bool(search)
         self._column_toggle = bool(column_toggle)
         self._follow = bool(follow)
+        self._actions = list(actions or [])
+        self._checked = checked
         self._columns: list[Col] | None = None
         if rows is not None:
             self._columns = list(columns) if columns is not None else self._infer_columns(rows)
@@ -1350,6 +1384,9 @@ class Table(Component):
             props["search"] = self._search
             props["columnToggle"] = self._column_toggle
             props["follow"] = self._follow
+            props["checkable"] = self._checked is not None
+            if self._actions:
+                props["actions"] = [a.wire(i) for i, a in enumerate(self._actions)]
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
@@ -1364,6 +1401,8 @@ class Table(Component):
                 )
             else:
                 props["value"] = lambda: _json_safe(self._selected.value)
+        if self._checked is not None:
+            props["checked"] = lambda: [_json_safe(k) for k in (self._checked.value or [])]
         return props
 
     def stream_props(self) -> dict[str, tuple[Stream, Callable[[list[Any]], list[Any]]]]:
@@ -1378,6 +1417,19 @@ class Table(Component):
                 return True
             if "index" in payload:
                 self._selected.set(int(payload["index"]))
+                return True
+        if event == "check" and self._checked is not None:
+            keys = payload.get("keys")
+            if isinstance(keys, list):
+                self._checked.set(keys)
+                return True
+        if event == "action" and "key" in payload:
+            actions = {f"a{i}": a for i, a in enumerate(self._actions)}
+            action = actions.get(str(payload.get("action")))
+            if action is not None:
+                result = action.on_click(payload["key"])
+                if inspect.iscoroutine(result):
+                    return result
                 return True
         return False
 
