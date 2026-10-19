@@ -157,3 +157,32 @@ def test_the_legacy_table_is_untouched_by_the_new_arguments():
 @pytest.mark.unit
 def test_a_list_still_takes_a_stream_after_the_refactor():
     assert List(Stream(limit=2)).stream_props()
+
+
+# -- search, column toggle, follow (IND-92) -------------------------------------
+
+
+@pytest.mark.unit
+def test_toolbar_flags_are_static_props_and_default_off():
+    plain = Table(rows=ROWS, key="id")
+    Session(Column(children=[plain]))
+    p = plain.to_json()["props"]
+    assert p["search"] is False and p["columnToggle"] is False and p["follow"] is False
+
+    rich = Table(rows=ROWS, key="id", search=True, column_toggle=True, follow=True, height="10rem")
+    Session(Column(children=[rich]))
+    p = rich.to_json()["props"]
+    assert p["search"] is True and p["columnToggle"] is True and p["follow"] is True
+
+
+@pytest.mark.unit
+def test_follow_needs_a_height_to_scroll_in():
+    with pytest.raises(ValueError, match="height"):
+        Table(rows=ROWS, key="id", follow=True)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("flag", ["search", "column_toggle", "follow"])
+def test_the_classic_table_does_not_take_the_toolbar_flags(flag):
+    with pytest.raises(ValueError, match="rows="):
+        Table({"columns": ["a"], "rows": [[1]]}, **{flag: True})

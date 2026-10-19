@@ -1,6 +1,6 @@
 # ADR-0027: Table v2: keyed rows, typed columns and streamed rows
 
-- Status: Accepted (core built in IND-91; client filter, row actions and remote mode follow)
+- Status: Accepted (core in IND-91, client search/column toggle/follow in IND-92; row actions and remote mode follow)
 - Date: 2026-10-19
 - Deciders: Jian (owner)
 - Amends: ADR-0021
@@ -47,6 +47,9 @@ additive (new props `columns`, `rows`, `rowKey`, `height`; a `select` event carr
 - A selection can survive sorting and new rows, so a detail panel stays on the row the
   user clicked while the log scrolls.
 - Rows must carry their key; a row without it is rejected when the prop is built.
-- Not yet built (later cards in the same epic): client-side search and column toggle,
-  follow-tail, row actions and multi-select, server-driven (remote) queries and virtual
+- Search, column toggle and follow-tail (IND-92) are client-only state: the filter text is
+  not sent to the server, hidden columns are remembered in `localStorage` per page and
+  table, and follow pauses on scroll-up or an active sort. Filtering a streaming table
+  therefore only sees the rows the browser holds (the stream's `limit`).
+- Not yet built (later cards in the same epic): row actions and multi-select, server-driven (remote) queries and virtual
   scroll for thousands of rows.

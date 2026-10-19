@@ -11,7 +11,34 @@
   let sortDir = $state(1); // 1 asc, -1 desc
   let page = $state(0);
 
-  let cols = $derived(props.columns ?? []);
+  // Client-only view state (no round trip): the filter text, hidden columns (remembered
+  // per page + table in localStorage) and whether the tail is being followed.
+  let query = $state("");
+  const storeKey = () => `indah-cols:${location.pathname}:${props.label || nodeId}`;
+  function loadHidden() {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(storeKey()) || "[]"));
+    } catch (e) {
+      return new Set();
+    }
+  }
+  let hidden = $state(loadHidden());
+  function toggleColumn(field) {
+    const next = new Set(hidden);
+    if (next.has(field)) next.delete(field);
+    else next.add(field);
+    hidden = next;
+    try {
+      localStorage.setItem(storeKey(), JSON.stringify([...next]));
+    } catch (e) {
+      /* storage blocked: the choice just is not remembered */
+    }
+  }
+  let following = $state(true);
+  let scroller = $state(null);
+
+  let allCols = $derived(props.columns ?? []);
+  let cols = $derived(allCols.filter((c) => !hidden.has(c.field)));
   let rows = $derived(props.rows ?? []);
   let rowKey = $derived(props.rowKey ?? null);
 
@@ -25,9 +52,17 @@
 
   // Keep each row's original index for selection when the table has no key.
   let indexed = $derived(rows.map((r, i) => ({ r, i, k: rowKey ? r[rowKey] : i })));
+  // Case-insensitive match over every column, so streamed rows are filtered as they land.
+  let filtered = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return indexed;
+    return indexed.filter((row) =>
+      allCols.some((c) => String(row.r[c.field] ?? "").toLowerCase().includes(q)),
+    );
+  });
   let sorted = $derived.by(() => {
-    if (sortField === null) return indexed;
-    return [...indexed].sort((x, y) => cmp(x.r[sortField], y.r[sortField]) * sortDir);
+    if (sortField === null) return filtered;
+    return [...filtered].sort((x, y) => cmp(x.r[sortField], y.r[sortField]) * sortDir);
   });
 
   let pageSize = $derived(props.pageSize ?? 0);
@@ -38,6 +73,23 @@
   let view = $derived(
     pageSize > 0 ? sorted.slice(page * pageSize, (page + 1) * pageSize) : sorted,
   );
+
+  // Follow the tail: keep the newest row in view while rows arrive, unless the viewer
+  // scrolled up (or a sort has reordered the rows, so "newest" is no longer the last).
+  $effect(() => {
+    view.length;
+    if (props.follow && following && sortField === null && scroller) {
+      scroller.scrollTop = scroller.scrollHeight;
+    }
+  });
+  function onScroll() {
+    if (!props.follow || !scroller) return;
+    following = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 24;
+  }
+  function resumeFollowing() {
+    following = true;
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+  }
 
   function sortBy(col) {
     if (!col.sortable) return;
@@ -85,7 +137,48 @@
 
 <div class="field">
   {#if props.label}<span class="stream-label">{props.label}</span>{/if}
-  <div class="table-scroll rich" style:max-height={props.height ?? null}>
+  {#if props.search || props.columnToggle || props.follow}
+    <div class="table-toolbar">
+      {#if props.search}
+        <input
+          type="search"
+          class="table-search"
+          placeholder="Filter rows"
+          aria-label="Filter rows"
+          bind:value={query}
+        />
+        {#if query.trim()}<span class="table-count">{sorted.length} of {rows.length}</span>{/if}
+      {/if}
+      {#if props.columnToggle}
+        <details class="col-toggle">
+          <summary>Columns</summary>
+          <div class="col-toggle-menu">
+            {#each allCols as col (col.field)}
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!hidden.has(col.field)}
+                  onchange={() => toggleColumn(col.field)}
+                />
+                {col.title}
+              </label>
+            {/each}
+          </div>
+        </details>
+      {/if}
+      {#if props.follow && !following && sortField === null}
+        <button type="button" class="follow-resume" onclick={resumeFollowing}
+          >Resume following</button
+        >
+      {/if}
+    </div>
+  {/if}
+  <div
+    class="table-scroll rich"
+    style:max-height={props.height ?? null}
+    bind:this={scroller}
+    onscroll={onScroll}
+  >
     <table class="dataframe table rich" class:selectable={props.selectable}>
       <thead>
         <tr>
