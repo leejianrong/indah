@@ -12,19 +12,21 @@ plain async generator the caller wraps (ADR-0009).
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import functools
 import inspect
 import io
+import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from .keys import normalize_keys
 from .markdown import to_blocks
 from .protocol import RenderSpec
-from .reactive import Computed, Signal
+from .reactive import Computed, Signal, effect
 from .stream import Stream
 
 if TYPE_CHECKING:
@@ -1256,6 +1258,63 @@ class Col:
         return out
 
 
+MAX_TABLE_LIMIT = 500
+_MAX_SEARCH = 200
+_MAX_FILTERS = 20
+logger = logging.getLogger("indah")
+
+
+@dataclass(frozen=True)
+class TableQuery:
+    """What a remote ``Table`` asks its loader for (IND-101): a window of the rows that
+    match ``search``/``filters``, ordered by ``sort`` (``(field, "asc"|"desc")``).
+    ``seq`` numbers the viewer's queries so an old answer is never shown over a new one."""
+
+    search: str = ""
+    filters: dict[str, Any] = field(default_factory=dict)
+    sort: tuple[str, str] | None = None
+    offset: int = 0
+    limit: int = 50
+    seq: int = 0
+
+    @classmethod
+    def parse(cls, payload: dict[str, Any], sortable: set[str] | frozenset[str]) -> TableQuery:
+        """Build a query from a client payload, clamping what is clampable (``offset`` >= 0,
+        ``1 <= limit <= 500``, ``search`` to 200 characters) and ignoring a sort on a column
+        that is not sortable. Raises ``ValueError`` for a wrongly typed field."""
+
+        def integer(name: str, default: int) -> int:
+            value = payload.get(name, default)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"query {name} must be an integer")
+            return value
+
+        search = payload.get("search", "")
+        if not isinstance(search, str):
+            raise ValueError("query search must be a string")
+        raw_filters = payload.get("filters", {})
+        if not isinstance(raw_filters, dict):
+            raise ValueError("query filters must be an object")
+        filters = {
+            str(k): v
+            for k, v in list(raw_filters.items())[:_MAX_FILTERS]
+            if isinstance(v, (str, int, float, bool)) or v is None
+        }
+        sort = payload.get("sort")
+        if sort is not None and not (isinstance(sort, (list, tuple)) and len(sort) == 2):
+            raise ValueError("query sort must be [field, direction]")
+        if sort is not None and not (sort[0] in sortable and sort[1] in ("asc", "desc")):
+            sort = None
+        return cls(
+            search=search[:_MAX_SEARCH],
+            filters=filters,
+            sort=(sort[0], sort[1]) if sort is not None else None,
+            offset=max(0, integer("offset", 0)),
+            limit=min(MAX_TABLE_LIMIT, max(1, integer("limit", 50))),
+            seq=integer("seq", 0),
+        )
+
+
 @dataclass(frozen=True)
 class RowAction:
     """A per-row button on a rich ``Table`` (IND-99). ``on_click(key)`` runs (sync or
@@ -1297,6 +1356,16 @@ class Table(Component):
     ``checked=`` (a ``Signal[list]`` of keys) adds a checkbox column plus select-all for
     bulk operations. Both need the rich form with a ``key``.
 
+    **Remote form**, ``Table(columns=[...], key="id", remote=loader)``: for more rows than
+    one prop should carry. The shell debounces search, sort and paging into a ``query``
+    event; ``loader(TableQuery)`` returns ``(rows, total)`` for that window (sync loaders run
+    in a worker thread, so a blocking database call is fine; ``async`` ones run on the loop).
+    A newer query supersedes an older one, whose late answer is dropped; an offset past the
+    end is pulled back to the last window. ``reload_on=[signal, ...]`` re-runs the last query
+    when one changes (a project picker, say), ``query=`` mirrors the latest ``TableQuery``
+    into a signal and ``page_size`` is the window size (default 50). Sorting and ``search=``
+    are server-side here; the loader is the one place that honours them.
+
     Sorting and paging are client-side; the data rides ordinary reactive props, so no
     ``protocol_version`` bump. Use ``DataFrame`` when you only need to show a table.
     """
@@ -1319,8 +1388,21 @@ class Table(Component):
         follow: bool = False,
         actions: list[RowAction] | None = None,
         checked: Signal[list[Any]] | None = None,
+        remote: Callable[[TableQuery], Any] | None = None,
+        reload_on: list[Signal[Any]] | None = None,
+        query: Signal[TableQuery | None] | None = None,
     ) -> None:
         super().__init__()
+        if remote is not None:
+            if rows is not None or source is not None:
+                raise ValueError("Table remote= replaces rows=/source: pass one or the other")
+            if key is None or columns is None:
+                raise ValueError("Table remote= needs key= and columns=")
+            if follow:
+                raise ValueError("Table follow= is for streamed rows, not remote= windows")
+            rows = []  # the rich form, with the window held in self._window
+        elif reload_on or query is not None:
+            raise ValueError("Table reload_on=/query= go with remote=")
         if rows is None and (
             columns is not None
             or key is not None
@@ -1356,6 +1438,30 @@ class Table(Component):
         self._follow = bool(follow)
         self._actions = list(actions or [])
         self._checked = checked
+        self._loader = remote
+        if remote is not None and not page_size:
+            self._page_size = 50
+        self._query_signal = query
+        self._window: Signal[dict[str, Any]] = Signal(
+            {"rows": [], "total": 0, "offset": 0, "seq": 0}
+        )
+        self._seq_seen = 0
+        self._last_query: TableQuery | None = None
+        self._reload_tasks: set[asyncio.Task[None]] = set()
+        self._reload_effect: Any = None
+        if remote is not None and reload_on:
+            deps = list(reload_on)
+            armed = False
+
+            def on_change() -> None:
+                nonlocal armed
+                for dep in deps:  # read them all, so each one is tracked
+                    dep.value  # noqa: B018
+                if armed:
+                    self._spawn_reload()
+                armed = True
+
+            self._reload_effect = effect(on_change)
         self._columns: list[Col] | None = None
         if rows is not None:
             self._columns = list(columns) if columns is not None else self._infer_columns(rows)
@@ -1385,6 +1491,8 @@ class Table(Component):
             props["columnToggle"] = self._column_toggle
             props["follow"] = self._follow
             props["checkable"] = self._checked is not None
+            if self._loader is not None:
+                props["remote"] = True
             if self._actions:
                 props["actions"] = [a.wire(i) for i, a in enumerate(self._actions)]
         return props
@@ -1392,6 +1500,8 @@ class Table(Component):
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         if self._columns is None:
             props: dict[str, Callable[[], Any]] = {"data": lambda: _to_table(_read(self._source))}
+        elif self._loader is not None:
+            props = {"window": lambda: self._window.value}
         else:
             props = {"rows": lambda: _to_records(_read(self._rows), self._key)}
         if self._selected is not None:
@@ -1418,6 +1528,13 @@ class Table(Component):
             if "index" in payload:
                 self._selected.set(int(payload["index"]))
                 return True
+        if event == "query" and self._loader is not None:
+            sortable = {c.field for c in self._columns or [] if c.sortable}
+            try:
+                query = TableQuery.parse(payload, sortable)
+            except ValueError:
+                return False
+            return self._run_query(query)
         if event == "check" and self._checked is not None:
             keys = payload.get("keys")
             if isinstance(keys, list):
@@ -1432,6 +1549,65 @@ class Table(Component):
                     return result
                 return True
         return False
+
+    # -- remote mode (IND-101) ----------------------------------------------
+
+    async def _run_query(self, query: TableQuery) -> None:
+        if query.seq < self._seq_seen:
+            return  # a newer query already arrived: never load for a superseded one
+        self._seq_seen = query.seq
+        self._last_query = query
+        if self._query_signal is not None:
+            self._query_signal.set(query)
+        await self._load(query)
+
+    async def _call_loader(self, query: TableQuery) -> tuple[list[Any], int]:
+        loader = self._loader
+        assert loader is not None
+        if inspect.iscoroutinefunction(loader):
+            result = await loader(query)
+        else:
+            result = await asyncio.to_thread(loader, query)
+            if inspect.isawaitable(result):
+                result = await result
+        rows, total = result
+        return list(rows), int(total)
+
+    async def _load(self, query: TableQuery) -> None:
+        rows, total = await self._call_loader(query)
+        if query.seq < self._seq_seen:
+            return  # superseded while the loader ran: drop the late answer
+        if not rows and total > 0 and query.offset >= total:
+            # The data shrank under the viewer: pull the window back to the last page.
+            query = replace(query, offset=(total - 1) // query.limit * query.limit)
+            rows, total = await self._call_loader(query)
+            if query.seq < self._seq_seen:
+                return
+        self._window.set(
+            {
+                "rows": _to_records(rows, self._key),
+                "total": total,
+                "offset": query.offset,
+                "seq": query.seq,
+            }
+        )
+
+    def _spawn_reload(self) -> None:
+        """Re-run the last query (a ``reload_on`` signal changed). Needs the event loop,
+        like any signal write that reaches the UI; outside one it is skipped."""
+        if self._last_query is None:
+            return  # nothing has been shown yet; the shell's first query will load
+        try:
+            task = asyncio.get_running_loop().create_task(self._load(self._last_query))
+        except RuntimeError:
+            return
+        self._reload_tasks.add(task)
+        task.add_done_callback(self._reload_done)
+
+    def _reload_done(self, task: asyncio.Task[None]) -> None:
+        self._reload_tasks.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            logger.error("Table reload failed", exc_info=task.exception())
 
 
 def _to_records(source: Any, key: str | None) -> list[dict[str, Any]]:

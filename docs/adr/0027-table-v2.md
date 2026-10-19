@@ -56,5 +56,13 @@ additive (new props `columns`, `rows`, `rowKey`, `height`; a `select` event carr
   checking posts the whole new key set as `check {keys}`, so a lost event cannot leave the
   sides disagreeing. Clicking an action or a checkbox never selects the row. A handler must
   tolerate a stale key.
-- Not yet built (later cards in the same epic): server-driven (remote) queries and virtual
-  scroll for thousands of rows.
+- Remote mode (IND-101): `Table(columns=, key=, remote=loader(TableQuery) -> (rows, total),
+  reload_on=[...], query=)`. The shell debounces search/sort/paging into `query {..., seq}`; the
+  server runs the loader (a sync loader in a worker thread, so a blocking database call does not
+  stall the loop), drops a superseded query, re-clamps an offset past `total`, and answers with a
+  single `window` prop so rows, total and seq are atomic. The shell shows a window only if its seq
+  is current. Paging is Prev/Next here; virtual scroll over the same protocol is IND-102. One
+  loader is the only place that honours search and sort, so a loader that ignores them is a bug
+  in the app, not the table. `TableQuery.parse` clamps limit, truncates search and ignores a sort
+  on a non-sortable column, so a client cannot ask for an arbitrary field or unbounded window.
+- Not yet built (later cards in the same epic): virtual scroll for thousands of rows.
