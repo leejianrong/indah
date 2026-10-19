@@ -93,11 +93,14 @@ O(delta) rather than resending the whole prop (ADR-0011, ADR-0018).
 ### Resume
 
 State-bearing messages (`patch`, `error`) are tagged on the wire with an SSE
-`id:` — a per-stream offset. When an `EventSource` reconnects it sends the last id
+`id:` — `<epoch>-<offset>`: the per-stream offset, qualified by a random id for the
+server-side hub that issued it. When an `EventSource` reconnects it sends the last id
 back as `Last-Event-Id`, and the server replays the messages the client missed. If
-the client's offset has been evicted from the buffer, the server falls back to a
+the client's offset has been evicted from the buffer, **or the epoch is not this
+hub's** (the server restarted, so the offset means nothing), the server falls back to a
 fresh `init` (always correct, because a `StreamText` snapshot carries its full
-accumulated text). `init` and `ping` carry no id. See ADR-0011.
+accumulated text). A bare integer id (no epoch) is still accepted and skips the epoch
+check. `init` and `ping` carry no id. See ADR-0011.
 
 ## Client → server events (HTTP POST)
 

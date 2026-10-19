@@ -50,3 +50,27 @@ def test_publish_assigns_increasing_offsets():
     assert hub.publish({"a": 1}) == 1
     assert hub.publish({"a": 2}) == 2
     assert hub.current_offset == 2
+
+
+@pytest.mark.unit
+def test_each_hub_has_its_own_epoch():
+    assert isinstance(Hub().epoch, str) and Hub().epoch
+    assert Hub().epoch != Hub().epoch
+
+
+@pytest.mark.unit
+def test_replay_from_another_epoch_forces_a_snapshot():
+    # A restarted server builds a fresh hub (offset 0). A client that last saw offset
+    # 500 on the *old* hub must not be told it is "already current" (IND-85).
+    hub = Hub()
+    assert hub.replay_since(500, epoch="some-old-epoch") is None
+    assert hub.replay_since(500, epoch=hub.epoch) == []  # same hub: genuinely current
+
+
+@pytest.mark.unit
+def test_replay_without_an_epoch_keeps_the_legacy_integer_behaviour():
+    hub = Hub()
+    hub.publish({"n": 1})
+    hub.publish({"n": 2})
+    assert hub.replay_since(1) == [(2, {"n": 2})]
+    assert hub.replay_since(2) == []

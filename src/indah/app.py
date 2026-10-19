@@ -576,6 +576,7 @@ async def sse_events(
     replay: tuple[Item, ...] | list[Item] = (),
     skip_upto: int = 0,
     proxy_flush: bool = False,
+    id_prefix: str = "",
 ) -> AsyncIterator[str]:
     """Yield SSE-framed strings for one browser connection.
 
@@ -596,6 +597,9 @@ async def sse_events(
     ``_SSE_FLUSH_PAD``). It coalesces a queued burst into one flush and pads only up
     to the next window boundary, so streaming does not pay a full window per frame
     (KAN-1395).
+
+    ``id_prefix`` is prepended to each SSE ``id:`` (``"<hub epoch>-"`` on the real
+    stream) so an id is only meaningful to the hub that issued it (IND-85).
     """
     # ``_SSE_FLUSH_PAD`` doubles as the on/off knob: "" disables all padding.
     flush_on = proxy_flush and bool(_SSE_FLUSH_PAD)
@@ -613,7 +617,7 @@ async def sse_events(
         connect_frames += 1
         yield chunk
     for offset, message in replay:
-        chunk = _sse(message, event_id=offset)
+        chunk = _sse(message, event_id=offset, id_prefix=id_prefix)
         pending += len(chunk)
         connect_frames += 1
         yield chunk
@@ -651,7 +655,7 @@ async def sse_events(
         for off, msg in batch:
             if off <= skip_upto:
                 continue
-            chunk = _sse(msg, event_id=off)
+            chunk = _sse(msg, event_id=off, id_prefix=id_prefix)
             pending += len(chunk)
             emitted += 1
             yield chunk
@@ -677,8 +681,8 @@ async def _stream(request: Request) -> StreamingResponse:
     # no await in between, so nothing published concurrently is missed or applied
     # twice. skip_upto = the offset the client is caught up to after init/replay;
     # queued messages already covered by that are dropped.
-    last_event_id = _parse_last_event_id(request)
-    replay = hub.replay_since(last_event_id)
+    epoch, last_event_id = _parse_last_event_id(request)
+    replay = hub.replay_since(last_event_id, epoch)
     if last_event_id is None or replay is None:
         # Fresh connect, or a buffer gap: send a full snapshot (always correct
         # because a StreamText snapshot carries its full accumulated text).
@@ -698,6 +702,7 @@ async def _stream(request: Request) -> StreamingResponse:
                 replay=replay,
                 skip_upto=skip_upto,
                 proxy_flush=True,
+                id_prefix=f"{hub.epoch}-",
             ):
                 yield chunk
         finally:
@@ -809,20 +814,22 @@ async def _file(request: Request) -> Response:
     )
 
 
-def _parse_last_event_id(request: Request) -> int | None:
-    """The SSE resume offset, from the ``Last-Event-Id`` header (EventSource sets
-    it natively on reconnect) or a ``?lastEventId=`` fallback. Invalid -> None."""
+def _parse_last_event_id(request: Request) -> tuple[str | None, int | None]:
+    """The SSE resume point as ``(hub epoch, offset)``, from the ``Last-Event-Id``
+    header (EventSource sets it natively on reconnect) or a ``?lastEventId=``
+    fallback. A bare integer (legacy / tests) has no epoch; invalid -> ``(None, None)``."""
     raw = request.headers.get("last-event-id") or request.query_params.get("lastEventId")
     if raw is None:
-        return None
+        return None, None
+    epoch, sep, offset = raw.rpartition("-")
     try:
-        return int(raw)
+        return (epoch or None) if sep else None, int(offset)
     except (TypeError, ValueError):
-        return None
+        return None, None
 
 
-def _sse(message: dict[str, Any], event_id: int | None = None) -> str:
-    prefix = f"id: {event_id}\n" if event_id is not None else ""
+def _sse(message: dict[str, Any], event_id: int | None = None, id_prefix: str = "") -> str:
+    prefix = f"id: {id_prefix}{event_id}\n" if event_id is not None else ""
     return f"{prefix}data: {json.dumps(message)}\n\n"
 
 

@@ -129,3 +129,60 @@ async def test_async_handler_exception_becomes_a_toast():
     await session._run_handler(result.coro)  # same path spawn() uses
 
     assert _errors(hub) == ["RuntimeError: async fail"]
+
+
+async def _first_frames(resp, *, want_data: int = 1) -> str:
+    """Read an SSE StreamingResponse until ``want_data`` ``data:`` frames arrived."""
+    seen, text = 0, ""
+    async for chunk in resp.body_iterator:
+        text += chunk if isinstance(chunk, str) else chunk.decode()
+        seen = text.count("data: ")
+        if seen >= want_data:
+            break
+    await resp.body_iterator.aclose()
+    return text
+
+
+def _stream_request(app, *, sid: str, last_event_id: str | None):
+    from starlette.requests import Request
+
+    headers = [(b"last-event-id", last_event_id.encode())] if last_event_id else []
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/api/stream",
+        "query_string": f"sid={sid}".encode(),
+        "headers": headers,
+        "app": app,
+    }
+    return Request(scope)
+
+
+@pytest.mark.integration
+async def test_resume_after_server_restart_resends_the_init_snapshot():
+    """IND-85: a restarted server has a fresh hub (offset 0). A tab reconnecting with
+    a high Last-Event-Id must get an `init`, not silence with a stale tree."""
+    from indah.app import _stream, create_app
+    from indah.components import Column, Text
+    from indah.session import Session
+
+    app = create_app(session_factory=lambda: Session(Column(children=[Text("hello")])))
+    resp = await _stream(_stream_request(app, sid="tab-a", last_event_id="deadbeef-500"))
+    text = await _first_frames(resp)
+    assert '"type": "init"' in text
+
+
+@pytest.mark.integration
+async def test_resume_with_the_current_epoch_replays_instead_of_re_init():
+    from indah.app import _stream, create_app
+    from indah.components import Column, Text
+    from indah.session import Session
+
+    app = create_app(session_factory=lambda: Session(Column(children=[Text("hello")])))
+    handle = app.state.store.get_or_create("tab-a")
+    handle.hub.publish({"v": 1, "type": "patch", "changes": [{"target": "n1", "props": {"x": 1}}]})
+    last = f"{handle.hub.epoch}-0"  # saw nothing yet on *this* hub
+    resp = await _stream(_stream_request(app, sid="tab-a", last_event_id=last))
+    text = await _first_frames(resp)
+    assert '"type": "patch"' in text and '"type": "init"' not in text
+    assert f"id: {handle.hub.epoch}-1" in text  # ids carry the epoch
