@@ -2371,3 +2371,92 @@ def test_entries_browser_meets_its_scroll_and_latency_budgets_on_20k_rows():
                 browser.close()
     finally:
         handle.stop()
+
+
+def _routed_parent_app():
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    from indah import Button, Column, Link, Router, Session, Text, create_app
+
+    def build(ctx):
+        return Session(
+            Column(
+                children=[
+                    Link(ctx, "Home", to="/"),
+                    Link(ctx, "Auth project", to="/projects/auth"),
+                    Button("Go to billing", lambda: ctx.navigate("/projects/billing")),
+                    Button("Replace to home", lambda: ctx.navigate("/", replace=True)),
+                    Router(
+                        ctx,
+                        routes={
+                            "/": Text("HOME PAGE"),
+                            "/projects/{project}": Text("PROJECT PAGE"),
+                            "/projects/{project}/entries/{entry_id}": Text("ENTRY PAGE"),
+                        },
+                        not_found=Text("NOT FOUND PAGE"),
+                    ),
+                ]
+            )
+        )
+
+    ui = create_app(session_factory=build, spa=True, proxy_flush=False)
+    return Starlette(routes=[Mount("/ui", app=ui)])
+
+
+@pytest.mark.e2e
+def test_router_deep_links_back_forward_new_tab_and_server_navigation_under_a_mount():
+    handle = launch(_routed_parent_app(), block=False, open_inline=False)
+    root = handle.url.rstrip("/")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            context = browser.new_context()
+            page = context.new_page()
+            try:
+                # A pasted deep link opens that page, under the /ui mount.
+                page.goto(f"{root}/ui/projects/auth/entries/01J", wait_until="domcontentloaded")
+                expect(page.get_by_text("ENTRY PAGE")).to_be_visible()
+                page.goto(f"{root}/ui/zzz", wait_until="domcontentloaded")
+                expect(page.get_by_text("NOT FOUND PAGE")).to_be_visible()
+
+                # Links navigate without a page load, and Back/Forward follow the history.
+                page.goto(f"{root}/ui/", wait_until="domcontentloaded")
+                expect(page.get_by_text("HOME PAGE")).to_be_visible()
+                page.evaluate("window.__marker = 'same-document'")
+                page.get_by_role("link", name="Auth project").click()
+                expect(page.get_by_text("PROJECT PAGE")).to_be_visible()
+                assert page.url == f"{root}/ui/projects/auth"
+                assert page.evaluate("window.__marker") == "same-document"  # no reload
+                page.go_back()
+                expect(page.get_by_text("HOME PAGE")).to_be_visible()
+                assert page.url == f"{root}/ui/"
+                page.go_forward()
+                expect(page.get_by_text("PROJECT PAGE")).to_be_visible()
+                assert page.url == f"{root}/ui/projects/auth"
+
+                # A link is a real href: opening it in a new tab lands on the same page.
+                href = page.get_by_role("link", name="Auth project").get_attribute("href")
+                assert href == "/ui/projects/auth"
+                other = context.new_page()
+                other.goto(root + href, wait_until="domcontentloaded")
+                expect(other.get_by_text("PROJECT PAGE")).to_be_visible()
+                other.close()
+
+                # Server-side navigation moves the address bar; replace=True rewrites history.
+                page.get_by_role("button", name="Go to billing").click()
+                expect(page).to_have_url(f"{root}/ui/projects/billing")
+                page.get_by_role("button", name="Replace to home").click()
+                expect(page).to_have_url(f"{root}/ui/")
+                expect(page.get_by_text("HOME PAGE")).to_be_visible()
+                page.go_back()  # replace dropped the billing entry: back is the auth page
+                expect(page).to_have_url(f"{root}/ui/projects/auth")
+                expect(page.get_by_text("PROJECT PAGE")).to_be_visible()
+
+                # A reload keeps the page: the stream asks for it by path.
+                page.reload(wait_until="domcontentloaded")
+                expect(page.get_by_text("PROJECT PAGE")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

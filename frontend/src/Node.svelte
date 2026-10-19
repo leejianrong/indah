@@ -1,6 +1,6 @@
 <script>
   import { nodeProps } from "./stores.js";
-  import { apiUrl, postEvent, postUpload } from "./api.js";
+  import { apiUrl, postEvent, postUpload, appPath, hrefFor, pushPath } from "./api.js";
   import Self from "./Node.svelte";
   import Custom from "./Custom.svelte";
   import Markdown from "./Markdown.svelte";
@@ -24,6 +24,23 @@
   // keystrokes - the "missing letters" bug. So we sync the server value into the
   // element only when it does NOT have focus; while focused, the DOM owns it.
   let inputEl = $state();
+
+  // Router: Back/Forward changes the address bar without a request, so tell the server which
+  // in-app page the tab is on now. (Link clicks and ctx.navigate push history themselves.)
+  $effect(() => {
+    if (node.type !== "router") return;
+    const onPop = () => postEvent(node.id, "navigate", { path: appPath() });
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  });
+  function onLink(e) {
+    // Let the browser handle anything that is not a plain left click (new tab, new window,
+    // download), so a Link is a real link.
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    pushPath(props.to);
+    postEvent(node.id, "navigate", { path: props.to });
+  }
 
   // MasterDetail swaps the split for a drawer on a narrow viewport.
   let narrow = $state(false);
@@ -141,6 +158,12 @@
       {/each}
     </div>
   </div>
+{:else if node.type === "router"}
+  {#each node.children as child, i (child.id)}
+    {#if i === props.active}<Self node={child} />{/if}
+  {/each}
+{:else if node.type === "link"}
+  <a class="link" href={hrefFor(props.to)} onclick={onLink}>{props.label}</a>
 {:else if node.type === "splitpane"}
   <SplitPane
     id={node.id}
