@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import inspect
 import io
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
@@ -1091,56 +1092,176 @@ class DataFrame(Component):
         return {"data": lambda: _to_table(_read(self._source))}
 
 
-class Table(Component):
-    """An interactive table (ADR-0021): sort, page, and select, on reactive props.
+_COL_KINDS = frozenset({"text", "mono", "badge", "time", "number"})
+_TONES = frozenset({"ok", "warn", "err", "info", "neutral"})
+_CSS_LENGTH = re.compile(r"^\d+(\.\d+)?(ch|px|rem|em|%|vw|vh)$")
 
-    A superset of ``DataFrame``'s display - it takes the same source (a pandas frame,
-    a ``{"columns","rows"}`` dict, or a list of row dicts) - adding interaction the
-    shell handles client-side: click a header to sort, page through large data, and
-    click a row to select it. Selection round-trips: bind ``selected`` to a
-    ``Signal[int]`` (the selected row index, or ``None``) and a click sets it, so the
-    selection drives the rest of the app (the dashboard pattern: pick a row -> charts
-    update). Sorting and paging are client-side (no round-trip), so the table stays
-    responsive; the data still rides one reactive prop, so no ``protocol_version``
-    bump. Use ``DataFrame`` when you only need to show a table.
+
+@dataclass(frozen=True)
+class Col:
+    """A typed column for a rich ``Table`` (ADR-0027).
+
+    ``kind`` picks the cell renderer (all shell-side, none interpret HTML): ``text``,
+    ``mono`` (truncated, full value on hover), ``badge`` (a pill; ``tones`` maps a cell
+    value to ``ok|warn|err|info|neutral``), ``time`` (an ISO string or epoch ms/s shown
+    relative, "3s ago", refreshed live) and ``number`` (right-aligned, grouped).
+    """
+
+    field: str
+    title: str | None = None
+    kind: str = "text"
+    width: str | None = None
+    sortable: bool = True
+    tones: dict[str, str] | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in _COL_KINDS:
+            raise ValueError(f"Col kind {self.kind!r} not in {sorted(_COL_KINDS)}")
+        for value, tone in (self.tones or {}).items():
+            if tone not in _TONES:
+                raise ValueError(f"Col tone {tone!r} for {value!r} not in {sorted(_TONES)}")
+        if self.width is not None and not _CSS_LENGTH.match(self.width):
+            raise ValueError(f"Col width {self.width!r} must be a length like '12ch' or '8rem'")
+
+    def wire(self) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "field": self.field,
+            "title": self.title if self.title is not None else self.field,
+            "kind": self.kind,
+            "sortable": self.sortable,
+        }
+        if self.width is not None:
+            out["width"] = self.width
+        if self.tones:
+            out["tones"] = dict(self.tones)
+        return out
+
+
+class Table(Component):
+    """An interactive table (ADR-0021, ADR-0027): sort, page, and select.
+
+    **Classic form**, ``Table(source, ...)``: a superset of ``DataFrame``'s display (a
+    pandas frame, a ``{"columns","rows"}`` dict, or a list of row dicts) with client-side
+    sort/paging and row select. Bind ``selected`` to a ``Signal[int]`` (the selected row
+    index, or ``None``) and a click sets it, so the selection drives the rest of the app.
+
+    **Rich form**, ``Table(rows=..., columns=[Col(...)], key="id")``: rows are dicts, each
+    with a stable ``key`` (a ULID, say), columns are typed (:class:`Col`), and ``selected``
+    holds the row's *key*, not its position, so it survives sorting and new rows. ``rows``
+    may be a ``Stream``: appended rows arrive as small ``append`` patches and the browser
+    keeps the newest ``stream.limit``. ``columns`` may be omitted when the rows are a
+    non-empty static list. ``height`` (a CSS length) makes the body scroll under a sticky
+    header.
+
+    Sorting and paging are client-side; the data rides ordinary reactive props, so no
+    ``protocol_version`` bump. Use ``DataFrame`` when you only need to show a table.
     """
 
     type = "table"
 
     def __init__(
         self,
-        source: Source,
+        source: Source = None,
         *,
+        rows: Source | Stream | None = None,
+        columns: list[Col] | None = None,
+        key: str | None = None,
+        selected: Signal[Any] | None = None,
         page_size: int = 0,
-        selected: Signal[int] | None = None,
         label: str = "",
+        height: str | None = None,
     ) -> None:
         super().__init__()
+        if rows is None and (columns is not None or key is not None):
+            raise ValueError(
+                "Table columns= and key= go with rows=; the classic form takes neither"
+            )
+        if rows is None and source is None:
+            raise ValueError("Table needs a source (classic form) or rows= (rich form)")
+        if rows is not None and source is not None:
+            raise ValueError("pass a positional source or rows=, not both")
+        if height is not None and not _CSS_LENGTH.match(height):
+            raise ValueError(f"Table height {height!r} must be a length like '20rem'")
         self._source = source
+        self._rows = rows
+        self._key = key
         self._page_size = int(page_size)
         self._selected = selected
         self._label = label
+        self._height = height
+        self._columns: list[Col] | None = None
+        if rows is not None:
+            self._columns = list(columns) if columns is not None else self._infer_columns(rows)
+
+    @staticmethod
+    def _infer_columns(rows: Any) -> list[Col]:
+        if isinstance(rows, (Signal, Stream)) or callable(rows):
+            raise ValueError("pass columns= when rows are a Stream, Signal or callable")
+        records = _to_records(rows, None)
+        if not records:
+            raise ValueError("pass columns= when the rows are empty")
+        return [Col(name) for name in records[0]]
 
     def static_props(self) -> dict[str, Any]:
-        return {
+        props: dict[str, Any] = {
             "pageSize": self._page_size,
             "selectable": self._selected is not None,
             "label": self._label,
         }
-
-    def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        props: dict[str, Callable[[], Any]] = {"data": lambda: _to_table(_read(self._source))}
-        if self._selected is not None:
-            props["value"] = lambda: (
-                None if self._selected.value is None else int(self._selected.value)
-            )
+        if self._columns is not None:
+            props["columns"] = [c.wire() for c in self._columns]
+            if self._key is not None:
+                props["rowKey"] = self._key
+            if self._height is not None:
+                props["height"] = self._height
         return props
 
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        if self._columns is None:
+            props: dict[str, Callable[[], Any]] = {"data": lambda: _to_table(_read(self._source))}
+        else:
+            props = {"rows": lambda: _to_records(_read(self._rows), self._key)}
+        if self._selected is not None:
+            if self._columns is None:
+                props["value"] = lambda: (
+                    None if self._selected.value is None else int(self._selected.value)
+                )
+            else:
+                props["value"] = lambda: _json_safe(self._selected.value)
+        return props
+
+    def stream_props(self) -> dict[str, tuple[Stream, Callable[[list[Any]], list[Any]]]]:
+        if self._columns is not None and isinstance(self._rows, Stream):
+            return {"rows": (self._rows, lambda rows: _to_records(rows, self._key))}
+        return {}
+
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
-        if event == "select" and "index" in payload and self._selected is not None:
-            self._selected.set(int(payload["index"]))
-            return True
+        if event == "select" and self._selected is not None:
+            if "key" in payload and self._columns is not None:
+                self._selected.set(payload["key"])
+                return True
+            if "index" in payload:
+                self._selected.set(int(payload["index"]))
+                return True
         return False
+
+
+def _to_records(source: Any, key: str | None) -> list[dict[str, Any]]:
+    """Normalise rows to ``[{field: json-safe value}, ...]``; every row must carry ``key``."""
+    if source is None:
+        return []
+    if hasattr(source, "columns") and hasattr(source, "to_dict"):  # pandas, duck-typed
+        source = source.to_dict(orient="records")
+    if not isinstance(source, (list, tuple)):
+        raise TypeError(f"Table rows must be a list of dicts, not {type(source).__name__}")
+    out: list[dict[str, Any]] = []
+    for row in source:
+        if not isinstance(row, dict):
+            raise TypeError(f"Table rows must be dicts, got {type(row).__name__}")
+        if key is not None and key not in row:
+            raise ValueError(f"Table row is missing its key {key!r}: {row!r}")
+        out.append({str(k): _json_safe(v) for k, v in row.items()})
+    return out
 
 
 class Stat(Component):

@@ -196,7 +196,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
 | `map` | display | `center:[lat,lon]`, `zoom`, `markers:[{lat,lon,label?,color?,radius?}]`, `polygons:[{points:[[lat,lon],...],label?,color?,fillOpacity?}]`, `polylines:[{points:[[lat,lon],...],label?,color?,weight?}]`, `tileUrl`, `attribution`, `height`, `label` | — (pan/zoom is client-side only, not reported back) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
-| `table` | display/input | `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index) | `select` `{index}` |
+| `table` | display/input | classic: `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index). Rich: `columns:[{field,title,kind,width?,sortable,tones?}]`, `rows:[{...}]`, `rowKey`, `height`, `pageSize`, `selectable`, `value` (selected row key) | `select` `{index}` or, in rich mode, `{key}` |
 | `stat` | display | `value`, `label`, `delta`, `help` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
@@ -274,6 +274,14 @@ no round-trip) plus row selection. When `selectable` is set (the app bound a
 selection signal), clicking a row emits `select` `{index}` — the index into the
 source rows — and the server patches back `value` (the selected row index) so the
 selection can drive other components. `pageSize` (0 = no paging) sets the page size.
+**Rich table (ADR-0027).** A `table` whose props carry `columns` is the rich form: `rows`
+is a list of objects (replacing `data`), each with a stable `rowKey` field, and `value`
+is the selected row's **key**, so a selection survives sorting and new rows. A column's
+`kind` picks a shell-side renderer that never interprets HTML: `text`, `mono`, `badge`
+(`tones` maps a value to `ok|warn|err|info|neutral`), `time` (ISO string or epoch ms/s,
+shown relative and refreshed live) and `number`. `height` makes the body scroll under a
+sticky header. When the rows are a `Stream` they grow by `append` patches on `rows`
+with a `trim`. All of it is additive props, so no `protocol_version` bump.
 `stat` is a metric card: a `value` with a `label`, an optional `delta` (the shell
 colours it by sign — red when it starts with `-`, otherwise green), and an optional
 `help` line. Both carry their data in ordinary props, so no `protocol_version` bump.

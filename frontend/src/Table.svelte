@@ -3,6 +3,7 @@
   // round-trips to Python (binds a Signal, so a selection drives the rest of the
   // app). Data rides one reactive prop, like DataFrame - no protocol change.
   import { postEvent } from "./api.js";
+  import TableRich from "./TableRich.svelte";
 
   let { props, nodeId } = $props();
 
@@ -53,6 +54,10 @@
   }
 </script>
 
+{#if props.columns}
+  <TableRich {props} {nodeId} />
+{:else}
+
 <div class="field">
   {#if props.label}<span class="stream-label">{props.label}</span>{/if}
   <div class="table-scroll">
@@ -101,3 +106,4 @@
     </div>
   {/if}
 </div>
+{/if}
