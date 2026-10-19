@@ -86,6 +86,7 @@ The UI is a tree of nodes. A node is:
 | `init` | `{"v","type":"init","root":<node>}` | On connect, or a resume that fell back to a full snapshot |
 | `patch` | `{"v","type":"patch","changes":[<change>,...]}` | Granular updates to existing nodes |
 | `error` | `{"v","type":"error","message":"..."}` | A handler failed; the shell shows a toast |
+| `toast` | `{"v","type":"toast","message","kind","ttl"}` | Feedback from `ctx.toast(...)`: `kind` is `info`/`success`/`warn`/`error`, `ttl` seconds (`0` = until dismissed). Sent to the calling session only; an older shell ignores it |
 | `ping` | `{"v","type":"ping"}` | Heartbeat, so idle-timeout proxies keep the stream open |
 
 A patch `change` is one of:
@@ -111,7 +112,7 @@ frames a second (ADR-0026).
 
 ### Resume
 
-State-bearing messages (`patch`, `error`) are tagged on the wire with an SSE
+State-bearing messages (`patch`, `error`, `toast`) are tagged on the wire with an SSE
 `id:` — `<epoch>-<offset>`: the per-stream offset, qualified by a random id for the
 server-side hub that issued it. When an `EventSource` reconnects it sends the last id
 back as `Last-Event-Id`, and the server replays the messages the client missed. If

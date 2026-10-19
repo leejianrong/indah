@@ -1,10 +1,11 @@
 <script>
   import { onMount } from "svelte";
   import { apiUrl, streamUrl, PROTOCOL_VERSION } from "./api.js";
-  import { structure, nodeProps, status, toast } from "./stores.js";
+  import { structure, nodeProps, status, toasts } from "./stores.js";
   import Node from "./Node.svelte";
 
-  let toastTimer;
+  let toastSeq = 0;
+  const MAX_TOASTS = 4;
 
   // Optional page chrome injected by the server into the served shell (create_app
   // args; the demo gallery sets them per demo): a clickable logo back to the
@@ -21,10 +22,15 @@
     };
   }
 
-  function showToast(message) {
-    toast.set(message);
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.set(null), 6000);
+  function dismissToast(id) {
+    toasts.update((list) => list.filter((t) => t.id !== id));
+  }
+
+  // ttl is seconds; 0 keeps the toast until it is clicked.
+  function showToast(message, kind = "info", ttl = 4) {
+    const id = ++toastSeq;
+    toasts.update((list) => [...list, { id, message, kind, ttl }].slice(-MAX_TOASTS));
+    if (ttl > 0) setTimeout(() => dismissToast(id), ttl * 1000);
   }
 
   function applyMessage(msg) {
@@ -66,7 +72,9 @@
         return new Map(map);
       });
     } else if (msg.type === "error") {
-      showToast(msg.message || "Something went wrong");
+      showToast(msg.message || "Something went wrong", "error", 6);
+    } else if (msg.type === "toast") {
+      showToast(msg.message || "", msg.kind || "info", msg.ttl ?? 4);
     }
   }
 
@@ -85,7 +93,6 @@
     };
     source.onerror = () => status.update((s) => ({ ...s, live: false, text: "reconnecting…" }));
     return () => {
-      clearTimeout(toastTimer);
       source.close();
     };
   });
@@ -214,6 +221,10 @@
   </div>
 </div>
 
-{#if $toast}
-  <button type="button" class="toast" onclick={() => toast.set(null)}>{$toast}</button>
+{#if $toasts.length}
+  <div class="toasts" role="status" aria-live="polite">
+    {#each $toasts as t (t.id)}
+      <button type="button" class="toast {t.kind}" onclick={() => dismissToast(t.id)}>{t.message}</button>
+    {/each}
+  </div>
 {/if}

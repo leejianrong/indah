@@ -696,11 +696,18 @@
         background: var(--ok);
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
       }
-      .toast {
+      .toasts {
         position: fixed;
         left: 50%;
         bottom: 1.5rem;
         transform: translateX(-50%);
+        z-index: 60;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .toast {
         max-width: min(520px, 92vw);
         padding: 0.7rem 1rem;
         font: inherit;
@@ -709,11 +716,14 @@
         color: var(--text);
         background: var(--surface);
         border: 1px solid var(--outline);
-        border-left: 3px solid var(--err);
+        border-left: 3px solid var(--primary);
         border-radius: var(--radius-sm);
         box-shadow: var(--shadow);
         cursor: pointer;
       }
+      .toast.success { border-left-color: var(--ok); }
+      .toast.warn { border-left-color: var(--warn); }
+      .toast.error { border-left-color: var(--err); }
     </style>
     <script>
       // Resolve the saved theme choice (light / dark / system) into data-theme

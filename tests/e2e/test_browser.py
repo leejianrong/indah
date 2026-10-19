@@ -1693,3 +1693,44 @@ def test_confirm_button_posts_nothing_until_accepted():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_ctx_toast_appears_in_the_sender_tab_only_and_expires():
+    from indah import Button, Column, Session, create_app
+
+    def build(ctx):
+        return Session(
+            Column(
+                children=[
+                    Button("ok", lambda: ctx.toast("Released 01J", kind="success", ttl=1)),
+                    Button("sticky", lambda: ctx.toast("Stay", kind="warn", ttl=0)),
+                ]
+            )
+        )
+
+    handle = launch(create_app(session_factory=build), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            a, b = browser.new_page(), browser.new_page()
+            try:
+                for page in (a, b):
+                    page.goto(handle.url, wait_until="domcontentloaded")
+                    expect(page.get_by_role("button", name="ok", exact=True)).to_be_visible()
+                a.get_by_role("button", name="ok", exact=True).click()
+                toast = a.locator(".toast.success")
+                expect(toast).to_have_text("Released 01J")
+                assert b.locator(".toast").count() == 0  # not the other tab
+                expect(toast).to_have_count(0, timeout=4000)  # ttl 1 s
+                a.get_by_role("button", name="sticky").click()
+                sticky = a.locator(".toast.warn")
+                expect(sticky).to_be_visible()
+                a.wait_for_timeout(1500)
+                expect(sticky).to_be_visible()  # ttl 0: stays
+                sticky.click()
+                expect(sticky).to_have_count(0)  # until dismissed
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

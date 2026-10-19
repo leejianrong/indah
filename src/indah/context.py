@@ -24,6 +24,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from .protocol import toast_message
 from .reactive import Signal
 from .stream import Stream
 
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
 
     from .push import Topic
+    from .transport import Hub
 
 logger = logging.getLogger("indah")
 
@@ -74,6 +76,20 @@ class Context:
         self.user = user  # the authenticated principal; always None until identity lands
         self._on_close: list[Callable[[], None]] = []
         self._closed = False
+        self._hub: Hub | None = None
+
+    def _bind_hub(self, hub: Hub) -> None:
+        self._hub = hub
+
+    def toast(self, message: str, *, kind: str = "info", ttl: float = 4.0) -> None:
+        """Show a transient message in *this session's* tab(s) only: ``kind`` is
+        ``info``/``success``/``warn``/``error``, ``ttl`` seconds (0 = until dismissed).
+
+        Call it from the event loop (a handler), like a signal write. Never put a
+        secret in one. A no-op before the session has a connection hub."""
+        message_ = toast_message(message, kind, ttl)  # validate even when unbound
+        if self._hub is not None:
+            self._hub.publish(message_)
 
     def on_close(self, fn: Callable[[], None]) -> None:
         """Run ``fn`` when the session ends (discard, eviction, idle reaping).
