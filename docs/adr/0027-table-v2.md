@@ -65,4 +65,11 @@ additive (new props `columns`, `rows`, `rowKey`, `height`; a `select` event carr
   loader is the only place that honours search and sort, so a loader that ignores them is a bug
   in the app, not the table. `TableQuery.parse` clamps limit, truncates search and ignores a sort
   on a non-sortable column, so a client cannot ask for an arbitrary field or unbounded window.
-- Not yet built (later cards in the same epic): virtual scroll for thousands of rows.
+- Virtual scroll (IND-102): `Table(virtual=True, height=)`, any rich form. The shell renders the
+  visible rows plus 8 of overscan between two spacer rows, so the scrollbar is the real
+  `total x --row-h` and the header stays sticky (no absolute positioning). Row height is fixed
+  (cells do not wrap; density tokens are IND-103). Remote windows are block-aligned so nearby
+  scroll positions share a request, the last 8 are cached to avoid flicker, and a search or sort
+  change drops the cache and invalidates in-flight answers by bumping the seq. Select-all on a
+  remote table covers only the rows the browser holds. Measured: 20k remote rows, under 200 DOM
+  rows, worst frame under 100 ms while scrolling the whole table.

@@ -730,6 +730,19 @@
         border: 1px solid var(--outline);
         border-radius: 4px;
       }
+      .table-scroll.virtual { --row-h: 36px; overflow-y: auto; }
+      .table-scroll.virtual table { table-layout: fixed; width: 100%; }
+      .table-scroll.virtual tbody tr:not(.vspacer) { height: var(--row-h); }
+      .table-scroll.virtual tbody td {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-top: 0;
+        padding-bottom: 0;
+      }
+      .table-scroll.virtual .actions-col { width: 13rem; }
+      tr.vspacer td { padding: 0; border: 0; }
+      tr.ph td { color: var(--muted); }
       .check-col { width: 2rem; text-align: center; }
       .actions-col { white-space: nowrap; text-align: right; }
       button.row-action { padding: 0.15rem 0.7rem; font-size: 0.8rem; margin-left: 0.3rem; align-self: auto; }

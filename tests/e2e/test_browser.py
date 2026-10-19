@@ -2033,3 +2033,124 @@ def test_remote_table_debounces_queries_and_round_trips_search_sort_and_paging()
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_virtual_remote_table_keeps_the_dom_small_scrolls_smoothly_and_refetches_on_sort():
+    from indah import Col, Session, Table, create_app
+
+    n = 20000
+    data = [{"id": f"r{i:06d}", "n": i, "name": f"call {i}"} for i in range(n)]
+    queries = []
+
+    def loader(q):
+        queries.append((q.search, q.sort, q.offset, q.limit))
+        rows = data
+        if q.search:
+            rows = [r for r in rows if q.search in r["name"]]
+        if q.sort:
+            rows = sorted(rows, key=lambda r: r[q.sort[0]], reverse=q.sort[1] == "desc")
+        return rows[q.offset : q.offset + q.limit], len(rows)
+
+    table = Table(
+        columns=[Col("id", kind="mono"), Col("n", kind="number", sortable=True), Col("name")],
+        key="id",
+        remote=loader,
+        search=True,
+        height="24rem",
+        virtual=True,
+    )
+    handle = launch(create_app(session=Session(table)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("20000 rows")).to_be_visible()
+                expect(page.locator("tbody tr:not(.vspacer):not(.ph)").first).to_be_visible()
+                dom_rows = lambda: page.locator("tbody tr").count()  # noqa: E731
+                assert dom_rows() < 200
+
+                # The scrollbar tracks `total`: 20k rows of 36 px.
+                height = page.evaluate("document.querySelector('.table-scroll').scrollHeight")
+                assert abs(height - n * 36) < 400
+
+                # Scroll through the whole table in big steps, measuring frame times.
+                stats = page.evaluate(
+                    """async () => {
+                      const el = document.querySelector('.table-scroll');
+                      let last = performance.now(), worst = 0, frames = 0;
+                      for (let y = 0; y < el.scrollHeight; y += 18000) {
+                        el.scrollTop = y;
+                        await new Promise(r => requestAnimationFrame(r));
+                        const t = performance.now();
+                        worst = Math.max(worst, t - last);
+                        last = t;
+                        frames++;
+                      }
+                      return {worst, frames};
+                    }"""
+                )
+                assert stats["worst"] < 100, stats
+                assert dom_rows() < 200
+
+                # Jump to the middle: rows for that position arrive and are the right ones.
+                page.evaluate("document.querySelector('.table-scroll').scrollTop = 10000 * 36")
+                page.wait_for_timeout(800)
+                first = page.locator("tbody tr:not(.vspacer):not(.ph)").first.inner_text()
+                idx = int(first.split("call ")[1].split()[0])
+                assert 9980 <= idx <= 10010, first
+                assert dom_rows() < 200
+
+                # Sorting round-trips: descending puts the last row first, scrollbar unchanged.
+                page.get_by_role("button", name="n", exact=True).click()
+                page.get_by_role("button", name="n", exact=True).click()
+                expect(page.locator("tbody tr:not(.vspacer):not(.ph)").first).to_contain_text(
+                    "call 19999"
+                )
+                assert page.evaluate("document.querySelector('.table-scroll').scrollTop") == 0
+                assert queries[-1][1] == ("n", "desc")
+
+                # Search shrinks the scrollbar to the matches.
+                page.get_by_label("Filter rows").fill("call 1999")
+                expect(page.get_by_text("11 rows")).to_be_visible()
+                height = page.evaluate("document.querySelector('.table-scroll').scrollHeight")
+                assert height < 20 * 36 + 100
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_virtual_static_table_renders_only_the_visible_rows():
+    from indah import Col, Session, Table, create_app
+
+    rows = [{"id": f"r{i}", "n": i} for i in range(5000)]
+    table = Table(
+        rows=rows,
+        columns=[Col("id"), Col("n", kind="number", sortable=True)],
+        key="id",
+        height="20rem",
+        virtual=True,
+        search=True,
+    )
+    handle = launch(create_app(session=Session(table)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator("tbody tr").first).to_be_visible()
+                assert page.locator("tbody tr").count() < 60
+                page.evaluate("document.querySelector('.table-scroll').scrollTop = 3000 * 36")
+                expect(page.get_by_text("r3000", exact=True)).to_be_visible()
+                assert page.locator("tbody tr").count() < 60
+                page.get_by_label("Filter rows").fill("r49")
+                expect(page.locator("tbody tr:not(.vspacer)").first).to_contain_text("r49")
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

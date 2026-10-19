@@ -1366,6 +1366,11 @@ class Table(Component):
     into a signal and ``page_size`` is the window size (default 50). Sorting and ``search=``
     are server-side here; the loader is the one place that honours them.
 
+    ``virtual=True`` (rich or remote form, needs ``height``) renders only the rows in view
+    plus a small overscan, with spacers standing in for the rest, so the DOM stays small at
+    tens of thousands of rows. Rows have one fixed height, so cells do not wrap. In remote
+    mode the shell fetches windows as the viewer scrolls and keeps a few recent ones.
+
     Sorting and paging are client-side; the data rides ordinary reactive props, so no
     ``protocol_version`` bump. Use ``DataFrame`` when you only need to show a table.
     """
@@ -1391,8 +1396,11 @@ class Table(Component):
         remote: Callable[[TableQuery], Any] | None = None,
         reload_on: list[Signal[Any]] | None = None,
         query: Signal[TableQuery | None] | None = None,
+        virtual: bool = False,
     ) -> None:
         super().__init__()
+        if virtual and (height is None or (rows is None and remote is None)):
+            raise ValueError("Table virtual=True needs the rich form and height=")
         if remote is not None:
             if rows is not None or source is not None:
                 raise ValueError("Table remote= replaces rows=/source: pass one or the other")
@@ -1438,6 +1446,7 @@ class Table(Component):
         self._follow = bool(follow)
         self._actions = list(actions or [])
         self._checked = checked
+        self._virtual = bool(virtual)
         self._loader = remote
         if remote is not None and not page_size:
             self._page_size = 50
@@ -1490,6 +1499,8 @@ class Table(Component):
             props["search"] = self._search
             props["columnToggle"] = self._column_toggle
             props["follow"] = self._follow
+            if self._virtual:
+                props["virtual"] = True
             props["checkable"] = self._checked is not None
             if self._loader is not None:
                 props["remote"] = True

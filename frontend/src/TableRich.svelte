@@ -2,7 +2,7 @@
   // Rich table (ADR-0027): keyed rows, typed cells, sticky header, client sort/page and
   // key-based select. Rows are objects; a Stream-bound table grows through `append`
   // patches and the shell keeps the newest N (`trim`), so the DOM stays bounded.
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { postEvent } from "./api.js";
   import { now } from "./stores.js";
   import Overlay from "./Overlay.svelte";
@@ -47,6 +47,7 @@
   let sentSeq = 0;
   let askTimer = null;
   let shown = $state(null); // the accepted window: {rows, total, offset, seq}
+  let reqWin = null; // virtual mode: the {offset, limit} the next query asks for
   function sendQuery() {
     askTimer = null;
     sentSeq += 1;
@@ -54,8 +55,8 @@
       search: query.trim(),
       filters: {},
       sort: sortField === null ? null : [sortField, sortDir === 1 ? "asc" : "desc"],
-      offset: page * (props.pageSize || 50),
-      limit: props.pageSize || 50,
+      offset: reqWin ? reqWin.offset : page * (props.pageSize || 50),
+      limit: reqWin ? reqWin.limit : props.pageSize || 50,
       seq: sentSeq,
     });
   }
@@ -66,18 +67,99 @@
     else askTimer = setTimeout(sendQuery, QUERY_DEBOUNCE_MS);
   }
   onMount(() => {
-    if (props.remote) ask(true); // first window, as soon as the table mounts
+    rowH = parseFloat(getComputedStyle(scroller).getPropertyValue("--row-h")) || 36;
+    if (props.remote) {
+      if (props.virtual) reqWin = { offset: 0, limit: INITIAL_WINDOW };
+      ask(true); // first window, as soon as the table mounts
+    }
     return () => clearTimeout(askTimer);
   });
+  let lastWin = null;
+  let lastAcceptedSeq = -1;
   $effect(() => {
     const w = props.window;
-    if (isRemote && w && w.seq >= sentSeq) {
-      shown = w;
-      page = Math.floor(w.offset / (props.pageSize || 50)); // the server may have clamped it
+    if (!isRemote || !w || w === lastWin || w.seq < sentSeq) return;
+    lastWin = w;
+    shown = w;
+    if (isVirtual) untrack(() => cacheWindow(w));
+    else page = Math.floor(w.offset / (props.pageSize || 50)); // the server may have clamped it
+  });
+
+  // Virtual scroll (IND-102): render only the rows in view plus a little overscan, with
+  // spacer rows standing in for the rest, so the DOM stays small at any row count. Rows
+  // have one fixed height (--row-h). In remote mode the rows come from a small cache of
+  // recent windows; a row not fetched yet shows as a placeholder until its window lands.
+  const OVERSCAN = 8;
+  const MAX_WINDOWS = 8;
+  const INITIAL_WINDOW = 100;
+  let isVirtual = $derived(!!props.virtual);
+  let scrollTop = $state(0);
+  let viewH = $state(0);
+  let rowH = $state(36);
+  let windows = $state([]); // [{offset, rows}], oldest first
+  let pendingKey = null;
+  function cacheWindow(w) {
+    // The same query answered again (a reload): older windows may be stale, start over.
+    const keep = w.seq === lastAcceptedSeq ? [] : windows.filter((c) => c.offset !== w.offset);
+    lastAcceptedSeq = w.seq;
+    pendingKey = null;
+    windows = [...keep, { offset: w.offset, rows: w.rows }].slice(-MAX_WINDOWS);
+  }
+  // Search or sort changed: cached rows belong to the old query, and any answer still in
+  // flight must not land in the fresh cache.
+  function resetWindows() {
+    windows = [];
+    sentSeq += 1;
+    pendingKey = null;
+    reqWin = { offset: 0, limit: INITIAL_WINDOW };
+    if (scroller) scroller.scrollTop = 0;
+    scrollTop = 0;
+  }
+  function cachedRow(i) {
+    for (let n = windows.length - 1; n >= 0; n--) {
+      const c = windows[n];
+      const r = i >= c.offset && i < c.offset + c.rows.length ? c.rows[i - c.offset] : null;
+      if (r) return { r, i, k: rowKey ? r[rowKey] : i };
     }
+    return null;
+  }
+  let vTotal = $derived(isRemote ? (shown?.total ?? 0) : sorted.length);
+  let vStart = $derived(Math.max(0, Math.floor(scrollTop / rowH) - OVERSCAN));
+  let vEnd = $derived(Math.min(vTotal, Math.ceil((scrollTop + viewH) / rowH) + OVERSCAN));
+  let vRows = $derived.by(() => {
+    if (!isVirtual) return [];
+    const out = [];
+    for (let i = vStart; i < vEnd; i++) {
+      out.push((isRemote ? cachedRow(i) : sorted[i]) ?? { ph: true, k: `ph-${i}`, i });
+    }
+    return out;
+  });
+  // Remote + virtual: when rows near the viewport are not cached, ask for the block of
+  // rows around it (aligned, so neighbouring scroll positions share a request).
+  $effect(() => {
+    if (!isVirtual || !isRemote || !shown) return;
+    const first = vStart;
+    const last = vEnd;
+    void windows; // re-check as windows land
+    untrack(() => {
+      let missing = false;
+      for (let i = first; i < last && !missing; i++) missing = cachedRow(i) === null;
+      if (!missing) return;
+      const step = Math.min(160, Math.max(20, last - first));
+      const base = Math.floor(first / step) * step;
+      const win = { offset: Math.max(0, base - step), limit: Math.min(500, step * 3) };
+      const key = `${win.offset}:${win.limit}`;
+      if (key === pendingKey) return;
+      pendingKey = key;
+      reqWin = win;
+      ask();
+    });
   });
 
   let allCols = $derived(props.columns ?? []);
+  let colSpan = $derived(
+    cols.length + (props.checkable ? 1 : 0) + (props.actions?.length ? 1 : 0) || 1,
+  );
   let cols = $derived(allCols.filter((c) => !hidden.has(c.field)));
   let rows = $derived(isRemote ? (shown?.rows ?? []) : (props.rows ?? []));
   let rowKey = $derived(props.rowKey ?? null);
@@ -133,6 +215,7 @@
     }
   });
   function onScroll() {
+    if (isVirtual && scroller) scrollTop = scroller.scrollTop;
     if (!props.follow || !scroller) return;
     following = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 24;
   }
@@ -149,6 +232,7 @@
       sortDir = 1;
     }
     page = 0;
+    if (isVirtual) resetWindows();
     ask();
   }
 
@@ -212,6 +296,48 @@
   }
 </script>
 
+{#snippet rowTpl(row)}
+      <tr class:selected={props.value === row.k} onclick={() => selectRow(row)}>
+        {#if props.checkable}
+          <td class="check-col" onclick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              aria-label="Select row"
+              checked={checkedKeys.has(row.k)}
+              onchange={() => toggleCheck(row)}
+            />
+          </td>
+        {/if}
+        {#each cols as col (col.field)}
+          {@const v = row.r[col.field]}
+          {#if col.kind === "badge"}
+            <td><span class="cell-badge tone-{tone(col, v)}">{v ?? ""}</span></td>
+          {:else if col.kind === "mono"}
+            <td style:max-width={col.width ?? null}
+              ><code class="cell-mono" title={v}>{v ?? ""}</code></td
+            >
+          {:else if col.kind === "time"}
+            <td title={absTime(v)}>{relTime(v, $now)}</td>
+          {:else if col.kind === "number"}
+            <td class="num">{fmtNumber(v)}</td>
+          {:else}
+            <td>{v ?? ""}</td>
+          {/if}
+        {/each}
+        {#if props.actions?.length}
+          <td class="actions-col" onclick={(e) => e.stopPropagation()}>
+            {#each props.actions as action (action.id)}
+              <button
+                type="button"
+                class="row-action {action.variant ?? 'ghost'}"
+                onclick={() => runAction(action, row)}>{action.label}</button
+              >
+            {/each}
+          </td>
+        {/if}
+      </tr>
+{/snippet}
+
 <div class="field">
   {#if props.label}<span class="stream-label">{props.label}</span>{/if}
   {#if props.search || props.columnToggle || props.follow}
@@ -225,6 +351,7 @@
           bind:value={query}
           oninput={() => {
             page = 0;
+            if (isVirtual && isRemote) resetWindows();
             ask();
           }}
         />
@@ -258,8 +385,11 @@
   {/if}
   <div
     class="table-scroll rich"
+    class:virtual={isVirtual}
     style:max-height={props.height ?? null}
+    style:height={isVirtual ? props.height : null}
     bind:this={scroller}
+    bind:clientHeight={viewH}
     onscroll={onScroll}
   >
     <table class="dataframe table rich" class:selectable={props.selectable}>
@@ -304,47 +434,25 @@
         </tr>
       </thead>
       <tbody>
-        {#each view as row (row.k)}
-          <tr class:selected={props.value === row.k} onclick={() => selectRow(row)}>
-            {#if props.checkable}
-              <td class="check-col" onclick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  aria-label="Select row"
-                  checked={checkedKeys.has(row.k)}
-                  onchange={() => toggleCheck(row)}
-                />
-              </td>
+        {#if isVirtual}
+          <tr class="vspacer" aria-hidden="true" style:height="{vStart * rowH}px"
+            ><td colspan={colSpan}></td></tr
+          >
+          {#each vRows as row (row.k)}
+            {#if row.ph}
+              <tr class="ph" aria-hidden="true"><td colspan={colSpan}>…</td></tr>
+            {:else}
+              {@render rowTpl(row)}
             {/if}
-            {#each cols as col (col.field)}
-              {@const v = row.r[col.field]}
-              {#if col.kind === "badge"}
-                <td><span class="cell-badge tone-{tone(col, v)}">{v ?? ""}</span></td>
-              {:else if col.kind === "mono"}
-                <td style:max-width={col.width ?? null}
-                  ><code class="cell-mono" title={v}>{v ?? ""}</code></td
-                >
-              {:else if col.kind === "time"}
-                <td title={absTime(v)}>{relTime(v, $now)}</td>
-              {:else if col.kind === "number"}
-                <td class="num">{fmtNumber(v)}</td>
-              {:else}
-                <td>{v ?? ""}</td>
-              {/if}
-            {/each}
-            {#if props.actions?.length}
-              <td class="actions-col" onclick={(e) => e.stopPropagation()}>
-                {#each props.actions as action (action.id)}
-                  <button
-                    type="button"
-                    class="row-action {action.variant ?? 'ghost'}"
-                    onclick={() => runAction(action, row)}>{action.label}</button
-                  >
-                {/each}
-              </td>
-            {/if}
-          </tr>
-        {/each}
+          {/each}
+          <tr class="vspacer" aria-hidden="true" style:height="{Math.max(0, vTotal - vEnd) * rowH}px"
+            ><td colspan={colSpan}></td></tr
+          >
+        {:else}
+          {#each view as row (row.k)}
+            {@render rowTpl(row)}
+          {/each}
+        {/if}
       </tbody>
     </table>
   </div>
