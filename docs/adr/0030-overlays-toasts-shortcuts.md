@@ -1,6 +1,6 @@
 # ADR-0030: Overlays, toasts, shortcuts and small controls
 
-- Status: Proposed (overlays and `Button(confirm=)` in IND-94; toast, Badge/Switch/tooltip, Shortcuts and row actions follow in IND-95..99)
+- Status: Accepted (overlays IND-94, toast IND-95, small controls IND-96, shortcuts IND-97, table actions IND-99; demo IND-100)
 - Date: 2026-10-20
 - Deciders: Jian (owner)
 
@@ -53,7 +53,7 @@ after a handler runs, and keyboard shortcuts. indah has only an error toast.
   in inputs; `mod+`/`alt+` combos fire in inputs; nothing fires under a dialog. `?` opens a
   help overlay built from the labels of every mounted map. Not user-rebindable.
 
-Table row actions and multi-select extend this ADR as they land.
+Table row actions and multi-select (IND-99) are recorded in ADR-0027.
 
 ## Alternatives considered
 

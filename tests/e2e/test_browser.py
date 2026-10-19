@@ -1905,3 +1905,60 @@ def test_table_row_actions_with_confirm_and_multi_select():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_pending_queue_release_in_one_tab_clears_the_row_in_both():
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "semula_pending.py"
+    spec = importlib.util.spec_from_file_location("semula_pending_e2e", path)
+    ex = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = ex
+    spec.loader.exec_module(ex)
+
+    app = ex.build_app(rate=80, max_pending=3, seed=5)
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            a, b = browser.new_page(), browser.new_page()
+            try:
+                for page in (a, b):
+                    page.goto(handle.url.rstrip("/") + "/ui/", wait_until="domcontentloaded")
+                    expect(page.locator("tbody tr")).to_have_count(3)
+                    expect(page.get_by_text("3 waiting")).to_be_visible()
+                queue = app.state.queue
+                first = queue.snapshot()[0]["id"]
+
+                # Review in tab A: drawer, reply, Submit.
+                a.locator("tbody tr").first.get_by_role("button", name="Review").click()
+                drawer = a.get_by_role("dialog", name="Review call")
+                expect(drawer).to_be_visible()
+                expect(drawer).to_contain_text(first)
+                box = drawer.locator("textarea")
+                box.fill("Use the 30-day policy.")
+                drawer.get_by_role("button", name="Submit").click()
+                expect(a.locator(".toast.success")).to_contain_text("Released")
+                a.wait_for_timeout(300)
+                assert queue.resolved[0].reply == "Use the 30-day policy."
+                assert first not in a.locator("tbody").inner_text()
+                assert first not in b.locator("tbody").inner_text()  # gone in tab B too
+                assert b.locator(".toast").count() == 0  # the toast was A's alone
+
+                # Keyboard triage in tab B: j moves the cursor, r rejects the row.
+                b.locator("body").click(position={"x": 2, "y": 2})
+                b.keyboard.press("j")
+                second = queue.snapshot()[0]["id"]
+                expect(b.locator("tbody tr.selected")).to_have_count(1)
+                b.keyboard.press("r")
+                b.wait_for_timeout(400)
+                assert queue.resolved[-1].call["id"] == second
+                assert queue.resolved[-1].outcome == "rejected"
+                assert second not in a.locator("tbody").inner_text()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
