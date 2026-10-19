@@ -91,3 +91,21 @@ mock), still without a wire-protocol change:
 - A **`Card`** surface component and a **tonal/ghost `Button`** variant were added so
   the shell realises the Studio "panels on warm porcelain" layout and uses the teal
   secondary role, not the magenta primary alone.
+
+## Amendment (2026-10-19): per-app token overrides and a custom logo
+
+The semula dashboard (`docs/SEMULA-REQUESTS-PLAN.md`, E8) must not be locked to Studio. A
+theme is a token-set swap, so this is allowed without reopening the deferred
+user-selectable *theme switcher*: `create_app(theme=Theme(...), logo=...)` (IND-88).
+
+- `Theme(light=, dark=, radius=, font=)` overrides the documented colour/elevation roles
+  per scheme, plus `--radius` and the font stacks. It is injected as one `<style
+  id="indah-theme">` after the shell's own styles. Token names are checked against the
+  documented set and values against a character allowlist (no `; { } < > @ :`, `url(`,
+  `import`, `expression`, `javascript`), because the text lands inside a `<style>` block.
+- `logo` (SVG/PNG/JPEG/WebP, at most 512 KB) is served at `api/brand/logo` with
+  `Content-Security-Policy: sandbox` and `nosniff`, and shown through an `<img>`, so an
+  SVG logo cannot run script. With a logo, `title` also becomes the header wordmark;
+  `title` alone still only renames the tab. Bundled fonts are unchanged: `font=` picks a
+  stack, it does not load a file (ADR-0004).
+- No `protocol_version` change: this is presentation served in the HTML, not a message.

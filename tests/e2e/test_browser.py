@@ -1173,3 +1173,51 @@ def test_mounted_app_opens_and_stays_live_on_a_deep_link():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_themed_app_shows_its_tokens_logo_and_wordmark_in_light_and_dark():
+    """IND-88: an app-level theme overrides the shell's tokens in both schemes, and a
+    custom logo plus title replace the Bunga mark and the "indah" wordmark."""
+    from indah.app import create_app
+    from indah.components import Column, Text
+    from indah.session import Session
+    from indah.theme import Theme
+
+    logo = (
+        b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'>"
+        b"<rect width='8' height='8' fill='#1f6feb'/></svg>"
+    )
+    app = create_app(
+        session_factory=lambda: Session(Column(children=[Text("hello")])),
+        title="semula",
+        logo=logo,
+        theme=Theme(light={"primary": "#1f6feb"}, dark={"primary": "#79b8ff"}, radius="3px"),
+    )
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator("header.brand .wordmark")).to_have_text("semula")
+                img = page.locator("header.brand img.mark")
+                expect(img).to_be_visible()
+                assert img.evaluate("el => el.naturalWidth") > 0  # the logo actually loaded
+
+                def token(name: str) -> str:
+                    return page.evaluate(
+                        "n => getComputedStyle(document.documentElement)"
+                        ".getPropertyValue(n).trim()",
+                        name,
+                    )
+
+                page.evaluate("document.documentElement.dataset.theme = 'light'")
+                assert token("--primary") == "#1f6feb" and token("--radius") == "3px"
+                page.evaluate("document.documentElement.dataset.theme = 'dark'")
+                assert token("--primary") == "#79b8ff"
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

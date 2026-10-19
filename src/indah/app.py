@@ -14,11 +14,13 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import os
 import urllib.parse
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from html import escape
 from importlib.resources import files
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
@@ -79,6 +81,7 @@ from .session_store import (
     SessionStore,
     SharedSessionStore,
 )
+from .theme import Theme
 from .transport import Item
 
 DEFAULT_HEARTBEAT_SECONDS = 15.0
@@ -472,6 +475,8 @@ def create_app(
     home_url: str | None = None,
     source_url: str | None = None,
     spa: bool = False,
+    theme: Theme | None = None,
+    logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -492,6 +497,11 @@ def create_app(
     (``/projects/auth/entries/01J``) can be opened directly or reloaded. The shell then
     gets a relative ``<base href>`` so its ``api/*`` calls still reach the app root,
     whatever prefix the app is mounted under (IND-86).
+
+    ``theme`` overrides the shell's design tokens for this app (IND-88, see
+    :class:`~indah.theme.Theme`). ``logo`` (an SVG/PNG/JPEG/WebP file path or bytes, up to
+    512 KB) replaces the Bunga mark in the header and, with ``title``, the "indah"
+    wordmark -- a rebranded app; ``title`` alone only renames the tab, as before.
     """
     given = [
         name
@@ -519,6 +529,7 @@ def create_app(
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
+            *([Route("/api/brand/logo", _logo, methods=["GET"])] if logo is not None else []),
             *([Route("/{path:path}", _spa_index, methods=["GET"])] if spa else []),
         ]
     )
@@ -533,6 +544,8 @@ def create_app(
     app.state.page_title = title
     app.state.home_url = home_url
     app.state.source_url = source_url
+    app.state.theme_css = theme.css() if theme is not None else ""
+    app.state.logo = _load_logo(logo) if logo is not None else None
     # Back-compat: a single-shared app still exposes .session/.hub for callers and
     # tests that introspect the one graph. A per-session app has neither -- there is
     # no single session to name; go through the store (keyed by sid) instead.
@@ -578,7 +591,14 @@ def _chrome_html(state: Any, base_href: str | None = None) -> str:
         "homeUrl": getattr(state, "home_url", None),
         "sourceUrl": getattr(state, "source_url", None),
         "title": title,
+        "logoUrl": "api/brand/logo" if getattr(state, "logo", None) else None,
+        "brandName": title if getattr(state, "logo", None) else None,
     }
+    theme_css = getattr(state, "theme_css", "")
+    if theme_css:
+        html_text = html_text.replace(
+            "</head>", f'<style id="indah-theme">\n{theme_css}\n</style></head>', 1
+        )
     if any(chrome.values()):
         payload = json.dumps(chrome).replace("<", "\\u003c")
         html_text = html_text.replace(
@@ -598,6 +618,43 @@ async def _spa_index(request: Request) -> Response:
     if path == "api" or path.startswith("api/"):
         return Response(status_code=404)
     return await _index(request)
+
+
+_MAX_LOGO_BYTES = 512 * 1024
+_LOGO_MAGIC = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+)
+
+
+def _load_logo(logo: str | os.PathLike[str] | bytes) -> tuple[bytes, str]:
+    """Read and sniff a custom logo. Fails at app creation, not on first request."""
+    data = bytes(logo) if isinstance(logo, bytes) else Path(logo).read_bytes()
+    if len(data) > _MAX_LOGO_BYTES:
+        raise ValueError(f"logo is {len(data)} bytes; the limit is {_MAX_LOGO_BYTES}")
+    for magic, media_type in _LOGO_MAGIC:
+        if data.startswith(magic):
+            return data, media_type
+    if data[:12].startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return data, "image/webp"
+    if b"<svg" in data[:2048].lower():
+        return data, "image/svg+xml"
+    raise ValueError("logo must be an SVG, PNG, JPEG or WebP image")
+
+
+async def _logo(request: Request) -> Response:
+    """The custom logo. ``sandbox`` makes the browser refuse any script in an SVG that
+    is opened directly; inside the shell's <img> it cannot run script anyway."""
+    data, media_type = request.app.state.logo
+    return Response(
+        data,
+        media_type=media_type,
+        headers={
+            "Content-Security-Policy": "sandbox",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
 
 
 async def _health(request: Request) -> JSONResponse:
