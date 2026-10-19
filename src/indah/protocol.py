@@ -10,6 +10,7 @@ Server -> client (over SSE):
   patch {"v","type":"patch","changes":[<change>,...]}       granular updates
   error {"v","type":"error","message":"..."}                a handler failed (toast)
   toast {"v","type":"toast","message","kind","ttl"}         handler feedback (ADR-0030)
+  navigate {"v","type":"navigate","path","replace"}         move the browser's URL (ADR-0029)
   ping  {"v","type":"ping"}                                 heartbeat
 
 A patch ``change`` is one of:
@@ -59,6 +60,8 @@ BUILTIN_TYPES = frozenset(
         "stat",
         "checkbox",
         "switch",
+        "router",
+        "link",
         "splitpane",
         "masterdetail",
         "shortcuts",
@@ -121,6 +124,12 @@ def toast_message(message: str, kind: str = "info", ttl: float = 4.0) -> dict[st
     if ttl < 0:
         raise ValueError("toast ttl must be >= 0")
     return {"v": PROTOCOL_VERSION, "type": "toast", "message": message, "kind": kind, "ttl": ttl}
+
+
+def navigate_message(path: str, replace: bool = False) -> dict[str, Any]:
+    """Ask the shell to move the address bar to in-app ``path`` (``replace`` rewrites the
+    current history entry instead of adding one)."""
+    return {"v": PROTOCOL_VERSION, "type": "navigate", "path": path, "replace": bool(replace)}
 
 
 def ping_message() -> dict[str, Any]:

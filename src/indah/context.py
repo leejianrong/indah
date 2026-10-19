@@ -24,8 +24,9 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from .protocol import toast_message
+from .protocol import navigate_message, toast_message
 from .reactive import Signal
+from .routes import normalize_path
 from .stream import Stream
 
 if TYPE_CHECKING:
@@ -48,10 +49,12 @@ class ConnectionInfo:
     cookies: Mapping[str, str] = field(default_factory=dict)
     client: str | None = None  # peer address as the ASGI server reports it
     path: str = ""
+    app_path: str = "/"  # the in-app page the tab was on when it connected (ADR-0029)
 
     @classmethod
-    def from_request(cls, request: Request) -> ConnectionInfo:
+    def from_request(cls, request: Request, app_path: str | None = None) -> ConnectionInfo:
         return cls(
+            app_path=app_path or "/",
             headers={k.lower(): v for k, v in request.headers.items()},
             cookies=dict(request.cookies),
             client=request.client.host if request.client else None,
@@ -77,6 +80,13 @@ class Context:
         self._on_close: list[Callable[[], None]] = []
         self._closed = False
         self._hub: Hub | None = None
+        try:
+            start = normalize_path(self.conn.app_path)
+        except ValueError:
+            start = "/"
+        # The in-app path this tab is showing (``/projects/auth``), a signal a ``Router``
+        # reads. Set it with ``navigate``; the browser sets it on a link click or Back.
+        self.path: Signal[str] = Signal(start)
 
     def _bind_hub(self, hub: Hub) -> None:
         self._hub = hub
@@ -90,6 +100,19 @@ class Context:
         message_ = toast_message(message, kind, ttl)  # validate even when unbound
         if self._hub is not None:
             self._hub.publish(message_)
+
+    def navigate(self, path: str, *, replace: bool = False) -> None:
+        """Go to in-app ``path`` from server code: updates ``ctx.path`` and moves this tab's
+        address bar (a new history entry, or ``replace`` the current one). Raises
+        ``ValueError`` for anything that is not a plain in-app path."""
+        path = normalize_path(path)
+        self.path.set(path)
+        if self._hub is not None:
+            self._hub.publish(navigate_message(path, replace))
+
+    def _client_navigated(self, path: str) -> None:
+        """The browser already moved (a link click, Back/Forward): record it, no echo."""
+        self.path.set(normalize_path(path))
 
     def on_close(self, fn: Callable[[], None]) -> None:
         """Run ``fn`` when the session ends (discard, eviction, idle reaping).

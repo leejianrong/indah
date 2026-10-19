@@ -27,9 +27,11 @@ from .keys import normalize_keys
 from .markdown import to_blocks
 from .protocol import RenderSpec
 from .reactive import Computed, Signal, effect
+from .routes import compile_route, match_routes, normalize_path
 from .stream import Stream
 
 if TYPE_CHECKING:
+    from .context import Context
     from .session import Session
 
 # A prop value may be static, a signal/computed, or a zero-arg callable.
@@ -2183,6 +2185,80 @@ class MasterDetail(Component):
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "close":
             self._open.set(False)
+            return True
+        return False
+
+
+class Router(Component):
+    """Pages chosen by the URL (ADR-0029). ``routes`` maps a pattern (``/``,
+    ``/projects/{project}``) to the page's component; ``not_found`` is shown when none
+    matches. Every page is built up front and the shell renders only the active one, so a
+    page is a function of data (the route's params), not of structure. Hidden pages are
+    still in the snapshot: never put anything role-restricted in one.
+
+    The app must be created with ``spa=True`` so a deep link such as
+    ``/ui/projects/auth`` serves the shell. Pair it with :class:`Link` for navigation and
+    ``ctx.navigate`` for navigating from code.
+    """
+
+    type = "router"
+
+    def __init__(
+        self,
+        ctx: Context,
+        routes: dict[str, Component],
+        *,
+        not_found: Component | None = None,
+    ) -> None:
+        if not routes:
+            raise ValueError("Router needs at least one route")
+        compiled = [compile_route(pattern) for pattern in routes]
+        super().__init__([*routes.values(), *([not_found] if not_found is not None else [])])
+        self._ctx = ctx
+        self._routes = compiled
+        self._has_not_found = not_found is not None
+
+    def _active(self) -> int:
+        found = match_routes(self._routes, self._ctx.path.value)
+        if found is not None:
+            return found[0]
+        return len(self._routes) if self._has_not_found else -1
+
+    def static_props(self) -> dict[str, Any]:
+        return {"routes": [r.pattern for r in self._routes], "notFound": self._has_not_found}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"active": self._active}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "navigate":
+            try:
+                self._ctx._client_navigated(payload.get("path"))  # type: ignore[arg-type]
+            except ValueError:
+                return False
+            return True
+        return False
+
+
+class Link(Component):
+    """A real ``<a href>`` to an in-app path (ADR-0029): a plain click navigates without a
+    page load, while a middle-click, Ctrl/Cmd-click or "open in new tab" use the URL as any
+    link would. ``to`` is an in-app path like ``/projects/auth``, never an external URL."""
+
+    type = "link"
+
+    def __init__(self, ctx: Context, label: str, *, to: str) -> None:
+        super().__init__()
+        self._ctx = ctx
+        self._label = label
+        self._to = normalize_path(to)
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label, "to": self._to}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "navigate" and payload.get("path") == self._to:
+            self._ctx._client_navigated(self._to)
             return True
         return False
 

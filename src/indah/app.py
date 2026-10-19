@@ -792,16 +792,28 @@ async def _stream(request: Request) -> StreamingResponse:
     # One session per browser tab, keyed by the id the shell sends (?sid=...).
     # An id-less connection shares the default session (ADR-0010).
     sid = request.query_params.get("sid") or DEFAULT_SESSION_ID
-    handle: SessionHandle = store.get_or_create(sid, ConnectionInfo.from_request(request))
+    # The in-app page the tab is on (``&path=``), so a deep link or reload starts there.
+    handle: SessionHandle = store.get_or_create(
+        sid, ConnectionInfo.from_request(request, request.query_params.get("path"))
+    )
     hub = handle.hub
     session = handle.session
     queue = hub.subscribe()
+    epoch, last_event_id = _parse_last_event_id(request)
+    ctx = session.ctx
+    if last_event_id is None and ctx is not None and request.query_params.get("path"):
+        # A fresh page load (the tab keeps its sid across full loads): the URL is the truth
+        # about which in-app page it is on. An automatic reconnect carries a Last-Event-Id
+        # and a path that was only right when the tab first connected, so it is left alone.
+        try:
+            ctx._client_navigated(request.query_params["path"])
+        except ValueError:
+            pass
 
     # Subscribe first, then decide init-vs-resume against the current offset with
     # no await in between, so nothing published concurrently is missed or applied
     # twice. skip_upto = the offset the client is caught up to after init/replay;
     # queued messages already covered by that are dropped.
-    epoch, last_event_id = _parse_last_event_id(request)
     hub.flush()  # held stream appends first, so the snapshot/offset below cover them
     replay = hub.replay_since(last_event_id, epoch)
     if last_event_id is None or replay is None:

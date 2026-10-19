@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { apiUrl, streamUrl, PROTOCOL_VERSION } from "./api.js";
+  import { apiUrl, streamUrl, pushPath, PROTOCOL_VERSION } from "./api.js";
   import { structure, nodeProps, status, toasts, shortcutRegistry, helpOpen } from "./stores.js";
   import Node from "./Node.svelte";
   import Overlay from "./Overlay.svelte";
@@ -74,6 +74,8 @@
       });
     } else if (msg.type === "error") {
       showToast(msg.message || "Something went wrong", "error", 6);
+    } else if (msg.type === "navigate") {
+      pushPath(msg.path || "/", !!msg.replace); // ctx.navigate from server code
     } else if (msg.type === "toast") {
       showToast(msg.message || "", msg.kind || "info", msg.ttl ?? 4);
     }

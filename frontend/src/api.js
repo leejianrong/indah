@@ -7,9 +7,17 @@ export const PROTOCOL_VERSION = 1;
 // relative <base href> on a deep in-app path (spa=True), so api/* always reaches the
 // app root.
 export function apiUrl(path) {
-  let base = document.baseURI.split("#")[0].split("?")[0];
-  if (!base.endsWith("/")) base += "/";
-  return new URL(path, base).toString();
+  return new URL(path, appBase()).toString();
+}
+
+// The app root as a URL: the directory of the document base. "." resolves against the
+// page URL when there is no <base> (a one-segment deep link like /ui/zzz, or the root),
+// and against the relative <base href="../"> otherwise, so both land on the app root.
+// Captured once at load: pushState (in-app navigation) changes the page URL, and a page
+// with no <base> would otherwise resolve api/* against the new, deeper URL.
+const APP_BASE = new URL(".", document.baseURI);
+function appBase() {
+  return APP_BASE;
 }
 
 // A per-tab session id, so each browser tab drives its own isolated server-side
@@ -45,7 +53,39 @@ export function sessionId() {
 // set request headers, and it preserves the URL (and resends Last-Event-Id) across
 // its native reconnects, so a resume lands on the same session.
 export function streamUrl() {
-  return apiUrl("api/stream") + "?sid=" + encodeURIComponent(sessionId());
+  return (
+    apiUrl("api/stream") +
+    "?sid=" +
+    encodeURIComponent(sessionId()) +
+    "&path=" +
+    encodeURIComponent(appPath())
+  );
+}
+
+// -- In-app routing (ADR-0029). The app may be mounted under a prefix (/ui/), so an
+// "in-app path" is the page's path relative to the document base: /ui/projects/auth is
+// /projects/auth. The base is the app root whatever the depth of the current URL.
+function baseDir() {
+  return appBase().pathname;
+}
+
+export function appPath() {
+  const base = baseDir();
+  const here = location.pathname;
+  if (!here.startsWith(base)) return "/";
+  return ("/" + here.slice(base.length)).replace(/\/+$/, "") || "/";
+}
+
+// The real URL of an in-app path, for an <a href> and for history.pushState.
+export function hrefFor(path) {
+  return baseDir() + String(path).replace(/^\/+/, "");
+}
+
+export function pushPath(path, replace = false) {
+  const href = hrefFor(path);
+  if (location.pathname === href) return;
+  if (replace) history.replaceState({}, "", href);
+  else history.pushState({}, "", href);
 }
 
 export function postEvent(id, event, payload) {

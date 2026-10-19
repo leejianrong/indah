@@ -86,6 +86,7 @@ The UI is a tree of nodes. A node is:
 | `init` | `{"v","type":"init","root":<node>}` | On connect, or a resume that fell back to a full snapshot |
 | `patch` | `{"v","type":"patch","changes":[<change>,...]}` | Granular updates to existing nodes |
 | `error` | `{"v","type":"error","message":"..."}` | A handler failed; the shell shows a toast |
+| `navigate` | `{"v","type":"navigate","path","replace"}` | `ctx.navigate(...)`: the shell pushes (or, with `replace`, rewrites) its history entry to the in-app `path`. An older shell ignores it |
 | `toast` | `{"v","type":"toast","message","kind","ttl"}` | Feedback from `ctx.toast(...)`: `kind` is `info`/`success`/`warn`/`error`, `ttl` seconds (`0` = until dismissed). Sent to the calling session only; an older shell ignores it |
 | `ping` | `{"v","type":"ping"}` | Heartbeat, so idle-timeout proxies keep the stream open |
 
@@ -214,6 +215,8 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `grid` | container | `columns`, `gap` | — |
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
+| `router` | container | `routes:[pattern]`, `notFound`, `active` (index of the shown child, -1 for none) | `navigate` `{path}` (Back/Forward) |
+| `link` | input | `label`, `to` (an in-app path) | `navigate` `{path}` |
 | `splitpane` | container | `direction`, `initial`, `min`, `key`, `height` (exactly two children) | — (resize is client-side) |
 | `masterdetail` | container | `initial`, `min`, `key`, `title`, `open` (two children: master, detail) | `close` |
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |
@@ -277,6 +280,12 @@ existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no
 payload.
+
+`router` renders only its `active` child. The stream URL carries `&path=<in-app path>`; on a
+fresh connect the server starts (or moves) the session there, an automatic reconnect keeps
+its current page. An in-app path is the URL path after the app's mount point and must be a
+plain `/a/b` (no `//host`, query, fragment or control characters). `link` is a real `<a
+href>`; a plain click navigates without a page load. See ADR-0029.
 
 `shortcuts` renders nothing: while mounted it listens for the listed keys (a space-separated
 sequence, `mod` = Ctrl/Cmd) and posts `press`. Bare keys are ignored while typing in a field,
