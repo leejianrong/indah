@@ -28,6 +28,17 @@ version) and a `type`. The upload and file routes carry bytes, not JSON messages
 so they are outside the versioned message schema (they are additive routes, not a
 wire-format change).
 
+### Base path and deep links
+
+The shell resolves every URL (`api/stream`, `api/event`, `api/file/...`) relative to the
+document's base, never absolutely, so the app works under a `Mount` or behind a proxy
+that adds or strips a prefix (ADR-0001). That holds at the app root. With
+`create_app(spa=True)` the server also serves the shell for any in-app GET path other
+than `api/*` (so `/projects/auth/entries/01J` can be opened or reloaded) and injects a
+**relative** `<base href="../../">` pointing back at the app root, so `api/*` still
+resolves there. At the root no `<base>` is injected. This is HTML served to the shell,
+not a protocol message, so `protocol_version` is unaffected.
+
 ### Sessions
 
 Each browser tab drives its own isolated server-side session (its own signals and

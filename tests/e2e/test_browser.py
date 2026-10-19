@@ -1129,3 +1129,47 @@ def test_open_tab_reinitialises_after_the_server_restarts():
     finally:
         proc.kill()
         proc.wait()
+
+
+@pytest.mark.e2e
+def test_mounted_app_opens_and_stays_live_on_a_deep_link():
+    """IND-86: indah mounted at /ui under a parent app, opened directly on an in-app
+    path. The shell must render and its api/* calls must resolve to the app root, so a
+    click round-trips (the counter increments) rather than 404ing at the deep path."""
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    from indah.app import create_app
+    from indah.components import Button, Column, Text
+    from indah.reactive import Signal
+    from indah.session import Session
+
+    def factory() -> Session:
+        n = Signal(0)
+        return Session(
+            Column(
+                children=[
+                    Button("tick", on_click=lambda: n.set(n.value + 1)),
+                    Text(lambda: f"count {n.value}"),
+                ]
+            )
+        )
+
+    parent = Starlette(routes=[Mount("/ui", app=create_app(session_factory=factory, spa=True))])
+    handle = launch(parent, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(
+                    f"http://127.0.0.1:{handle.port}/ui/projects/auth/entries/01J",
+                    wait_until="domcontentloaded",
+                )
+                expect(page.locator("div.text", has_text="count 0")).to_be_visible()
+                page.get_by_role("button", name="tick").click()
+                expect(page.locator("div.text", has_text="count 1")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

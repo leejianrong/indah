@@ -470,6 +470,7 @@ def create_app(
     title: str | None = None,
     home_url: str | None = None,
     source_url: str | None = None,
+    spa: bool = False,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -485,6 +486,11 @@ def create_app(
       pre-Slice-C behaviour; for single-user apps and introspection in tests).
 
     ``session``, ``session_factory``, and ``store`` are mutually exclusive.
+
+    ``spa=True`` serves the shell for any non-``api/`` GET path, so an in-app URL
+    (``/projects/auth/entries/01J``) can be opened directly or reloaded. The shell then
+    gets a relative ``<base href>`` so its ``api/*`` calls still reach the app root,
+    whatever prefix the app is mounted under (IND-86).
     """
     given = [
         name
@@ -512,6 +518,7 @@ def create_app(
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
+            *([Route("/{path:path}", _spa_index, methods=["GET"])] if spa else []),
         ]
     )
     app.state.store = store
@@ -532,7 +539,22 @@ def create_app(
     return app
 
 
-def _chrome_html(state: Any) -> str:
+def _base_href(path: str, root_path: str = "") -> str | None:
+    """A relative ``<base href>`` that points a deep in-app URL back at the app root.
+
+    ``None`` at the root. Relative (``../../``) rather than absolute so it holds under a
+    ``Mount`` and behind a proxy that strips a prefix the app never sees (ADR-0001).
+    Starlette 1.x keeps the mount prefix in ``scope["path"]``; older versions do not, so
+    the prefix is stripped only if present.
+    """
+    if root_path and path.startswith(root_path):
+        path = path[len(root_path) :]
+    segments = [seg for seg in path.split("/") if seg]
+    ups = len(segments) if path.endswith("/") else len(segments) - 1
+    return "../" * ups if ups > 0 else None
+
+
+def _chrome_html(state: Any, base_href: str | None = None) -> str:
     """Serve the shell, injecting optional per-app chrome.
 
     ``title`` renames the browser tab; ``home_url`` (a clickable logo) and
@@ -542,6 +564,8 @@ def _chrome_html(state: Any) -> str:
     so a URL can never break out of the ``<script>``.
     """
     html_text = _read_static("index.html")
+    if base_href:
+        html_text = html_text.replace("<head>", f'<head><base href="{escape(base_href)}">', 1)
     title = getattr(state, "page_title", None)
     if title:
         html_text = html_text.replace(
@@ -561,7 +585,16 @@ def _chrome_html(state: Any) -> str:
 
 
 async def _index(request: Request) -> HTMLResponse:
-    return HTMLResponse(_chrome_html(request.app.state))
+    base = _base_href(request.scope.get("path", "/"), request.scope.get("root_path", ""))
+    return HTMLResponse(_chrome_html(request.app.state, base))
+
+
+async def _spa_index(request: Request) -> Response:
+    """The ``spa=True`` fallback: the shell for any in-app path, never for ``api/``."""
+    path = request.path_params["path"]
+    if path == "api" or path.startswith("api/"):
+        return Response(status_code=404)
+    return await _index(request)
 
 
 async def _health(request: Request) -> JSONResponse:
