@@ -22,6 +22,7 @@ ADR-0010), so a patch fans out only to that viewer's stream, never another's.
 from __future__ import annotations
 
 import asyncio
+import secrets
 from collections import deque
 from typing import Any
 
@@ -35,6 +36,11 @@ class Hub:
         self._queue_maxsize = queue_maxsize
         self._history: deque[Item] = deque(maxlen=history_size)
         self._offset = 0
+        # Identifies this hub instance. Offsets only mean something within one hub, so
+        # the SSE ``id:`` is ``<epoch>-<offset>``: a client resuming against a restarted
+        # server (a fresh hub) presents a foreign epoch and is sent a full snapshot
+        # instead of being told it is "already current" (IND-85).
+        self.epoch: str = secrets.token_hex(4)
 
     @property
     def subscriber_count(self) -> int:
@@ -77,14 +83,22 @@ class Hub:
         """A copy of the buffered ``(offset, message)`` items, oldest first."""
         return list(self._history)
 
-    def replay_since(self, last_event_id: int | None) -> list[Item] | None:
+    def replay_since(
+        self, last_event_id: int | None, epoch: str | None = None
+    ) -> list[Item] | None:
         """Buffered messages with offset > ``last_event_id`` (a resume).
+
+        ``epoch`` is the hub instance the client's id came from; a mismatch means the
+        offset belongs to a different (e.g. pre-restart) hub, so return ``None`` to force
+        a snapshot. ``None`` (a legacy integer id) skips the check.
 
         Returns ``[]`` when the client is already current (or has no last id to
         resume from), and ``None`` when the next needed message has been evicted
         from the buffer -- a gap the caller must recover from by resending a full
         ``init`` snapshot rather than a partial, corrupt replay.
         """
+        if epoch is not None and last_event_id is not None and epoch != self.epoch:
+            return None
         if last_event_id is None or last_event_id >= self._offset:
             return []
         if not self._history:

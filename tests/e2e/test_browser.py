@@ -1054,3 +1054,78 @@ def test_upload_image_classify_and_show_result(tmp_path):
                 browser.close()
     finally:
         handle.stop()
+
+
+_RESTART_SERVER = """
+import sys, uvicorn
+from indah.app import create_app
+from indah.components import Button, Column, Text
+from indah.reactive import Signal
+from indah.session import Session
+
+word, port = sys.argv[1], int(sys.argv[2])
+
+def factory():
+    n = Signal(0)
+    return Session(
+        Column(
+            children=[
+                Button("tick", on_click=lambda: n.set(n.value + 1)),
+                Text(lambda: f"{word} {n.value}"),
+            ]
+        )
+    )
+
+uvicorn.run(create_app(session_factory=factory), host="127.0.0.1", port=port, log_level="error")
+"""
+
+
+def _start_server(word: str, port: int):
+    import subprocess
+    import sys
+    import time
+    import urllib.request
+
+    proc = subprocess.Popen([sys.executable, "-c", _RESTART_SERVER, word, str(port)])
+    for _ in range(100):
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.5)
+            return proc
+        except OSError:
+            time.sleep(0.1)
+    proc.kill()
+    raise RuntimeError("server did not start")
+
+
+@pytest.mark.e2e
+def test_open_tab_reinitialises_after_the_server_restarts():
+    """IND-85: a restarted server has a fresh hub, so the tab's Last-Event-Id belongs
+    to a hub that no longer exists. The tab must be sent a new `init` (here the text
+    changes from v1 to v2) rather than sit on a stale tree. The server runs in a
+    subprocess so killing it really drops the open SSE connection, as a deploy does."""
+    from indah.launch import find_free_port
+
+    port = find_free_port(18500)
+    proc = _start_server("v1", port)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(f"http://127.0.0.1:{port}/", wait_until="domcontentloaded")
+                expect(page.locator("div.text", has_text="v1 0")).to_be_visible()
+                # A patch first, so the tab holds a real Last-Event-Id before the restart.
+                page.get_by_role("button", name="tick").click()
+                expect(page.locator("div.text", has_text="v1 1")).to_be_visible()
+
+                proc.kill()
+                proc.wait()
+                proc = _start_server("v2", port)
+
+                # EventSource reconnects on its own; the new hub must re-init it.
+                expect(page.locator("div.text", has_text="v2 0")).to_be_visible(timeout=20_000)
+            finally:
+                browser.close()
+    finally:
+        proc.kill()
+        proc.wait()
