@@ -18,7 +18,9 @@ public demo gallery. Current work is the **semula requests**: enhancements for t
 semula dashboard (live push, a rich Table, overlays, routing, editors, then hosted
 identity/authz/hardening). The plan is `docs/SEMULA-REQUESTS-PLAN.md`; progress is board
 IND (epics IND-E19..E26, label `semula`). Done so far: mount-safe shell, `Context`, app
-theme, `Topic`/`Stream`, Table v2 core, and the live-log demo (`make demo-semula`).
+theme, `Topic`/`Stream`, Table v2 core, the live-log demo (`make demo-semula`), and the
+overlays slice (TextArea, Modal/Drawer/confirm, toasts, Badge/Switch/tooltip, Shortcuts, Table
+row actions and multi-select, `make demo-pending`).
 Trust the code over any doc where they disagree, and fix the doc.
 
 Layout:
@@ -31,7 +33,8 @@ Layout:
   ~20-line app, `examples/chatbot.py` + `examples/chatbot_colab.ipynb` the
   flagship "real LLM in Colab" chatbot (transformers is the user's dep, not
   indah's); `examples/semula_log.py` the semula-shaped live request log (`make
-  demo-semula`; the requests behind it are in `docs/SEMULA-REQUESTS-PLAN.md`);
+  demo-semula`; the requests behind it are in `docs/SEMULA-REQUESTS-PLAN.md`),
+  `examples/semula_pending.py` the pending queue with drawer, toast and shortcuts (`make demo-pending`);
   `docs/DEV-DOCKER.md` the Docker/Traefik flow
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
 - `docs/` PLAN, SLICES, QUESTIONS, RELEASING, `protocol.md` (the public wire
