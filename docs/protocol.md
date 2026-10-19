@@ -179,7 +179,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `column` | container | — | — |
 | `card` | container | `title` (a surface panel) | — |
 | `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree) | — |
-| `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`) | `click` |
+| `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`), `confirm` (text: the shell asks first and posts `click` only once accepted) | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label` | `input` `{value}` |
 | `textarea` | input | `value`, `placeholder`, `label`, `rows` | `input` `{value}` (debounced 150 ms, flushed on blur) |
@@ -211,6 +211,8 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |
+| `modal` | overlay | `open`, `title`, `size` (`sm`/`md`/`lg`) | `close` |
+| `drawer` | overlay | `open`, `title`, `side` (`left`/`right`) | `close` |
 
 `Plot` serialises to an `image` node whose `src` is a PNG `data:` URI rendered on
 the Python side, so the shell needs nothing extra to show it.
@@ -269,6 +271,12 @@ existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no
 payload.
+
+`modal` and `drawer` (ADR-0030) render their `children` only while `open` is true, as a
+`role=dialog` `aria-modal` layer with a focus trap; Esc, the backdrop and the close button
+post `close`, which clears `open` server-side. Their children stay in the snapshot while
+closed, so never put a secret in one. `button.confirm` is a UX guard, not authorization:
+the server runs any `click` it receives.
 
 `table` is the interactive superset of `dataframe`: it takes the same
 `data:{columns,rows}` and adds sorting and paging (both **client-side** in the shell,

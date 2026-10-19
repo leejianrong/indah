@@ -9,6 +9,7 @@
   import MapView from "./Map.svelte";
   import Table from "./Table.svelte";
   import ImageOverlay from "./ImageOverlay.svelte";
+  import Overlay from "./Overlay.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -20,6 +21,9 @@
   // keystrokes - the "missing letters" bug. So we sync the server value into the
   // element only when it does NOT have focus; while focused, the DOM owns it.
   let inputEl = $state();
+
+  // Button(confirm=...): the click is posted only after the user accepts the dialog.
+  let confirming = $state(false);
 
   // Upload status shown under a file input while the multipart POST is in flight
   // and after it settles (the result itself arrives over SSE as ordinary patches).
@@ -159,6 +163,20 @@
       </div>
     {/if}
   </div>
+{:else if node.type === "modal" || node.type === "drawer"}
+  {#if props.open}
+    <Overlay
+      kind={node.type}
+      side={props.side}
+      size={props.size}
+      title={props.title}
+      onclose={() => postEvent(node.id, "close")}
+    >
+      {#each node.children as child (child.id)}
+        <Self node={child} />
+      {/each}
+    </Overlay>
+  {/if}
 {:else if node.type === "list"}
   <div class="list">
     {#if (props.items ?? []).length === 0}
@@ -236,8 +254,24 @@
   <button
     class:tonal={props.variant === "tonal"}
     class:ghost={props.variant === "ghost"}
-    onclick={() => postEvent(node.id, "click")}>{props.label ?? ""}</button
+    onclick={() => (props.confirm ? (confirming = true) : postEvent(node.id, "click"))}
+    >{props.label ?? ""}</button
   >
+  {#if confirming}
+    <Overlay kind="modal" size="sm" title={props.confirm} onclose={() => (confirming = false)} initialFocus=".confirm-no">
+      <div class="confirm-actions">
+        <button type="button" class="ghost confirm-no" onclick={() => (confirming = false)}>Cancel</button>
+        <button
+          type="button"
+          class="confirm-yes"
+          onclick={() => {
+            confirming = false;
+            postEvent(node.id, "click");
+          }}>{props.label ?? "OK"}</button
+        >
+      </div>
+    </Overlay>
+  {/if}
 {:else if node.type === "textinput"}
   <div class="field">
     {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
