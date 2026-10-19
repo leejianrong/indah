@@ -1151,7 +1151,10 @@ class Table(Component):
     may be a ``Stream``: appended rows arrive as small ``append`` patches and the browser
     keeps the newest ``stream.limit``. ``columns`` may be omitted when the rows are a
     non-empty static list. ``height`` (a CSS length) makes the body scroll under a sticky
-    header.
+    header. ``search=True`` adds a filter box (case-insensitive, over every column, in the
+    browser, so rows streaming in are filtered too); ``column_toggle=True`` lets the viewer
+    hide columns (remembered in the browser); ``follow=True`` keeps the newest row in view
+    while rows arrive and pauses when the viewer scrolls up (needs ``height``).
 
     Sorting and paging are client-side; the data rides ordinary reactive props, so no
     ``protocol_version`` bump. Use ``DataFrame`` when you only need to show a table.
@@ -1170,12 +1173,20 @@ class Table(Component):
         page_size: int = 0,
         label: str = "",
         height: str | None = None,
+        search: bool = False,
+        column_toggle: bool = False,
+        follow: bool = False,
     ) -> None:
         super().__init__()
-        if rows is None and (columns is not None or key is not None):
+        if rows is None and (
+            columns is not None or key is not None or search or column_toggle or follow
+        ):
             raise ValueError(
-                "Table columns= and key= go with rows=; the classic form takes neither"
+                "Table columns=/key=/search=/column_toggle=/follow= go with rows=; "
+                "the classic form takes none of them"
             )
+        if follow and height is None:
+            raise ValueError("Table follow=True needs height= (the body scrolls inside it)")
         if rows is None and source is None:
             raise ValueError("Table needs a source (classic form) or rows= (rich form)")
         if rows is not None and source is not None:
@@ -1189,6 +1200,9 @@ class Table(Component):
         self._selected = selected
         self._label = label
         self._height = height
+        self._search = bool(search)
+        self._column_toggle = bool(column_toggle)
+        self._follow = bool(follow)
         self._columns: list[Col] | None = None
         if rows is not None:
             self._columns = list(columns) if columns is not None else self._infer_columns(rows)
@@ -1214,6 +1228,9 @@ class Table(Component):
                 props["rowKey"] = self._key
             if self._height is not None:
                 props["height"] = self._height
+            props["search"] = self._search
+            props["columnToggle"] = self._column_toggle
+            props["follow"] = self._follow
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:

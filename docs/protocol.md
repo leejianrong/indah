@@ -196,7 +196,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
 | `map` | display | `center:[lat,lon]`, `zoom`, `markers:[{lat,lon,label?,color?,radius?}]`, `polygons:[{points:[[lat,lon],...],label?,color?,fillOpacity?}]`, `polylines:[{points:[[lat,lon],...],label?,color?,weight?}]`, `tileUrl`, `attribution`, `height`, `label` | — (pan/zoom is client-side only, not reported back) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
-| `table` | display/input | classic: `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index). Rich: `columns:[{field,title,kind,width?,sortable,tones?}]`, `rows:[{...}]`, `rowKey`, `height`, `pageSize`, `selectable`, `value` (selected row key) | `select` `{index}` or, in rich mode, `{key}` |
+| `table` | display/input | classic: `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index). Rich: `columns:[{field,title,kind,width?,sortable,tones?}]`, `rows:[{...}]`, `rowKey`, `height`, `search`, `columnToggle`, `follow`, `pageSize`, `selectable`, `value` (selected row key) | `select` `{index}` or, in rich mode, `{key}` |
 | `stat` | display | `value`, `label`, `delta`, `help` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
@@ -280,7 +280,10 @@ is the selected row's **key**, so a selection survives sorting and new rows. A c
 `kind` picks a shell-side renderer that never interprets HTML: `text`, `mono`, `badge`
 (`tones` maps a value to `ok|warn|err|info|neutral`), `time` (ISO string or epoch ms/s,
 shown relative and refreshed live) and `number`. `height` makes the body scroll under a
-sticky header. When the rows are a `Stream` they grow by `append` patches on `rows`
+sticky header. `search`, `columnToggle` and `follow` switch on a toolbar that is entirely
+client-side (no event): a case-insensitive filter over every column (so streamed rows are
+filtered as they land), a column picker remembered in the browser, and follow-the-tail
+that pauses when the viewer scrolls up. When the rows are a `Stream` they grow by `append` patches on `rows`
 with a `trim`. All of it is additive props, so no `protocol_version` bump.
 `stat` is a metric card: a `value` with a `label`, an optional `delta` (the shell
 colours it by sign — red when it starts with `-`, otherwise green), and an optional

@@ -1403,3 +1403,93 @@ def test_rich_table_renders_typed_cells_selects_by_key_and_follows_a_stream():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_streaming_table_filters_toggles_columns_and_follows_the_tail():
+    """IND-92: client-side search over rows still streaming in, a remembered column
+    toggle, and follow-tail that pauses when the viewer scrolls up."""
+    import asyncio
+    import itertools
+
+    from indah.app import create_app
+    from indah.components import Button, Col, Column, Table
+    from indah.session import Session
+    from indah.stream import Stream
+
+    def factory() -> Session:
+        rows = Stream(limit=500)
+        counter = itertools.count()
+
+        async def burst() -> None:
+            for _ in range(30):
+                i = next(counter)
+                rows.append({"id": f"r{i:03d}", "result": "miss" if i % 2 else "hit", "score": i})
+                await asyncio.sleep(0.01)
+
+        return Session(
+            Column(
+                children=[
+                    Table(
+                        rows=rows,
+                        key="id",
+                        height="10rem",
+                        search=True,
+                        column_toggle=True,
+                        follow=True,
+                        label="Log",
+                        columns=[Col("id", kind="mono"), Col("result"), Col("score")],
+                    ),
+                    Button("go", on_click=burst),
+                ]
+            )
+        )
+
+    handle = launch(create_app(session_factory=factory), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                scroller = page.locator(".table-scroll.rich")
+
+                def gap() -> float:
+                    return scroller.evaluate(
+                        "el => el.scrollHeight - el.scrollTop - el.clientHeight"
+                    )
+
+                # Column toggle: hide "score"; the choice survives a reload.
+                page.locator(".col-toggle summary").click()
+                page.get_by_label("score").uncheck()
+                expect(page.locator("thead th", has_text="score")).to_have_count(0)
+                page.reload(wait_until="domcontentloaded")
+                expect(page.locator("thead th", has_text="result")).to_have_count(1)
+                expect(page.locator("thead th", has_text="score")).to_have_count(0)
+
+                # Follow: after a burst the newest row is in view.
+                page.get_by_role("button", name="go").click()
+                expect(page.locator("tbody tr")).to_have_count(30)
+                assert gap() < 24
+
+                # Scroll up: following pauses, and a second burst does not drag us down.
+                scroller.evaluate("el => { el.scrollTop = 0; }")
+                expect(page.get_by_role("button", name="Resume following")).to_be_visible()
+                page.get_by_role("button", name="go").click()
+                expect(page.locator("tbody tr")).to_have_count(60)
+                assert scroller.evaluate("el => el.scrollTop") < 24
+                page.get_by_role("button", name="Resume following").click()
+                assert gap() < 24
+                expect(page.get_by_role("button", name="Resume following")).to_have_count(0)
+
+                # Filter while rows keep arriving: new matching rows appear, others do not.
+                page.get_by_label("Filter rows").fill("miss")
+                expect(page.locator("tbody tr")).to_have_count(30)
+                expect(page.locator(".table-count")).to_have_text("30 of 60")
+                page.get_by_role("button", name="go").click()
+                expect(page.locator("tbody tr")).to_have_count(45)
+                assert all("miss" in t for t in page.locator("tbody tr").all_inner_texts())
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
