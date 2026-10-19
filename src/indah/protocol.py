@@ -59,6 +59,8 @@ BUILTIN_TYPES = frozenset(
         "stat",
         "checkbox",
         "switch",
+        "splitpane",
+        "masterdetail",
         "shortcuts",
         "badge",
         "number",

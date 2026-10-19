@@ -1258,6 +1258,7 @@ class Col:
         return out
 
 
+DENSITIES = ("comfortable", "compact")
 MAX_TABLE_LIMIT = 500
 _MAX_SEARCH = 200
 _MAX_FILTERS = 20
@@ -1370,6 +1371,8 @@ class Table(Component):
     plus a small overscan, with spacers standing in for the rest, so the DOM stays small at
     tens of thousands of rows. Rows have one fixed height, so cells do not wrap. In remote
     mode the shell fetches windows as the viewer scrolls and keeps a few recent ones.
+    ``density="compact"`` shrinks this table's rows (the app-wide default is
+    ``create_app(density=)``).
 
     Sorting and paging are client-side; the data rides ordinary reactive props, so no
     ``protocol_version`` bump. Use ``DataFrame`` when you only need to show a table.
@@ -1397,8 +1400,11 @@ class Table(Component):
         reload_on: list[Signal[Any]] | None = None,
         query: Signal[TableQuery | None] | None = None,
         virtual: bool = False,
+        density: str | None = None,
     ) -> None:
         super().__init__()
+        if density is not None and density not in DENSITIES:
+            raise ValueError(f"Table density must be one of {DENSITIES}, got {density!r}")
         if virtual and (height is None or (rows is None and remote is None)):
             raise ValueError("Table virtual=True needs the rich form and height=")
         if remote is not None:
@@ -1447,6 +1453,7 @@ class Table(Component):
         self._actions = list(actions or [])
         self._checked = checked
         self._virtual = bool(virtual)
+        self._density = density
         self._loader = remote
         if remote is not None and not page_size:
             self._page_size = 50
@@ -1501,6 +1508,8 @@ class Table(Component):
             props["follow"] = self._follow
             if self._virtual:
                 props["virtual"] = True
+            if self._density:
+                props["density"] = self._density
             props["checkable"] = self._checked is not None
             if self._loader is not None:
                 props["remote"] = True
@@ -2073,6 +2082,102 @@ class Shortcuts(Component):
         if inspect.iscoroutine(result):
             return result
         return True
+
+
+class SplitPane(Component):
+    """Two panes with a draggable divider (IND-103). Everything is client-side: dragging,
+    the arrow keys on the focused divider (Shift for bigger steps, Home/End for the limits,
+    double-click to reset) and the remembered ratio (``localStorage``, by ``key``) never
+    touch the server. ``initial`` is the first pane's share, ``min`` the least either pane
+    may shrink to. A ``vertical`` split stacks the panes and needs a ``height`` (default
+    ``28rem``); a horizontal one stacks on a phone."""
+
+    type = "splitpane"
+
+    def __init__(
+        self,
+        first: Component,
+        second: Component,
+        *,
+        direction: str = "horizontal",
+        initial: float = 0.4,
+        min: float = 0.2,
+        key: str | None = None,
+        height: str | None = None,
+    ) -> None:
+        _check_split(direction, initial, min)
+        if height is not None and not _CSS_LENGTH.match(height):
+            raise ValueError(f"SplitPane height {height!r} must be a length like '20rem'")
+        super().__init__([first, second])
+        self._direction = direction
+        self._initial = initial
+        self._min = min
+        self._key = key
+        self._height = height
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {
+            "direction": self._direction,
+            "initial": self._initial,
+            "min": self._min,
+        }
+        if self._key:
+            props["key"] = self._key
+        if self._height:
+            props["height"] = self._height
+        return props
+
+
+def _check_split(direction: str, initial: float, minimum: float) -> None:
+    if direction not in ("horizontal", "vertical"):
+        raise ValueError(f"split direction must be horizontal or vertical, got {direction!r}")
+    if not 0 < minimum <= 0.5:
+        raise ValueError("split min must be in (0, 0.5]")
+    if not minimum <= initial <= 1 - minimum:
+        raise ValueError("split initial must lie within [min, 1 - min]")
+
+
+class MasterDetail(Component):
+    """A list beside its detail: a :class:`SplitPane` on wide screens, and on a narrow one
+    the master alone with the detail in a drawer. ``open`` (a ``Signal[bool]``) says whether
+    the drawer is showing; set it when the user picks a row, the drawer's close clears it.
+    On a wide screen the detail is always visible and ``open`` is ignored."""
+
+    type = "masterdetail"
+
+    def __init__(
+        self,
+        master: Component,
+        detail: Component,
+        *,
+        open: Signal[bool] | None = None,
+        initial: float = 0.4,
+        min: float = 0.2,
+        key: str | None = None,
+        title: str = "",
+    ) -> None:
+        _check_split("horizontal", initial, min)
+        super().__init__([master, detail])
+        self._open = open if open is not None else Signal(False)
+        self._initial = initial
+        self._min = min
+        self._key = key
+        self._title = title
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"initial": self._initial, "min": self._min, "title": self._title}
+        if self._key:
+            props["key"] = self._key
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"open": lambda: bool(self._open.value)}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "close":
+            self._open.set(False)
+            return True
+        return False
 
 
 class Tabs(Component):

@@ -85,3 +85,15 @@ def test_bad_logos_fail_at_app_creation(tmp_path):
         _app(logo=b"<svg>" + b"x" * (600 * 1024))
     with pytest.raises(FileNotFoundError):
         _app(logo=tmp_path / "missing.svg")
+
+
+@pytest.mark.integration
+async def test_density_is_set_on_the_html_element_and_validated():
+    async with _client(_app(density="compact")) as client:
+        html = (await client.get("/")).text
+    assert '<html lang="en" data-density="compact">' in html
+
+    async with _client(_app()) as client:
+        assert '<html lang="en">' in (await client.get("/")).text  # comfortable: untouched
+    with pytest.raises(ValueError):
+        _app(density="tiny")

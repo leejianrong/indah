@@ -2154,3 +2154,147 @@ def test_virtual_static_table_renders_only_the_visible_rows():
                 browser.close()
     finally:
         handle.stop()
+
+
+def _panes_app(**app_kw):
+    from indah import (
+        Col,
+        Column,
+        MasterDetail,
+        Session,
+        Signal,
+        SplitPane,
+        Table,
+        Text,
+        create_app,
+    )
+
+    picked, open_ = Signal(None), Signal(False)
+    rows = [{"id": f"r{i}", "name": f"call {i}"} for i in range(8)]
+    table = Table(rows=rows, columns=[Col("id"), Col("name")], key="id", selected=picked)
+    root = Column(
+        children=[
+            SplitPane(Text("left pane"), Text("right pane"), initial=0.4, key="t1"),
+            MasterDetail(table, Text("the detail"), open=open_, key="t2", title="Call detail"),
+        ]
+    )
+    return create_app(session=Session(root), **app_kw), open_
+
+
+@pytest.mark.e2e
+def test_split_pane_drags_resizes_by_keyboard_and_the_ratio_survives_reload():
+    app, _ = _panes_app()
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 1100, "height": 800})
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                sep = page.get_by_role("separator").first
+                expect(sep).to_have_attribute("aria-valuenow", "40")
+
+                first = page.locator(".split-pane").first
+                width0 = first.bounding_box()["width"]
+                box = sep.bounding_box()
+                page.mouse.move(box["x"] + 5, box["y"] + 5)
+                page.mouse.down()
+                page.mouse.move(box["x"] + 5 + 150, box["y"] + 5, steps=5)
+                page.mouse.up()
+                assert first.bounding_box()["width"] > width0 + 100  # dragged wider
+                dragged = int(sep.get_attribute("aria-valuenow"))
+                assert dragged > 40
+
+                sep.focus()
+                page.keyboard.press("ArrowLeft")
+                assert int(sep.get_attribute("aria-valuenow")) == dragged - 2
+                page.keyboard.press("Shift+ArrowLeft")
+                assert int(sep.get_attribute("aria-valuenow")) == dragged - 12
+                page.keyboard.press("Home")
+                expect(sep).to_have_attribute("aria-valuenow", "20")  # clamped to min
+                page.keyboard.press("End")
+                expect(sep).to_have_attribute("aria-valuenow", "80")
+                page.keyboard.press("ArrowRight")
+                expect(sep).to_have_attribute("aria-valuenow", "80")  # never past the limit
+                page.keyboard.press("Home")
+                page.keyboard.press("ArrowRight")  # 22
+
+                page.reload(wait_until="domcontentloaded")  # a new session, same browser
+                expect(page.get_by_role("separator").first).to_have_attribute("aria-valuenow", "22")
+                page.get_by_role("separator").first.dblclick()
+                expect(page.get_by_role("separator").first).to_have_attribute("aria-valuenow", "40")
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_master_detail_is_a_split_when_wide_and_a_drawer_when_narrow():
+    app, open_ = _panes_app()
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 1100, "height": 800})
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("the detail")).to_be_visible()  # wide: side by side
+
+                page.set_viewport_size({"width": 600, "height": 800})
+                expect(page.get_by_text("the detail")).to_have_count(0)  # narrow: hidden
+                open_.set(True)  # the app picked a row
+                drawer = page.get_by_role("dialog", name="Call detail")
+                expect(drawer).to_contain_text("the detail")
+                page.keyboard.press("Escape")
+                expect(drawer).to_have_count(0)
+                assert open_.value is False  # the close reached the server
+
+                page.set_viewport_size({"width": 1100, "height": 800})
+                expect(page.get_by_text("the detail")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_compact_density_shrinks_table_rows_app_wide_and_per_table():
+    from indah import Col, Column, Session, Table, create_app
+
+    rows = [{"id": f"r{i}"} for i in range(6)]
+
+    def tables():
+        return Column(
+            children=[
+                Table(rows=rows, columns=[Col("id")], key="id", label="plain"),
+                Table(rows=rows, columns=[Col("id")], key="id", label="dense", density="compact"),
+            ]
+        )
+
+    def row_height(page, label):
+        return (
+            page.locator(".field", has_text=label)
+            .locator("tbody tr")
+            .first.bounding_box()["height"]
+        )
+
+    heights = {}
+    for name, kw in (("comfortable", {}), ("compact", {"density": "compact"})):
+        handle = launch(create_app(session=Session(tables()), **kw), block=False, open_inline=False)
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                try:
+                    page.goto(handle.url, wait_until="domcontentloaded")
+                    expect(page.locator("tbody tr").first).to_be_visible()
+                    heights[name] = (row_height(page, "plain"), row_height(page, "dense"))
+                finally:
+                    browser.close()
+        finally:
+            handle.stop()
+    plain, dense = heights["comfortable"]
+    assert dense < plain - 6  # a per-table override shrinks just that table
+    assert heights["compact"][0] < plain - 6  # app-wide compact shrinks the plain one too
+    assert abs(heights["compact"][0] - heights["compact"][1]) < 1

@@ -49,3 +49,16 @@ shell driven by static props (columns, gap, orientation).
 - Multi-page/routing is a separate, larger concern (needs a nav model and, for
   runtime-added pages, the structural op deferred in ADR-0016); `Tabs` covers the
   common "sections" case in the interim.
+
+## Amendment (IND-103): SplitPane and MasterDetail
+
+- `SplitPane(first, second, direction=, initial=, min=, key=, height=)` is a two-child container
+  with a draggable divider. It is client-only like `Tabs`/`Expander` state: the pointer drag, the
+  arrow keys on the focused divider (Shift for 10 points, Home/End for the limits, Enter or
+  double-click to reset) and the ratio in `localStorage` (by `key`, else the node id, per page)
+  never reach the server. The divider is a `role="separator"` with `aria-valuenow`. A horizontal
+  split stacks on a phone.
+- `MasterDetail(master, detail, open=)` is a `SplitPane` on a wide viewport and, under 700 px,
+  the master alone with the detail in a `Drawer` driven by the `open` signal (its close event
+  clears it). On a wide viewport `open` is ignored. Both are additive node types, so no
+  `protocol_version` bump.
