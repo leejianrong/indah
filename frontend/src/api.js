@@ -2,10 +2,12 @@
 
 export const PROTOCOL_VERSION = 1;
 
-// Resolve API URLs relative to the current document so the shell works behind
-// Colab/Runpod proxy base paths (ADR-0001).
+// Resolve API URLs relative to the document's base so the shell works behind
+// Colab/Runpod proxy base paths (ADR-0001). baseURI is the page URL, or the server's
+// relative <base href> on a deep in-app path (spa=True), so api/* always reaches the
+// app root.
 export function apiUrl(path) {
-  let base = location.href.split("#")[0].split("?")[0];
+  let base = document.baseURI.split("#")[0].split("?")[0];
   if (!base.endsWith("/")) base += "/";
   return new URL(path, base).toString();
 }
