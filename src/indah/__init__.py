@@ -68,6 +68,7 @@ from .session_store import (
     SharedSessionStore,
 )
 from .stream import Stream
+from .theme import Theme
 
 __version__ = "0.2.2"
 
@@ -81,6 +82,7 @@ __all__ = [
     "LaunchHandle",
     "Session",
     "Stream",
+    "Theme",
     "Topic",
     "Context",
     "ConnectionInfo",
