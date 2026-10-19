@@ -95,6 +95,10 @@ DEFAULT_SESSION_ID = "default"
 # larger part with 413 rather than buffering it.
 DEFAULT_MAX_UPLOAD_MB = 25.0
 
+# The hard cap on a JSON event body (IND-98). A text area can carry a long note, so
+# this is generous; the route returns 413 rather than buffer an unbounded body.
+DEFAULT_MAX_EVENT_BYTES = 1024 * 1024
+
 _SSE_HEADERS = {
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
@@ -471,6 +475,7 @@ def create_app(
     store: SessionStore | None = None,
     heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
     max_upload_mb: float = DEFAULT_MAX_UPLOAD_MB,
+    max_event_bytes: int = DEFAULT_MAX_EVENT_BYTES,
     title: str | None = None,
     home_url: str | None = None,
     source_url: str | None = None,
@@ -498,6 +503,9 @@ def create_app(
     (``/projects/auth/entries/01J``) can be opened directly or reloaded. The shell then
     gets a relative ``<base href>`` so its ``api/*`` calls still reach the app root,
     whatever prefix the app is mounted under (IND-86).
+
+    ``max_event_bytes`` (default 1 MiB) caps one ``POST /api/event`` body; a larger one
+    is rejected with ``413`` before it is parsed.
 
     ``proxy_flush`` (default on) pads the SSE stream so a window-buffering proxy such as
     Colab's releases each frame (ADR-0002); a deployment with no such proxy -- a local
@@ -544,6 +552,7 @@ def create_app(
     app.state.heartbeat_seconds = heartbeat_seconds
     app.state.proxy_flush = proxy_flush
     app.state.max_upload_bytes = int(max_upload_mb * 1024 * 1024)
+    app.state.max_event_bytes = max_event_bytes
     # Optional page chrome, injected into the served shell by ``_index``. The gallery
     # sets these per demo (a clickable logo back to the gallery, a view-source link,
     # a distinct tab title); a standalone app leaves them unset and gets the plain shell.
@@ -811,9 +820,27 @@ async def _stream(request: Request) -> StreamingResponse:
     return StreamingResponse(event_source(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
+async def _read_capped(request: Request, limit: int) -> bytes | None:
+    """The request body, or ``None`` once it exceeds ``limit`` bytes (never buffers more)."""
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > limit:
+        return None
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > limit:
+            return None
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 async def _event(request: Request) -> JSONResponse:
+    body = await _read_capped(request, request.app.state.max_event_bytes)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "event too large"}, status_code=413)
     try:
-        raw = await request.json()
+        raw = json.loads(body)
     except (json.JSONDecodeError, ValueError):
         return JSONResponse({"ok": False, "error": "invalid json"}, status_code=400)
 

@@ -48,6 +48,24 @@
     if (inputEl && document.activeElement !== inputEl) syncFromServer();
   });
 
+  // A text area batches keystrokes: one POST per pause (150 ms), not per character,
+  // and a blur flushes at once so a click right after typing never reads stale text.
+  let areaTimer = null;
+  function flushArea() {
+    if (areaTimer === null) return;
+    clearTimeout(areaTimer);
+    areaTimer = null;
+    if (inputEl) postEvent(node.id, "input", { value: inputEl.value });
+  }
+  function onAreaInput() {
+    if (areaTimer !== null) clearTimeout(areaTimer);
+    areaTimer = setTimeout(flushArea, 150);
+  }
+  function onAreaBlur() {
+    flushArea();
+    syncFromServer();
+  }
+
   // Keep a chat pinned to the newest message. The dependency array is re-created
   // whenever messages/pending change, so the action's update() runs and scrolls.
   function autoscroll(node) {
@@ -233,6 +251,18 @@
       onkeydown={(e) => { if (e.key === "Enter") postEvent(node.id, "submit"); }}
       onblur={syncFromServer}
     />
+  </div>
+{:else if node.type === "textarea"}
+  <div class="field">
+    {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
+    <textarea
+      bind:this={inputEl}
+      id={`${node.id}-input`}
+      rows={props.rows ?? 4}
+      placeholder={props.placeholder ?? ""}
+      oninput={onAreaInput}
+      onblur={onAreaBlur}
+    ></textarea>
   </div>
 {:else if node.type === "checkbox"}
   <label class="check">

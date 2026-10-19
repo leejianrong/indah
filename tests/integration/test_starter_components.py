@@ -11,7 +11,7 @@ import pytest
 
 from indah.app import create_app
 from indah.components import Column, DataFrame, Image, Select
-from indah.custom import clear_registry, custom, register_component
+from indah.custom import _REGISTRY, clear_registry, custom, register_component
 from indah.reactive import Signal
 from indah.session import Session
 
@@ -22,9 +22,12 @@ def _client(app) -> httpx.AsyncClient:
 
 @pytest.fixture(autouse=True)
 def _isolate_registry():
+    # Restore (not just clear) so the demo's import-time "colorpicker" survives.
+    saved = dict(_REGISTRY)
     clear_registry()
     yield
     clear_registry()
+    _REGISTRY.update(saved)
 
 
 # -- Select: two-way round-trip ---------------------------------------------

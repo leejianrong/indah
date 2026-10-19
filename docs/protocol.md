@@ -136,7 +136,8 @@ check. `init` and `ping` carry no id. See ADR-0011.
   event lands on the default session.
 
 A malformed body is rejected `400`; a body that does not validate, `422`; an event
-for an unknown component or event, `400`. A handler that raises does not take the
+for an unknown component or event, `400`. A body larger than `max_event_bytes`
+(`create_app` argument, default 1 MiB) is rejected `413` before it is parsed. A handler that raises does not take the
 UI down: the traceback is logged server-side and an `error` message is pushed.
 
 ## File upload and download
@@ -181,6 +182,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`) | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label` | `input` `{value}` |
+| `textarea` | input | `value`, `placeholder`, `label`, `rows` | `input` `{value}` (debounced 150 ms, flushed on blur) |
 | `select` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
 | `checkbox` | input | `checked`, `label` | `change` `{value}` |
 | `number` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |

@@ -24,6 +24,7 @@ from indah.components import (
     Spinner,
     Tabs,
     Text,
+    TextArea,
     TextInput,
     walk,
 )
@@ -584,3 +585,15 @@ def test_containers_walk_preorder_over_nested_children():
     inner = Column(children=[leaf])
     root = Tabs(children=[inner], labels=["T"])
     assert list(walk(root)) == [root, inner, leaf]
+
+
+@pytest.mark.unit
+def test_textarea_serialises_and_round_trips():
+    v = Signal("a\nb")
+    ta = TextArea(v, label="Notes", placeholder="...", rows=6)
+    assert ta.type == "textarea"
+    assert ta.static_props() == {"placeholder": "...", "label": "Notes", "rows": 6}
+    assert ta.reactive_props()["value"]() == "a\nb"
+    assert ta.handle("input", {"value": "x\ny"}) is True
+    assert v.value == "x\ny"
+    assert ta.handle("nope", {}) is False
