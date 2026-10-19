@@ -26,8 +26,9 @@ Where the build differs from the plan text below: the context ADR is **0025**, p
 ADR-0014**, not a new 0031; the additive-change rule is an amendment to ADR-0005; IND-29
 and IND-75 are closed as superseded; Table search/column toggle/follow are client-only
 and `Table` gained `search=`, `column_toggle=`, `follow=`.
-`LaunchHandle.stop()` does not stop uvicorn while an SSE stream is open (found during
-IND-85, not yet filed); the browser e2e that needs a real restart kills a subprocess.
+`LaunchHandle.stop()` used to leave uvicorn running while an SSE stream was open (IND-123,
+fixed with `timeout_graceful_shutdown`); the browser e2e that needs a real restart still kills a
+subprocess.
 
 ## Summary
 

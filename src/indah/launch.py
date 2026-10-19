@@ -7,6 +7,7 @@ a plain script it blocks until interrupted.
 
 from __future__ import annotations
 
+import logging
 import socket
 import threading
 import time
@@ -37,6 +38,10 @@ def find_free_port(preferred: int = 8000, *, host: str = "127.0.0.1", max_tries:
         return sock.getsockname()[1]
 
 
+# How long stop() lets uvicorn drain before it cancels streams still open.
+STOP_GRACE_SECONDS = 1
+
+
 @dataclass
 class LaunchHandle:
     """A running indah server. Call ``stop()`` to shut it down."""
@@ -47,8 +52,19 @@ class LaunchHandle:
     _thread: threading.Thread
 
     def stop(self) -> None:
-        self._server.should_exit = True  # type: ignore[attr-defined]
-        self._thread.join(timeout=5)
+        """Shut the server down. An SSE stream never ends on its own, so uvicorn is given
+        ``STOP_GRACE_SECONDS`` to drain (``timeout_graceful_shutdown``) and then cancels
+        the streams still open, which lets the thread end and frees the port."""
+        # Cancelling an open stream is what we asked for, so keep uvicorn from logging it
+        # as a server error.
+        quiet = logging.getLogger("uvicorn.error")
+        level = quiet.level
+        quiet.setLevel(logging.CRITICAL)
+        try:
+            self._server.should_exit = True  # type: ignore[attr-defined]
+            self._thread.join(timeout=STOP_GRACE_SECONDS + 4)
+        finally:
+            quiet.setLevel(level)
 
 
 def launch(
@@ -72,7 +88,13 @@ def launch(
     # In Colab/Runpod the proxy reaches the container, so bind all interfaces.
     bind_host = "0.0.0.0" if environment in (Environment.COLAB, Environment.RUNPOD) else host
 
-    config = uvicorn.Config(app, host=bind_host, port=port, log_level="warning")
+    config = uvicorn.Config(
+        app,
+        host=bind_host,
+        port=port,
+        log_level="warning",
+        timeout_graceful_shutdown=int(STOP_GRACE_SECONDS),
+    )
     server = uvicorn.Server(config)
 
     thread = threading.Thread(target=server.run, daemon=True)
