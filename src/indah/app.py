@@ -68,6 +68,7 @@ from .components import (
     TextInput,
     UploadedFile,
 )
+from .context import ConnectionInfo, Context
 from .custom import custom, register_component
 from .protocol import EventIn, init_message, patch_message, ping_message
 from .reactive import Signal
@@ -463,7 +464,7 @@ def build_demo_session() -> Session:
 def create_app(
     *,
     session: Session | None = None,
-    session_factory: Callable[[], Session] | None = None,
+    session_factory: Callable[[], Session] | Callable[[Context], Session] | None = None,
     store: SessionStore | None = None,
     heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
     max_upload_mb: float = DEFAULT_MAX_UPLOAD_MB,
@@ -522,6 +523,8 @@ def create_app(
         ]
     )
     app.state.store = store
+    if hasattr(store, "app"):
+        store.app = app  # so each session's Context can reach its ASGI app
     app.state.heartbeat_seconds = heartbeat_seconds
     app.state.max_upload_bytes = int(max_upload_mb * 1024 * 1024)
     # Optional page chrome, injected into the served shell by ``_index``. The gallery
@@ -705,7 +708,7 @@ async def _stream(request: Request) -> StreamingResponse:
     # One session per browser tab, keyed by the id the shell sends (?sid=...).
     # An id-less connection shares the default session (ADR-0010).
     sid = request.query_params.get("sid") or DEFAULT_SESSION_ID
-    handle: SessionHandle = store.get_or_create(sid)
+    handle: SessionHandle = store.get_or_create(sid, ConnectionInfo.from_request(request))
     hub = handle.hub
     session = handle.session
     queue = hub.subscribe()
@@ -760,7 +763,9 @@ async def _event(request: Request) -> JSONResponse:
     # Route the event to the sender's session (ADR-0010): its handler runs on its
     # own signals and its patches go only to its own hub -- never another viewer's.
     store: SessionStore = request.app.state.store
-    handle: SessionHandle = store.get_or_create(event.sid or DEFAULT_SESSION_ID)
+    handle: SessionHandle = store.get_or_create(
+        event.sid or DEFAULT_SESSION_ID, ConnectionInfo.from_request(request)
+    )
     hub = handle.hub
     session = handle.session
     result = session.dispatch(event.component, event.event, event.payload)
@@ -813,7 +818,7 @@ async def _upload(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "file too large"}, status_code=413)
 
     store: SessionStore = request.app.state.store
-    handle: SessionHandle = store.get_or_create(sid)
+    handle: SessionHandle = store.get_or_create(sid, ConnectionInfo.from_request(request))
     result = handle.session.dispatch(component_id, "upload", {"files": files})
     if result is None:
         return JSONResponse({"ok": False, "error": "unknown component"}, status_code=400)

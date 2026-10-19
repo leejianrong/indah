@@ -53,6 +53,7 @@ from .components import (
     Upload,
     UploadedFile,
 )
+from .context import ConnectionInfo, Context
 from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
 from .launch import LaunchHandle, launch
@@ -76,6 +77,8 @@ __all__ = [
     "launch",
     "LaunchHandle",
     "Session",
+    "Context",
+    "ConnectionInfo",
     "DispatchResult",
     # per-session state seam (ADR-0010)
     "SessionStore",
