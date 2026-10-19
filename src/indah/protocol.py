@@ -44,6 +44,7 @@ BUILTIN_TYPES = frozenset(
         "button",
         "slider",
         "textinput",
+        "textarea",
         "streamtext",
         "select",
         "image",

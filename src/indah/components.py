@@ -253,6 +253,43 @@ class TextInput(Component):
         return False
 
 
+class TextArea(Component):
+    """A multiline text box two-way bound to a ``Signal[str]`` (IND-98).
+
+    Like :class:`TextInput` the focused element is client-owned (ADR-0013), and the
+    shell also debounces keystrokes and flushes on blur, so a long note is not one
+    POST per character. There is no submit event: Enter inserts a newline.
+    """
+
+    type = "textarea"
+
+    def __init__(
+        self,
+        value: Signal[str],
+        *,
+        placeholder: str = "",
+        label: str = "",
+        rows: int = 4,
+    ) -> None:
+        super().__init__()
+        self._value = value
+        self._placeholder = placeholder
+        self._label = label
+        self._rows = rows
+
+    def static_props(self) -> dict[str, Any]:
+        return {"placeholder": self._placeholder, "label": self._label, "rows": self._rows}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: self._value.value}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "input" and "value" in payload:
+            self._value.set(str(payload["value"]))
+            return True
+        return False
+
+
 class Checkbox(Component):
     """A checkbox two-way bound to a ``Signal[bool]`` (R5)."""
 

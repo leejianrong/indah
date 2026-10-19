@@ -1539,3 +1539,48 @@ def test_semula_live_log_two_tabs_follow_the_same_calls():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_focused_textarea_survives_a_300ms_echo_and_flushes_on_blur():
+    """Typing into a TextArea behind a slow echo loses nothing: the server's late
+    echoes are ignored while focused (ADR-0013), keystrokes are debounced into few
+    POSTs, and blur flushes the final text so the server signal ends up complete."""
+    import time
+
+    from indah import Column, Session, Signal, TextArea, create_app
+
+    sig = Signal("")
+    app = create_app(session=Session(Column(children=[TextArea(sig, label="Notes")])))
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            posts = []
+            page.on("request", lambda r: posts.append(1) if r.url.endswith("api/event") else None)
+
+            def slow(route):  # delay every event by 300 ms: a laggy proxy
+                time.sleep(0.3)
+                route.continue_()
+
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                box = page.locator("textarea").first
+                expect(box).to_be_visible()
+                page.route("**/api/event", slow)
+                box.click()
+                text = "line one\nline two, typed fairly quickly"
+                page.keyboard.type(text, delay=20)
+                expect(box).to_have_value(text)
+                page.wait_for_timeout(1200)  # let the delayed echoes land
+                expect(box).to_have_value(text)  # nothing clobbered
+                assert 0 < len(posts) < len(text)  # debounced, not per keystroke
+                box.blur()
+                page.wait_for_timeout(1000)
+                assert sig.value == text
+                expect(box).to_have_value(text)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

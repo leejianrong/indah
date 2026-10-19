@@ -2,7 +2,7 @@
 
 import pytest
 
-from indah.custom import clear_registry, custom, register_component, registered
+from indah.custom import _REGISTRY, clear_registry, custom, register_component, registered
 from indah.reactive import Signal
 
 COLORPICKER = {
@@ -15,9 +15,12 @@ COLORPICKER = {
 
 @pytest.fixture(autouse=True)
 def _isolate_registry():
+    # Restore (not just clear) so the demo's import-time "colorpicker" survives.
+    saved = dict(_REGISTRY)
     clear_registry()
     yield
     clear_registry()
+    _REGISTRY.update(saved)
 
 
 @pytest.mark.unit
