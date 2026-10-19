@@ -29,9 +29,12 @@
     return [mod && "mod", e.altKey && "alt", shift && "shift", key].filter(Boolean).join("+");
   }
 
-  function typing(e) {
+  function typing(e, tok) {
     const t = e.target;
-    return !!t && (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable);
+    if (!t) return false;
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable) return true;
+    // Enter/Space activate a focused button or link: that is the control's key, not ours.
+    return (tok === "enter" || tok === "space") && !!t.closest?.("button, a[href], summary, [role=switch]");
   }
 
   function reset() {
@@ -45,7 +48,7 @@
     if (e.defaultPrevented || document.querySelector('[role="dialog"]')) return;
     const tok = token(e);
     const combo = tok.startsWith("mod+") || tok.startsWith("alt+");
-    if (typing(e) && !combo) return;
+    if (typing(e, tok) && !combo) return;
 
     const keys = (props.keys ?? []).map((k) => k.keys);
     let candidate = [...buffer, tok];
