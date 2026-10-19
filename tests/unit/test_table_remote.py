@@ -161,3 +161,16 @@ async def test_reload_on_signals_re_run_the_last_query_keeping_its_seq():
             break
     assert calls == [("a", "call 1"), ("b", "call 1")]
     assert t.reactive_props()["window"]()["seq"] == 3  # same query, fresh answer
+
+
+@pytest.mark.unit
+def test_virtual_needs_a_height_and_the_rich_form_and_is_a_static_prop():
+    t = _table(virtual=True, height="20rem")
+    assert t.static_props()["virtual"] is True
+    assert "virtual" not in _table().static_props()
+    rich = Table(rows=ROWS, columns=[Col("id")], key="id", virtual=True, height="20rem")
+    assert rich.static_props()["virtual"] is True
+    with pytest.raises(ValueError):
+        _table(virtual=True)  # the body must scroll inside a fixed height
+    with pytest.raises(ValueError):
+        Table([{"a": 1}], virtual=True, height="10rem")  # classic form

@@ -314,7 +314,12 @@ and paging into `query` `{search, filters, sort:[field,"asc"|"desc"]|null, offse
 and the server answers through one reactive prop, `window` `{rows, total, offset, seq}`, so
 rows, total and the window they belong to always arrive together. The shell shows a `window`
 only if its `seq` is at least the last `seq` it sent; the server drops a superseded query,
-clamps `limit` to 1..500, and pulls an offset past `total` back to the last window. When the rows are a `Stream` they grow by `append` patches on `rows`
+clamps `limit` to 1..500, and pulls an offset past `total` back to the last window.
+`virtual: true` (needs `height`) renders only the rows in view plus an overscan between two
+spacer rows, at one fixed row height (`--row-h`, 36px). In remote mode the shell requests
+block-aligned windows as the viewer scrolls (the same `query`, `limit` up to 500), keeps the
+last eight windows, shows placeholders for rows not fetched yet, and discards the cache on a
+search or sort change. When the rows are a `Stream` they grow by `append` patches on `rows`
 with a `trim`. All of it is additive props, so no `protocol_version` bump.
 `stat` is a metric card: a `value` with a `label`, an optional `delta` (the shell
 colours it by sign — red when it starts with `-`, otherwise green), and an optional
