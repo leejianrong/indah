@@ -1493,3 +1493,49 @@ def test_streaming_table_filters_toggles_columns_and_follows_the_tail():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_semula_live_log_two_tabs_follow_the_same_calls():
+    """IND-93: the semula-shaped demo, mounted at /ui under a parent with a lifespan
+    producer at 40 events/s. Both tabs show the same live rows, the DOM stays at the
+    limit, and a selection in one tab does not move the other."""
+    import importlib.util
+    import sys
+    import time
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "semula_log.py"
+    spec = importlib.util.spec_from_file_location("semula_log_e2e", path)
+    example = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = example
+    spec.loader.exec_module(example)
+
+    handle = launch(example.build_app(rate=40.0, limit=30, seed=2), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            tabs = [browser.new_context().new_page() for _ in range(2)]
+            try:
+                for page in tabs:
+                    page.goto(handle.url.rstrip("/") + "/ui/", wait_until="domcontentloaded")
+                    expect(page.locator("tbody tr")).to_have_count(30, timeout=15_000)
+
+                time.sleep(1.5)
+
+                def ids(page):
+                    return set(page.locator("tbody tr code.cell-mono").all_inner_texts())
+
+                a, b = ids(tabs[0]), ids(tabs[1])
+                assert len(a) == len(b) == 30  # bounded at the limit
+                assert len(a & b) >= 15  # the same live stream (they differ by a moment)
+
+                tabs[0].locator("tbody tr").last.click()
+                expect(tabs[0].locator("tbody tr.selected")).to_have_count(1)
+                expect(tabs[0].locator(".card", has_text="via")).to_be_visible()
+                expect(tabs[1].locator(".card", has_text="Select a row")).to_be_visible()
+                expect(tabs[1].locator("tbody tr.selected")).to_have_count(0)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e build cleanroom docs docs-serve check clean
+.PHONY: help demo demo-semula demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e build cleanroom docs docs-serve check clean
 
 # Print a free host port (stdlib only; no lsof/nc needed).
 FREE_PORT := python3 -c 'import socket;s=socket.socket();s.bind(("",0));p=s.getsockname()[1];s.close();print(p)'
@@ -11,6 +11,9 @@ help: ## Show this help
 
 demo: ## Run the built-in demo app (prints a URL; Ctrl+C to stop)
 	uv run python -m indah
+
+demo-semula: ## Run the semula-shaped live request log (open /ui/ in two tabs)
+	uv run python examples/semula_log.py
 
 demo-notebook: ## Open the demo notebook in JupyterLab (try indah inline in a cell)
 	uv run --with jupyterlab jupyter lab examples/demo.ipynb
