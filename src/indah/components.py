@@ -147,15 +147,25 @@ class Button(Component):
         on_click: Callable[[], Any] | None = None,
         *,
         variant: str = "filled",
+        confirm: str | None = None,
     ) -> None:
         super().__init__()
         self._label = label
         self._on_click = on_click
         self._variant = variant
+        # ``confirm`` makes the shell ask first; the click is only posted once the
+        # user accepts. It is a UX guard, not authorization: the server still runs
+        # any click it receives (ADR-0030).
+        self._confirm = confirm
 
     def static_props(self) -> dict[str, Any]:
-        # Only emit a non-default variant, so a plain Button stays minimal on the wire.
-        return {"variant": self._variant} if self._variant != "filled" else {}
+        # Only emit non-default props, so a plain Button stays minimal on the wire.
+        props: dict[str, Any] = {}
+        if self._variant != "filled":
+            props["variant"] = self._variant
+        if self._confirm:
+            props["confirm"] = self._confirm
+        return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"label": lambda: str(_read(self._label))}
@@ -1796,6 +1806,91 @@ class Expander(Component):
                 self._open.set(not self._open.value)
             return True
         return False
+
+
+# -- Overlays (ADR-0030) ------------------------------------------------------
+
+
+class _Overlay(Component):
+    """Shared behaviour of :class:`Modal` and :class:`Drawer`: an ``open`` signal the
+    shell renders the children for only while true, and a ``close`` event (Esc, the
+    backdrop or the close button) that clears it and runs ``on_close``.
+
+    The children stay in the tree, so their props are in the snapshot even while the
+    overlay is closed: do not put anything secret in one.
+    """
+
+    def __init__(
+        self,
+        children: list[Component] | None,
+        *,
+        open: Signal[bool] | bool,
+        title: str,
+        on_close: Callable[[], Any] | None,
+    ) -> None:
+        super().__init__(children)
+        self._open = _as_signal(open, False, bool)
+        self._title = title
+        self._on_close = on_close
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"open": lambda: bool(self._open.value)}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "close":
+            self._open.set(False)
+            if self._on_close is not None:
+                result = self._on_close()
+                if inspect.iscoroutine(result):
+                    return result
+            return True
+        return False
+
+
+class Modal(_Overlay):
+    """A centred dialog over a backdrop, with a focus trap and Esc to close."""
+
+    type = "modal"
+
+    def __init__(
+        self,
+        children: list[Component] | None = None,
+        *,
+        open: Signal[bool] | bool = False,
+        title: str = "",
+        size: str = "md",
+        on_close: Callable[[], Any] | None = None,
+    ) -> None:
+        if size not in ("sm", "md", "lg"):
+            raise ValueError(f"Modal size must be sm, md or lg, got {size!r}")
+        super().__init__(children, open=open, title=title, on_close=on_close)
+        self._size = size
+
+    def static_props(self) -> dict[str, Any]:
+        return {"title": self._title, "size": self._size}
+
+
+class Drawer(_Overlay):
+    """A panel sliding in from the ``left`` or ``right`` edge; same behaviour as Modal."""
+
+    type = "drawer"
+
+    def __init__(
+        self,
+        children: list[Component] | None = None,
+        *,
+        open: Signal[bool] | bool = False,
+        side: str = "right",
+        title: str = "",
+        on_close: Callable[[], Any] | None = None,
+    ) -> None:
+        if side not in ("left", "right"):
+            raise ValueError(f"Drawer side must be left or right, got {side!r}")
+        super().__init__(children, open=open, title=title, on_close=on_close)
+        self._side = side
+
+    def static_props(self) -> dict[str, Any]:
+        return {"title": self._title, "side": self._side}
 
 
 # -- Data-driven list (ADR-0016) ---------------------------------------------

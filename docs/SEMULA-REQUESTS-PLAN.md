@@ -14,7 +14,7 @@
 |------|-------|-------|
 | IND-E19 | S0 mount, context, theme | **Done** (PRs #106-#109) |
 | IND-E20 | S1 live push + live log | **Done** (PRs #110-#114); `make demo-semula` |
-| IND-E21 | S2 overlays + pending queue | Next |
+| IND-E21 | S2 overlays + pending queue | In progress (IND-98 TextArea, IND-94 Modal/Drawer/confirm done) |
 | IND-E22 | S3 big tables, panes | Not started |
 | IND-E23 | S4 routing | Not started |
 | IND-E24 | S5 editors, dynamic rows | Not started |

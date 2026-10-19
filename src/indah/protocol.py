@@ -71,6 +71,8 @@ BUILTIN_TYPES = frozenset(
         "tabs",
         "sidebar",
         "expander",
+        "modal",
+        "drawer",
         "upload",
         "download",
     }

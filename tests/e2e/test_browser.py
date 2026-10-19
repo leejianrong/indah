@@ -1584,3 +1584,112 @@ def test_focused_textarea_survives_a_300ms_echo_and_flushes_on_blur():
                 browser.close()
     finally:
         handle.stop()
+
+
+def _dialog_app():
+    from indah import Button, Column, Drawer, Modal, Session, Signal, Text, create_app
+
+    shown, note, deleted = Signal(False), Signal(False), []
+    root = Column(
+        children=[
+            Button("Open modal", lambda: shown.set(True)),
+            Button("Open drawer", lambda: note.set(True)),
+            Button("Delete", lambda: deleted.append(1), confirm="Delete this entry?"),
+            Modal(
+                [Text("modal body"), Button("Inside", lambda: None)],
+                open=shown,
+                title="Details",
+            ),
+            Drawer([Text("drawer body")], open=note, title="Row", side="right"),
+        ]
+    )
+    return create_app(session=Session(root)), shown, note, deleted
+
+
+@pytest.mark.e2e
+def test_modal_is_keyboard_operable_traps_focus_and_returns_it_on_esc():
+    app, shown, _, _ = _dialog_app()
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                opener = page.get_by_role("button", name="Open modal")
+                opener.focus()
+                page.keyboard.press("Enter")
+                dialog = page.get_by_role("dialog", name="Details")
+                expect(dialog).to_be_visible()
+                assert dialog.get_attribute("aria-modal") == "true"
+                for _ in range(6):  # Tab never leaves the dialog
+                    page.keyboard.press("Tab")
+                    assert page.evaluate("document.activeElement.closest('[role=dialog]') !== null")
+                page.keyboard.press("Shift+Tab")
+                assert page.evaluate("document.activeElement.closest('[role=dialog]') !== null")
+                page.keyboard.press("Escape")
+                expect(dialog).to_have_count(0)
+                assert shown.value is False  # the close event reached the server
+                expect(opener).to_be_focused()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_drawer_opens_and_closes_from_its_button_and_backdrop():
+    app, _, note, _ = _dialog_app()
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                page.get_by_role("button", name="Open drawer").click()
+                drawer = page.get_by_role("dialog", name="Row")
+                expect(drawer).to_be_visible()
+                page.get_by_role("button", name="Close").click()
+                expect(drawer).to_have_count(0)
+                assert note.value is False
+                page.get_by_role("button", name="Open drawer").click()
+                expect(drawer).to_be_visible()
+                page.mouse.click(5, 5)  # backdrop
+                expect(drawer).to_have_count(0)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_confirm_button_posts_nothing_until_accepted():
+    app, _, _, deleted = _dialog_app()
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                trigger = page.get_by_role("button", name="Delete", exact=True)
+                trigger.click()
+                dialog = page.get_by_role("dialog", name="Delete this entry?")
+                expect(dialog).to_be_visible()
+                expect(page.get_by_role("button", name="Cancel")).to_be_focused()  # safe default
+                page.wait_for_timeout(300)
+                assert deleted == []
+                page.keyboard.press("Escape")
+                expect(dialog).to_have_count(0)
+                page.wait_for_timeout(300)
+                assert deleted == []  # cancelled: still nothing posted
+                trigger.click()
+                dialog.get_by_role("button", name="Delete", exact=True).click()
+                expect(dialog).to_have_count(0)
+                page.wait_for_timeout(500)
+                assert deleted == [1]
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

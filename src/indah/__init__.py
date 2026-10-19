@@ -27,6 +27,7 @@ from .components import (
     Date,
     Download,
     DownloadFile,
+    Drawer,
     Expander,
     Gallery,
     Grid,
@@ -35,6 +36,7 @@ from .components import (
     ImageOverlay,
     List,
     Map,
+    Modal,
     MultiSelect,
     Number,
     Plot,
@@ -134,6 +136,7 @@ __all__ = [
     "DownloadFile",
     # data-driven list (ADR-0016)
     "List",
+    "Modal",
     "Chat",
     "Col",
     "Gallery",
@@ -142,6 +145,7 @@ __all__ = [
     "Grid",
     "Tabs",
     "Sidebar",
+    "Drawer",
     "Expander",
     # custom components (R7)
     "register_component",

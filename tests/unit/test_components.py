@@ -1,3 +1,5 @@
+import inspect
+
 import pytest
 
 from indah.components import (
@@ -8,10 +10,12 @@ from indah.components import (
     Column,
     DataFrame,
     Date,
+    Drawer,
     Expander,
     Grid,
     Image,
     Map,
+    Modal,
     MultiSelect,
     Number,
     Plot,
@@ -597,3 +601,52 @@ def test_textarea_serialises_and_round_trips():
     assert ta.handle("input", {"value": "x\ny"}) is True
     assert v.value == "x\ny"
     assert ta.handle("nope", {}) is False
+
+
+# -- Overlays (IND-94) -------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_modal_and_drawer_serialise_and_close_sets_open_false():
+    closed = []
+    flag = Signal(True)
+    m = Modal([Text("hi")], open=flag, title="Sure?", size="lg", on_close=lambda: closed.append(1))
+    assert m.type == "modal"
+    assert m.static_props() == {"title": "Sure?", "size": "lg"}
+    assert m.reactive_props()["open"]() is True
+    assert m.handle("close", {}) is True
+    assert flag.value is False and closed == [1]
+
+    d = Drawer([Text("x")], open=Signal(False), side="left", title="Row")
+    assert d.type == "drawer"
+    assert d.static_props() == {"title": "Row", "side": "left"}
+    assert d.reactive_props()["open"]() is False
+    assert d.handle("nope", {}) is False
+
+
+@pytest.mark.unit
+def test_overlay_accepts_a_plain_bool_and_validates_choices():
+    assert Modal([], open=True).reactive_props()["open"]() is True
+    with pytest.raises(ValueError):
+        Modal([], open=Signal(False), size="huge")
+    with pytest.raises(ValueError):
+        Drawer([], open=Signal(False), side="top")
+
+
+@pytest.mark.unit
+def test_modal_async_on_close_is_returned_for_the_session_to_await():
+    async def on_close():
+        pass
+
+    result = Modal([], open=Signal(True), on_close=on_close).handle("close", {})
+    assert inspect.iscoroutine(result)
+    result.close()
+
+
+@pytest.mark.unit
+def test_button_confirm_is_a_static_prop_and_click_is_unchanged():
+    calls = []
+    b = Button("Delete", lambda: calls.append(1), confirm="Delete this entry?")
+    assert b.static_props() == {"confirm": "Delete this entry?"}
+    assert Button("x").static_props() == {}
+    assert b.handle("click", {}) is True and calls == [1]
