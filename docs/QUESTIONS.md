@@ -46,7 +46,7 @@ Q-theme-switcher).
 | Q-market | Component marketplace / plugin distribution? | DEFERRED | Post-v0 | n/a |
 | Q-persist | Persistent state / database integration? | DEFERRED | User code owns durable data | n/a |
 | Q-children | Dynamic children (grow/reorder a node's child list at runtime)? | DECIDED | Near-term answer is a **data-driven list** (items in one reactive `data` prop, rendered by a shell template — no protocol op), Slice B. A general structural children op (heterogeneous nodes added/removed/reordered) stays DEFERRED until multi-page/dynamic-forms need it (KAN-1396). Supersedes the earlier `repeat`-needs-a-structural-op framing. | ADR-0016 |
-| Q-frame-coalesce | Streaming wire overhead: one ~8 KB proxy-flush pad per token frame | DEFERRED | Ship on the current pad for 0.1.0; the chatbot example coalesces tokens in userland as the mitigation. Framework-level coalescing/debounce (or not padding sub-window frames) is a post-0.1.0 optimization; scheduled just before Slice E (streaming chart points amplify it), KAN-1395. | ADR-0002, ADR-0011 |
+| Q-frame-coalesce | Streaming wire overhead: one ~8 KB proxy-flush pad per token frame | DECIDED | Queue-drain coalescing and window-boundary padding landed in `sse_events` (KAN-1395). Rows published from background tasks are additionally held 100 ms by the hub and sent as one patch (`Stream`, `Topic`); `create_app(proxy_flush=False)` turns the padding off where no window-buffering proxy exists. Token/chart streaming stays unbatched. | ADR-0002, ADR-0011, ADR-0026 |
 | Q-usecase-priority | Which use-case half leads post-MVP? | DECIDED | Shared foundation first (layout + list + per-session state), then ML-demo I/O ahead of data-viz (Colab-researcher north star) | PLAN §Post-MVP, SLICES |
 | Q-dynamic | Dynamic content: structural protocol op or data-driven list? | DECIDED | Data-driven list first (no wire change); structural op deferred | ADR-0016 |
 | Q-charting | Charting: server-PNG, a client lib, or hybrid? | DECIDED | Hybrid — keep server-PNG `Plot` for static, add one bundled client chart for interactive/real-time; no protocol bump | ADR-0018 |
@@ -54,6 +54,13 @@ Q-theme-switcher).
 | Q-design | Visual language and identity? | DECIDED | "Studio" theme + "Bunga" logo; a design-token layer using Material 3's role architecture but not its look; one theme baked now | ADR-0014 |
 | Q-layout | Layout beyond `Column`? | DECIDED | Named container components (Row/Grid/Tabs/Sidebar/Expander) arranging existing children; no protocol change | ADR-0015 |
 | Q-theme-switcher | User-selectable themes in the shell? | DEFERRED | One baked theme (Studio) now; a theme is a token-set swap, so a switcher is a cheap later addition | ADR-0014 |
+| Q-semula | What does the semula dashboard need from indah? | DECIDED | A staged roadmap of 15 enhancements (E1-E8 local, H1-H7 hosted), planned 2026-10-19 and tracked on board IND as epics IND-E19..E26 (label `semula`) | `docs/SEMULA-REQUESTS-PLAN.md` |
+| Q-context | How does a session factory see per-session facilities (push, toast, route, user)? | DECIDED | A `Context` argument, optional (arity-detected), with `Session.close()` running `ctx.on_close`; store seam gains `ctx_info` and `owner` | ADR-0025 |
+| Q-push | How does a background task update every open tab? | DECIDED | App-level `Topic`; sessions follow it with `ctx.latest`/`ctx.tail` (a bounded `Stream`); appends coalesce in the hub; `trim` keeps the browser bounded | ADR-0026 |
+| Q-table-v2 | Keyed rows, typed columns, streamed rows | DECIDED | Rich form of `Table` (`rows=`, `Col`, `key=`), classic form untouched; remote mode and virtual scroll still to build (IND-E22) | ADR-0027 |
+| Q-app-theme | Per-app token overrides and a custom logo | DECIDED | `create_app(theme=Theme(...), logo=...)`, validated; the user-selectable theme switcher stays deferred | ADR-0014 (amendment) |
+| Q-mount | Mounting indah as a sub-app and opening in-app deep links | DECIDED | Relative `<base href>` plus opt-in `spa=True` fallback; shell resolves URLs against `document.baseURI` | `docs/protocol.md` (Base path and deep links) |
+| Q-resume-restart | Reconnect after a server restart | DECIDED | Hub epoch; SSE ids are `<epoch>-<offset>`; a foreign epoch forces a fresh `init` | `docs/protocol.md` (Resume) |
 
 ## Coverage
 

@@ -44,3 +44,13 @@ graduating app needs it.
   future Redis backend is a genuine drop-in.
 - A later backend inherits its own concerns (serialization, eviction, locking);
   those are deferred with the backend, not designed now.
+
+## Amendment (2026-10-19): the seam carries a Context
+
+`SessionStore.get_or_create` is now `get_or_create(session_id, ctx_info=None)`,
+`SessionHandle` has an `owner`, and `discard`/eviction call `Session.close()`, which runs
+the callbacks registered through `ctx.on_close` (ADR-0025). The factory may take a
+`Context`. All additions are optional, so existing stores' behaviour and every zero-argument
+factory are unchanged; a custom store must accept the extra optional parameter. An external
+backend remains deferred (see `docs/SEMULA-REQUESTS-PLAN.md`, H4, for what it would need:
+named state, a hub backend and a topic backend).

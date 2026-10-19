@@ -38,3 +38,15 @@ client, or HMR ships in v0.
   while it has one consumer, and changes now incur a compatibility check.
 - Requires the shell to validate `protocol_version` and fail loudly on mismatch,
   so a backend/shell version skew cannot silently misrender.
+
+## Amendment (2026-10-19): additive changes do not bump the version
+
+`protocol_version` is bumped when the wire format changes in a way an older shell could
+**not parse**. Changes an older shell can safely ignore are additive and do not bump it:
+a new component type or prop, a new message `type` (the shell already ignores unknown
+ones), a new key on a change such as `trim`, a new route, or the epoch prefix on the SSE
+`id:`. Each is documented in `docs/protocol.md` when it ships. The shell is bundled in the
+same wheel as the backend, so skew only arises with an ejected or third-party client.
+Bump (to v2) for a structural children op, for making a handshake mandatory for every
+app, or for any change to the meaning of an existing field. Nothing in the semula
+roadmap (`docs/SEMULA-REQUESTS-PLAN.md`) needs a bump so far.

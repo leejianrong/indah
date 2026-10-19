@@ -11,9 +11,14 @@ single-port ASGI app + SSE/POST transport (ADR-0002), the reactive core
 handlers + LLM token streaming (ADR-0011), the starter component set (Text, Button,
 Slider, TextInput, Select, Image, Plot, DataFrame, StreamText, Column), and a
 `register_component()` seam for custom components (ADR-0012). The JSON protocol is
-documented as a versioned public contract (`docs/protocol.md`, ADR-0005). Next:
-post-MVP direction - per-session state (ADR-0010), the graduation path
-(ADR-0008/0009), a Zensical docs site (ADR-0007) - likely a planning round first.
+documented as a versioned public contract (`docs/protocol.md`, ADR-0005). Post-MVP
+slices are also in: per-session state (ADR-0010), layout and data-driven lists, media
+upload, hybrid charting, the Studio design system, a Zensical docs site (ADR-0007) and a
+public demo gallery. Current work is the **semula requests**: enhancements for the
+semula dashboard (live push, a rich Table, overlays, routing, editors, then hosted
+identity/authz/hardening). The plan is `docs/SEMULA-REQUESTS-PLAN.md`; progress is board
+IND (epics IND-E19..E26, label `semula`). Done so far: mount-safe shell, `Context`, app
+theme, `Topic`/`Stream`, Table v2 core, and the live-log demo (`make demo-semula`).
 Trust the code over any doc where they disagree, and fix the doc.
 
 Layout:
