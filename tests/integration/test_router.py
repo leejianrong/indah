@@ -171,3 +171,73 @@ async def test_an_automatic_reconnect_keeps_the_sessions_current_page():
             break
     await resp.body_iterator.aclose()
     assert handle.session.ctx.path.value == "/projects/auth/entries/01J"  # not reset to the URL
+
+
+ENTRIES = {("auth", "01J"): "login reply", ("auth", "02K"): "logout reply", ("docs", "01J"): "doc"}
+
+
+def _entry_factory(ctx):
+    """The semula shape: the page is a computed of the route's params, not of structure."""
+    from indah.reactive import computed
+
+    entry = computed(
+        lambda: ENTRIES.get((ctx.params.value.get("project"), ctx.params.value.get("entry_id")))
+    )
+    return Session(
+        Column(
+            children=[
+                Router(
+                    ctx,
+                    routes={
+                        "/": Text("home"),
+                        "/projects/{project}/entries/{entry_id}": Text(
+                            lambda: (
+                                f"entry: {entry.value or 'missing'} "
+                                f"({ctx.params.value.get('project')})"
+                            )
+                        ),
+                    },
+                    not_found=Text("404"),
+                ),
+            ]
+        )
+    )
+
+
+def _texts(handle):
+    return [
+        c.reactive_props()["text"]() for c in handle.session._by_id.values() if c.type == "text"
+    ]
+
+
+@pytest.mark.integration
+async def test_route_params_drive_a_computed_entry_across_navigation():
+    app = create_app(session_factory=_entry_factory, spa=True)
+    init = await _init(await _stream(_request(app, "t", "/projects/auth/entries/01J")))
+    assert _router_active(init) == 1
+    handle = app.state.store.get("t")
+    assert "entry: login reply (auth)" in _texts(handle)
+
+    router = next(c for c in handle.session._by_id.values() if c.type == "router")
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        for path in (
+            "/projects/auth/entries/02K",
+            "/projects/docs/entries/01J",
+            "/projects/x/entries/9",
+        ):
+            resp = await client.post(
+                "/api/event",
+                json={
+                    "sid": "t",
+                    "component": router.id,
+                    "event": "navigate",
+                    "payload": {"path": path},
+                },
+            )
+            assert resp.status_code == 200
+    assert "entry: missing (x)" in _texts(handle)  # unknown entry, still a valid route
+    patches = [c for _, m in handle.hub.history() if m["type"] == "patch" for c in m["changes"]]
+    texts = [c["props"]["text"] for c in patches if "text" in c["props"]]
+    assert texts == ["entry: logout reply (auth)", "entry: doc (docs)", "entry: missing (x)"]

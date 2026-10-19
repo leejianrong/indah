@@ -59,7 +59,9 @@ def test_router_activates_the_matching_page_and_not_found():
     assert r.reactive_props()["active"]() == 1
     ctx.navigate("/zzz")
     assert r.reactive_props()["active"]() == 2  # the not_found child
-    no_nf = Router(ctx, routes={"/": Text("home")})
+    other = Context("t")  # a second session; one Router per session
+    no_nf = Router(other, routes={"/": Text("home")})
+    other.navigate("/missing")
     assert no_nf.static_props()["notFound"] is False
     assert no_nf.reactive_props()["active"]() == -1  # nothing to show
 
@@ -95,3 +97,69 @@ def test_link_serialises_and_navigates_the_context_silently():
     assert link.handle("navigate", {"path": "/elsewhere"}) is False  # only its own target
     with pytest.raises(ValueError):
         Link(ctx, "x", to="https://evil.example")
+
+
+@pytest.mark.unit
+def test_params_follow_the_path_as_a_signal_and_typed_segments_are_cast():
+    ctx = Context("s")
+    assert ctx.params.value == {}  # no router yet
+    Router(
+        ctx,
+        routes={
+            "/": Text("h"),
+            "/projects/{project}/entries/{entry_id}": Text("e"),
+            "/n/{id:int}": Text("n"),
+        },
+    )
+    assert ctx.params.value == {}  # at "/"
+    ctx.navigate("/projects/auth/entries/01J")
+    assert ctx.params.value == {"project": "auth", "entry_id": "01J"}
+    ctx.navigate("/n/42")
+    assert ctx.params.value == {"id": 42}
+    ctx.navigate("/nowhere")
+    assert ctx.params.value == {}  # not found: no params
+
+
+@pytest.mark.unit
+def test_a_computed_over_params_only_recomputes_when_its_inputs_change():
+    from indah.reactive import computed
+
+    ctx = Context("s")
+    Router(ctx, routes={"/p/{project}/e/{entry}": Text("e"), "/p/{project}": Text("p")})
+    runs = []
+    entry = computed(lambda: runs.append(1) or ctx.params.value.get("entry"))
+    ctx.navigate("/p/auth/e/1")
+    assert entry.value == "1"
+    ctx.navigate("/p/auth/e/2")
+    assert entry.value == "2"
+    ctx.navigate("/p/auth")
+    assert entry.value is None
+
+
+@pytest.mark.unit
+def test_only_one_router_per_context():
+    ctx = Context("s")
+    Router(ctx, routes={"/": Text("a")})
+    with pytest.raises(ValueError, match="one Router"):
+        Router(ctx, routes={"/": Text("b")})
+
+
+@pytest.mark.unit
+def test_link_active_state_exact_and_prefix():
+    ctx = Context("s")
+    exact = Link(ctx, "Auth", to="/projects/auth")
+    prefix = Link(ctx, "Projects", to="/projects", match="prefix")
+    home = Link(ctx, "Home", to="/", match="prefix")  # "/" is only ever exact
+    assert home.reactive_props()["active"]() is True
+    assert exact.reactive_props()["active"]() is False
+    ctx.navigate("/projects/auth")
+    assert exact.reactive_props()["active"]() is True
+    assert prefix.reactive_props()["active"]() is True
+    assert home.reactive_props()["active"]() is False
+    ctx.navigate("/projects/auth/entries/01J")
+    assert exact.reactive_props()["active"]() is False  # exact: only the page itself
+    assert prefix.reactive_props()["active"]() is True  # prefix: the section it heads
+    ctx.navigate("/projectsx")
+    assert prefix.reactive_props()["active"]() is False  # whole segments, not a string prefix
+    with pytest.raises(ValueError):
+        Link(ctx, "x", to="/a", match="fuzzy")

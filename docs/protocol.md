@@ -216,7 +216,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
 | `router` | container | `routes:[pattern]`, `notFound`, `active` (index of the shown child, -1 for none) | `navigate` `{path}` (Back/Forward) |
-| `link` | input | `label`, `to` (an in-app path) | `navigate` `{path}` |
+| `link` | input | `label`, `to` (an in-app path), `active` (the page is showing) | `navigate` `{path}` |
 | `splitpane` | container | `direction`, `initial`, `min`, `key`, `height` (exactly two children) | — (resize is client-side) |
 | `masterdetail` | container | `initial`, `min`, `key`, `title`, `open` (two children: master, detail) | `close` |
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |
