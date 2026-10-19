@@ -20,6 +20,7 @@ from .components import (
     Chart,
     Chat,
     Checkbox,
+    Col,
     Column,
     Component,
     DataFrame,
@@ -130,6 +131,7 @@ __all__ = [
     # data-driven list (ADR-0016)
     "List",
     "Chat",
+    "Col",
     "Gallery",
     # layout containers (ADR-0015)
     "Row",

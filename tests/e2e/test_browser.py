@@ -1324,3 +1324,82 @@ def test_two_tabs_follow_a_topic_published_from_another_thread():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_rich_table_renders_typed_cells_selects_by_key_and_follows_a_stream():
+    """IND-91: typed cells (badge, mono, relative time, number), a sticky header, selection
+    by row key that survives sorting, and rows streamed in live."""
+    import time
+
+    from indah.app import create_app
+    from indah.components import Button, Col, Column, Table, Text
+    from indah.reactive import Signal
+    from indah.session import Session
+    from indah.stream import Stream
+
+    def row(i: int, result: str) -> dict:
+        return {
+            "id": f"01ROW{i}",
+            "result": result,
+            "score": 1000 + i,
+            "ts": int(time.time() * 1000) - 30_000,
+        }
+
+    def factory() -> Session:
+        rows = Stream([row(1, "hit"), row(2, "miss")], limit=50)
+        picked: Signal = Signal(None)
+        return Session(
+            Column(
+                children=[
+                    Table(
+                        rows=rows,
+                        key="id",
+                        selected=picked,
+                        height="12rem",
+                        columns=[
+                            Col("id", kind="mono", width="12ch"),
+                            Col("result", kind="badge", tones={"hit": "ok", "miss": "warn"}),
+                            Col("score", kind="number"),
+                            Col("ts", title="When", kind="time"),
+                        ],
+                    ),
+                    Button("more", on_click=lambda: rows.append(row(3, "hit"))),
+                    Text(lambda: f"picked={picked.value}"),
+                ]
+            )
+        )
+
+    handle = launch(create_app(session_factory=factory), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator("tbody tr")).to_have_count(2)
+                expect(page.locator(".cell-badge.tone-ok", has_text="hit")).to_have_count(1)
+                expect(page.locator(".cell-badge.tone-warn", has_text="miss")).to_have_count(1)
+                assert page.locator("code.cell-mono").first.inner_text() == "01ROW1"
+                assert "1,001" in page.locator("td.num").first.inner_text()
+                expect(page.locator("tbody tr td").nth(3)).to_have_text(re.compile(r"\d+s ago"))
+                assert (
+                    page.locator("thead th").first.evaluate("el => getComputedStyle(el).position")
+                    == "sticky"
+                )
+
+                # Sort by score descending, then select the top row: the key (not the
+                # position) reaches Python.
+                page.get_by_role("button", name="score").click()
+                page.get_by_role("button", name="score").click()
+                page.locator("tbody tr").first.click()
+                expect(page.locator("div.text", has_text="picked=01ROW2")).to_be_visible()
+                expect(page.locator("tbody tr.selected")).to_have_count(1)
+
+                page.get_by_role("button", name="more").click()
+                expect(page.locator("tbody tr")).to_have_count(3)
+                expect(page.locator("tbody tr.selected td code")).to_have_text("01ROW2")
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
