@@ -9,6 +9,7 @@ Server -> client (over SSE):
   init  {"v","type":"init","root":<node>}                   full tree on connect
   patch {"v","type":"patch","changes":[<change>,...]}       granular updates
   error {"v","type":"error","message":"..."}                a handler failed (toast)
+  toast {"v","type":"toast","message","kind","ttl"}         handler feedback (ADR-0030)
   ping  {"v","type":"ping"}                                 heartbeat
 
 A patch ``change`` is one of:
@@ -102,6 +103,19 @@ def patch_message(changes: list[dict[str, Any]]) -> dict[str, Any]:
 def error_message(message: str) -> dict[str, Any]:
     """A handler-failure notice: shows a UI toast; the traceback is logged server-side."""
     return {"v": PROTOCOL_VERSION, "type": "error", "message": message}
+
+
+TOAST_KINDS = ("info", "success", "warn", "error")
+
+
+def toast_message(message: str, kind: str = "info", ttl: float = 4.0) -> dict[str, Any]:
+    """Transient feedback for one session's UI. ``ttl`` is seconds; 0 keeps it until
+    dismissed."""
+    if kind not in TOAST_KINDS:
+        raise ValueError(f"toast kind must be one of {TOAST_KINDS}, got {kind!r}")
+    if ttl < 0:
+        raise ValueError("toast ttl must be >= 0")
+    return {"v": PROTOCOL_VERSION, "type": "toast", "message": message, "kind": kind, "ttl": ttl}
 
 
 def ping_message() -> dict[str, Any]:

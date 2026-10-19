@@ -9,8 +9,9 @@ export const nodeProps = writable(new Map());
 
 export const status = writable({ live: false, text: "connecting…" });
 
-// A transient error message shown as a toast when a handler fails server-side.
-export const toast = writable(null);
+// Transient messages, newest last: [{id, message, kind, ttl}]. A failed handler
+// pushes an "error" one; ctx.toast pushes any kind (ADR-0030).
+export const toasts = writable([]);
 
 // The current time in ms, ticking once a second while anything is subscribed, so every
 // relative-time cell on the page ("3s ago") is refreshed from one shared timer.

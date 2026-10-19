@@ -31,7 +31,14 @@ after a handler runs, and keyboard shortcuts. indah has only an error toast.
 - **Additive wire change** (ADR-0005 amendment): new component types `modal` and `drawer`, a
   new `confirm` prop and a `close` event. No `protocol_version` bump.
 
-Toasts, `Badge`, `Switch`, `tooltip=` and `Shortcuts` extend this ADR as they land.
+- **Toasts (IND-95).** `ctx.toast(message, kind=, ttl=)` publishes a new `toast` message on
+  the session's own hub, so it reaches only that session's tabs (a shared-store app shares
+  its one hub). The shell keeps a stack of up to four; the existing handler-failure `error`
+  message is shown through the same stack as an `error` toast. `ttl=0` stays until clicked.
+  A toast is ephemeral by design: it is not replayed to a fresh connection, and secrets
+  must not go in one. Like a signal write it must be called on the event loop.
+
+`Badge`, `Switch`, `tooltip=` and `Shortcuts` extend this ADR as they land.
 
 ## Alternatives considered
 
