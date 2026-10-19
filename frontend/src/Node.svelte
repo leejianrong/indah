@@ -11,6 +11,7 @@
   import ImageOverlay from "./ImageOverlay.svelte";
   import Overlay from "./Overlay.svelte";
   import Tip from "./Tip.svelte";
+  import Shortcuts from "./Shortcuts.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -312,6 +313,8 @@
     ><span class="switch-knob"></span></button>
     {#if props.label}<span class="switch-label">{props.label}</span>{/if}
   </div>
+{:else if node.type === "shortcuts"}
+  <Shortcuts {node} {props} />
 {:else if node.type === "badge"}
   <span class="badge tone-{props.tone ?? 'neutral'}">{props.text ?? ""}</span>
 {:else if node.type === "checkbox"}
