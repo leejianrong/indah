@@ -23,14 +23,31 @@ the backend, not designed now.
 
 from __future__ import annotations
 
+import inspect
 import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from .context import ConnectionInfo, Context
 from .session import Session
 from .transport import Hub
+
+
+def _takes_context(factory: Callable[..., Session]) -> bool:
+    """Whether ``factory`` wants a ``Context``: it has a required positional parameter.
+
+    A zero-arg factory (every app before IND-87) or one whose parameters all have
+    defaults is called with no arguments."""
+    try:
+        params = inspect.signature(factory).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(
+        p.default is p.empty and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+        for p in params
+    )
 
 
 @dataclass
@@ -43,6 +60,9 @@ class SessionHandle:
 
     session: Session
     hub: Hub
+    # The authenticated principal that owns this session, once identity lands (always
+    # None until then). Lets a store drop every session a user holds.
+    owner: str | None = None
 
 
 @runtime_checkable
@@ -54,8 +74,13 @@ class SessionStore(Protocol):
     distinct ids (so viewers stay isolated).
     """
 
-    def get_or_create(self, session_id: str) -> SessionHandle:
-        """Return the handle for ``session_id``, creating it on first sight."""
+    def get_or_create(
+        self, session_id: str, ctx_info: ConnectionInfo | None = None
+    ) -> SessionHandle:
+        """Return the handle for ``session_id``, creating it on first sight.
+
+        ``ctx_info`` describes the request that is creating it (used only on first
+        sight, to build the session's ``Context``)."""
         ...
 
     def get(self, session_id: str) -> SessionHandle | None:
@@ -63,7 +88,7 @@ class SessionStore(Protocol):
         ...
 
     def discard(self, session_id: str) -> None:
-        """Drop ``session_id``'s state; a no-op if it is unknown."""
+        """Drop ``session_id``'s state and close its session; a no-op if unknown."""
         ...
 
 
@@ -88,12 +113,14 @@ class InMemorySessionStore:
 
     def __init__(
         self,
-        factory: Callable[[], Session],
+        factory: Callable[[], Session] | Callable[[Context], Session],
         *,
         max_sessions: int | None = None,
         idle_timeout_seconds: float | None = None,
     ) -> None:
         self._factory = factory
+        self._wants_ctx = _takes_context(factory)
+        self.app: object | None = None  # bound by create_app; handed to each Context
         self.max_sessions = max_sessions
         self.idle_timeout_seconds = idle_timeout_seconds
         self._handles: OrderedDict[str, SessionHandle] = OrderedDict()
@@ -115,11 +142,15 @@ class InMemorySessionStore:
                 break
             self.discard(session_id)
 
-    def get_or_create(self, session_id: str) -> SessionHandle:
+    def get_or_create(
+        self, session_id: str, ctx_info: ConnectionInfo | None = None
+    ) -> SessionHandle:
         self._reap_idle()
         handle = self._handles.get(session_id)
         if handle is None:
-            session = self._factory()
+            ctx = Context(session_id, ctx_info, app=self.app)
+            session = self._factory(ctx) if self._wants_ctx else self._factory()
+            session.ctx = ctx
             session.session_id = session_id  # so served file URLs route back here
             hub = Hub()
             session.bind_hub(hub)
@@ -141,7 +172,7 @@ class InMemorySessionStore:
         handle = self._handles.pop(session_id, None)
         self._last_seen.pop(session_id, None)
         if handle is not None:
-            handle.session.cancel_tasks()
+            handle.session.close()
 
     def __len__(self) -> int:
         return len(self._handles)
@@ -163,7 +194,9 @@ class SharedSessionStore:
         session.bind_hub(hub)
         self.handle = SessionHandle(session=session, hub=hub)
 
-    def get_or_create(self, session_id: str) -> SessionHandle:
+    def get_or_create(
+        self, session_id: str, ctx_info: ConnectionInfo | None = None
+    ) -> SessionHandle:
         return self.handle
 
     def get(self, session_id: str) -> SessionHandle | None:

@@ -122,3 +122,27 @@ async def test_a_shared_session_app_still_exposes_one_graph():
 def test_session_and_factory_are_mutually_exclusive():
     with pytest.raises(ValueError, match="at most one"):
         create_app(session=Session(Column()), session_factory=build_demo_session)
+
+
+@pytest.mark.integration
+async def test_factory_sees_the_first_request_connection_info():
+    """IND-87: the session is built on first sight of a sid, and its Context carries
+    that request's headers and client address."""
+    from indah.context import Context
+
+    seen: list[Context] = []
+
+    def factory(ctx: Context) -> Session:
+        seen.append(ctx)
+        return Session(Column(children=[Text("hi")]))
+
+    app = create_app(session_factory=factory)
+    async with _client(app) as client:
+        await client.post(
+            "/api/event",
+            headers={"x-probe": "yes"},
+            json={"sid": "tab-z", "component": "n1", "event": "click"},
+        )
+    assert seen[0].sid == "tab-z"
+    assert seen[0].conn.headers["x-probe"] == "yes"
+    assert seen[0].conn.path == "/api/event"

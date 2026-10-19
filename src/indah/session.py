@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .components import Chart, Component, Download, Heatmap, StreamText, walk
+from .context import Context
 from .protocol import error_message, patch_message
 from .reactive import Computation, batch, effect
 from .transport import Hub
@@ -71,6 +72,9 @@ class Session:
         # stamps session_id so the URL routes back to this session; "default" is the
         # id-less fallback (a single-shared app resolves any id to its one session).
         self.session_id: str = "default"
+        # The Context the store built this session with (None for a hand-built or
+        # shared session); ``close`` runs its on_close callbacks.
+        self.ctx: Context | None = None
         self._files: dict[str, tuple[bytes, str, str]] = {}
 
         self._assign_ids()
@@ -214,6 +218,14 @@ class Session:
             await coro
         except Exception as exc:
             self._report_error(exc)
+
+    def close(self) -> None:
+        """End the session: cancel its tasks, then run ``ctx.on_close`` callbacks.
+
+        Called by the store on discard, LRU eviction and idle reaping. Idempotent."""
+        self.cancel_tasks()
+        if self.ctx is not None:
+            self.ctx.close()
 
     def cancel_tasks(self) -> None:
         """Cancel every running async-handler task (ADR-0024).
