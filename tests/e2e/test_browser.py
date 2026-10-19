@@ -2298,3 +2298,76 @@ def test_compact_density_shrinks_table_rows_app_wide_and_per_table():
     assert dense < plain - 6  # a per-table override shrinks just that table
     assert heights["compact"][0] < plain - 6  # app-wide compact shrinks the plain one too
     assert abs(heights["compact"][0] - heights["compact"][1]) < 1
+
+
+@pytest.mark.e2e
+def test_entries_browser_meets_its_scroll_and_latency_budgets_on_20k_rows():
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "semula_entries.py"
+    spec = importlib.util.spec_from_file_location("semula_entries_e2e", path)
+    ex = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = ex
+    spec.loader.exec_module(ex)
+
+    handle = launch(ex.build_app(n=20_000, seed=4), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 1300, "height": 900})
+            try:
+                page.goto(handle.url.rstrip("/") + "/ui/", wait_until="domcontentloaded")
+                body = page.locator("tbody tr:not(.vspacer):not(.ph)")
+                expect(body.first).to_be_visible()
+                expect(page.get_by_text("20000 rows")).to_be_visible()
+                assert page.locator("tbody tr").count() < 200
+
+                # Scrolling the whole table stays within the frame budget, DOM bounded.
+                worst = page.evaluate(
+                    """async () => {
+                      const el = document.querySelector('.table-scroll');
+                      let last = performance.now(), worst = 0;
+                      for (let y = 0; y < el.scrollHeight; y += 20000) {
+                        el.scrollTop = y;
+                        await new Promise(r => requestAnimationFrame(r));
+                        const t = performance.now();
+                        worst = Math.max(worst, t - last);
+                        last = t;
+                      }
+                      return worst;
+                    }"""
+                )
+                assert worst < 100, worst
+                assert page.locator("tbody tr").count() < 200
+
+                # Project filter and search narrow the scrollbar; sorting by hits reorders.
+                page.get_by_label("Project").select_option("docs-qa")
+                expect(page.get_by_text("20000 rows")).to_have_count(0)
+                page.get_by_label("Filter rows").fill("case 1999")
+                expect(page.get_by_text("rows").first).to_be_visible()
+                page.get_by_label("Filter rows").fill("")
+                page.get_by_role("button", name="hits", exact=True).click()
+                page.get_by_role("button", name="hits", exact=True).click()  # descending
+                page.wait_for_timeout(500)
+                hits = [
+                    int(r.locator("td.num").inner_text().replace(",", "")) for r in body.all()[:10]
+                ]
+                assert hits == sorted(hits, reverse=True)
+
+                # Selecting a row previews it beside the table; pinning shows a badge.
+                body.nth(2).click()
+                expect(page.get_by_text("Cached response")).to_be_visible()
+                page.get_by_role("button", name="Pin / unpin").click()
+                expect(page.locator(".cell-badge", has_text="pinned").first).to_be_visible()
+
+                # Compact density shrinks the rows.
+                before = body.first.bounding_box()["height"]
+                page.get_by_role("switch", name="Compact").click()
+                page.wait_for_timeout(300)
+                assert body.first.bounding_box()["height"] < before - 4
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
