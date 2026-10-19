@@ -1,10 +1,33 @@
 # Plan: enhancements requested by semula
 
-- Status: **Draft for owner review.** Planning only. No framework code written, no cards filed on board IND.
+- Status: **Approved 2026-10-19 and in progress.** Cards are filed on board IND as epics
+  IND-E19..E26 (label `semula`). See "Progress" below for what is built and where the build
+  differs from this plan.
 - Date: 2026-10-19 (indah 0.2.2, `main` at `1365d95`)
 - Scope: the 15 requested items (E1-E8 local MVP, H1-H7 hosted) for semula's dashboard.
 - Method: `plan-new-project`, one round. The forks that need the owner are in section 6, each with a recommendation. Everything else is stated as a default and marked `ASSUMED` where it matters.
 - "Existing no decisions are open this round" is applied throughout: where a request conflicts with an ADR, section 4 names it and proposes an amendment or a superseding ADR.
+
+## Progress (updated as slices land)
+
+| Epic | Slice | State |
+|------|-------|-------|
+| IND-E19 | S0 mount, context, theme | **Done** (PRs #106-#109) |
+| IND-E20 | S1 live push + live log | **Done** (PRs #110-#114); `make demo-semula` |
+| IND-E21 | S2 overlays + pending queue | Next |
+| IND-E22 | S3 big tables, panes | Not started |
+| IND-E23 | S4 routing | Not started |
+| IND-E24 | S5 editors, dynamic rows | Not started |
+| IND-E25 | H-A identity | Not started (gated by Q1 checkpoint after S3) |
+| IND-E26 | H-B authz, secrets, hardening | Not started |
+
+Where the build differs from the plan text below: the context ADR is **0025**, push is
+**0026** and Table v2 is **0027** (as planned); app theming became an **amendment to
+ADR-0014**, not a new 0031; the additive-change rule is an amendment to ADR-0005; IND-29
+and IND-75 are closed as superseded; Table search/column toggle/follow are client-only
+and `Table` gained `search=`, `column_toggle=`, `follow=`.
+`LaunchHandle.stop()` does not stop uvicorn while an SSE stream is open (found during
+IND-85, not yet filed); the browser e2e that needs a real restart kills a subprocess.
 
 ## Summary
 
