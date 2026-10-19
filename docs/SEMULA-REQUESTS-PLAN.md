@@ -15,7 +15,7 @@
 | IND-E19 | S0 mount, context, theme | **Done** (PRs #106-#109) |
 | IND-E20 | S1 live push + live log | **Done** (PRs #110-#114); `make demo-semula` |
 | IND-E21 | S2 overlays + pending queue | **Done** (PRs #116-#122); `make demo-pending` |
-| IND-E22 | S3 big tables, panes | Not started |
+| IND-E22 | S3 big tables, panes | **Done** (PRs #124-#127); `make demo-entries` |
 | IND-E23 | S4 routing | Not started |
 | IND-E24 | S5 editors, dynamic rows | Not started |
 | IND-E25 | H-A identity | Not started (gated by Q1 checkpoint after S3) |

@@ -1372,7 +1372,7 @@ class Table(Component):
     tens of thousands of rows. Rows have one fixed height, so cells do not wrap. In remote
     mode the shell fetches windows as the viewer scrolls and keeps a few recent ones.
     ``density="compact"`` shrinks this table's rows (the app-wide default is
-    ``create_app(density=)``).
+    ``create_app(density=)``); pass a ``Signal[str]`` to let the viewer toggle it.
 
     Sorting and paging are client-side; the data rides ordinary reactive props, so no
     ``protocol_version`` bump. Use ``DataFrame`` when you only need to show a table.
@@ -1400,10 +1400,10 @@ class Table(Component):
         reload_on: list[Signal[Any]] | None = None,
         query: Signal[TableQuery | None] | None = None,
         virtual: bool = False,
-        density: str | None = None,
+        density: str | Signal[str] | None = None,
     ) -> None:
         super().__init__()
-        if density is not None and density not in DENSITIES:
+        if isinstance(density, str) and density not in DENSITIES:
             raise ValueError(f"Table density must be one of {DENSITIES}, got {density!r}")
         if virtual and (height is None or (rows is None and remote is None)):
             raise ValueError("Table virtual=True needs the rich form and height=")
@@ -1508,7 +1508,7 @@ class Table(Component):
             props["follow"] = self._follow
             if self._virtual:
                 props["virtual"] = True
-            if self._density:
+            if isinstance(self._density, str):
                 props["density"] = self._density
             props["checkable"] = self._checked is not None
             if self._loader is not None:
@@ -1531,6 +1531,13 @@ class Table(Component):
                 )
             else:
                 props["value"] = lambda: _json_safe(self._selected.value)
+        if (
+            self._columns is not None
+            and self._density is not None
+            and not isinstance(self._density, str)
+        ):
+            density = self._density
+            props["density"] = lambda: d if (d := _read(density)) in DENSITIES else "comfortable"
         if self._checked is not None:
             props["checked"] = lambda: [_json_safe(k) for k in (self._checked.value or [])]
         return props

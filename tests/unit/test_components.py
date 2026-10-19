@@ -811,3 +811,15 @@ def test_table_density_prop():
     assert "density" not in Table(rows=rows, columns=[Col("id")], key="id").static_props()
     with pytest.raises(ValueError):
         Table(rows=rows, columns=[Col("id")], key="id", density="tiny")
+
+
+@pytest.mark.unit
+def test_table_density_may_be_a_signal():
+    dense = Signal("comfortable")
+    t = Table(rows=[{"id": "a"}], columns=[Col("id")], key="id", density=dense)
+    assert "density" not in t.static_props()
+    assert t.reactive_props()["density"]() == "comfortable"
+    dense.set("compact")
+    assert t.reactive_props()["density"]() == "compact"
+    dense.set("tiny")  # a bad value from a signal falls back rather than breaking the table
+    assert t.reactive_props()["density"]() == "comfortable"

@@ -34,7 +34,8 @@ Layout:
   flagship "real LLM in Colab" chatbot (transformers is the user's dep, not
   indah's); `examples/semula_log.py` the semula-shaped live request log (`make
   demo-semula`; the requests behind it are in `docs/SEMULA-REQUESTS-PLAN.md`),
-  `examples/semula_pending.py` the pending queue with drawer, toast and shortcuts (`make demo-pending`);
+  `examples/semula_pending.py` the pending queue with drawer, toast and shortcuts (`make demo-pending`),
+  `examples/semula_entries.py` the 20k-row SQLite entries browser (`make demo-entries`);
   `docs/DEV-DOCKER.md` the Docker/Traefik flow
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
 - `docs/` PLAN, SLICES, QUESTIONS, RELEASING, `protocol.md` (the public wire
