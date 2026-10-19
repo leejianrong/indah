@@ -1843,3 +1843,65 @@ def test_shortcuts_fire_outside_inputs_only_and_help_lists_them():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_table_row_actions_with_confirm_and_multi_select():
+    from indah import Col, RowAction, Session, Signal, Table, create_app
+
+    rows = [{"id": f"r{i}", "name": f"call {i}"} for i in range(1, 4)]
+    checked, selected, log = Signal([]), Signal(None), []
+    table = Table(
+        rows=rows,
+        columns=[Col("id", "ID"), Col("name", "Name")],
+        key="id",
+        selected=selected,
+        checked=checked,
+        actions=[
+            RowAction("Pin", lambda k: log.append(("pin", k))),
+            RowAction("Delete", lambda k: log.append(("del", k)), confirm="Delete this call?"),
+        ],
+    )
+    handle = launch(create_app(session=Session(table)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                row2 = page.locator("tbody tr").nth(1)
+                expect(row2).to_be_visible()
+                row2.get_by_role("button", name="Pin").click()
+                page.wait_for_timeout(300)
+                assert log == [("pin", "r2")]
+                assert selected.value is None  # an action click is not a row select
+
+                row2.get_by_role("button", name="Delete").click()
+                dialog = page.get_by_role("dialog", name="Delete this call?")
+                expect(dialog).to_be_visible()
+                page.wait_for_timeout(300)
+                assert log == [("pin", "r2")]  # nothing until accepted
+                dialog.get_by_role("button", name="Delete", exact=True).click()
+                page.wait_for_timeout(300)
+                assert log[-1] == ("del", "r2")
+
+                row2.get_by_label("Select row").check()
+                page.locator("tbody tr").nth(0).get_by_label("Select row").check()
+                page.wait_for_timeout(300)
+                assert sorted(checked.value) == ["r1", "r2"]
+                assert selected.value is None  # checking is not selecting
+                page.get_by_label("Select all rows").check()
+                page.wait_for_timeout(300)
+                assert sorted(checked.value) == ["r1", "r2", "r3"]
+                page.get_by_label("Select all rows").uncheck()
+                page.wait_for_timeout(300)
+                assert checked.value == []
+                checked.set(["r3"])  # server-side change reaches the boxes
+                expect(page.locator("tbody tr").nth(2).get_by_label("Select row")).to_be_checked()
+                row2.locator("td").nth(1).click()
+                page.wait_for_timeout(300)
+                assert selected.value == "r2"  # a plain row click still selects
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

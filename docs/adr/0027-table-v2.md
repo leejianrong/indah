@@ -51,5 +51,10 @@ additive (new props `columns`, `rows`, `rowKey`, `height`; a `select` event carr
   not sent to the server, hidden columns are remembered in `localStorage` per page and
   table, and follow pauses on scroll-up or an active sort. Filtering a streaming table
   therefore only sees the rows the browser holds (the stream's `limit`).
-- Not yet built (later cards in the same epic): row actions and multi-select, server-driven (remote) queries and virtual
+- Row actions and multi-select (IND-99): `Table(actions=[RowAction(label, fn(key), confirm=)],
+  checked=Signal[list])`, rich form with `key=` only. An action posts `action {action, key}`;
+  checking posts the whole new key set as `check {keys}`, so a lost event cannot leave the
+  sides disagreeing. Clicking an action or a checkbox never selects the row. A handler must
+  tolerate a stale key.
+- Not yet built (later cards in the same epic): server-driven (remote) queries and virtual
   scroll for thousands of rows.

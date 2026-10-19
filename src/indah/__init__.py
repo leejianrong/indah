@@ -44,6 +44,7 @@ from .components import (
     Progress,
     Radio,
     Row,
+    RowAction,
     Select,
     Shortcuts,
     Sidebar,
@@ -147,6 +148,7 @@ __all__ = [
     "Gallery",
     # layout containers (ADR-0015)
     "Row",
+    "RowAction",
     "Grid",
     "Tabs",
     "Shortcuts",

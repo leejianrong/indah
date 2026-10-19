@@ -305,7 +305,11 @@ shown relative and refreshed live) and `number`. `height` makes the body scroll 
 sticky header. `search`, `columnToggle` and `follow` switch on a toolbar that is entirely
 client-side (no event): a case-insensitive filter over every column (so streamed rows are
 filtered as they land), a column picker remembered in the browser, and follow-the-tail
-that pauses when the viewer scrolls up. When the rows are a `Stream` they grow by `append` patches on `rows`
+that pauses when the viewer scrolls up. `actions:[{id,label,variant,confirm?}]` adds a button
+per row that posts `action` `{action,key}` (a `confirm` text asks in a dialog first, a UX
+guard only); `checkable` adds a checkbox column whose full set of checked keys is posted as
+`check` `{keys:[...]}` and echoed back in the reactive `checked` prop. Neither changes
+`select`. When the rows are a `Stream` they grow by `append` patches on `rows`
 with a `trim`. All of it is additive props, so no `protocol_version` bump.
 `stat` is a metric card: a `value` with a `label`, an optional `delta` (the shell
 colours it by sign — red when it starts with `-`, otherwise green), and an optional

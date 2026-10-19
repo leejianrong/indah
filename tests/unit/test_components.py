@@ -8,6 +8,7 @@ from indah.components import (
     Button,
     Card,
     Checkbox,
+    Col,
     Column,
     DataFrame,
     Date,
@@ -23,11 +24,13 @@ from indah.components import (
     Progress,
     Radio,
     Row,
+    RowAction,
     Select,
     Sidebar,
     Slider,
     Spinner,
     Switch,
+    Table,
     Tabs,
     Text,
     TextArea,
@@ -691,3 +694,64 @@ def test_any_component_accepts_a_tooltip_kwarg():
     assert Modal([], open=True, tooltip="m").to_json()["props"]["tooltip"] == "m"
     assert "tooltip" not in Button("x").to_json()["props"]
     assert Column(children=[Text("a")], tooltip="col").to_json()["props"]["tooltip"] == "col"
+
+
+# -- Table row actions and multi-select (IND-99) -----------------------------
+
+
+def _rich(**kw):
+    rows = [{"id": "a", "n": 1}, {"id": "b", "n": 2}]
+    return Table(rows=rows, columns=[Col("id"), Col("n")], key="id", **kw)
+
+
+@pytest.mark.unit
+def test_row_actions_serialise_and_dispatch_with_the_row_key():
+    got = []
+    t = _rich(
+        actions=[
+            RowAction("Pin", lambda k: got.append(("pin", k))),
+            RowAction("Delete", lambda k: got.append(("del", k)), confirm="Delete it?"),
+        ]
+    )
+    assert t.static_props()["actions"] == [
+        {"id": "a0", "label": "Pin", "variant": "ghost"},
+        {"id": "a1", "label": "Delete", "variant": "ghost", "confirm": "Delete it?"},
+    ]
+    assert t.handle("action", {"action": "a1", "key": "b"}) is True
+    assert t.handle("action", {"action": "a0", "key": "a"}) is True
+    assert got == [("del", "b"), ("pin", "a")]
+    assert t.handle("action", {"action": "a9", "key": "a"}) is False
+    assert t.handle("action", {"action": "a0"}) is False  # no key
+
+
+@pytest.mark.unit
+def test_row_action_async_handler_is_returned():
+    async def go(key):
+        pass
+
+    r = _rich(actions=[RowAction("Go", go)]).handle("action", {"action": "a0", "key": "a"})
+    assert inspect.iscoroutine(r)
+    r.close()
+
+
+@pytest.mark.unit
+def test_checked_signal_round_trips_a_list_of_keys():
+    checked = Signal([])
+    t = _rich(checked=checked)
+    assert t.static_props()["checkable"] is True
+    assert t.reactive_props()["checked"]() == []
+    assert t.handle("check", {"keys": ["a", "b"]}) is True
+    assert checked.value == ["a", "b"]
+    assert t.reactive_props()["checked"]() == ["a", "b"]
+    assert t.handle("check", {"keys": "a"}) is False  # must be a list
+    assert _rich().static_props()["checkable"] is False
+
+
+@pytest.mark.unit
+def test_actions_and_checked_need_the_rich_form():
+    with pytest.raises(ValueError):
+        Table([{"a": 1}], checked=Signal([]))
+    with pytest.raises(ValueError):
+        Table([{"a": 1}], actions=[RowAction("x", lambda k: None)])
+    with pytest.raises(ValueError):  # keys are what actions and checks are about
+        Table(rows=[{"a": 1}], columns=[Col("a")], checked=Signal([]))

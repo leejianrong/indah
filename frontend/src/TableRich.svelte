@@ -4,6 +4,7 @@
   // patches and the shell keeps the newest N (`trim`), so the DOM stays bounded.
   import { postEvent } from "./api.js";
   import { now } from "./stores.js";
+  import Overlay from "./Overlay.svelte";
 
   let { props, nodeId } = $props();
 
@@ -101,6 +102,32 @@
     page = 0;
   }
 
+  // Bulk check (a Signal[list] of keys on the server). The full new set is posted, so a
+  // lost event can never leave the two sides adding up differently.
+  let checkedKeys = $derived(new Set(props.checked ?? []));
+  let allChecked = $derived(sorted.length > 0 && sorted.every((r) => checkedKeys.has(r.k)));
+  function toggleCheck(row) {
+    const next = new Set(checkedKeys);
+    if (next.has(row.k)) next.delete(row.k);
+    else next.add(row.k);
+    postEvent(nodeId, "check", { keys: [...next] });
+  }
+  function toggleAll() {
+    const next = new Set(checkedKeys);
+    for (const r of sorted) {
+      if (allChecked) next.delete(r.k);
+      else next.add(r.k);
+    }
+    postEvent(nodeId, "check", { keys: [...next] });
+  }
+
+  // Row actions: one with `confirm` asks first, the rest post straight away.
+  let pending = $state(null); // {action, key}
+  function runAction(action, row) {
+    if (action.confirm) pending = { action, key: row.k };
+    else postEvent(nodeId, "action", { action: action.id, key: row.k });
+  }
+
   function selectRow(row) {
     if (!props.selectable) return;
     postEvent(nodeId, "select", rowKey ? { key: row.k } : { index: row.i });
@@ -182,6 +209,16 @@
     <table class="dataframe table rich" class:selectable={props.selectable}>
       <thead>
         <tr>
+          {#if props.checkable}
+            <th class="check-col">
+              <input
+                type="checkbox"
+                aria-label="Select all rows"
+                checked={allChecked}
+                onchange={toggleAll}
+              />
+            </th>
+          {/if}
           {#each cols as col (col.field)}
             <th
               style:width={col.width ?? null}
@@ -207,11 +244,22 @@
               </button>
             </th>
           {/each}
+          {#if props.actions?.length}<th class="actions-col"><span class="sr-only">Actions</span></th>{/if}
         </tr>
       </thead>
       <tbody>
         {#each view as row (row.k)}
           <tr class:selected={props.value === row.k} onclick={() => selectRow(row)}>
+            {#if props.checkable}
+              <td class="check-col" onclick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  aria-label="Select row"
+                  checked={checkedKeys.has(row.k)}
+                  onchange={() => toggleCheck(row)}
+                />
+              </td>
+            {/if}
             {#each cols as col (col.field)}
               {@const v = row.r[col.field]}
               {#if col.kind === "badge"}
@@ -228,6 +276,17 @@
                 <td>{v ?? ""}</td>
               {/if}
             {/each}
+            {#if props.actions?.length}
+              <td class="actions-col" onclick={(e) => e.stopPropagation()}>
+                {#each props.actions as action (action.id)}
+                  <button
+                    type="button"
+                    class="row-action {action.variant ?? 'ghost'}"
+                    onclick={() => runAction(action, row)}>{action.label}</button
+                  >
+                {/each}
+              </td>
+            {/if}
           </tr>
         {/each}
       </tbody>
@@ -247,3 +306,25 @@
     </div>
   {/if}
 </div>
+
+{#if pending}
+  <Overlay
+    kind="modal"
+    size="sm"
+    title={pending.action.confirm}
+    onclose={() => (pending = null)}
+    initialFocus=".confirm-no"
+  >
+    <div class="confirm-actions">
+      <button type="button" class="ghost confirm-no" onclick={() => (pending = null)}>Cancel</button>
+      <button
+        type="button"
+        class="confirm-yes"
+        onclick={() => {
+          postEvent(nodeId, "action", { action: pending.action.id, key: pending.key });
+          pending = null;
+        }}>{pending.action.label}</button
+      >
+    </div>
+  </Overlay>
+{/if}
