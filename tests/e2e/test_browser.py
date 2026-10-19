@@ -1734,3 +1734,50 @@ def test_ctx_toast_appears_in_the_sender_tab_only_and_expires():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_badge_switch_and_tooltip_render_and_round_trip():
+    from indah import Badge, Button, Column, Session, Signal, Switch, create_app
+
+    pinned = Signal(False)
+    label = Signal("pending")
+    root = Column(
+        children=[
+            Badge(label, tone="warn"),
+            Switch(pinned, label="Pinned"),
+            Button("Hover me", lambda: label.set("done"), tooltip="Marks the call done"),
+        ]
+    )
+    handle = launch(create_app(session=Session(root)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                badge = page.locator(".badge.tone-warn")
+                expect(badge).to_have_text("pending")
+                sw = page.get_by_role("switch", name="Pinned")
+                expect(sw).to_have_attribute("aria-checked", "false")
+                sw.click()
+                expect(sw).to_have_attribute("aria-checked", "true")
+                assert pinned.value is True  # round-tripped to the signal
+                pinned.set(False)  # and back from the server
+                expect(sw).to_have_attribute("aria-checked", "false")
+
+                btn = page.get_by_role("button", name="Hover me")
+                btn.hover()
+                tip = page.get_by_role("tooltip")
+                expect(tip).to_have_text("Marks the call done")
+                page.keyboard.press("Escape")
+                expect(tip).to_have_count(0)
+                page.mouse.move(0, 0)
+                btn.focus()  # keyboard focus shows it too
+                expect(page.get_by_role("tooltip")).to_be_visible()
+                btn.click()
+                expect(badge.or_(page.locator(".badge"))).to_have_text("done")
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

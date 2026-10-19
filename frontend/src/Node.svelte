@@ -10,6 +10,7 @@
   import Table from "./Table.svelte";
   import ImageOverlay from "./ImageOverlay.svelte";
   import Overlay from "./Overlay.svelte";
+  import Tip from "./Tip.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -81,6 +82,7 @@
   }
 </script>
 
+{#snippet body()}
 {#if node.type === "column"}
   <div class="column">
     {#each node.children as child (child.id)}
@@ -298,6 +300,20 @@
       onblur={onAreaBlur}
     ></textarea>
   </div>
+{:else if node.type === "switch"}
+  <div class="switch-row">
+    <button
+      type="button"
+      class="switch"
+      role="switch"
+      aria-checked={props.checked ? "true" : "false"}
+      aria-label={props.label || null}
+      onclick={() => postEvent(node.id, "change", { value: !props.checked })}
+    ><span class="switch-knob"></span></button>
+    {#if props.label}<span class="switch-label">{props.label}</span>{/if}
+  </div>
+{:else if node.type === "badge"}
+  <span class="badge tone-{props.tone ?? 'neutral'}">{props.text ?? ""}</span>
 {:else if node.type === "checkbox"}
   <label class="check">
     <input
@@ -481,4 +497,11 @@
   <Custom spec={props._spec} {props} nodeId={node.id} />
 {:else}
   <div>[unknown: {node.type}]</div>
+{/if}
+{/snippet}
+
+{#if props.tooltip}
+  <Tip text={props.tooltip}>{@render body()}</Tip>
+{:else}
+  {@render body()}
 {/if}
