@@ -1221,3 +1221,48 @@ def test_themed_app_shows_its_tokens_logo_and_wordmark_in_light_and_dark():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_stream_bound_list_appends_live_and_trims_to_its_limit():
+    """IND-90: rows appended to a Stream reach the browser as coalesced append patches,
+    and the `trim` keeps only the newest `limit` in the DOM."""
+    import asyncio
+
+    from indah.app import create_app
+    from indah.components import Button, Column, List
+    from indah.session import Session
+    from indah.stream import Stream
+
+    def factory() -> Session:
+        rows = Stream(limit=5)
+
+        async def burst() -> None:
+            for i in range(12):
+                rows.append({"t": f"row {i}"})
+                await asyncio.sleep(0.03)
+
+        return Session(
+            Column(
+                children=[
+                    List(rows, item={"tag": "span", "text": "t"}),
+                    Button("go", on_click=burst),
+                ]
+            )
+        )
+
+    handle = launch(create_app(session_factory=factory), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                page.get_by_role("button", name="go").click()
+                expect(page.locator(".list-item", has_text="row 11")).to_be_visible()
+                texts = page.locator(".list-item").all_inner_texts()
+                assert texts == [f"row {i}" for i in range(7, 12)]
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

@@ -74,3 +74,79 @@ def test_replay_without_an_epoch_keeps_the_legacy_integer_behaviour():
     hub.publish({"n": 2})
     assert hub.replay_since(1) == [(2, {"n": 2})]
     assert hub.replay_since(2) == []
+
+
+# -- append coalescing (IND-90) -------------------------------------------------
+
+
+def _changes(item):
+    return item[1]["changes"]
+
+
+@pytest.mark.unit
+async def test_queued_appends_to_one_target_merge_into_a_single_patch():
+    hub = Hub(coalesce_seconds=0.02)
+    q = hub.subscribe()
+    hub.queue_append("n1", "items", [1, 2], trim=10)
+    hub.queue_append("n1", "items", [3], trim=10)
+    assert q.empty()  # held back until the window closes
+    await asyncio.sleep(0.06)
+    (item,) = [q.get_nowait()]
+    assert q.empty()
+    assert _changes(item) == [
+        {"target": "n1", "append": {"items": [1, 2, 3]}, "trim": {"items": 10}}
+    ]
+
+
+@pytest.mark.unit
+async def test_different_targets_and_props_share_one_patch_message():
+    hub = Hub(coalesce_seconds=0.02)
+    q = hub.subscribe()
+    hub.queue_append("n1", "items", ["a"], trim=5)
+    hub.queue_append("n2", "rows", ["b"], trim=7)
+    await asyncio.sleep(0.06)
+    item = q.get_nowait()
+    assert q.empty()
+    assert {c["target"] for c in _changes(item)} == {"n1", "n2"}
+
+
+@pytest.mark.unit
+async def test_any_other_publish_flushes_pending_appends_first_to_keep_order():
+    hub = Hub(coalesce_seconds=10)  # would never flush on its own in this test
+    q = hub.subscribe()
+    hub.queue_append("n1", "items", [1], trim=5)
+    hub.publish({"v": 1, "type": "patch", "changes": [{"target": "n9", "props": {"x": 1}}]})
+    first, second = q.get_nowait(), q.get_nowait()
+    assert _changes(first)[0]["append"] == {"items": [1]}
+    assert _changes(second)[0]["target"] == "n9"
+    assert first[0] < second[0]
+
+
+@pytest.mark.unit
+def test_without_a_running_loop_appends_publish_immediately():
+    hub = Hub()
+    hub.queue_append("n1", "items", [1], trim=5)
+    assert hub.current_offset == 1
+
+
+@pytest.mark.unit
+async def test_explicit_flush_publishes_pending_now():
+    hub = Hub(coalesce_seconds=10)
+    hub.queue_append("n1", "items", [1], trim=5)
+    assert hub.current_offset == 0
+    hub.flush()
+    assert hub.current_offset == 1
+    hub.flush()  # nothing pending: no empty patch
+    assert hub.current_offset == 1
+
+
+@pytest.mark.unit
+async def test_a_burst_at_40_events_per_second_makes_about_ten_frames_per_second():
+    hub = Hub()  # default window
+    for i in range(40):
+        hub.queue_append("n1", "items", [i], trim=100)
+        await asyncio.sleep(0.025)
+    hub.flush()
+    assert 8 <= hub.current_offset <= 12
+    rows = [r for _, m in hub.history() for c in m["changes"] for r in c["append"]["items"]]
+    assert rows == list(range(40))

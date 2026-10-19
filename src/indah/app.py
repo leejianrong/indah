@@ -475,6 +475,7 @@ def create_app(
     home_url: str | None = None,
     source_url: str | None = None,
     spa: bool = False,
+    proxy_flush: bool = True,
     theme: Theme | None = None,
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
@@ -497,6 +498,10 @@ def create_app(
     (``/projects/auth/entries/01J``) can be opened directly or reloaded. The shell then
     gets a relative ``<base href>`` so its ``api/*`` calls still reach the app root,
     whatever prefix the app is mounted under (IND-86).
+
+    ``proxy_flush`` (default on) pads the SSE stream so a window-buffering proxy such as
+    Colab's releases each frame (ADR-0002); a deployment with no such proxy -- a local
+    container -- can turn it off and pay only payload plus framing.
 
     ``theme`` overrides the shell's design tokens for this app (IND-88, see
     :class:`~indah.theme.Theme`). ``logo`` (an SVG/PNG/JPEG/WebP file path or bytes, up to
@@ -537,6 +542,7 @@ def create_app(
     if hasattr(store, "app"):
         store.app = app  # so each session's Context can reach its ASGI app
     app.state.heartbeat_seconds = heartbeat_seconds
+    app.state.proxy_flush = proxy_flush
     app.state.max_upload_bytes = int(max_upload_mb * 1024 * 1024)
     # Optional page chrome, injected into the served shell by ``_index``. The gallery
     # sets these per demo (a clickable logo back to the gallery, a view-source link,
@@ -775,6 +781,7 @@ async def _stream(request: Request) -> StreamingResponse:
     # twice. skip_upto = the offset the client is caught up to after init/replay;
     # queued messages already covered by that are dropped.
     epoch, last_event_id = _parse_last_event_id(request)
+    hub.flush()  # held stream appends first, so the snapshot/offset below cover them
     replay = hub.replay_since(last_event_id, epoch)
     if last_event_id is None or replay is None:
         # Fresh connect, or a buffer gap: send a full snapshot (always correct
@@ -794,7 +801,7 @@ async def _stream(request: Request) -> StreamingResponse:
                 app.state.heartbeat_seconds,
                 replay=replay,
                 skip_upto=skip_upto,
-                proxy_flush=True,
+                proxy_flush=app.state.proxy_flush,
                 id_prefix=f"{hub.epoch}-",
             ):
                 yield chunk

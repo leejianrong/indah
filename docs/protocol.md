@@ -93,6 +93,7 @@ A patch `change` is one of:
 ```json
 { "target": "n3", "props": { "text": "hello" } }        // replace/merge props
 { "target": "n7", "append": { "text": "next token " } } // append a delta onto a prop
+{ "target": "n9", "append": { "items": [ ... ] }, "trim": { "items": 1000 } } // bounded
 ```
 
 `props` merges the given keys into the node's current props. `append` concatenates
@@ -100,6 +101,13 @@ a delta onto an existing prop: a **string** delta grows a streamed string prop
 (a `streamtext`'s `text`, token by token) and a **list** delta grows a streamed
 list prop (a `chart`'s `data`, point by point). Either way a streamed value costs
 O(delta) rather than resending the whole prop (ADR-0011, ADR-0018).
+
+An optional `trim` on a change (`{"<prop>": N}`) caps each named array prop to its
+newest `N` entries after the append, so a live log stays bounded in the browser. It is
+additive: a shell that ignores it only keeps more rows. A `Stream`-bound prop (a `list`
+fed by `indah.Stream`) is sent this way, and the server holds a burst of appends for
+about 100 ms and sends them as **one** patch, so tens of rows a second make about ten
+frames a second (ADR-0026).
 
 ### Resume
 

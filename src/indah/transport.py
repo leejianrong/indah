@@ -26,12 +26,20 @@ import secrets
 from collections import deque
 from typing import Any
 
+from .protocol import PROTOCOL_VERSION
+
 Message = dict[str, Any]
 Item = tuple[int, Message]
 
 
 class Hub:
-    def __init__(self, *, queue_maxsize: int = 1024, history_size: int = 512) -> None:
+    def __init__(
+        self,
+        *,
+        queue_maxsize: int = 1024,
+        history_size: int = 512,
+        coalesce_seconds: float = 0.1,
+    ) -> None:
         self._subscribers: set[asyncio.Queue[Item]] = set()
         self._queue_maxsize = queue_maxsize
         self._history: deque[Item] = deque(maxlen=history_size)
@@ -41,6 +49,13 @@ class Hub:
         # server (a fresh hub) presents a foreign epoch and is sent a full snapshot
         # instead of being told it is "already current" (IND-85).
         self.epoch: str = secrets.token_hex(4)
+        # Stream appends (IND-90) are held for ``coalesce_seconds`` and sent as one patch,
+        # so tens of rows a second make ~10 frames a second, not tens. Pending rows are
+        # flushed before any other message so the stream stays strictly ordered.
+        self._coalesce = coalesce_seconds
+        self._pending: dict[tuple[str, str], list[Any]] = {}
+        self._pending_trim: dict[tuple[str, str], int | None] = {}
+        self._timer: asyncio.TimerHandle | None = None
 
     @property
     def subscriber_count(self) -> int:
@@ -59,12 +74,48 @@ class Hub:
     def unsubscribe(self, queue: asyncio.Queue[Item]) -> None:
         self._subscribers.discard(queue)
 
+    def queue_append(self, target: str, prop: str, rows: list[Any], *, trim: int | None) -> None:
+        """Hold an append for the coalescing window (``trim`` = rows the client keeps)."""
+        key = (target, prop)
+        self._pending.setdefault(key, []).extend(rows)
+        self._pending_trim[key] = trim
+        if self._timer is not None:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # no loop to wait on (sync caller, a test): send now
+            self.flush()
+            return
+        self._timer = loop.call_later(self._coalesce, self.flush)
+
+    def flush(self) -> None:
+        """Publish any held appends as one patch now. A no-op when nothing is pending."""
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+        if not self._pending:
+            return
+        pending, trims = self._pending, self._pending_trim
+        self._pending, self._pending_trim = {}, {}
+        changes: dict[str, dict[str, Any]] = {}
+        for (target, prop), rows in pending.items():
+            change = changes.setdefault(target, {"target": target, "append": {}})
+            change["append"][prop] = rows
+            if trims[(target, prop)] is not None:
+                change.setdefault("trim", {})[prop] = trims[(target, prop)]
+        self._publish({"v": PROTOCOL_VERSION, "type": "patch", "changes": list(changes.values())})
+
     def publish(self, message: Message) -> int:
-        """Assign the next offset, buffer the message, and fan it out. Synchronous.
+        """Flush held appends, then assign the next offset, buffer the message, and fan
+        it out. Synchronous.
 
         A subscriber whose queue is full (a stalled or dead client) is dropped
         rather than allowed to block the broadcast. Returns the assigned offset.
         """
+        self.flush()
+        return self._publish(message)
+
+    def _publish(self, message: Message) -> int:
         self._offset += 1
         item: Item = (self._offset, message)
         self._history.append(item)

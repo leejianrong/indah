@@ -65,6 +65,7 @@ from .session_store import (
     SessionStore,
     SharedSessionStore,
 )
+from .stream import Stream
 
 __version__ = "0.2.2"
 
@@ -77,6 +78,7 @@ __all__ = [
     "launch",
     "LaunchHandle",
     "Session",
+    "Stream",
     "Context",
     "ConnectionInfo",
     "DispatchResult",

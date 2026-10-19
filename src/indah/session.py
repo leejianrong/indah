@@ -30,7 +30,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import secrets
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -67,6 +67,8 @@ class Session:
         self._hub: Hub | None = None
         # Strong refs to running async-handler tasks so they are not GC'd.
         self._tasks: set[asyncio.Task[Any]] = set()
+        # Unsubscribe callbacks for Stream-bound props (IND-90), run on close.
+        self._stream_offs: list[Callable[[], None]] = []
         # File-out (ADR-0017): bytes handed back to this viewer, keyed by an
         # unguessable token and served at api/file/<session_id>/<token>. The store
         # stamps session_id so the URL routes back to this session; "default" is the
@@ -91,8 +93,12 @@ class Session:
         for component in walk(self.root):
             if isinstance(component, (StreamText, Download, Chart, Heatmap)):
                 component.bind(self)
+            streams = component.stream_props()
             for prop_name, getter in component.reactive_props().items():
-                self._effects.append(self._make_effect(component.id, prop_name, getter))
+                if prop_name in streams:
+                    self._bind_stream(component.id, prop_name, getter, *streams[prop_name])
+                else:
+                    self._effects.append(self._make_effect(component.id, prop_name, getter))
 
     def _make_effect(self, node_id: str, prop_name: str, getter):
         state = {"initialised": False}
@@ -105,6 +111,27 @@ class Session:
                 state["initialised"] = True
 
         return effect(run)
+
+    def _bind_stream(self, node_id: str, prop: str, getter, stream, to_wire) -> None:
+        """Send a Stream-bound prop as append patches, not whole-prop replaces (IND-90).
+
+        Inside a synchronous dispatch an append is folded into the collected sink as a
+        full replace (correct, and rare); live, it is queued on the hub, which coalesces
+        a burst into one patch. A ``set``/``clear`` is always a replace.
+        """
+
+        def on_change(kind: str, rows: list) -> None:
+            if kind == "append" and self._sink is None:
+                if self._hub is not None:
+                    self._hub.queue_append(node_id, prop, to_wire(rows), trim=stream.limit)
+                return
+            if self._sink is not None:
+                self._sink.setdefault(node_id, {})[prop] = getter()
+            elif self._hub is not None:
+                self._hub.flush()  # held appends first: a replace supersedes them in order
+                self.emit_props(node_id, {prop: getter()})
+
+        self._stream_offs.append(stream.listen(on_change))
 
     def bind_hub(self, hub: Hub) -> None:
         """Attach the hub so live (async/streaming) emits reach clients."""
@@ -224,6 +251,9 @@ class Session:
 
         Called by the store on discard, LRU eviction and idle reaping. Idempotent."""
         self.cancel_tasks()
+        for off in self._stream_offs:
+            off()
+        self._stream_offs.clear()
         if self.ctx is not None:
             self.ctx.close()
 
