@@ -22,12 +22,20 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
+
+from .reactive import Signal
+from .stream import Stream
 
 if TYPE_CHECKING:
     from starlette.requests import Request
 
+    from .push import Topic
+
 logger = logging.getLogger("indah")
+
+T = TypeVar("T")
+_MISSING: Any = object()
 
 
 @dataclass(frozen=True)
@@ -75,6 +83,25 @@ class Context:
             self._run(fn)
         else:
             self._on_close.append(fn)
+
+    def latest(self, topic: Topic[T], *, initial: Any = _MISSING) -> Signal[T | None]:
+        """A signal holding the newest item published to ``topic`` (for a badge count, a
+        status line). Starts at ``initial``, else the topic's latest retained item, else
+        ``None``. Released when the session ends."""
+        if initial is _MISSING:
+            recent = topic.recent(1)
+            initial = recent[0] if recent else None
+        signal: Signal[T | None] = Signal(initial)
+        self.on_close(topic.subscribe(signal.set))
+        return signal
+
+    def tail(self, topic: Topic[T], *, limit: int = 1000) -> Stream:
+        """A bounded :class:`~indah.stream.Stream` of ``topic``'s items, seeded from its
+        retained history and appended to on every publish. Released when the session
+        ends."""
+        stream = Stream(topic.recent(limit), limit=limit)
+        self.on_close(topic.subscribe(stream.append))
+        return stream
 
     def close(self) -> None:
         """Run the close callbacks once, each isolated from the others' failures."""

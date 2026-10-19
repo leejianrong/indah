@@ -1266,3 +1266,61 @@ def test_stream_bound_list_appends_live_and_trims_to_its_limit():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_two_tabs_follow_a_topic_published_from_another_thread():
+    """IND-89: a plain thread publishes to a Topic; both open tabs show the rows, while a
+    per-tab counter stays separate."""
+    import threading
+    import time
+
+    from indah.app import create_app
+    from indah.components import Button, Column, List, Text
+    from indah.context import Context
+    from indah.push import Topic
+    from indah.reactive import Signal
+    from indah.session import Session
+
+    topic: Topic[dict] = Topic("log", replay=50)
+
+    def factory(ctx: Context) -> Session:
+        rows = ctx.tail(topic, limit=20)
+        mine = Signal(0)
+        return Session(
+            Column(
+                children=[
+                    List(rows, item={"tag": "span", "text": "t"}),
+                    Button("mine", on_click=lambda: mine.set(mine.value + 1)),
+                    Text(lambda: f"mine={mine.value}"),
+                ]
+            )
+        )
+
+    handle = launch(create_app(session_factory=factory), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            tabs = [browser.new_context().new_page() for _ in range(2)]
+            try:
+                for page in tabs:
+                    page.goto(handle.url, wait_until="domcontentloaded")
+                    expect(page.locator("div.text", has_text="mine=0")).to_be_visible()
+
+                def publisher() -> None:
+                    for i in range(15):
+                        topic.publish_threadsafe({"t": f"event {i}"})
+                        time.sleep(0.02)
+
+                threading.Thread(target=publisher).start()
+                for page in tabs:
+                    expect(page.locator(".list-item", has_text="event 14")).to_be_visible()
+                    assert page.locator(".list-item").count() == 15
+
+                tabs[0].get_by_role("button", name="mine").click()
+                expect(tabs[0].locator("div.text", has_text="mine=1")).to_be_visible()
+                expect(tabs[1].locator("div.text", has_text="mine=0")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
