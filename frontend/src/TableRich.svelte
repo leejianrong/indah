@@ -2,6 +2,7 @@
   // Rich table (ADR-0027): keyed rows, typed cells, sticky header, client sort/page and
   // key-based select. Rows are objects; a Stream-bound table grows through `append`
   // patches and the shell keeps the newest N (`trim`), so the DOM stays bounded.
+  import { onMount } from "svelte";
   import { postEvent } from "./api.js";
   import { now } from "./stores.js";
   import Overlay from "./Overlay.svelte";
@@ -38,9 +39,47 @@
   let following = $state(true);
   let scroller = $state(null);
 
+  // Remote mode (IND-101): the server owns search, sort and the window. Every change is
+  // debounced into one `query` event tagged with a rising seq; only an answer at least as
+  // new as the last query sent is shown, so a slow old one never overwrites a newer one.
+  let isRemote = $derived(!!props.remote);
+  const QUERY_DEBOUNCE_MS = 150;
+  let sentSeq = 0;
+  let askTimer = null;
+  let shown = $state(null); // the accepted window: {rows, total, offset, seq}
+  function sendQuery() {
+    askTimer = null;
+    sentSeq += 1;
+    postEvent(nodeId, "query", {
+      search: query.trim(),
+      filters: {},
+      sort: sortField === null ? null : [sortField, sortDir === 1 ? "asc" : "desc"],
+      offset: page * (props.pageSize || 50),
+      limit: props.pageSize || 50,
+      seq: sentSeq,
+    });
+  }
+  function ask(immediate = false) {
+    if (!isRemote) return;
+    clearTimeout(askTimer);
+    if (immediate) sendQuery();
+    else askTimer = setTimeout(sendQuery, QUERY_DEBOUNCE_MS);
+  }
+  onMount(() => {
+    if (props.remote) ask(true); // first window, as soon as the table mounts
+    return () => clearTimeout(askTimer);
+  });
+  $effect(() => {
+    const w = props.window;
+    if (isRemote && w && w.seq >= sentSeq) {
+      shown = w;
+      page = Math.floor(w.offset / (props.pageSize || 50)); // the server may have clamped it
+    }
+  });
+
   let allCols = $derived(props.columns ?? []);
   let cols = $derived(allCols.filter((c) => !hidden.has(c.field)));
-  let rows = $derived(props.rows ?? []);
+  let rows = $derived(isRemote ? (shown?.rows ?? []) : (props.rows ?? []));
   let rowKey = $derived(props.rowKey ?? null);
 
   function cmp(a, b) {
@@ -56,24 +95,34 @@
   // Case-insensitive match over every column, so streamed rows are filtered as they land.
   let filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return indexed;
+    if (!q || isRemote) return indexed; // remote: the server already filtered
     return indexed.filter((row) =>
       allCols.some((c) => String(row.r[c.field] ?? "").toLowerCase().includes(q)),
     );
   });
   let sorted = $derived.by(() => {
-    if (sortField === null) return filtered;
+    if (sortField === null || isRemote) return filtered; // remote: the server sorted
     return [...filtered].sort((x, y) => cmp(x.r[sortField], y.r[sortField]) * sortDir);
   });
 
   let pageSize = $derived(props.pageSize ?? 0);
-  let pageCount = $derived(pageSize > 0 ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1);
+  let pageCount = $derived(
+    isRemote
+      ? Math.max(1, Math.ceil((shown?.total ?? 0) / (pageSize || 50)))
+      : pageSize > 0
+        ? Math.max(1, Math.ceil(sorted.length / pageSize))
+        : 1,
+  );
   $effect(() => {
-    if (page >= pageCount) page = pageCount - 1;
+    if (!isRemote && page >= pageCount) page = pageCount - 1;
   });
   let view = $derived(
-    pageSize > 0 ? sorted.slice(page * pageSize, (page + 1) * pageSize) : sorted,
+    isRemote ? sorted : pageSize > 0 ? sorted.slice(page * pageSize, (page + 1) * pageSize) : sorted,
   );
+  function goToPage(next) {
+    page = Math.max(0, Math.min(pageCount - 1, next));
+    ask();
+  }
 
   // Follow the tail: keep the newest row in view while rows arrive, unless the viewer
   // scrolled up (or a sort has reordered the rows, so "newest" is no longer the last).
@@ -100,6 +149,7 @@
       sortDir = 1;
     }
     page = 0;
+    ask();
   }
 
   // Bulk check (a Signal[list] of keys on the server). The full new set is posted, so a
@@ -173,8 +223,14 @@
           placeholder="Filter rows"
           aria-label="Filter rows"
           bind:value={query}
+          oninput={() => {
+            page = 0;
+            ask();
+          }}
         />
-        {#if query.trim()}<span class="table-count">{sorted.length} of {rows.length}</span>{/if}
+        {#if isRemote}
+          <span class="table-count">{shown?.total ?? 0} rows</span>
+        {:else if query.trim()}<span class="table-count">{sorted.length} of {rows.length}</span>{/if}
       {/if}
       {#if props.columnToggle}
         <details class="col-toggle">
@@ -292,15 +348,15 @@
       </tbody>
     </table>
   </div>
-  {#if pageSize > 0 && pageCount > 1}
+  {#if (isRemote || pageSize > 0) && pageCount > 1}
     <div class="table-pager">
-      <button type="button" onclick={() => (page = Math.max(0, page - 1))} disabled={page === 0}
+      <button type="button" onclick={() => goToPage(page - 1)} disabled={page === 0}
         >Prev</button
       >
       <span>Page {page + 1} / {pageCount}</span>
       <button
         type="button"
-        onclick={() => (page = Math.min(pageCount - 1, page + 1))}
+        onclick={() => goToPage(page + 1)}
         disabled={page >= pageCount - 1}>Next</button
       >
     </div>

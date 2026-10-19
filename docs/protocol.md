@@ -309,7 +309,12 @@ that pauses when the viewer scrolls up. `actions:[{id,label,variant,confirm?}]` 
 per row that posts `action` `{action,key}` (a `confirm` text asks in a dialog first, a UX
 guard only); `checkable` adds a checkbox column whose full set of checked keys is posted as
 `check` `{keys:[...]}` and echoed back in the reactive `checked` prop. Neither changes
-`select`. When the rows are a `Stream` they grow by `append` patches on `rows`
+`select`. **Remote mode** (`remote: true`, no `rows`): the shell debounces (150 ms) search, sort
+and paging into `query` `{search, filters, sort:[field,"asc"|"desc"]|null, offset, limit, seq}`
+and the server answers through one reactive prop, `window` `{rows, total, offset, seq}`, so
+rows, total and the window they belong to always arrive together. The shell shows a `window`
+only if its `seq` is at least the last `seq` it sent; the server drops a superseded query,
+clamps `limit` to 1..500, and pulls an offset past `total` back to the last window. When the rows are a `Stream` they grow by `append` patches on `rows`
 with a `trim`. All of it is additive props, so no `protocol_version` bump.
 `stat` is a metric card: a `value` with a `label`, an optional `delta` (the shell
 colours it by sign — red when it starts with `-`, otherwise green), and an optional

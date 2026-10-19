@@ -1962,3 +1962,74 @@ def test_pending_queue_release_in_one_tab_clears_the_row_in_both():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_remote_table_debounces_queries_and_round_trips_search_sort_and_paging():
+    import time
+
+    from indah import Col, Session, Table, create_app
+
+    data = [{"id": f"r{i:05d}", "n": i, "name": f"call {i}"} for i in range(2000)]
+    queries = []
+
+    def loader(q):
+        queries.append((q.search, q.sort, q.offset, q.seq))
+        if q.search == "call 1":
+            time.sleep(0.6)  # a slow old query: it must not overwrite the next one
+        rows = [r for r in data if q.search in r["name"]]
+        if q.sort:
+            rows.sort(key=lambda r: r[q.sort[0]], reverse=q.sort[1] == "desc")
+        return rows[q.offset : q.offset + q.limit], len(rows)
+
+    table = Table(
+        columns=[Col("id", kind="mono"), Col("n", kind="number", sortable=True), Col("name")],
+        key="id",
+        remote=loader,
+        search=True,
+        page_size=20,
+    )
+    handle = launch(create_app(session=Session(table)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                rows = page.locator("tbody tr")
+                expect(rows).to_have_count(20)
+                expect(page.get_by_text("2000 rows")).to_be_visible()
+                expect(page.get_by_text("Page 1 / 100")).to_be_visible()
+
+                # A burst of typing is one query, not one per key.
+                box = page.get_by_label("Filter rows")
+                before = len(queries)
+                box.press_sequentially("call 17", delay=30)
+                expect(page.get_by_text("111 rows")).to_be_visible()  # 17, 170-179, 1700-1799 ...
+                assert len(queries) - before <= 2
+
+                # Stale drop: "call 1" is slow; the newer "call 12" must win.
+                box.fill("")
+                box.press_sequentially("call 1", delay=10)
+                page.wait_for_timeout(300)  # debounce fired, the slow loader is running
+                box.press_sequentially("2", delay=10)
+                expect(page.get_by_text("111 rows")).to_be_visible()  # "call 12"
+                page.wait_for_timeout(1000)  # long enough for the slow "call 1" answer to land
+                expect(page.get_by_text("1111 rows")).to_have_count(0)  # it was dropped
+                expect(page.get_by_text("111 rows")).to_be_visible()
+                assert all("call 12" in r.inner_text() for r in rows.all())
+
+                # Server-side sort and paging.
+                box.fill("")
+                expect(page.get_by_text("2000 rows")).to_be_visible()
+                page.get_by_role("button", name="n", exact=True).click()
+                page.get_by_role("button", name="n", exact=True).click()  # descending
+                expect(rows.first).to_contain_text("call 1999")
+                page.get_by_role("button", name="Next").click()
+                expect(page.get_by_text("Page 2 / 100")).to_be_visible()
+                expect(rows.first).to_contain_text("call 1979")
+                assert queries[-1][1] == ("n", "desc") and queries[-1][2] == 20
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
