@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .markdown import to_blocks
 from .protocol import RenderSpec
 from .reactive import Computed, Signal
+from .stream import Stream
 
 if TYPE_CHECKING:
     from .session import Session
@@ -50,6 +51,14 @@ class Component:
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         """Prop name -> getter. Getters read signals, so effects can track them."""
+        return {}
+
+    def stream_props(self) -> dict[str, tuple[Stream, Callable[[list[Any]], list[Any]]]]:
+        """Reactive props fed by a ``Stream``: prop name -> (stream, row -> wire).
+
+        The session sends these as ``append`` patches instead of re-sending the whole
+        prop on every change (IND-90). The prop must also appear in ``reactive_props``
+        so the ``init`` snapshot carries its current value."""
         return {}
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
@@ -1674,6 +1683,11 @@ class List(Component):
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"items": lambda: _to_items(_read(self._items))}
+
+    def stream_props(self) -> dict[str, tuple[Stream, Callable[[list[Any]], list[Any]]]]:
+        if isinstance(self._items, Stream):
+            return {"items": (self._items, _to_items)}
+        return {}
 
 
 def _to_messages(value: Any) -> list[dict[str, str]]:

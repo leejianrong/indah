@@ -52,6 +52,12 @@
                 next[key] = (base ?? "") + delta;
               }
             }
+            // `trim` caps a grown array to its newest N entries (a bounded live log).
+            for (const [key, keep] of Object.entries(change.trim || {})) {
+              if (Array.isArray(next[key]) && next[key].length > keep) {
+                next[key] = next[key].slice(-keep);
+              }
+            }
             map.set(change.target, next);
           } else {
             map.set(change.target, { ...cur, ...(change.props || {}) });
