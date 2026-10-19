@@ -680,6 +680,44 @@
       }
       button.ghost:hover { filter: none; background: var(--surface-2); }
 
+      .badge {
+        align-self: flex-start;
+        display: inline-block;
+        padding: 0.1rem 0.55rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border-radius: var(--radius-pill);
+        background: var(--surface-2);
+        color: var(--muted);
+      }
+      .badge.tone-ok { background: color-mix(in srgb, var(--ok) 16%, var(--surface)); color: var(--ok); }
+      .badge.tone-warn { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); color: var(--warn); }
+      .badge.tone-err { background: color-mix(in srgb, var(--err) 16%, var(--surface)); color: var(--err); }
+      .badge.tone-info { background: var(--primary-container); color: var(--primary); }
+      .switch-row { display: flex; align-items: center; gap: 0.6rem; }
+      .switch-label { font-size: 0.95rem; }
+      button.switch {
+        position: relative;
+        width: 2.5rem;
+        height: 1.4rem;
+        padding: 0;
+        flex: none;
+        align-self: center;
+        background: var(--surface-3);
+        border: 1px solid var(--outline);
+      }
+      button.switch[aria-checked="true"] { background: var(--primary); border-color: var(--primary); }
+      .switch-knob {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: calc(1.4rem - 6px);
+        height: calc(1.4rem - 6px);
+        border-radius: 50%;
+        background: var(--surface);
+        transition: transform 0.15s;
+      }
+      button.switch[aria-checked="true"] .switch-knob { transform: translateX(1.1rem); }
       .confirm-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
 
       .status {

@@ -38,7 +38,14 @@ after a handler runs, and keyboard shortcuts. indah has only an error toast.
   A toast is ephemeral by design: it is not replayed to a fresh connection, and secrets
   must not go in one. Like a signal write it must be called on the event loop.
 
-`Badge`, `Switch`, `tooltip=` and `Shortcuts` extend this ADR as they land.
+- **Small controls (IND-96).** `Badge(text, tone=)` is a status chip (same tones as a Table
+  badge cell), `Switch(signal, label=)` a `role=switch` two-way bool. `tooltip=` works on
+  **every** component: `Component.__init_subclass__` wraps each subclass constructor to accept
+  it, so custom subclasses get it too (type checkers will not see the kwarg). The prop rides
+  `props.tooltip` and the shell wraps the node in a box-less tooltip. `badge` and `switch`
+  are now reserved built-in type names, so `register_component("badge")` is rejected.
+
+`Shortcuts` extends this ADR as they land.
 
 ## Alternatives considered
 

@@ -186,6 +186,8 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `textarea` | input | `value`, `placeholder`, `label`, `rows` | `input` `{value}` (debounced 150 ms, flushed on blur) |
 | `select` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
 | `checkbox` | input | `checked`, `label` | `change` `{value}` |
+| `switch` | input | `checked`, `label` (a `role=switch` toggle) | `change` `{value}` |
+| `badge` | display | `text`, `tone` (`neutral`/`ok`/`warn`/`err`/`info`) | — |
 | `number` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `radio` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
 | `multiselect` | input | `value:[...]`, `options:[{value,label}]`, `label` | `change` `{value:[...]}` |
@@ -272,6 +274,9 @@ existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no
 payload.
+
+Any node may carry a `tooltip` prop (string): the shell shows it on hover or keyboard
+focus, dismissible with Esc, linked by `aria-describedby`; it adds no layout box.
 
 `modal` and `drawer` (ADR-0030) render their `children` only while `open` is true, as a
 `role=dialog` `aria-modal` layer with a focus trap; Esc, the backdrop and the close button

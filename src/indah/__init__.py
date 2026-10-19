@@ -15,6 +15,7 @@ public contract (docs/protocol.md). See https://github.com/leejianrong/indah.
 from .app import build_demo_session, create_app, mock_llm
 from .components import (
     Audio,
+    Badge,
     Button,
     Card,
     Chart,
@@ -49,6 +50,7 @@ from .components import (
     Spinner,
     Stat,
     StreamText,
+    Switch,
     Table,
     Tabs,
     Text,
@@ -119,6 +121,7 @@ __all__ = [
     "Image",
     "ImageOverlay",
     "Audio",
+    "Badge",
     "Plot",
     "Chart",
     "Heatmap",
@@ -129,6 +132,7 @@ __all__ = [
     "StreamText",
     "Progress",
     "Spinner",
+    "Switch",
     # file upload / download (ADR-0017)
     "Upload",
     "UploadedFile",

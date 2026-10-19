@@ -70,12 +70,12 @@ def test_custom_ignores_unknown_event():
 @pytest.mark.unit
 def test_custom_supports_static_props():
     register_component(
-        "badge",
-        render={"tag": "span", "class": "badge", "text": "label"},
+        "chip",
+        render={"tag": "span", "class": "chip", "text": "label"},
     )
-    badge = custom("badge", label="v0")
-    badge.id = "n0"
-    props = badge.to_json()["props"]
+    chip = custom("chip", label="v0")
+    chip.id = "n0"
+    props = chip.to_json()["props"]
     assert props["label"] == "v0"  # static (not a signal) prop
     assert props["_spec"]["text"] == "label"
 

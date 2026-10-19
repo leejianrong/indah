@@ -4,6 +4,7 @@ import pytest
 
 from indah.components import (
     Audio,
+    Badge,
     Button,
     Card,
     Checkbox,
@@ -26,6 +27,7 @@ from indah.components import (
     Sidebar,
     Slider,
     Spinner,
+    Switch,
     Tabs,
     Text,
     TextArea,
@@ -650,3 +652,42 @@ def test_button_confirm_is_a_static_prop_and_click_is_unchanged():
     assert b.static_props() == {"confirm": "Delete this entry?"}
     assert Button("x").static_props() == {}
     assert b.handle("click", {}) is True and calls == [1]
+
+
+# -- Badge, Switch, tooltip (IND-96) -----------------------------------------
+
+
+@pytest.mark.unit
+def test_badge_serialises_text_source_and_tone():
+    label = Signal("pending")
+    b = Badge(label, tone="warn")
+    assert b.type == "badge"
+    assert b.static_props() == {"tone": "warn"}
+    assert b.reactive_props()["text"]() == "pending"
+    label.set("done")
+    assert b.reactive_props()["text"]() == "done"
+    assert Badge("x").static_props() == {"tone": "neutral"}
+    with pytest.raises(ValueError):
+        Badge("x", tone="purple")
+
+
+@pytest.mark.unit
+def test_switch_round_trips_a_bool_signal():
+    v = Signal(False)
+    sw = Switch(v, label="Pinned")
+    assert sw.type == "switch"
+    assert sw.static_props() == {"label": "Pinned"}
+    assert sw.reactive_props()["checked"]() is False
+    assert sw.handle("change", {"value": True}) is True
+    assert v.value is True
+    assert sw.reactive_props()["checked"]() is True
+    assert sw.handle("change", {}) is False
+
+
+@pytest.mark.unit
+def test_any_component_accepts_a_tooltip_kwarg():
+    assert Button("x", tooltip="Does x").to_json()["props"]["tooltip"] == "Does x"
+    assert Text("t", tooltip="hint").to_json()["props"]["tooltip"] == "hint"
+    assert Modal([], open=True, tooltip="m").to_json()["props"]["tooltip"] == "m"
+    assert "tooltip" not in Button("x").to_json()["props"]
+    assert Column(children=[Text("a")], tooltip="col").to_json()["props"]["tooltip"] == "col"

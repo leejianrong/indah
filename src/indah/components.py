@@ -13,6 +13,7 @@ plain async generator the caller wraps (ADR-0009).
 from __future__ import annotations
 
 import base64
+import functools
 import inspect
 import io
 import re
@@ -42,10 +43,31 @@ def _read(source: Source) -> Any:
 
 class Component:
     type: str = "component"
+    # Hover/focus hint shown by the shell (ADR-0030). Every subclass constructor accepts
+    # ``tooltip=`` (see ``__init_subclass__``); a plain attribute also works.
+    tooltip: str | None = None
 
-    def __init__(self, children: list[Component] | None = None) -> None:
+    def __init__(
+        self, children: list[Component] | None = None, *, tooltip: str | None = None
+    ) -> None:
         self.id: str | None = None
         self.children: list[Component] = children or []
+        if tooltip is not None:
+            self.tooltip = tooltip
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        init = cls.__dict__.get("__init__")
+        if init is None:
+            return
+
+        @functools.wraps(init)
+        def __init__(self: Component, *args: Any, tooltip: str | None = None, **kw: Any) -> None:
+            init(self, *args, **kw)
+            if tooltip is not None:
+                self.tooltip = tooltip
+
+        cls.__init__ = __init__  # type: ignore[method-assign]
 
     def static_props(self) -> dict[str, Any]:
         return {}
@@ -75,6 +97,8 @@ class Component:
         props = dict(self.static_props())
         for name, getter in self.reactive_props().items():
             props[name] = getter()
+        if self.tooltip:
+            props["tooltip"] = self.tooltip
         return {
             "id": self.id,
             "type": self.type,
@@ -321,6 +345,53 @@ class Checkbox(Component):
             self._value.set(bool(payload["value"]))
             return True
         return False
+
+
+class Switch(Component):
+    """A toggle switch two-way bound to a ``Signal[bool]``: a :class:`Checkbox` drawn as
+    a ``role="switch"`` control, for an immediate on/off setting (a pin, a flag)."""
+
+    type = "switch"
+
+    def __init__(self, value: Signal[bool], *, label: str = "") -> None:
+        super().__init__()
+        self._value = value
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"checked": lambda: bool(self._value.value)}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "change" and "value" in payload:
+            self._value.set(bool(payload["value"]))
+            return True
+        return False
+
+
+BADGE_TONES = ("neutral", "ok", "warn", "err", "info")
+
+
+class Badge(Component):
+    """A small status chip. ``text`` may be a string, signal or callable; ``tone`` is one
+    of ``neutral``/``ok``/``warn``/``err``/``info`` (the same tones as a Table badge)."""
+
+    type = "badge"
+
+    def __init__(self, text: Source, *, tone: str = "neutral") -> None:
+        if tone not in BADGE_TONES:
+            raise ValueError(f"Badge tone must be one of {BADGE_TONES}, got {tone!r}")
+        super().__init__()
+        self._text = text
+        self._tone = tone
+
+    def static_props(self) -> dict[str, Any]:
+        return {"tone": self._tone}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"text": lambda: str(_read(self._text))}
 
 
 class Number(Component):
