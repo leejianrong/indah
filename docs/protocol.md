@@ -187,6 +187,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `select` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
 | `checkbox` | input | `checked`, `label` | `change` `{value}` |
 | `switch` | input | `checked`, `label` (a `role=switch` toggle) | `change` `{value}` |
+| `shortcuts` | invisible | `keys:[{keys,label}]` (canonical key specs, see `indah.keys`) | `press` `{keys}` |
 | `badge` | display | `text`, `tone` (`neutral`/`ok`/`warn`/`err`/`info`) | — |
 | `number` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `radio` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
@@ -274,6 +275,11 @@ existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no
 payload.
+
+`shortcuts` renders nothing: while mounted it listens for the listed keys (a space-separated
+sequence, `mod` = Ctrl/Cmd) and posts `press`. Bare keys are ignored while typing in a field,
+and everything is ignored under a `role=dialog`. `?` opens a help overlay of every mounted
+map. A map is scoped by where it sits in the tree.
 
 Any node may carry a `tooltip` prop (string): the shell shows it on hover or keyboard
 focus, dismissible with Esc, linked by `aria-describedby`; it adds no layout box.

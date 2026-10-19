@@ -45,7 +45,15 @@ after a handler runs, and keyboard shortcuts. indah has only an error toast.
   `props.tooltip` and the shell wraps the node in a box-less tooltip. `badge` and `switch`
   are now reserved built-in type names, so `register_component("badge")` is rejected.
 
-`Shortcuts` extends this ADR as they land.
+- **Shortcuts (IND-97).** `Shortcuts({spec: fn | (fn, label)})` is an invisible node: the
+  shell listens while it is mounted (so a map inside a tab is scoped to that tab), posts
+  `press {keys}`, and the server runs the handler. Specs are canonicalised by `indah.keys`
+  and the shell tokenises key events the same way. Sequences (`g l`) time out after 1 s;
+  a broken sequence restarts from the key that broke it. Bare keys and sequences are ignored
+  in inputs; `mod+`/`alt+` combos fire in inputs; nothing fires under a dialog. `?` opens a
+  help overlay built from the labels of every mounted map. Not user-rebindable.
+
+Table row actions and multi-select extend this ADR as they land.
 
 ## Alternatives considered
 

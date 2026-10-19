@@ -718,6 +718,18 @@
         transition: transform 0.15s;
       }
       button.switch[aria-checked="true"] .switch-knob { transform: translateX(1.1rem); }
+      .shortcut-help { border-collapse: collapse; width: 100%; }
+      .shortcut-help td { padding: 0.3rem 0.4rem; font-size: 0.9rem; }
+      .shortcut-help td:first-child { white-space: nowrap; }
+      .then { color: var(--muted); font-size: 0.8rem; }
+      kbd {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        padding: 0.05rem 0.4rem;
+        background: var(--surface-2);
+        border: 1px solid var(--outline);
+        border-radius: 4px;
+      }
       .confirm-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
 
       .status {

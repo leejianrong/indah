@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from .keys import normalize_keys
 from .markdown import to_blocks
 from .protocol import RenderSpec
 from .reactive import Computed, Signal
@@ -1795,6 +1796,44 @@ class Grid(Component):
 
     def static_props(self) -> dict[str, Any]:
         return {"columns": int(self._columns), "gap": self._gap}
+
+
+class Shortcuts(Component):
+    """Invisible keyboard shortcuts, active while this component is in the rendered tree.
+
+    ``Shortcuts({"a": approve, "g l": (go_log, "Go to the log"), "mod+k": palette})``
+    maps key specs (see :mod:`indah.keys`) to handlers, each optionally paired with a
+    description for the ``?`` help overlay. Bare keys and sequences are ignored while
+    the user types in a field or while a dialog is open; ``mod+``/``alt+`` combos fire
+    anywhere outside a dialog. To scope a map to one page, place it inside that page's
+    tab or container. Not user-rebindable.
+    """
+
+    type = "shortcuts"
+
+    def __init__(self, keys: dict[str, Callable[[], Any] | tuple[Callable[[], Any], str]]) -> None:
+        super().__init__()
+        self._handlers: dict[str, Callable[[], Any]] = {}
+        self._labels: dict[str, str] = {}
+        for spec, target in keys.items():
+            canonical = normalize_keys(spec)
+            if canonical in self._handlers:
+                raise ValueError(f"duplicate shortcut {canonical!r}")
+            fn, label = target if isinstance(target, tuple) else (target, "")
+            self._handlers[canonical] = fn
+            self._labels[canonical] = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"keys": [{"keys": k, "label": self._labels[k]} for k in self._handlers]}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        fn = self._handlers.get(str(payload.get("keys", ""))) if event == "press" else None
+        if fn is None:
+            return False
+        result = fn()
+        if inspect.iscoroutine(result):
+            return result
+        return True
 
 
 class Tabs(Component):

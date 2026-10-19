@@ -1781,3 +1781,65 @@ def test_badge_switch_and_tooltip_render_and_round_trip():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_shortcuts_fire_outside_inputs_only_and_help_lists_them():
+    from indah import Column, Modal, Session, Shortcuts, Signal, Text, TextArea, create_app
+
+    log, note, shown = [], Signal(""), Signal(False)
+    root = Column(
+        children=[
+            Shortcuts(
+                {
+                    "a": (lambda: log.append("a"), "Approve"),
+                    "g l": (lambda: log.append("g l"), "Go to the log"),
+                    "mod+k": lambda: log.append("mod+k"),
+                    "m": lambda: shown.set(True),
+                }
+            ),
+            TextArea(note, label="Reply"),
+            Modal([Text("dlg")], open=shown, title="Dialog"),
+        ]
+    )
+    handle = launch(create_app(session=Session(root)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                box = page.locator("textarea")
+                expect(box).to_be_visible()
+                page.keyboard.press("a")
+                page.keyboard.press("g")
+                page.keyboard.press("l")
+                page.wait_for_timeout(400)
+                assert log == ["a", "g l"]
+                box.click()
+                page.keyboard.type("a g l")  # typing: nothing fires
+                page.keyboard.press("Control+k")  # a combo does fire in a field
+                page.wait_for_timeout(400)
+                assert log == ["a", "g l", "mod+k"]
+                expect(box).to_have_value("a g l")
+                box.blur()
+                page.keyboard.press("g")
+                page.keyboard.press("x")  # broken sequence, no fire
+                page.keyboard.press("l")
+                page.wait_for_timeout(300)
+                assert log == ["a", "g l", "mod+k"]
+                page.keyboard.press("Shift+?")
+                help_ = page.get_by_role("dialog", name="Keyboard shortcuts")
+                expect(help_).to_contain_text("Approve")
+                expect(help_).to_contain_text("Go to the log")
+                page.keyboard.press("Escape")
+                expect(help_).to_have_count(0)
+                page.keyboard.press("m")  # opens a dialog...
+                expect(page.get_by_role("dialog", name="Dialog")).to_be_visible()
+                page.keyboard.press("a")  # ...under which shortcuts are off
+                page.wait_for_timeout(300)
+                assert log == ["a", "g l", "mod+k"]
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

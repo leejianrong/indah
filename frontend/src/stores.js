@@ -19,3 +19,8 @@ export const now = readable(Date.now(), (set) => {
   const id = setInterval(() => set(Date.now()), 1000);
   return () => clearInterval(id);
 });
+
+// Keyboard shortcuts registered by mounted `shortcuts` nodes (ADR-0030): node id ->
+// [{keys, label}]. The `?` help overlay lists them all; helpOpen toggles it.
+export const shortcutRegistry = writable(new Map());
+export const helpOpen = writable(false);

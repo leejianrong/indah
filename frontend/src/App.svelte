@@ -1,8 +1,9 @@
 <script>
   import { onMount } from "svelte";
   import { apiUrl, streamUrl, PROTOCOL_VERSION } from "./api.js";
-  import { structure, nodeProps, status, toasts } from "./stores.js";
+  import { structure, nodeProps, status, toasts, shortcutRegistry, helpOpen } from "./stores.js";
   import Node from "./Node.svelte";
+  import Overlay from "./Overlay.svelte";
 
   let toastSeq = 0;
   const MAX_TOASTS = 4;
@@ -220,6 +221,23 @@
     <span>{$status.text}</span>
   </div>
 </div>
+
+{#if $helpOpen}
+  <Overlay kind="modal" size="sm" title="Keyboard shortcuts" onclose={() => helpOpen.set(false)}>
+    <table class="shortcut-help">
+      <tbody>
+        {#each [...$shortcutRegistry.values()].flat() as entry}
+          <tr>
+            <td>{#each entry.keys.split(" ") as step, i}{#if i > 0}<span class="then"> then </span>{/if}<kbd>{step}</kbd>{/each}</td>
+            <td>{entry.label}</td>
+          </tr>
+        {/each}
+        <tr><td><kbd>?</kbd></td><td>This help</td></tr>
+        <tr><td><kbd>escape</kbd></td><td>Close dialogs</td></tr>
+      </tbody>
+    </table>
+  </Overlay>
+{/if}
 
 {#if $toasts.length}
   <div class="toasts" role="status" aria-live="polite">
