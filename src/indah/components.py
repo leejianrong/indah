@@ -17,7 +17,9 @@ import base64
 import functools
 import inspect
 import io
+import json
 import logging
+import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -2296,6 +2298,73 @@ class Link(Component):
             self._ctx._client_navigated(self._to())
             return True
         return False
+
+
+MAX_JSON_BYTES = 8 * 1024 * 1024
+_MAX_JSON_DEPTH = 64
+
+
+def _json_clean(value: Any, depth: int = 0) -> Any:
+    """Coerce ``value`` into data every JSON parser accepts: string keys, no NaN/Infinity,
+    unknown objects as strings, and nesting cut at 64 levels."""
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if depth >= _MAX_JSON_DEPTH:
+        return "..."
+    if isinstance(value, dict):
+        return {str(k): _json_clean(v, depth + 1) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_clean(v, depth + 1) for v in value]
+    return str(value)
+
+
+def _json_doc(value: Any) -> dict[str, Any]:
+    """``{"data", "error"}`` for a ``JsonTree``: the document as JSON-safe data, or an
+    error message (invalid text, too large) with ``data`` of ``None``."""
+    try:
+        if isinstance(value, (bytes, bytearray)):
+            value = bytes(value).decode("utf-8")
+        if isinstance(value, str):
+            value = json.loads(value)
+        data = _json_clean(value)
+        size = len(json.dumps(data, allow_nan=False))
+    except (ValueError, RecursionError) as exc:  # JSONDecodeError and UnicodeDecodeError too
+        return {"data": None, "error": f"Invalid JSON: {exc}"}
+    if size > MAX_JSON_BYTES:
+        limit = MAX_JSON_BYTES // (1024 * 1024)
+        return {"data": None, "error": f"Document too large ({size // 1024} KB; limit {limit} MB)"}
+    return {"data": data, "error": None}
+
+
+class JsonTree(Component):
+    """A read-only, collapsible view of a JSON document (IND-108): an object, a list, or
+    JSON text (``str``/``bytes``). The browser renders a node's children only when it is
+    opened, in chunks, so a megabyte document stays responsive. ``expanded`` is how many
+    levels start open, ``search`` adds a filter box that opens the path to every match,
+    and each node has a "copy path" button (``$.a.b[0]``). A value that is not valid JSON,
+    or is over 8 MB, shows an error line instead of raising.
+    """
+
+    type = "jsontree"
+
+    def __init__(
+        self, value: Source, *, expanded: int = 1, search: bool = True, label: str = ""
+    ) -> None:
+        if expanded < 0:
+            raise ValueError("JsonTree expanded must be >= 0")
+        super().__init__()
+        self._doc: Computed[dict[str, Any]] = Computed(lambda: _json_doc(_read(value)))
+        self._expanded = expanded
+        self._search = bool(search)
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"expanded": self._expanded, "search": self._search, "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"doc": lambda: self._doc.value}
 
 
 class Tabs(Component):

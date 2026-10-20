@@ -18,6 +18,7 @@ real uvicorn server in its own background thread.
 """
 
 import base64
+import json
 import re
 
 import pytest
@@ -2590,6 +2591,109 @@ def test_routes_demo_deep_link_row_click_switcher_back_and_new_tab_under_ui():
                 expect(page.get_by_text("There is no page at this address.")).to_be_visible()
                 page.get_by_role("link", name="Go to the overview").click()
                 expect(page.get_by_text("Pick one from the sidebar")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_json_tree_handles_a_megabyte_lazily_searches_and_copies_paths():
+    from indah import Column, JsonTree, Session, create_app
+
+    records = [
+        {
+            "id": f"01J{i:06d}",
+            "name": f"entry number {i}",
+            "tags": ["alpha", "beta", "gamma"],
+            "meta": {"hits": i % 50, "pinned": i % 7 == 0, "note": "x" * 120},
+        }
+        for i in range(4000)
+    ]
+    records[3500]["name"] = "the-needle-in-the-haystack"
+    doc = {"project": "support-bot", "entries": records}
+    assert len(json.dumps(doc)) > 1_000_000
+
+    handle = launch(
+        create_app(session=Session(Column(children=[JsonTree(doc, expanded=2)]))),
+        block=False,
+        open_inline=False,
+    )
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            context = browser.new_context(permissions=["clipboard-read", "clipboard-write"])
+            context.add_init_script(
+                """window.__long = [];
+                new PerformanceObserver((list) => {
+                  for (const e of list.getEntries()) window.__long.push(e.duration);
+                }).observe({ entryTypes: ['longtask'] });"""
+            )
+            page = context.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("support-bot")).to_be_visible()
+                items = page.locator(".jt-item")
+                assert items.count() < 300  # 4000 records, only the first chunk is in the DOM
+
+                # Opening a record creates just its own children.
+                before = items.count()
+                page.get_by_role("button", name="Expand").first.click()  # record 0
+                page.wait_for_timeout(100)
+                assert 0 < items.count() - before < 20
+
+                # Searching a deep value finds it (beyond the first chunk) and opens its path.
+                page.get_by_label("Search JSON").fill("needle-in-the")
+                expect(page.get_by_text("1 matches")).to_be_visible(timeout=15000)
+                hit = page.locator(".jt-row.match")
+                expect(hit).to_have_count(1)
+                expect(hit).to_contain_text("the-needle-in-the-haystack")
+                assert items.count() < 400
+
+                # Copy path puts a JSONPath on the clipboard.
+                hit.hover()
+                hit.get_by_role("button", name="Copy path").click()
+                expect(hit.get_by_role("button", name="Copy path")).to_have_text("copied")
+                assert page.evaluate("navigator.clipboard.readText()") == "$.entries[3500].name"
+
+                # Clearing the search and collapsing all brings it back to the first level.
+                page.get_by_label("Search JSON").fill("")
+                page.get_by_role("button", name="Collapse all").click()
+                page.wait_for_timeout(200)
+                assert items.count() < 150
+
+                long_tasks = page.evaluate("window.__long")
+                assert max(long_tasks, default=0) < 100, long_tasks  # nothing blocked the page
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_json_tree_reports_invalid_text_and_follows_a_signal():
+    from indah import Button, Column, JsonTree, Session, Signal, create_app
+
+    src = Signal('{"a": 1}')
+    root = Column(
+        children=[
+            JsonTree(src, label="Body"),
+            Button("break", lambda: src.set("{nope")),
+            Button("fix", lambda: src.set('{"b": [1, 2]}')),
+        ]
+    )
+    handle = launch(create_app(session=Session(root)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator(".jt-key", has_text='"a"')).to_be_visible()
+                page.get_by_role("button", name="break").click()
+                expect(page.get_by_role("alert")).to_contain_text("Invalid JSON")
+                page.get_by_role("button", name="fix").click()
+                expect(page.locator(".jt-key", has_text='"b"')).to_be_visible()
             finally:
                 browser.close()
     finally:

@@ -13,6 +13,7 @@
   import Tip from "./Tip.svelte";
   import Shortcuts from "./Shortcuts.svelte";
   import SplitPane from "./SplitPane.svelte";
+  import JsonTree from "./JsonTree.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -158,6 +159,8 @@
       {/each}
     </div>
   </div>
+{:else if node.type === "jsontree"}
+  <JsonTree {props} />
 {:else if node.type === "router"}
   {#each node.children as child, i (child.id)}
     {#if i === props.active}<Self node={child} />{/if}

@@ -35,6 +35,7 @@ from .components import (
     Heatmap,
     Image,
     ImageOverlay,
+    JsonTree,
     Link,
     List,
     Map,
@@ -148,6 +149,7 @@ __all__ = [
     "Download",
     "DownloadFile",
     # data-driven list (ADR-0016)
+    "JsonTree",
     "Link",
     "List",
     "Modal",
