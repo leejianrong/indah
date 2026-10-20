@@ -2144,7 +2144,7 @@ def test_virtual_static_table_renders_only_the_visible_rows():
             page = browser.new_page()
             try:
                 page.goto(handle.url, wait_until="domcontentloaded")
-                expect(page.locator("tbody tr").first).to_be_visible()
+                expect(page.locator("tbody tr:not(.vspacer)").first).to_be_visible()
                 assert page.locator("tbody tr").count() < 60
                 page.evaluate("document.querySelector('.table-scroll').scrollTop = 3000 * 36")
                 expect(page.get_by_text("r3000", exact=True)).to_be_visible()
@@ -2794,5 +2794,44 @@ def test_diff_flags_truncation_and_pages_through_a_large_change():
                 assert rows.count() == 1500
             finally:
                 browser.close()
+    finally:
+        handle.stop()
+
+
+def _search_table_app():
+    from indah import Column, JsonTree, Session, Table, create_app
+
+    rows = [{"id": i, "name": f"row-{i}"} for i in range(40)]
+    root = Column(
+        children=[
+            Table(rows=rows, key="id", search=True, height="10rem"),
+            JsonTree({"a": 1}),
+        ]
+    )
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_search_inputs_are_rounded_and_a_sticky_header_hides_scrolled_rows():
+    """Search boxes (type=search) share the text-input radius, and a rich table's sticky
+    header is opaque with separate borders so scrolled rows never show above it."""
+    handle = launch(_search_table_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page()
+            page.goto(handle.url)
+            page.wait_for_selector("table.rich")
+            for sel in ('[placeholder="Filter rows"]', '[placeholder="Search keys and values"]'):
+                radius = page.eval_on_selector(sel, "e => getComputedStyle(e).borderTopLeftRadius")
+                assert radius not in ("0px", ""), (sel, radius)
+            info = page.eval_on_selector(
+                "table.rich thead th",
+                "e => { const c = getComputedStyle(e); const t = e.closest('table');"
+                " return [c.backgroundColor, getComputedStyle(t).borderCollapse]; }",
+            )
+            assert info[1] == "separate"
+            assert info[0] not in ("rgba(0, 0, 0, 0)", "transparent")
+            browser.close()
     finally:
         handle.stop()
