@@ -163,3 +163,23 @@ def test_link_active_state_exact_and_prefix():
     assert prefix.reactive_props()["active"]() is False  # whole segments, not a string prefix
     with pytest.raises(ValueError):
         Link(ctx, "x", to="/a", match="fuzzy")
+
+
+@pytest.mark.unit
+def test_link_to_may_be_a_callable_that_follows_the_params():
+    ctx = Context("s")
+    Router(
+        ctx,
+        routes={"/": Text("h"), "/p/{project}": Text("p"), "/p/{project}/e/{entry}": Text("e")},
+    )
+    link = Link(ctx, "Back", to=lambda: f"/p/{ctx.params.value.get('project')}")
+    assert "to" not in link.static_props() and link.static_props() == {"label": "Back"}
+    ctx.navigate("/p/auth/e/1")
+    assert link.reactive_props()["to"]() == "/p/auth"
+    assert link.handle("navigate", {"path": "/p/auth"}) is True and ctx.path.value == "/p/auth"
+    ctx.navigate("/p/docs/e/9")
+    assert link.reactive_props()["to"]() == "/p/docs"
+    assert link.handle("navigate", {"path": "/p/auth"}) is False  # a stale target is refused
+    assert link.reactive_props()["active"]() is False
+    ctx.navigate("/p/docs")
+    assert link.reactive_props()["active"]() is True
