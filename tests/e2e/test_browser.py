@@ -2698,3 +2698,101 @@ def test_json_tree_reports_invalid_text_and_follows_a_signal():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_diff_renders_add_remove_change_with_inline_spans_in_both_layouts():
+    from indah import Button, Column, Diff, Session, Signal, create_app
+
+    incoming = Signal(
+        {
+            "model": "alpha-1",
+            "temperature": 0.2,
+            "stop": ["\n"],
+            "legacy": True,
+            **{f"key{i:02d}": i for i in range(40)},  # a long unchanged run to collapse
+        }
+    )
+    candidate = {
+        "model": "alpine-1",
+        "temperature": 0.2,
+        "stop": ["\n"],
+        "top_p": 0.9,
+        **{f"key{i:02d}": i for i in range(40)},
+    }
+    root = Column(
+        children=[
+            Diff(incoming, candidate, labels=("incoming", "candidate"), context=2),
+            Button("make equal", lambda: incoming.set(dict(candidate))),
+        ]
+    )
+    handle = launch(create_app(session=Session(root)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                table = page.get_by_role("table", name="Differences between incoming and candidate")
+                expect(table).to_be_visible()
+                # top_p after temperature adds a trailing comma to it, so two lines change.
+                expect(page.get_by_label("Changes")).to_have_text("+1 −1 ~2")
+
+                # Split: the changed line has the differing characters marked on both sides.
+                changed = table.locator("tr.chg", has_text="alpha")
+                expect(table.locator("tr.chg")).to_have_count(2)
+                expect(changed.locator("td.code.a mark")).to_have_text("ha")
+                expect(changed.locator("td.code.b mark")).to_have_text("ine")
+                expect(table.locator("tr.add td.code.b")).to_contain_text('"top_p": 0.9')
+                expect(table.locator("tr.del td.code.a")).to_contain_text('"legacy": true')
+                expect(table.locator("tr.skip").first).to_contain_text("unchanged lines")
+                assert table.locator("tr.eq").count() <= 12  # context, not the whole document
+
+                # Unified: the change becomes a removal then an addition, with +/- signs.
+                page.get_by_role("button", name="Unified").click()
+                expect(page.get_by_role("button", name="Unified")).to_have_attribute(
+                    "aria-pressed", "true"
+                )
+                rows = table.locator("tr:not(.skip):not(.eq)")
+                assert rows.count() == 6  # legacy, model (-/+), temperature (-/+), top_p
+                expect(table.locator("tr.del mark").first).to_have_text("ha")
+                expect(table.locator("tr.add mark").first).to_have_text("ine")
+                assert "−" in table.locator("tr.del").first.inner_text()
+                assert "+" in table.locator("tr.add").first.inner_text()
+
+                # The server recomputes when a source changes; equal documents say so.
+                page.get_by_role("button", name="make equal").click()
+                expect(page.get_by_text("No differences.")).to_be_visible()
+                expect(table).to_have_count(0)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_diff_flags_truncation_and_pages_through_a_large_change():
+    from indah import Column, Diff, Session, create_app
+
+    a = "\n".join(f"line {i}" for i in range(6000))
+    b = "\n".join(f"LINE {i}" for i in range(6000))  # every line changed, over the cap
+    handle = launch(
+        create_app(session=Session(Column(children=[Diff(a, b, normalise="text", context=None)]))),
+        block=False,
+        open_inline=False,
+    )
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("Only the first 5,000 lines")).to_be_visible()
+                rows = page.locator("table.diff tbody tr")
+                assert rows.count() == 500  # drawn in chunks, not all 5,000 at once
+                page.get_by_role("button", name="Show more").click()
+                assert rows.count() == 1500
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

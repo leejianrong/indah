@@ -62,6 +62,7 @@ BUILTIN_TYPES = frozenset(
         "switch",
         "router",
         "jsontree",
+        "diff",
         "link",
         "splitpane",
         "masterdetail",

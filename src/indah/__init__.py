@@ -26,6 +26,7 @@ from .components import (
     Component,
     DataFrame,
     Date,
+    Diff,
     Download,
     DownloadFile,
     Drawer,
@@ -146,6 +147,7 @@ __all__ = [
     # file upload / download (ADR-0017)
     "Upload",
     "UploadedFile",
+    "Diff",
     "Download",
     "DownloadFile",
     # data-driven list (ADR-0016)

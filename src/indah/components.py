@@ -25,6 +25,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from .diff import compute_diff
 from .keys import normalize_keys
 from .markdown import to_blocks
 from .protocol import RenderSpec
@@ -2365,6 +2366,52 @@ class JsonTree(Component):
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"doc": lambda: self._doc.value}
+
+
+class Diff(Component):
+    """A read-only comparison of two documents (IND-109): ``a`` ("incoming") against ``b``
+    ("candidate"), each an object, a list, JSON text or plain text. In ``normalise="json"``
+    mode both sides are pretty-printed with sorted keys first, so key order and formatting
+    never show up as changes; ``"text"`` compares them as written. The diff is computed here
+    (see :mod:`indah.diff`) and the browser draws it, ``split`` (side by side) or ``unified``
+    (the viewer can switch), with the changed characters of a changed line marked.
+    ``context`` is how many unchanged lines stay around a change (``None`` keeps them all).
+    At most 5,000 lines per side are compared, and a very large, very repetitive input is
+    diffed approximately; both are flagged in the UI.
+    """
+
+    type = "diff"
+
+    def __init__(
+        self,
+        a: Source,
+        b: Source,
+        *,
+        mode: str = "split",
+        normalise: str = "json",
+        context: int | None = 3,
+        labels: tuple[str, str] = ("incoming", "candidate"),
+    ) -> None:
+        if mode not in ("split", "unified"):
+            raise ValueError(f"Diff mode must be 'split' or 'unified', got {mode!r}")
+        if normalise not in ("json", "text"):
+            raise ValueError(f"Diff normalise must be 'json' or 'text', got {normalise!r}")
+        if context is not None and context < 0:
+            raise ValueError("Diff context must be >= 0 or None")
+        if len(labels) != 2:
+            raise ValueError("Diff labels must be a pair")
+        super().__init__()
+        self._mode = mode
+        self._labels = [str(labels[0]), str(labels[1])]
+        self._diff: Computed[dict[str, Any]] = Computed(
+            lambda: compute_diff(_read(a), _read(b), normalise=normalise, context=context)
+        )
+
+    def static_props(self) -> dict[str, Any]:
+        return {"mode": self._mode, "labels": self._labels}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"diff": lambda: self._diff.value}
 
 
 class Tabs(Component):

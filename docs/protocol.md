@@ -216,6 +216,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
 | `jsontree` | display | `doc:{data,error}` (JSON-safe document or an error line), `expanded`, `search`, `label` | — (all client-side) |
+| `diff` | display | `diff:{rows,stats,same,truncated,approximate}`, `mode` (`split`/`unified`), `labels` | — (the layout toggle is client-side) |
 | `router` | container | `routes:[pattern]`, `notFound`, `active` (index of the shown child, -1 for none) | `navigate` `{path}` (Back/Forward) |
 | `link` | input | `label`, `to` (an in-app path), `active` (the page is showing) | `navigate` `{path}` |
 | `splitpane` | container | `direction`, `initial`, `min`, `key`, `height` (exactly two children) | — (resize is client-side) |
@@ -285,6 +286,10 @@ payload.
 `jsontree` carries its whole document in `doc.data`; the shell opens nodes lazily (children are
 created only when a node is opened, in chunks of 100), searches in the browser and copies a
 JSONPath. A document over 8 MB, or text that is not JSON, arrives as `doc.error`. See ADR-0028.
+
+`diff` carries rows the server computed (`eq`, `del`, `add`, `chg` with `ai`/`bi` character spans,
+`skip` with a count); the shell draws them in chunks of 500, split or unified. See ADR-0028 for
+the line cap, the clipping and the approximate fallback.
 
 `router` renders only its `active` child. The stream URL carries `&path=<in-app path>`; on a
 fresh connect the server starts (or moves) the session there, an automatic reconnect keeps
