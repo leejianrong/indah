@@ -16,7 +16,7 @@
 | IND-E20 | S1 live push + live log | **Done** (PRs #110-#114); `make demo-semula` |
 | IND-E21 | S2 overlays + pending queue | **Done** (PRs #116-#122); `make demo-pending` |
 | IND-E22 | S3 big tables, panes | **Done** (PRs #124-#127); `make demo-entries` |
-| IND-E23 | S4 routing | **Done** (PRs #128-#129, #130); `make demo-routes` |
+| IND-E23 | S4 routing | **Done** (PRs #128-#130); `make demo-routes` |
 | IND-E24 | S5 editors, dynamic rows | In progress (IND-108 JsonTree, IND-109 Diff done; IND-110 keyed `List`, IND-112 demo next; IND-111 held for Q4) |
 | IND-E25 | H-A identity | Not started (gated by Q1 checkpoint after S3) |
 | IND-E26 | H-B authz, secrets, hardening | Not started |
@@ -42,7 +42,7 @@ hosted path yet.
 | Server memory per open tab | 7 to 22 KB per session (reactive graph + hub, no socket), over 300 sessions of each demo: log 14 KB, pending 22 KB, entries 7 KB, routes 13 KB. Excludes per-tab rows held by a `ctx.tail` Stream (up to its limit) and the hub's 512-message history | Small for hundreds of tabs. The per-tab row copies and history are the real cost to measure under load. Browser-side memory not measured |
 | p95 interaction latency | POST `/api/event` to the patch on the SSE stream, 300 samples: p50 1.6 ms, p95 3.5 ms, max 5.6 ms on localhost | Says nothing about the gateway; the Colab proxy added round trips that ADR-0013 exists for. Needs the same probe through the real gateway |
 | Bundle growth vs plan | Shell 502 KB raw / 219 KB gzip, from 460 / 208 KB (+9% raw, +5% gzip) for overlays, toasts, shortcuts, tables (remote, virtual), panes, routing, JsonTree and Diff. `CodeEditor` (the +80% item) is not built | Well under the plan's worst case |
-| Effort vs estimates | S2 (20 pts), S3 (15), S4 (10) and the JsonTree/Diff half of S5a (8) delivered at their planned points, 15 cards plus one bug (IND-123), as PRs #116 to #131 | On plan in points. Calendar days are not tracked here |
+| Effort vs estimates | S2 (20 pts), S3 (15), S4 (10) and the JsonTree/Diff half of S5a (8) delivered at their planned points, 15 cards plus one bug (IND-123), as PRs #116 to #132 | On plan in points. Calendar days are not tracked here |
 | Screens wanting something the set lacked | Six gaps surfaced while building the three demos, each fixed in its slice: `Link(to=)` as a callable, `Table(density=)` as a signal, no untracked read in the switcher effect (`peek` existed), single-segment deep links resolving `api/*` wrongly, `LaunchHandle.stop()` with an open stream, a sort whitelist for SQL | None blocked a screen. Two are gaps a SPA does not have (pages run their reactive code even when hidden; select-all on a remote table covers loaded rows only) |
 
 Still true from section 8, not changed by building: every interaction is a round trip, state
