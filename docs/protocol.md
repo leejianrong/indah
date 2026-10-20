@@ -215,6 +215,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `grid` | container | `columns`, `gap` | — |
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
+| `jsontree` | display | `doc:{data,error}` (JSON-safe document or an error line), `expanded`, `search`, `label` | — (all client-side) |
 | `router` | container | `routes:[pattern]`, `notFound`, `active` (index of the shown child, -1 for none) | `navigate` `{path}` (Back/Forward) |
 | `link` | input | `label`, `to` (an in-app path), `active` (the page is showing) | `navigate` `{path}` |
 | `splitpane` | container | `direction`, `initial`, `min`, `key`, `height` (exactly two children) | — (resize is client-side) |
@@ -280,6 +281,10 @@ existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no
 payload.
+
+`jsontree` carries its whole document in `doc.data`; the shell opens nodes lazily (children are
+created only when a node is opened, in chunks of 100), searches in the browser and copies a
+JSONPath. A document over 8 MB, or text that is not JSON, arrives as `doc.error`. See ADR-0028.
 
 `router` renders only its `active` child. The stream URL carries `&path=<in-app path>`; on a
 fresh connect the server starts (or moves) the session there, an automatic reconnect keeps
