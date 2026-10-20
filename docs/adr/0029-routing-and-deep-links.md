@@ -31,6 +31,15 @@ be shared. ADR-0016 deferred the structural children op, so pages cannot be adde
   echo `navigate` message, the browser already moved). Middle-click, Ctrl/Cmd-click and "open
   in new tab" use the href like any link. `Router` listens for `popstate` and posts the new
   in-app path, so Back/Forward follow the history.
+- **Params are a computed signal (IND-106).** The one `Router` per session registers its table
+  with the context, and `ctx.params` is a `Computed[dict]` of the matched route's params
+  (`{}` when nothing matches), so a page derives its data with an ordinary `computed` over
+  `ctx.params.value.get(...)` and is recomputed only when its inputs change. A `{name:int}`
+  segment is cast to `int`; a value that is not one does not match. Because every page exists
+  from the start, its reactive code runs on every navigation, so it must tolerate absent
+  params (`.get`). `Link(match="exact"|"prefix")` has a reactive `active` prop (the shell adds
+  `class=active` and `aria-current=page`); `prefix` also lights up for pages beneath it, by whole
+  segments.
 - **A new tab starts where its URL says.** The shell sends `&path=` on the stream URL. On a
   fresh connect (no `Last-Event-Id`) the server sets `ctx.path` from it before building the
   `init` snapshot, so a pasted deep link or a reload opens that page even though the tab

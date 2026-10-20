@@ -163,7 +163,13 @@
     {#if i === props.active}<Self node={child} />{/if}
   {/each}
 {:else if node.type === "link"}
-  <a class="link" href={hrefFor(props.to)} onclick={onLink}>{props.label}</a>
+  <a
+    class="link"
+    class:active={props.active}
+    href={hrefFor(props.to)}
+    aria-current={props.active ? "page" : null}
+    onclick={onLink}>{props.label}</a
+  >
 {:else if node.type === "splitpane"}
   <SplitPane
     id={node.id}

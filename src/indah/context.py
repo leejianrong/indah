@@ -25,8 +25,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from .protocol import navigate_message, toast_message
-from .reactive import Signal
-from .routes import normalize_path
+from .reactive import Computed, Signal
+from .routes import Route, match_routes, normalize_path
 from .stream import Stream
 
 if TYPE_CHECKING:
@@ -87,6 +87,11 @@ class Context:
         # The in-app path this tab is showing (``/projects/auth``), a signal a ``Router``
         # reads. Set it with ``navigate``; the browser sets it on a link click or Back.
         self.path: Signal[str] = Signal(start)
+        self._routes: Signal[list[Route] | None] = Signal(None)  # set by the one Router
+        # The matched route's params (``{"project": "auth", "entry_id": "01J"}``), or ``{}``
+        # when nothing matches or there is no router. A computed, so a page that derives its
+        # data from one param is not recomputed when an unrelated param or page changes.
+        self.params: Computed[dict[str, Any]] = Computed(self._current_params)
 
     def _bind_hub(self, hub: Hub) -> None:
         self._hub = hub
@@ -100,6 +105,16 @@ class Context:
         message_ = toast_message(message, kind, ttl)  # validate even when unbound
         if self._hub is not None:
             self._hub.publish(message_)
+
+    def _current_params(self) -> dict[str, Any]:
+        routes = self._routes.value
+        found = match_routes(routes, self.path.value) if routes else None
+        return dict(found[1]) if found else {}
+
+    def _set_routes(self, routes: list[Route]) -> None:
+        if self._routes.value is not None:
+            raise ValueError("a session can have only one Router")
+        self._routes.set(routes)
 
     def navigate(self, path: str, *, replace: bool = False) -> None:
         """Go to in-app ``path`` from server code: updates ``ctx.path`` and moves this tab's

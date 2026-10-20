@@ -2460,3 +2460,70 @@ def test_router_deep_links_back_forward_new_tab_and_server_navigation_under_a_mo
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_route_params_and_active_links_follow_the_url():
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    from indah import Column, Link, Router, Session, Sidebar, Text, computed, create_app
+
+    entries = {("auth", "01J"): "the login reply", ("auth", "02K"): "the logout reply"}
+
+    def build(ctx):
+        entry = computed(
+            lambda: entries.get((ctx.params.value.get("project"), ctx.params.value.get("entry_id")))
+        )
+        nav = Column(
+            children=[
+                Link(ctx, "Home", to="/"),
+                Link(ctx, "Auth", to="/projects/auth", match="prefix"),
+                Link(ctx, "Entry 01J", to="/projects/auth/entries/01J"),
+                Link(ctx, "Entry 02K", to="/projects/auth/entries/02K"),
+            ]
+        )
+        pages = Router(
+            ctx,
+            routes={
+                "/": Text("HOME"),
+                "/projects/{project}": Text(lambda: f"PROJECT {ctx.params.value.get('project')}"),
+                "/projects/{project}/entries/{entry_id}": Text(
+                    lambda: f"ENTRY {ctx.params.value.get('entry_id')}: {entry.value}"
+                ),
+            },
+            not_found=Text("NOT FOUND"),
+        )
+        return Session(Sidebar(children=[nav, pages]))
+
+    ui = create_app(session_factory=build, spa=True, proxy_flush=False)
+    handle = launch(Starlette(routes=[Mount("/ui", app=ui)]), block=False, open_inline=False)
+    root = handle.url.rstrip("/")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(f"{root}/ui/projects/auth/entries/02K", wait_until="domcontentloaded")
+                expect(page.get_by_text("ENTRY 02K: the logout reply")).to_be_visible()
+                active = page.locator("a.link.active")
+                expect(active).to_have_count(2)  # the section (prefix) and the page itself
+                expect(page.locator("a.link[aria-current=page]")).to_have_count(2)
+                expect(active.nth(0)).to_have_text("Auth")
+                expect(active.nth(1)).to_have_text("Entry 02K")
+
+                page.get_by_role("link", name="Entry 01J").click()
+                expect(page.get_by_text("ENTRY 01J: the login reply")).to_be_visible()
+                expect(page.locator("a.link.active", has_text="Entry 01J")).to_have_count(1)
+                expect(page.locator("a.link.active", has_text="Entry 02K")).to_have_count(0)
+
+                page.get_by_role("link", name="Home").click()
+                expect(page.get_by_text("HOME", exact=True)).to_be_visible()
+                expect(page.locator("a.link.active")).to_have_count(1)
+                page.go_back()  # Back restores the page, its params and the highlight
+                expect(page.get_by_text("ENTRY 01J: the login reply")).to_be_visible()
+                expect(page.locator("a.link.active", has_text="Auth")).to_have_count(1)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

@@ -2194,7 +2194,9 @@ class Router(Component):
     ``/projects/{project}``) to the page's component; ``not_found`` is shown when none
     matches. Every page is built up front and the shell renders only the active one, so a
     page is a function of data (the route's params), not of structure. Hidden pages are
-    still in the snapshot: never put anything role-restricted in one.
+    still in the snapshot: never put anything role-restricted in one. Because every page
+    exists from the start, its reactive code runs on every navigation, including when its
+    route is not showing and its params are absent: read them with ``ctx.params.value.get``.
 
     The app must be created with ``spa=True`` so a deep link such as
     ``/ui/projects/auth`` serves the shell. Pair it with :class:`Link` for navigation and
@@ -2214,6 +2216,7 @@ class Router(Component):
             raise ValueError("Router needs at least one route")
         compiled = [compile_route(pattern) for pattern in routes]
         super().__init__([*routes.values(), *([not_found] if not_found is not None else [])])
+        ctx._set_routes(compiled)  # ctx.params reads the same table
         self._ctx = ctx
         self._routes = compiled
         self._has_not_found = not_found is not None
@@ -2243,18 +2246,33 @@ class Router(Component):
 class Link(Component):
     """A real ``<a href>`` to an in-app path (ADR-0029): a plain click navigates without a
     page load, while a middle-click, Ctrl/Cmd-click or "open in new tab" use the URL as any
-    link would. ``to`` is an in-app path like ``/projects/auth``, never an external URL."""
+    link would. ``to`` is an in-app path like ``/projects/auth``, never an external URL.
+    ``active`` is true while the page is showing (``match="prefix"``: or one beneath it), so
+    a sidebar can highlight where you are."""
 
     type = "link"
 
-    def __init__(self, ctx: Context, label: str, *, to: str) -> None:
+    def __init__(self, ctx: Context, label: str, *, to: str, match: str = "exact") -> None:
+        if match not in ("exact", "prefix"):
+            raise ValueError(f"Link match must be 'exact' or 'prefix', got {match!r}")
         super().__init__()
         self._ctx = ctx
         self._label = label
         self._to = normalize_path(to)
+        self._match = match
 
     def static_props(self) -> dict[str, Any]:
         return {"label": self._label, "to": self._to}
+
+    def _active(self) -> bool:
+        path = self._ctx.path.value
+        if path == self._to:
+            return True
+        # ``prefix`` also lights up for the pages under it (whole segments; "/" is exact).
+        return self._match == "prefix" and self._to != "/" and path.startswith(self._to + "/")
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"active": self._active}
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "navigate" and payload.get("path") == self._to:

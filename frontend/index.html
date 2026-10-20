@@ -761,6 +761,12 @@
       }
       a.link { color: var(--primary); text-decoration: none; font-weight: 600; }
       a.link:hover { text-decoration: underline; }
+      a.link.active {
+        color: var(--text);
+        background: var(--primary-container);
+        padding: 0.1rem 0.5rem;
+        border-radius: var(--radius-pill);
+      }
       .confirm-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
 
       .status {
