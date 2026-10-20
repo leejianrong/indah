@@ -2527,3 +2527,70 @@ def test_route_params_and_active_links_follow_the_url():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_routes_demo_deep_link_row_click_switcher_back_and_new_tab_under_ui():
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "semula_routes.py"
+    spec = importlib.util.spec_from_file_location("semula_routes_e2e", path)
+    ex = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = ex
+    spec.loader.exec_module(ex)
+
+    app = ex.build_app(per_project=8, seed=3)
+    entry = next(iter(app.state.data["docs-qa"].values()))
+    handle = launch(app, block=False, open_inline=False)
+    root = handle.url.rstrip("/")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            context = browser.new_context()
+            page = context.new_page()
+            try:
+                # Paste an entry URL into a fresh tab: it opens that entry.
+                page.goto(f"{root}/ui/projects/docs-qa/entries/{entry['id']}")
+                expect(page.get_by_text(entry["response"])).to_be_visible()
+                expect(page.locator("a.link.active", has_text="docs-qa")).to_have_count(1)
+
+                # Back to the project via the in-page link; then click a row to open an entry.
+                page.get_by_role("link", name="Back to the project").click()
+                expect(page).to_have_url(f"{root}/ui/projects/docs-qa")
+                expect(page.get_by_text("8 cached entries")).to_be_visible()
+                page.locator("tbody tr").nth(1).click()
+                expect(page).to_have_url(re.compile(r"/ui/projects/docs-qa/entries/[0-9A-Z]{10}$"))
+                expect(page.get_by_text("Cached response")).to_be_visible()
+
+                # The project switcher lives in the URL, and Back undoes it.
+                page.get_by_role("link", name="Back to the project").click()
+                page.get_by_label("Project").select_option("code-review")
+                expect(page).to_have_url(f"{root}/ui/projects/code-review")
+                page.go_back()
+                expect(page).to_have_url(f"{root}/ui/projects/docs-qa")
+                expect(page.get_by_label("Project")).to_have_value("docs-qa")
+                page.go_forward()
+                expect(page).to_have_url(f"{root}/ui/projects/code-review")
+
+                # A link opened in a new tab lands on the same page.
+                href = page.get_by_role("link", name="docs-qa").get_attribute("href")
+                other = context.new_page()
+                other.goto(root + href)
+                expect(other.get_by_text("8 cached entries")).to_be_visible()
+                other.close()
+
+                # Overview, Back stays put, and an unknown address is a 404 page.
+                page.get_by_role("link", name="Overview").click()
+                expect(page.get_by_text("Pick one from the sidebar")).to_be_visible()
+                page.wait_for_timeout(300)
+                assert page.url == f"{root}/ui/"  # the switcher did not bounce us to a project
+                page.goto(f"{root}/ui/no/such/page")
+                expect(page.get_by_text("There is no page at this address.")).to_be_visible()
+                page.get_by_role("link", name="Go to the overview").click()
+                expect(page.get_by_text("Pick one from the sidebar")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

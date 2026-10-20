@@ -2246,37 +2246,54 @@ class Router(Component):
 class Link(Component):
     """A real ``<a href>`` to an in-app path (ADR-0029): a plain click navigates without a
     page load, while a middle-click, Ctrl/Cmd-click or "open in new tab" use the URL as any
-    link would. ``to`` is an in-app path like ``/projects/auth``, never an external URL.
-    ``active`` is true while the page is showing (``match="prefix"``: or one beneath it), so
-    a sidebar can highlight where you are."""
+    link would. ``to`` is an in-app path like ``/projects/auth``, never an external URL; pass
+    a callable for a link that depends on the route's params. ``active`` is true while the
+    page is showing (``match="prefix"``: or one beneath it), so a sidebar can highlight where
+    you are."""
 
     type = "link"
 
-    def __init__(self, ctx: Context, label: str, *, to: str, match: str = "exact") -> None:
+    def __init__(
+        self, ctx: Context, label: str, *, to: str | Callable[[], str], match: str = "exact"
+    ) -> None:
         if match not in ("exact", "prefix"):
             raise ValueError(f"Link match must be 'exact' or 'prefix', got {match!r}")
         super().__init__()
         self._ctx = ctx
         self._label = label
-        self._to = normalize_path(to)
+        # ``to`` may be a callable (a link that depends on the route's params); it is then
+        # a reactive prop and is validated each time it is read.
+        self._to_source = to
+        self._static_to = normalize_path(to) if isinstance(to, str) else None
         self._match = match
 
+    def _to(self) -> str:
+        if self._static_to is not None:
+            return self._static_to
+        return normalize_path(self._to_source())  # type: ignore[operator]
+
     def static_props(self) -> dict[str, Any]:
-        return {"label": self._label, "to": self._to}
+        props: dict[str, Any] = {"label": self._label}
+        if self._static_to is not None:
+            props["to"] = self._static_to
+        return props
 
     def _active(self) -> bool:
-        path = self._ctx.path.value
-        if path == self._to:
+        path, to = self._ctx.path.value, self._to()
+        if path == to:
             return True
         # ``prefix`` also lights up for the pages under it (whole segments; "/" is exact).
-        return self._match == "prefix" and self._to != "/" and path.startswith(self._to + "/")
+        return self._match == "prefix" and to != "/" and path.startswith(to + "/")
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"active": self._active}
+        props: dict[str, Callable[[], Any]] = {"active": self._active}
+        if self._static_to is None:
+            props["to"] = self._to
+        return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
-        if event == "navigate" and payload.get("path") == self._to:
-            self._ctx._client_navigated(self._to)
+        if event == "navigate" and payload.get("path") == self._to():
+            self._ctx._client_navigated(self._to())
             return True
         return False
 
