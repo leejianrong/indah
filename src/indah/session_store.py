@@ -176,12 +176,15 @@ class InMemorySessionStore:
         if handle is not None:
             handle.session.close()
 
-    def discard_where(self, *, owner: str) -> int:
+    def discard_where(self, *, owner: str, farewell: dict | None = None) -> int:
         """Discard every session owned by ``owner`` (sign-out, a revoked login); returns how
-        many. Not part of the ``SessionStore`` protocol: a store that lacks it just cannot be
-        signed out this way."""
+        many. ``farewell`` is published to each session's stream first (the signed-out
+        message). Not part of the ``SessionStore`` protocol: a store that lacks it just cannot
+        be signed out this way."""
         mine = [sid for sid, h in self._handles.items() if h.owner == owner]
         for sid in mine:
+            if farewell is not None:
+                self._handles[sid].hub.publish(farewell)
             self.discard(sid)
         return len(mine)
 

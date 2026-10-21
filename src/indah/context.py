@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from .auth import Principal
-from .protocol import navigate_message, toast_message
+from .protocol import navigate_message, signed_out_message, toast_message
 from .reactive import Computed, Signal
 from .routes import Route, match_routes, normalize_path
 from .stream import Stream
@@ -111,6 +111,18 @@ class Context:
         message_ = toast_message(message, kind, ttl)  # validate even when unbound
         if self._hub is not None:
             self._hub.publish(message_)
+
+    def sign_out(self) -> int:
+        """End every session this user holds (every open tab), and show each a signed-out page.
+
+        The parent app still has to end its own login (clear its cookie), or the next request
+        simply signs in again. Returns how many sessions were ended. A no-op for an app with
+        no authenticated user."""
+        store = getattr(getattr(self.app, "state", None), "store", None)
+        discard_where = getattr(store, "discard_where", None)
+        if self.user is None or discard_where is None:
+            return 0
+        return int(discard_where(owner=self.user.id, farewell=signed_out_message()))
 
     def _current_params(self) -> dict[str, Any]:
         routes = self._routes.value

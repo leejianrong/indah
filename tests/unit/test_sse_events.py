@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 
 import pytest
 
@@ -187,3 +188,20 @@ async def test_queued_message_at_or_below_skip_upto_is_dropped():
     assert event_id == 6  # 5 was skipped, 6 forwarded
     assert data["changes"][0]["append"] == {"text": "y"}
     await gen.aclose()
+
+
+@pytest.mark.unit
+async def test_stream_ends_with_signed_out_at_the_principals_expiry():
+    queue: asyncio.Queue = asyncio.Queue()
+    gen = sse_events(queue, None, heartbeat_seconds=60, expires_at=time.time() + 0.15)
+    chunks = [chunk async for chunk in gen]  # ends by itself, no 60 s heartbeat wait
+    assert len(chunks) == 1 and '"type": "signed_out"' in chunks[0]
+
+
+@pytest.mark.unit
+async def test_stream_ends_after_a_signed_out_message_and_sends_nothing_later():
+    queue: asyncio.Queue = asyncio.Queue()
+    queue.put_nowait((1, {"v": 1, "type": "signed_out"}))
+    queue.put_nowait((2, {"v": 1, "type": "patch", "changes": []}))
+    chunks = [chunk async for chunk in sse_events(queue, None, heartbeat_seconds=60)]
+    assert len(chunks) == 1 and "signed_out" in chunks[0]

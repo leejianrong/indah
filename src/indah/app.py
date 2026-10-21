@@ -17,6 +17,7 @@ import json
 import math
 import os
 import re
+import time
 import urllib.parse
 from collections.abc import AsyncIterator, Callable, Sequence
 from datetime import datetime
@@ -27,6 +28,7 @@ from typing import Any
 
 from pydantic import ValidationError
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import (
     HTMLResponse,
@@ -82,7 +84,8 @@ from .components import (
 )
 from .context import ConnectionInfo, Context
 from .custom import custom, register_component
-from .protocol import EventIn, init_message, patch_message, ping_message
+from .guard import OriginGuard, normalize_origins
+from .protocol import EventIn, init_message, patch_message, ping_message, signed_out_message
 from .reactive import Signal
 from .session import Session
 from .session_store import (
@@ -500,6 +503,7 @@ def create_app(
     auth: Authenticator | None = None,
     secure: bool = False,
     secret: str | bytes | Sequence[str | bytes] | None = None,
+    allowed_origins: Sequence[str] = (),
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
     """Build the ASGI app.
@@ -539,6 +543,10 @@ def create_app(
     ``default`` session) is refused. With ``secure=True`` and no ``auth``, Starlette's
     ``scope["user"]`` (a parent app's ``AuthenticationMiddleware``) is used. It needs a
     per-viewer ``session_factory``: one shared ``Session`` cannot be secure.
+
+    A secure app also refuses cross-origin requests (a multipart upload from another site is
+    the classic CSRF): ``allowed_origins`` lists extra origins (``"https://app.example.com"``)
+    that may call it, for a gateway on another origin. Same-origin browsers need nothing.
 
     A secure app also needs ``secret`` (at least 16 random bytes; a list rotates: the first
     signs, any verifies). The shell trades its login for a signed session token with
@@ -591,7 +599,9 @@ def create_app(
         else:
             store = InMemorySessionStore(session_factory or build_demo_session)
 
+    guard = [Middleware(OriginGuard, allowed_origins=normalize_origins(allowed_origins))]
     app = Starlette(
+        middleware=guard if secure else [],
         routes=[
             Route("/", _index, methods=["GET"]),
             Route("/health", _health, methods=["GET"]),
@@ -603,7 +613,7 @@ def create_app(
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
             *([Route("/api/brand/logo", _logo, methods=["GET"])] if logo is not None else []),
             *([Route("/{path:path}", _spa_index, methods=["GET"])] if spa else []),
-        ]
+        ],
     )
     app.state.store = store
     app.state.auth = auth
@@ -778,6 +788,7 @@ async def sse_events(
     skip_upto: int = 0,
     proxy_flush: bool = False,
     id_prefix: str = "",
+    expires_at: float | None = None,
 ) -> AsyncIterator[str]:
     """Yield SSE-framed strings for one browser connection.
 
@@ -801,6 +812,10 @@ async def sse_events(
 
     ``id_prefix`` is prepended to each SSE ``id:`` (``"<hub epoch>-"`` on the real
     stream) so an id is only meaningful to the hub that issued it (IND-85).
+
+    The stream ends after a ``signed_out`` message (``ctx.sign_out()``), and at ``expires_at``
+    (epoch seconds, a secure app's ``Principal.expires_at``) it sends one and ends, so a login
+    that lapses does not keep an open stream alive (ADR-0033).
     """
     # ``_SSE_FLUSH_PAD`` doubles as the on/off knob: "" disables all padding.
     flush_on = proxy_flush and bool(_SSE_FLUSH_PAD)
@@ -829,9 +844,15 @@ async def sse_events(
             yield pad
 
     while True:
+        timeout = heartbeat_seconds
+        if expires_at is not None:
+            timeout = min(timeout, max(0.0, expires_at - time.time()))
         try:
-            offset, message = await asyncio.wait_for(queue.get(), timeout=heartbeat_seconds)
+            offset, message = await asyncio.wait_for(queue.get(), timeout=timeout)
         except (asyncio.TimeoutError, TimeoutError):
+            if expires_at is not None and time.time() >= expires_at:
+                yield _sse(signed_out_message())
+                return
             chunk = _sse(ping_message())
             pending += len(chunk)
             yield chunk
@@ -860,6 +881,8 @@ async def sse_events(
             pending += len(chunk)
             emitted += 1
             yield chunk
+            if msg.get("type") == "signed_out":
+                return
         if flush_on and emitted:
             pad = _boundary_pad(pending)
             pending = 0
@@ -873,7 +896,7 @@ def _denied(status: int, error: str) -> JSONResponse:
 
 async def _open_session(
     request: Request, sid: str | None, app_path: str | None = None
-) -> tuple[SessionHandle | None, JSONResponse | None]:
+) -> tuple[SessionHandle | None, JSONResponse | None, Principal | None]:
     """The session this request is allowed to use, or the refusal to send (ADR-0033).
 
     Not secure: today's behaviour (an id-less request shares ``default``), plus the principal,
@@ -885,22 +908,22 @@ async def _open_session(
     principal: Principal | None = await authenticate(request, state.auth)
     if state.secure:
         if principal is None:
-            return None, _denied(401, "unauthenticated")
+            return None, _denied(401, "unauthenticated"), None
         if not sid:
-            return None, _denied(401, "session id required")
+            return None, _denied(401, "session id required"), None
         # The id the shell sends is a signed token: only the one minted for this principal
         # verifies, so a forged, replayed or other user's id never reaches the store.
         real_sid = state.signer.verify(sid, principal)
         if real_sid is None:
-            return None, _denied(403, "forbidden")
+            return None, _denied(403, "forbidden"), None
         sid = real_sid
         existing = store.get(sid)
         if existing is not None and existing.owner != principal.id:
-            return None, _denied(403, "forbidden")
+            return None, _denied(403, "forbidden"), None
     handle = store.get_or_create(
         sid or DEFAULT_SESSION_ID, ConnectionInfo.from_request(request, app_path, principal)
     )
-    return handle, None
+    return handle, None, principal
 
 
 async def _session(request: Request) -> JSONResponse:
@@ -933,7 +956,7 @@ async def _stream(request: Request) -> Response:
     # One session per browser tab, keyed by the id the shell sends (?sid=...).
     # An id-less connection shares the default session (ADR-0010), unless the app is secure.
     # The in-app page the tab is on (``&path=``), so a deep link or reload starts there.
-    handle, denied = await _open_session(
+    handle, denied, principal = await _open_session(
         request, request.query_params.get("sid"), request.query_params.get("path")
     )
     if handle is None:
@@ -978,6 +1001,7 @@ async def _stream(request: Request) -> Response:
                 skip_upto=skip_upto,
                 proxy_flush=app.state.proxy_flush,
                 id_prefix=f"{hub.epoch}-",
+                expires_at=principal.expires_at if app.state.secure and principal else None,
             ):
                 yield chunk
         finally:
@@ -1019,7 +1043,7 @@ async def _event(request: Request) -> JSONResponse:
 
     # Route the event to the sender's session (ADR-0010): its handler runs on its
     # own signals and its patches go only to its own hub -- never another viewer's.
-    handle, denied = await _open_session(request, event.sid)
+    handle, denied, _ = await _open_session(request, event.sid)
     if handle is None:
         return denied
     hub = handle.hub
@@ -1075,7 +1099,7 @@ async def _upload(request: Request) -> JSONResponse:
     except MultiPartException:
         return JSONResponse({"ok": False, "error": "file too large"}, status_code=413)
 
-    handle, denied = await _open_session(request, sid)
+    handle, denied, _ = await _open_session(request, sid)
     if handle is None:
         return denied
     result = handle.session.dispatch(component_id, "upload", {"files": files})
