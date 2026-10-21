@@ -84,6 +84,7 @@ set shipped so far.
 | `Progress` | a progress bar bound to a source |
 | `Spinner` | an indeterminate busy indicator |
 | `Badge` | a small status pill |
+| `SecretReveal` | shows a secret (a new API token) once, with Copy and dismiss; never replayed on reconnect (see [Host an app](hosting.md#showing-a-secret-once)) |
 
 Every component also takes `tooltip="..."`, and `ctx.toast(message)` shows a transient message in the
 current tab. For the live-data, table, overlay and routing features, see
