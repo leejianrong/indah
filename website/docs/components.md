@@ -2,7 +2,7 @@
 
 Every component is a Python object you place in a tree and bind to a signal. The
 sections below walk through the common ones with runnable snippets; this is the full
-set shipped in 0.2.0.
+set shipped so far.
 
 ### Text and display
 
