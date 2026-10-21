@@ -184,11 +184,16 @@ export function createEditor(parent, opts = {}) {
     });
   }
 
+  // CodeMirror injects <style> elements; under a strict CSP they need the page's nonce
+  // (ADR-0038). The attribute is hidden from the DOM, but the property still reads it.
+  const nonce = document.querySelector("script[nonce]")?.nonce || "";
+
   const view = new EditorView({
     parent,
     state: EditorState.create({
       doc: opts.doc ?? "",
       extensions: [
+        ...(nonce ? [EditorView.cspNonce.of(nonce)] : []),
         lineNumbers(),
         highlightActiveLineGutter(),
         highlightSpecialChars(),

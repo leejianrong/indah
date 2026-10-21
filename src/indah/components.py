@@ -25,6 +25,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from .csp import register_img_host
 from .diff import compute_diff
 from .keys import normalize_keys
 from .markdown import to_blocks
@@ -1332,6 +1333,7 @@ class Map(Component):
         self._polylines = polylines
         self._height = int(height)
         self._tile_url = tile_url
+        register_img_host(tile_url)  # so a strict CSP lets this host's tiles load (ADR-0038)
         self._attribution = attribution
         self._label = label
 
