@@ -55,6 +55,7 @@ class DispatchResult:
 
     changes: list[dict[str, Any]] = field(default_factory=list)
     coro: Coroutine[Any, Any, Any] | None = None
+    transient: list[dict[str, Any]] = field(default_factory=list)  # secrets: send, never record
     forbidden: bool = False  # the handler refused the caller (guard / ctx.require): answer 403
 
 
@@ -170,10 +171,27 @@ class Session:
         else:
             self.emit_props(node_id, {prop_name: value})
 
+    def _split_ephemeral(self, node_id: str, props: dict[str, Any]) -> tuple[dict, dict]:
+        """``(recordable, transient)``: an ephemeral prop holding a value is transient; its
+        clearing (``None``) carries no secret and stays recordable (ADR-0036)."""
+        component = self._by_id.get(node_id)
+        eph = component.ephemeral if component is not None else frozenset()
+        if not eph:
+            return props, {}
+        transient = {k: v for k, v in props.items() if k in eph and v is not None}
+        return {k: v for k, v in props.items() if k not in transient}, transient
+
     def emit_props(self, node_id: str, props: dict[str, Any]) -> None:
         """Publish a prop replace/merge for one node immediately (live path)."""
-        if self._hub is not None:
-            self._hub.publish(patch_message([{"target": node_id, "props": props}]))
+        if self._hub is None:
+            return
+        kept, transient = self._split_ephemeral(node_id, props)
+        if kept:
+            self._hub.publish(patch_message([{"target": node_id, "props": kept}]))
+        if transient:
+            self._hub.publish(
+                patch_message([{"target": node_id, "props": transient}]), record=False
+            )
 
     def emit_append(self, node_id: str, prop: str, delta: Any) -> None:
         """Publish an append delta for one node immediately (streaming path).
@@ -239,10 +257,16 @@ class Session:
         if ret is False:
             return None  # unknown event for this component
 
-        changes = [{"target": nid, "props": props} for nid, props in collected.items()]
-        if asyncio.iscoroutine(ret):
-            return DispatchResult(changes=changes, coro=ret)
-        return DispatchResult(changes=changes)
+        changes: list[dict[str, Any]] = []
+        transient: list[dict[str, Any]] = []
+        for nid, props in collected.items():
+            kept, secret = self._split_ephemeral(nid, props)
+            if kept:
+                changes.append({"target": nid, "props": kept})
+            if secret:
+                transient.append({"target": nid, "props": secret})
+        coro = ret if asyncio.iscoroutine(ret) else None
+        return DispatchResult(changes=changes, transient=transient, coro=coro)
 
     def spawn(self, coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
         """Run an async handler in the background; report any exception as a toast."""
@@ -265,8 +289,19 @@ class Session:
         for off in self._stream_offs:
             off()
         self._stream_offs.clear()
+        self.forget_ephemeral()
         if self.ctx is not None:
             self.ctx.close()
+
+    def forget_ephemeral(self) -> None:
+        """Clear every ephemeral (secret) prop: the session is ending, or a tab is about to be
+        sent a fresh ``init`` that cannot carry them (ADR-0036)."""
+        for component in walk(self.root):
+            if component.ephemeral:
+                try:
+                    component.forget()
+                except Exception:
+                    logger.exception("indah component forget raised")
 
     def cancel_tasks(self) -> None:
         """Cancel every running async-handler task (ADR-0024).

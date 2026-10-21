@@ -57,6 +57,10 @@ class Component:
     # A component whose event payload must never reach an audit log (a password field). A
     # subclass overrides it, as a class attribute or a property.
     sensitive: bool = False
+    # Props that carry a secret (ADR-0036). They are sent live to the open stream but never
+    # kept: left out of the ``init`` snapshot and out of the hub's replay history, so a
+    # reconnect cannot be handed them. Clearing one (``None``) carries no secret and is kept.
+    ephemeral: frozenset[str] = frozenset()
 
     def __init__(
         self, children: list[Component] | None = None, *, tooltip: str | None = None
@@ -83,6 +87,10 @@ class Component:
     def static_props(self) -> dict[str, Any]:
         return {}
 
+    def forget(self) -> None:
+        """Drop any secret held in an ephemeral prop. Called when the session ends and when a
+        tab (re)connects with a fresh ``init``, which cannot carry it (ADR-0036)."""
+
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         """Prop name -> getter. Getters read signals, so effects can track them."""
         return {}
@@ -107,7 +115,8 @@ class Component:
     def to_json(self) -> dict[str, Any]:
         props = dict(self.static_props())
         for name, getter in self.reactive_props().items():
-            props[name] = getter()
+            if name not in self.ephemeral:
+                props[name] = getter()
         if self.tooltip:
             props["tooltip"] = self.tooltip
         return {
@@ -498,6 +507,56 @@ class Badge(Component):
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"text": lambda: str(_read(self._text))}
+
+
+class SecretReveal(Component):
+    """Show a secret once (a new API token), with Copy and "I have saved it" buttons.
+
+    ``value`` is a ``Signal[str | None]``: set it to the secret to reveal it, ``None`` (the
+    default) shows nothing. The value is an *ephemeral prop* (ADR-0036): it goes to the open
+    tab only, never into the ``init`` snapshot or the replay history, so a reload or a
+    reconnect cannot show it again. It is cleared when the user dismisses it and when the
+    session closes. If the connection drops before the user has copied it, issue a new one.
+
+    Never put a secret in an exception message: a failing handler's message is echoed to the
+    tab as a toast. The component is ``sensitive``, so an audit hook never records its events'
+    payloads. ``on_dismiss`` runs after the value has been cleared.
+    """
+
+    type = "secretreveal"
+    sensitive = True
+    ephemeral = frozenset({"value"})
+
+    def __init__(
+        self,
+        value: Signal[str | None],
+        *,
+        label: str = "",
+        on_dismiss: Callable[[], Any] | None = None,
+    ) -> None:
+        super().__init__()
+        self._value = value
+        self._label = label
+        self._on_dismiss = on_dismiss
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: self._value.value}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "dismiss":
+            self._value.set(None)
+            if self._on_dismiss is not None:
+                result = self._on_dismiss()
+                if inspect.iscoroutine(result):
+                    return result
+            return True
+        return False
+
+    def forget(self) -> None:
+        self._value.set(None)
 
 
 class Number(Component):

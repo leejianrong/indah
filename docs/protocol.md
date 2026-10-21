@@ -155,6 +155,15 @@ for an unknown component or event, `400`. A body larger than `max_event_bytes`
 (`create_app` argument, default 1 MiB) is rejected `413` before it is parsed. A handler that raises does not take the
 UI down: the traceback is logged server-side and an `error` message is pushed.
 
+### Ephemeral props
+
+A component can mark a prop *ephemeral* (ADR-0036; `SecretReveal.value` is the one built in).
+The server sends it to the open stream as a normal `patch`, but never keeps it: it is left out
+of the `init` snapshot, and the patch gets an SSE offset but is not put in the resume history.
+A client that reconnects, resumes or reloads therefore never receives it, and the shell shows
+nothing until the app sets it again. Clearing (`null`) carries no secret and is replayed like any
+patch. A client needs no special handling beyond treating an absent ephemeral prop as empty.
+
 ### Secure apps
 
 With `create_app(secure=True)` (ADR-0033) the session id is a signed token, not a browser-minted
@@ -216,6 +225,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `checkbox` | input | `checked`, `label` | `change` `{value}` |
 | `switch` | input | `checked`, `label` (a `role=switch` toggle) | `change` `{value}` |
 | `shortcuts` | invisible | `keys:[{keys,label}]` (canonical key specs, see `indah.keys`) | `press` `{keys}` |
+| `secretreveal` | display, event | `label`; `value` (**ephemeral**, see below) | `dismiss` |
 | `badge` | display | `text`, `tone` (`neutral`/`ok`/`warn`/`err`/`info`) | — |
 | `number` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `radio` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |

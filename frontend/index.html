@@ -725,6 +725,28 @@
       .badge.tone-warn { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); color: var(--warn); }
       .badge.tone-err { background: color-mix(in srgb, var(--err) 16%, var(--surface)); color: var(--err); }
       .badge.tone-info { background: var(--primary-container); color: var(--primary); }
+      .secret {
+        display: grid;
+        gap: 0.5rem;
+        padding: 0.85rem 1rem;
+        background: var(--surface-2);
+        border: 1px solid var(--outline);
+        border-left: 4px solid var(--primary);
+        border-radius: var(--radius, 10px);
+      }
+      .secret-label { font-weight: 600; }
+      .secret-value {
+        font-family: var(--font-mono);
+        font-size: 0.92rem;
+        padding: 0.5rem 0.65rem;
+        background: var(--surface);
+        border: 1px solid var(--outline);
+        border-radius: 6px;
+        overflow-wrap: anywhere;
+        user-select: all;
+      }
+      .secret-note { color: var(--muted); font-size: 0.85rem; }
+      .secret-actions { display: flex; gap: 0.5rem; }
       .switch-row { display: flex; align-items: center; gap: 0.6rem; }
       .switch-label { font-size: 0.95rem; }
       button.switch {

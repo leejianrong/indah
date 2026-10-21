@@ -105,20 +105,25 @@ class Hub:
                 change.setdefault("trim", {})[prop] = trims[(target, prop)]
         self._publish({"v": PROTOCOL_VERSION, "type": "patch", "changes": list(changes.values())})
 
-    def publish(self, message: Message) -> int:
+    def publish(self, message: Message, *, record: bool = True) -> int:
         """Flush held appends, then assign the next offset, buffer the message, and fan
         it out. Synchronous.
+
+        ``record=False`` delivers to the live subscribers only and keeps the message out of
+        the replay history (it still takes an offset, which a resume simply skips). Used for
+        a secret that must not outlive the stream it was shown on (ADR-0036).
 
         A subscriber whose queue is full (a stalled or dead client) is dropped
         rather than allowed to block the broadcast. Returns the assigned offset.
         """
         self.flush()
-        return self._publish(message)
+        return self._publish(message, record)
 
-    def _publish(self, message: Message) -> int:
+    def _publish(self, message: Message, record: bool = True) -> int:
         self._offset += 1
         item: Item = (self._offset, message)
-        self._history.append(item)
+        if record:
+            self._history.append(item)
         for queue in list(self._subscribers):
             try:
                 queue.put_nowait(item)
