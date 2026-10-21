@@ -3820,3 +3820,70 @@ def test_the_strict_policy_really_blocks_injected_script_and_style_and_reports_i
     finally:
         handle.stop()
     assert len(app.state.csp_violations) >= 2  # and the server heard about them
+
+
+@pytest.mark.e2e
+def test_semula_hosted_demo_roles_and_the_token_screen():
+    """IND-122: viewer, editor and admin see different pages; the admin creates a token that is
+    revealed once (and not again after a reload), lists it, and revokes it with a confirm."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "semula_hosted.py"
+    spec = importlib.util.spec_from_file_location("semula_hosted_roles_e2e", path)
+    example = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = example
+    spec.loader.exec_module(example)
+
+    app = example.build_app()
+    handle = launch(app, block=False, open_inline=False)
+    base = handle.url.rstrip("/") + "/"
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            ctx = browser.new_context(viewport={"width": 1100, "height": 1500})
+            ctx.grant_permissions(["clipboard-read", "clipboard-write"], origin=handle.url)
+            carol = ctx.new_page()
+            alice = browser.new_context().new_page()
+            bob = browser.new_context().new_page()
+            try:
+                for page, user in ((carol, "carol"), (alice, "alice"), (bob, "bob")):
+                    page.goto(base + f"login?user={user}")
+                expect(carol.get_by_text("API tokens (admins only)")).to_be_visible()
+                for page in (alice, bob):
+                    expect(page.get_by_text("Entries", exact=True)).to_be_visible()
+                    assert page.get_by_text("API tokens").count() == 0
+                    assert page.content().count("API tokens") == 0
+                expect(alice.get_by_role("button", name="Add entry")).to_be_visible()
+                assert bob.get_by_role("button", name="Add entry").count() == 0
+                alice.get_by_role("button", name="Add entry").click()
+                expect(alice.get_by_text("1 entries")).to_be_visible()
+                bob.screenshot(path="/tmp/hosted_bob.png")
+
+                carol.get_by_label("Name").fill("ci-pipeline")
+                carol.get_by_role("button", name="Create token").click()
+                secret = carol.locator(".secret-value")
+                expect(secret).to_have_text(re.compile(r"ind_[A-Za-z0-9_-]{20,}"))
+                value = secret.inner_text()
+                expect(carol.get_by_role("cell", name="ci-pipeline")).to_be_visible()
+                expect(carol.get_by_text("active", exact=True)).to_be_visible()
+                carol.get_by_role("button", name="Copy", exact=True).click()
+                expect(carol.get_by_role("button", name="Copied")).to_be_visible()
+                assert carol.evaluate("navigator.clipboard.readText()") == value
+                carol.screenshot(path="/tmp/hosted_carol.png")
+
+                carol.reload()  # the same session, a fresh init: the secret is gone, the row stays
+                expect(carol.get_by_role("cell", name="ci-pipeline")).to_be_visible()
+                carol.wait_for_timeout(300)
+                assert carol.locator(".secret").count() == 0
+                assert value not in carol.content()
+
+                carol.get_by_role("button", name="Revoke").click()
+                carol.get_by_role("button", name="Revoke").last.click()  # confirm
+                expect(carol.get_by_text("revoked", exact=True)).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+    assert [r["status"] for r in app.state.tokens.snapshot()] == ["revoked"]
