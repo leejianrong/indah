@@ -70,6 +70,9 @@ additive (new props `columns`, `rows`, `rowKey`, `height`; a `select` event carr
   `total x --row-h` and the header stays sticky (no absolute positioning). Row height is fixed
   (cells do not wrap; density tokens are IND-103). Remote windows are block-aligned so nearby
   scroll positions share a request, the last 8 are cached to avoid flicker, and a search or sort
-  change drops the cache and invalidates in-flight answers by bumping the seq. Select-all on a
-  remote table covers only the rows the browser holds. Measured: 20k remote rows, under 200 DOM
+  change drops the cache and invalidates in-flight answers by bumping the seq. The header checkbox on a
+  remote table ticks only the rows the browser holds; the selection bar (IND-124) shows "N of M
+  selected" and "Select all M" posts `check_all`, which makes the server walk the loader over the
+  viewer's current search and filters (up to `MAX_CHECK_ALL`, 10 000 keys, advertised as
+  `checkAllMax`), keeping rows already ticked. Over the cap the bar asks to narrow the search. Measured: 20k remote rows, under 200 DOM
   rows, worst frame under 100 ms while scrolling the whole table.

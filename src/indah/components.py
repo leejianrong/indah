@@ -1265,6 +1265,7 @@ class Col:
 
 DENSITIES = ("comfortable", "compact")
 MAX_TABLE_LIMIT = 500
+MAX_CHECK_ALL = 10_000  # most keys a remote table's "select all" will gather
 _MAX_SEARCH = 200
 _MAX_FILTERS = 20
 logger = logging.getLogger("indah")
@@ -1518,6 +1519,8 @@ class Table(Component):
             props["checkable"] = self._checked is not None
             if self._loader is not None:
                 props["remote"] = True
+                if self._checked is not None:
+                    props["checkAllMax"] = MAX_CHECK_ALL
             if self._actions:
                 props["actions"] = [a.wire(i) for i, a in enumerate(self._actions)]
         return props
@@ -1572,6 +1575,9 @@ class Table(Component):
             if isinstance(keys, list):
                 self._checked.set(keys)
                 return True
+        if event == "check_all" and self._checked is not None and self._loader is not None:
+            if self._last_query is not None:
+                return self._check_all(self._last_query)
         if event == "action" and "key" in payload:
             actions = {f"a{i}": a for i, a in enumerate(self._actions)}
             action = actions.get(str(payload.get("action")))
@@ -1592,6 +1598,25 @@ class Table(Component):
         if self._query_signal is not None:
             self._query_signal.set(query)
         await self._load(query)
+
+    async def _check_all(self, query: TableQuery) -> None:
+        """Tick every row that matches the viewer's current search/filters, not just the
+        loaded window: walk the loader in windows, up to ``MAX_CHECK_ALL`` keys. Rows
+        already ticked stay, in front. The shown window is left alone."""
+        assert self._key is not None
+        gathered: list[Any] = []
+        offset = 0
+        while offset < MAX_CHECK_ALL:
+            limit = min(MAX_TABLE_LIMIT, MAX_CHECK_ALL - offset)
+            rows, total = await self._call_loader(replace(query, offset=offset, limit=limit))
+            gathered += [_json_safe(r[self._key]) for r in _to_records(rows, self._key)]
+            offset += len(rows)
+            if not rows or offset >= total:
+                break
+        assert self._checked is not None
+        kept = list(self._checked.value or [])
+        seen = set(kept)
+        self._checked.set(kept + [k for k in gathered if k not in seen])
 
     async def _call_loader(self, query: TableQuery) -> tuple[list[Any], int]:
         loader = self._loader

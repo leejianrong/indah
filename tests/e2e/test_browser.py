@@ -2873,3 +2873,46 @@ def test_default_logo_ignores_the_app_theme_and_a_tooltip_follows_the_pointer():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_remote_table_select_all_gathers_every_match_not_just_the_window():
+    from indah import Col, Session, Signal, Table, Text, create_app
+
+    data = [{"id": f"r{i:04d}", "name": f"call {i}"} for i in range(300)]
+
+    def loader(q):
+        rows = [r for r in data if q.search in r["name"]]
+        return rows[q.offset : q.offset + q.limit], len(rows)
+
+    checked: Signal[list] = Signal([])
+    table = Table(
+        columns=[Col("id"), Col("name")],
+        key="id",
+        remote=loader,
+        search=True,
+        page_size=20,
+        checked=checked,
+    )
+    root = __import__("indah").Column(
+        children=[table, Text(lambda: f"ticked {len(checked.value)}")]
+    )
+    handle = launch(create_app(session=Session(root)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                page.get_by_label("Select the rows on screen").check()
+                expect(page.get_by_text("20 of 300 selected")).to_be_visible()
+                expect(page.get_by_text("ticked 20")).to_be_visible()
+                page.get_by_role("button", name="Select all 300").click()
+                expect(page.get_by_text("300 of 300 selected")).to_be_visible()
+                expect(page.get_by_text("ticked 300")).to_be_visible()
+                page.get_by_role("button", name="Clear").click()
+                expect(page.get_by_text("ticked 0")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
