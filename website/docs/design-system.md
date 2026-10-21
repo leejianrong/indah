@@ -29,6 +29,10 @@ If you override a `*-container` role, also override its `on-*-container` partner
 stays readable. The Bunga logo is brand identity, not a theme role: a theme never recolours
 it. To use your own mark, pass `logo=`.
 
+The browser tab reads `"<title> - indah"` when you pass `title=`. Pass `title_suffix=""` for
+the exact title (`title="semula", title_suffix=""` gives `<title>semula</title>`), or any other
+suffix such as `" | Semula Ops"`.
+
 ## Colour roles
 
 Every role is defined for light and dark. Use a role by its job, never by its hex value.

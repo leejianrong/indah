@@ -65,6 +65,20 @@ async def test_index_injects_configured_chrome():
 
 
 @pytest.mark.integration
+async def test_title_suffix_drops_or_replaces_the_indah_suffix():
+    # semula wants the exact page title: title="semula", title_suffix="" -> <title>semula</title>.
+    def app(**kw):
+        return create_app(session=Session(Column(children=[Text("hi")])), title="semula", **kw)
+
+    async with _client(app(title_suffix="")) as client:
+        assert "<title>semula</title>" in (await client.get("/")).text
+    async with _client(app(title_suffix=" | Semula Ops")) as client:
+        assert "<title>semula | Semula Ops</title>" in (await client.get("/")).text
+    async with _client(app()) as client:  # default unchanged
+        assert "<title>semula - indah</title>" in (await client.get("/")).text
+
+
+@pytest.mark.integration
 async def test_chrome_json_escapes_angle_brackets():
     # A `<` in a URL must not break out of the injected <script>.
     app = create_app(

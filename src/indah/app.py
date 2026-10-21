@@ -479,6 +479,7 @@ def create_app(
     max_upload_mb: float = DEFAULT_MAX_UPLOAD_MB,
     max_event_bytes: int = DEFAULT_MAX_EVENT_BYTES,
     title: str | None = None,
+    title_suffix: str = " - indah",
     home_url: str | None = None,
     source_url: str | None = None,
     spa: bool = False,
@@ -520,7 +521,9 @@ def create_app(
     ``theme`` overrides the shell's design tokens for this app (IND-88, see
     :class:`~indah.theme.Theme`). ``logo`` (an SVG/PNG/JPEG/WebP file path or bytes, up to
     512 KB) replaces the Bunga mark in the header and, with ``title``, the "indah"
-    wordmark -- a rebranded app; ``title`` alone only renames the tab, as before.
+    wordmark -- a rebranded app; ``title`` alone only renames the tab, as before. The tab
+    reads ``"<title> - indah"``; ``title_suffix`` replaces that suffix (``""`` gives the exact
+    ``title``).
     """
     if density not in DENSITIES:
         raise ValueError(f"density must be one of {DENSITIES}, got {density!r}")
@@ -566,6 +569,7 @@ def create_app(
     # sets these per demo (a clickable logo back to the gallery, a view-source link,
     # a distinct tab title); a standalone app leaves them unset and gets the plain shell.
     app.state.page_title = title
+    app.state.title_suffix = title_suffix
     app.state.home_url = home_url
     app.state.source_url = source_url
     app.state.density = density
@@ -610,7 +614,9 @@ def _chrome_html(state: Any, base_href: str | None = None) -> str:
     title = getattr(state, "page_title", None)
     if title:
         html_text = html_text.replace(
-            "<title>indah</title>", f"<title>{escape(title)} - indah</title>", 1
+            "<title>indah</title>",
+            f"<title>{escape(title)}{escape(getattr(state, 'title_suffix', ' - indah'))}</title>",
+            1,
         )
     chrome = {
         "homeUrl": getattr(state, "home_url", None),
