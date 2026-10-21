@@ -5,20 +5,41 @@
   let { text, children } = $props();
 
   let wrap = $state();
+  let bubble = $state();
   let shown = $state(false);
+  // Where the tip wants to be: the pointer on hover, the element's start on keyboard focus.
+  let anchor = $state({ x: 0, y: 0, h: 0 });
   let pos = $state({ x: 0, y: 0 });
   const tipId = `tip-${Math.random().toString(36).slice(2, 8)}`;
+  const GAP = 14;
+  const MARGIN = 8;
 
   $effect(() => {
     const el = wrap?.firstElementChild;
     if (el) el.setAttribute("aria-describedby", tipId);
   });
 
-  function show() {
+  // Once the bubble is in the DOM, measure it, flip above the anchor when it would run off
+  // the bottom, and clamp it inside the viewport.
+  $effect(() => {
+    if (!shown || !bubble) return;
+    const w = bubble.offsetWidth;
+    const h = bubble.offsetHeight;
+    let x = Math.min(anchor.x, window.innerWidth - w - MARGIN);
+    let y = anchor.y + anchor.h + GAP;
+    if (y + h > window.innerHeight - MARGIN) y = Math.max(MARGIN, anchor.y - h - GAP);
+    pos = { x: Math.max(MARGIN, x), y };
+  });
+
+  function point(e) {
+    anchor = { x: e.clientX, y: e.clientY, h: 0 };
+    shown = true;
+  }
+  function focus() {
     const el = wrap?.firstElementChild;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    pos = { x: r.left + r.width / 2, y: r.bottom + 6 };
+    anchor = { x: r.left, y: r.top, h: r.height - GAP + 6 };
     shown = true;
   }
   function leave(e) {
@@ -32,14 +53,21 @@
 <span
   bind:this={wrap}
   class="tip"
-  onmouseover={show}
-  onfocusin={show}
+  onmouseover={point}
+  onmousemove={(e) => shown && point(e)}
+  onfocusin={focus}
   onmouseout={leave}
   onfocusout={leave}
 >
   {@render children?.()}
   {#if shown}
-    <span id={tipId} role="tooltip" class="tip-bubble" style="left: {pos.x}px; top: {pos.y}px;">{text}</span>
+    <span
+      id={tipId}
+      bind:this={bubble}
+      role="tooltip"
+      class="tip-bubble"
+      style="left: {pos.x}px; top: {pos.y}px;">{text}</span
+    >
   {/if}
 </span>
 
@@ -48,7 +76,6 @@
   .tip-bubble {
     position: fixed;
     z-index: 70;
-    transform: translateX(-50%);
     max-width: min(20rem, 90vw);
     padding: 0.3rem 0.6rem;
     font-size: 0.8rem;

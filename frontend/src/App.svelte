@@ -150,10 +150,10 @@
         <img class="mark" src={apiUrl(chrome.logoUrl)} alt={chrome.brandName || "logo"} />
       {:else}
         <svg class="mark" viewBox="0 0 32 32" aria-label="indah" role="img">
-          <path d="M16 16C11.7 12.4 11.7 6 16 3.6C20.3 6 20.3 12.4 16 16Z" fill="var(--primary)" />
-          <path d="M16 16C20.3 19.6 20.3 26 16 28.4C11.7 26 11.7 19.6 16 16Z" fill="var(--primary)" />
-          <path d="M16 16C12.4 20.3 6 20.3 3.6 16C6 11.7 12.4 11.7 16 16Z" fill="var(--secondary)" />
-          <path d="M16 16C19.6 20.3 26 20.3 28.4 16C26 11.7 19.6 11.7 16 16Z" fill="var(--secondary)" />
+          <path d="M16 16C11.7 12.4 11.7 6 16 3.6C20.3 6 20.3 12.4 16 16Z" fill="var(--brand-a)" />
+          <path d="M16 16C20.3 19.6 20.3 26 16 28.4C11.7 26 11.7 19.6 16 16Z" fill="var(--brand-a)" />
+          <path d="M16 16C12.4 20.3 6 20.3 3.6 16C6 11.7 12.4 11.7 16 16Z" fill="var(--brand-b)" />
+          <path d="M16 16C19.6 20.3 26 20.3 28.4 16C26 11.7 19.6 11.7 16 16Z" fill="var(--brand-b)" />
         </svg>
       {/if}
       <span class="wordmark">{chrome.brandName || "indah"}</span>
