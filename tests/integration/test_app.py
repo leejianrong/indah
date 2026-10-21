@@ -137,3 +137,19 @@ async def test_slider_event_updates_session_state():
     root = app.state.session.snapshot()
     label = root["children"][1]
     assert label["props"]["text"] == "a = 9"
+
+
+@pytest.mark.integration
+async def test_max_width_sets_the_page_frame_token():
+    def app(**kw):
+        return create_app(session=Session(Column(children=[Text("hi")])), **kw)
+
+    async with _client(app()) as client:  # default: nothing injected
+        assert 'id="indah-theme"' not in (await client.get("/")).text
+    async with _client(app(max_width="none")) as client:
+        assert ":root { --page-max: none; }" in (await client.get("/")).text
+    async with _client(app(max_width="90rem")) as client:
+        assert ":root { --page-max: 90rem; }" in (await client.get("/")).text
+    for bad in ("wide", "1400", "1400px; x", "calc(1px)"):
+        with pytest.raises(ValueError, match="max_width"):
+            app(max_width=bad)

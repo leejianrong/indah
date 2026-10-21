@@ -16,6 +16,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import urllib.parse
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
@@ -96,6 +97,8 @@ DEFAULT_SESSION_ID = "default"
 # can raise or lower it with create_app(max_upload_mb=...); the route rejects a
 # larger part with 413 rather than buffering it.
 DEFAULT_MAX_UPLOAD_MB = 25.0
+DEFAULT_MAX_WIDTH = "1080px"
+_LENGTH = re.compile(r"\d+(\.\d+)?(px|rem|em|vw|%)")
 
 # The hard cap on a JSON event body (IND-98). A text area can carry a long note, so
 # this is generous; the route returns 413 rather than buffer an unbounded body.
@@ -486,6 +489,7 @@ def create_app(
     proxy_flush: bool = True,
     theme: Theme | None = None,
     density: str = "comfortable",
+    max_width: str = DEFAULT_MAX_WIDTH,
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
     """Build the ASGI app.
@@ -519,7 +523,9 @@ def create_app(
     cell padding of tables across the app; a ``Table(density=)`` overrides it for one table.
 
     ``theme`` overrides the shell's design tokens for this app (IND-88, see
-    :class:`~indah.theme.Theme`). ``logo`` (an SVG/PNG/JPEG/WebP file path or bytes, up to
+    :class:`~indah.theme.Theme`). ``max_width`` is the page frame's widest size (a CSS length
+    such as ``"1400px"`` or ``"90rem"``, or ``"none"`` to fill the window); the default is
+    ``"1080px"``. ``logo`` (an SVG/PNG/JPEG/WebP file path or bytes, up to
     512 KB) replaces the Bunga mark in the header and, with ``title``, the "indah"
     wordmark -- a rebranded app; ``title`` alone only renames the tab, as before. The tab
     reads ``"<title> - indah"``; ``title_suffix`` replaces that suffix (``""`` gives the exact
@@ -527,6 +533,10 @@ def create_app(
     """
     if density not in DENSITIES:
         raise ValueError(f"density must be one of {DENSITIES}, got {density!r}")
+    if max_width != "none" and not _LENGTH.fullmatch(max_width):
+        raise ValueError(
+            f"max_width must be 'none' or a CSS length like '1400px', got {max_width!r}"
+        )
     given = [
         name
         for name, val in (
@@ -573,7 +583,10 @@ def create_app(
     app.state.home_url = home_url
     app.state.source_url = source_url
     app.state.density = density
-    app.state.theme_css = theme.css() if theme is not None else ""
+    theme_css = theme.css() if theme is not None else ""
+    if max_width != DEFAULT_MAX_WIDTH:
+        theme_css += f"\n:root {{ --page-max: {max_width}; }}"
+    app.state.theme_css = theme_css.strip()
     app.state.logo = _load_logo(logo) if logo is not None else None
     # Back-compat: a single-shared app still exposes .session/.hub for callers and
     # tests that introspect the one graph. A per-session app has neither -- there is

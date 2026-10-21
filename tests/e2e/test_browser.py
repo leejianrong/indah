@@ -3273,3 +3273,32 @@ def test_code_editor_falls_back_to_a_text_area_when_the_module_cannot_load():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_max_width_widens_the_page_frame():
+    from indah import Column, Session, Text, create_app
+
+    widths = {}
+    for name, kw in (
+        ("default", {}),
+        ("wide", {"max_width": "none"}),
+        ("cap", {"max_width": "1400px"}),
+    ):
+        app = create_app(session=Session(Column(children=[Text("hi")])), **kw)
+        handle = launch(app, block=False, open_inline=False)
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page(viewport={"width": 1800, "height": 800})
+                try:
+                    page.goto(handle.url, wait_until="domcontentloaded")
+                    expect(page.get_by_text("hi")).to_be_visible()
+                    widths[name] = page.locator(".shell").bounding_box()["width"]
+                finally:
+                    browser.close()
+        finally:
+            handle.stop()
+    assert widths["default"] == 1080  # unchanged
+    assert widths["cap"] == 1400
+    assert widths["wide"] > 1700  # fills the window (less the page gutter)

@@ -29,6 +29,10 @@ If you override a `*-container` role, also override its `on-*-container` partner
 stays readable. The Bunga logo is brand identity, not a theme role: a theme never recolours
 it. To use your own mark, pass `logo=`.
 
+The page frame is 1080px wide at most. `create_app(max_width="none")` lets it fill the window
+(a dashboard with a left rail wants this), and `max_width="1400px"` or `"90rem"` sets another
+cap. Anything else raises an error. It is applied as the `--page-max` token.
+
 The browser tab reads `"<title> - indah"` when you pass `title=`. Pass `title_suffix=""` for
 the exact title (`title="semula", title_suffix=""` gives `<title>semula</title>`), or any other
 suffix such as `" | Semula Ops"`.
