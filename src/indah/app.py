@@ -43,6 +43,7 @@ except Exception:  # pragma: no cover - starlette always ships these
     UploadFile = None  # type: ignore[assignment,misc]
     MultiPartException = Exception  # type: ignore[assignment,misc]
 
+from .auth import Authenticator, Principal, authenticate, default_authenticator
 from .components import (
     DENSITIES,
     Button,
@@ -490,6 +491,8 @@ def create_app(
     theme: Theme | None = None,
     density: str = "comfortable",
     max_width: str = DEFAULT_MAX_WIDTH,
+    auth: Authenticator | None = None,
+    secure: bool = False,
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
     """Build the ASGI app.
@@ -522,6 +525,14 @@ def create_app(
     ``density`` (``"comfortable"``, the default, or ``"compact"``) sets the row height and
     cell padding of tables across the app; a ``Table(density=)`` overrides it for one table.
 
+    ``auth`` (an :data:`~indah.auth.Authenticator`: request -> :class:`~indah.auth.Principal`
+    or ``None``) says who each request is, so a session factory can read ``ctx.user`` and each
+    session is owned by one principal. ``secure=True`` (ADR-0033) turns that into a rule: no
+    principal is 401, another principal's session is 403, and an id-less request (the shared
+    ``default`` session) is refused. With ``secure=True`` and no ``auth``, Starlette's
+    ``scope["user"]`` (a parent app's ``AuthenticationMiddleware``) is used. It needs a
+    per-viewer ``session_factory``: one shared ``Session`` cannot be secure.
+
     ``theme`` overrides the shell's design tokens for this app (IND-88, see
     :class:`~indah.theme.Theme`). ``max_width`` is the page frame's widest size (a CSS length
     such as ``"1400px"`` or ``"90rem"``, or ``"none"`` to fill the window); the default is
@@ -549,6 +560,15 @@ def create_app(
     if len(given) > 1:
         raise ValueError(f"pass at most one of session/session_factory/store, got {given}")
 
+    if secure:
+        if auth is None:
+            auth = default_authenticator
+        if session is not None or isinstance(store, SharedSessionStore):
+            raise ValueError(
+                "secure=True needs a per-viewer session_factory (or store): a single shared "
+                "Session would be one state for every user"
+            )
+
     if store is None:
         if session is not None:
             store = SharedSessionStore(session)
@@ -569,6 +589,8 @@ def create_app(
         ]
     )
     app.state.store = store
+    app.state.auth = auth
+    app.state.secure = secure
     if hasattr(store, "app"):
         store.app = app  # so each session's Context can reach its ASGI app
     app.state.heartbeat_seconds = heartbeat_seconds
@@ -826,16 +848,46 @@ async def sse_events(
                 yield pad
 
 
-async def _stream(request: Request) -> StreamingResponse:
-    app = request.app
-    store: SessionStore = app.state.store
-    # One session per browser tab, keyed by the id the shell sends (?sid=...).
-    # An id-less connection shares the default session (ADR-0010).
-    sid = request.query_params.get("sid") or DEFAULT_SESSION_ID
-    # The in-app page the tab is on (``&path=``), so a deep link or reload starts there.
-    handle: SessionHandle = store.get_or_create(
-        sid, ConnectionInfo.from_request(request, request.query_params.get("path"))
+def _denied(status: int, error: str) -> JSONResponse:
+    return JSONResponse({"ok": False, "error": error}, status_code=status)
+
+
+async def _open_session(
+    request: Request, sid: str | None, app_path: str | None = None
+) -> tuple[SessionHandle | None, JSONResponse | None]:
+    """The session this request is allowed to use, or the refusal to send (ADR-0033).
+
+    Not secure: today's behaviour (an id-less request shares ``default``), plus the principal,
+    when an authenticator is set, so the factory sees ``ctx.user``. Secure: no principal is 401,
+    no session id is 401 (nothing falls back to a shared session), and a session owned by
+    another principal is 403. Nothing is created for a refused request."""
+    state = request.app.state
+    store: SessionStore = state.store
+    principal: Principal | None = await authenticate(request, state.auth)
+    if state.secure:
+        if principal is None:
+            return None, _denied(401, "unauthenticated")
+        if not sid:
+            return None, _denied(401, "session id required")
+        existing = store.get(sid)
+        if existing is not None and existing.owner != principal.id:
+            return None, _denied(403, "forbidden")
+    handle = store.get_or_create(
+        sid or DEFAULT_SESSION_ID, ConnectionInfo.from_request(request, app_path, principal)
     )
+    return handle, None
+
+
+async def _stream(request: Request) -> Response:
+    app = request.app
+    # One session per browser tab, keyed by the id the shell sends (?sid=...).
+    # An id-less connection shares the default session (ADR-0010), unless the app is secure.
+    # The in-app page the tab is on (``&path=``), so a deep link or reload starts there.
+    handle, denied = await _open_session(
+        request, request.query_params.get("sid"), request.query_params.get("path")
+    )
+    if handle is None:
+        return denied
     hub = handle.hub
     session = handle.session
     queue = hub.subscribe()
@@ -917,10 +969,9 @@ async def _event(request: Request) -> JSONResponse:
 
     # Route the event to the sender's session (ADR-0010): its handler runs on its
     # own signals and its patches go only to its own hub -- never another viewer's.
-    store: SessionStore = request.app.state.store
-    handle: SessionHandle = store.get_or_create(
-        event.sid or DEFAULT_SESSION_ID, ConnectionInfo.from_request(request)
-    )
+    handle, denied = await _open_session(request, event.sid)
+    if handle is None:
+        return denied
     hub = handle.hub
     session = handle.session
     result = session.dispatch(event.component, event.event, event.payload)
@@ -951,7 +1002,9 @@ async def _upload(request: Request) -> JSONResponse:
     try:
         async with request.form(max_part_size=max_bytes) as form:
             component_id = form.get("component")
-            sid = form.get("sid") or DEFAULT_SESSION_ID
+            sid = form.get("sid")
+            if sid is not None and not isinstance(sid, str):
+                return JSONResponse({"ok": False, "error": "bad sid"}, status_code=400)
             if not isinstance(component_id, str) or not component_id:
                 return JSONResponse({"ok": False, "error": "missing component"}, status_code=400)
             files: list[UploadedFile] = []
@@ -972,8 +1025,9 @@ async def _upload(request: Request) -> JSONResponse:
     except MultiPartException:
         return JSONResponse({"ok": False, "error": "file too large"}, status_code=413)
 
-    store: SessionStore = request.app.state.store
-    handle: SessionHandle = store.get_or_create(sid, ConnectionInfo.from_request(request))
+    handle, denied = await _open_session(request, sid)
+    if handle is None:
+        return denied
     result = handle.session.dispatch(component_id, "upload", {"files": files})
     if result is None:
         return JSONResponse({"ok": False, "error": "unknown component"}, status_code=400)
@@ -996,6 +1050,12 @@ async def _file(request: Request) -> Response:
     handle = store.get(request.path_params["sid"])
     if handle is None:
         return Response(status_code=404)
+    if request.app.state.secure:
+        principal = await authenticate(request, request.app.state.auth)
+        if principal is None:
+            return _denied(401, "unauthenticated")
+        if handle.owner != principal.id:
+            return Response(status_code=404)  # not yours: indistinguishable from absent
     found = handle.session.get_file(request.path_params["token"])
     if found is None:
         return Response(status_code=404)

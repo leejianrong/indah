@@ -13,6 +13,7 @@ public contract (docs/protocol.md). See https://github.com/leejianrong/indah.
 """
 
 from .app import build_demo_session, create_app, mock_llm
+from .auth import Authenticator, Principal
 from .components import (
     Audio,
     Badge,
@@ -100,6 +101,8 @@ __all__ = [
     "Theme",
     "Topic",
     "Context",
+    "Principal",
+    "Authenticator",
     "ConnectionInfo",
     "DispatchResult",
     # per-session state seam (ADR-0010)

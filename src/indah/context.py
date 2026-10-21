@@ -24,6 +24,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from .auth import Principal
 from .protocol import navigate_message, toast_message
 from .reactive import Computed, Signal
 from .routes import Route, match_routes, normalize_path
@@ -50,11 +51,15 @@ class ConnectionInfo:
     client: str | None = None  # peer address as the ASGI server reports it
     path: str = ""
     app_path: str = "/"  # the in-app page the tab was on when it connected (ADR-0029)
+    user: Principal | None = None  # who the request authenticated as (ADR-0033)
 
     @classmethod
-    def from_request(cls, request: Request, app_path: str | None = None) -> ConnectionInfo:
+    def from_request(
+        cls, request: Request, app_path: str | None = None, user: Principal | None = None
+    ) -> ConnectionInfo:
         return cls(
             app_path=app_path or "/",
+            user=user,
             headers={k.lower(): v for k, v in request.headers.items()},
             cookies=dict(request.cookies),
             client=request.client.host if request.client else None,
@@ -76,7 +81,8 @@ class Context:
         self.sid = sid
         self.conn = conn if conn is not None else ConnectionInfo()
         self.app = app  # the ASGI app serving this session, once create_app has bound it
-        self.user = user  # the authenticated principal; always None until identity lands
+        # The authenticated principal (ADR-0033), or None when the app has no authenticator.
+        self.user: Principal | None = user if user is not None else self.conn.user
         self._on_close: list[Callable[[], None]] = []
         self._closed = False
         self._hub: Hub | None = None
