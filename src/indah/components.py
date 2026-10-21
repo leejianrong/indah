@@ -54,6 +54,9 @@ class Component:
     # Hover/focus hint shown by the shell (ADR-0030). Every subclass constructor accepts
     # ``tooltip=`` (see ``__init_subclass__``); a plain attribute also works.
     tooltip: str | None = None
+    # A component whose event payload must never reach an audit log (a password field). A
+    # subclass overrides it, as a class attribute or a property.
+    sensitive: bool = False
 
     def __init__(
         self, children: list[Component] | None = None, *, tooltip: str | None = None
@@ -269,6 +272,10 @@ class TextInput(Component):
         # server like any input, so keep it in session state and never log it.
         self._password = password
         self._on_submit = on_submit
+
+    @property
+    def sensitive(self) -> bool:  # type: ignore[override]
+        return self._password
 
     def static_props(self) -> dict[str, Any]:
         return {

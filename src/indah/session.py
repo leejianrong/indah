@@ -193,6 +193,10 @@ class Session:
         """The full component tree as JSON, for the ``init`` message."""
         return self.root.to_json()
 
+    def find(self, component_id: str) -> Component | None:
+        """The component with this node id, or ``None``."""
+        return self._by_id.get(component_id)
+
     def dispatch(
         self, component_id: str, event: str, payload: dict[str, Any]
     ) -> DispatchResult | None:

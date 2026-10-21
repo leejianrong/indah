@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from .auth import Principal
 from .protocol import navigate_message, signed_out_message, toast_message
+from .proxy import forwarded_prefix
 from .reactive import Computed, Signal
 from .routes import Route, match_routes, normalize_path
 from .stream import Stream
@@ -50,6 +51,7 @@ class ConnectionInfo:
     cookies: Mapping[str, str] = field(default_factory=dict)
     client: str | None = None  # peer address as the ASGI server reports it
     path: str = ""
+    prefix: str = ""  # the public path prefix a trusted proxy forwarded (ADR-0034), else ""
     app_path: str = "/"  # the in-app page the tab was on when it connected (ADR-0029)
     user: Principal | None = None  # who the request authenticated as (ADR-0033)
 
@@ -64,6 +66,7 @@ class ConnectionInfo:
             cookies=dict(request.cookies),
             client=request.client.host if request.client else None,
             path=request.url.path,
+            prefix=forwarded_prefix(request.scope),
         )
 
 

@@ -45,6 +45,8 @@ except Exception:  # pragma: no cover - starlette always ships these
     UploadFile = None  # type: ignore[assignment,misc]
     MultiPartException = Exception  # type: ignore[assignment,misc]
 
+from .audit import AuditHook
+from .audit import emit as emit_audit
 from .auth import (
     Authenticator,
     Principal,
@@ -86,6 +88,7 @@ from .context import ConnectionInfo, Context
 from .custom import custom, register_component
 from .guard import OriginGuard, normalize_origins
 from .protocol import EventIn, init_message, patch_message, ping_message, signed_out_message
+from .proxy import ProxyHeaders, parse_trusted
 from .reactive import Signal
 from .session import Session
 from .session_store import (
@@ -504,6 +507,9 @@ def create_app(
     secure: bool = False,
     secret: str | bytes | Sequence[str | bytes] | None = None,
     allowed_origins: Sequence[str] = (),
+    trusted_proxies: Sequence[str] = (),
+    audit: AuditHook | None = None,
+    audit_payloads: bool = False,
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
     """Build the ASGI app.
@@ -547,6 +553,12 @@ def create_app(
     A secure app also refuses cross-origin requests (a multipart upload from another site is
     the classic CSRF): ``allowed_origins`` lists extra origins (``"https://app.example.com"``)
     that may call it, for a gateway on another origin. Same-origin browsers need nothing.
+
+    ``trusted_proxies`` (IPs or CIDRs of your gateway) says whose ``X-Forwarded-For``, ``-Proto``,
+    ``-Host`` and ``-Prefix`` headers to believe (ADR-0034); by default none are, so a client
+    cannot pick its own address, scheme or prefix. ``audit`` is called with an
+    :class:`~indah.audit.AuditEvent` after each UI event (who, which component, which event,
+    the payload keys; values only with ``audit_payloads=True``, never from a sensitive field).
 
     A secure app also needs ``secret`` (at least 16 random bytes; a list rotates: the first
     signs, any verifies). The shell trades its login for a signed session token with
@@ -599,9 +611,13 @@ def create_app(
         else:
             store = InMemorySessionStore(session_factory or build_demo_session)
 
-    guard = [Middleware(OriginGuard, allowed_origins=normalize_origins(allowed_origins))]
+    middleware = [Middleware(ProxyHeaders, trusted=parse_trusted(trusted_proxies))]
+    if secure:
+        middleware.append(
+            Middleware(OriginGuard, allowed_origins=normalize_origins(allowed_origins))
+        )
     app = Starlette(
-        middleware=guard if secure else [],
+        middleware=middleware,
         routes=[
             Route("/", _index, methods=["GET"]),
             Route("/health", _health, methods=["GET"]),
@@ -619,6 +635,8 @@ def create_app(
     app.state.auth = auth
     app.state.secure = secure
     app.state.signer = signer
+    app.state.audit = audit
+    app.state.audit_payloads = audit_payloads
     if hasattr(store, "app"):
         store.app = app  # so each session's Context can reach its ASGI app
     app.state.heartbeat_seconds = heartbeat_seconds
@@ -890,6 +908,31 @@ async def sse_events(
                 yield pad
 
 
+def _audit(
+    request: Request,
+    handle: SessionHandle,
+    principal: Principal | None,
+    component_id: str,
+    event: str,
+    payload: dict[str, Any],
+) -> None:
+    """Report a dispatched event to the app's audit hook (ADR-0034), if it set one."""
+    state = request.app.state
+    if state.audit is None:
+        return
+    component = handle.session.find(component_id)
+    emit_audit(
+        state.audit,
+        sid=handle.session.session_id or "",
+        user=principal.id if principal else None,
+        component=component_id,
+        event=event,
+        payload=payload,
+        include_payload=state.audit_payloads,
+        sensitive=bool(component is not None and component.sensitive),
+    )
+
+
 def _denied(status: int, error: str) -> JSONResponse:
     return JSONResponse({"ok": False, "error": error}, status_code=status)
 
@@ -1043,7 +1086,7 @@ async def _event(request: Request) -> JSONResponse:
 
     # Route the event to the sender's session (ADR-0010): its handler runs on its
     # own signals and its patches go only to its own hub -- never another viewer's.
-    handle, denied, _ = await _open_session(request, event.sid)
+    handle, denied, principal = await _open_session(request, event.sid)
     if handle is None:
         return denied
     hub = handle.hub
@@ -1051,6 +1094,7 @@ async def _event(request: Request) -> JSONResponse:
     result = session.dispatch(event.component, event.event, event.payload)
     if result is None:
         return JSONResponse({"ok": False, "error": "unknown event"}, status_code=400)
+    _audit(request, handle, principal, event.component, event.event, event.payload)
 
     if result.changes:
         hub.publish(patch_message(result.changes))
@@ -1099,12 +1143,15 @@ async def _upload(request: Request) -> JSONResponse:
     except MultiPartException:
         return JSONResponse({"ok": False, "error": "file too large"}, status_code=413)
 
-    handle, denied, _ = await _open_session(request, sid)
+    handle, denied, principal = await _open_session(request, sid)
     if handle is None:
         return denied
     result = handle.session.dispatch(component_id, "upload", {"files": files})
     if result is None:
         return JSONResponse({"ok": False, "error": "unknown component"}, status_code=400)
+    _audit(
+        request, handle, principal, component_id, "upload", {"files": [f.filename for f in files]}
+    )
 
     if result.changes:
         handle.hub.publish(patch_message(result.changes))
