@@ -119,6 +119,46 @@ Things to know about a remote table:
   search, up to 10,000 rows. Over that, the table asks the viewer to narrow the search.
 - `query=` mirrors the latest `TableQuery` into a signal, and `page_size` sets the window.
 
+## Slow handlers: keep the loop free
+
+indah serves every tab from one event loop. A plain `def` handler runs on that loop, and a
+blocking call inside an `async def` handler does too, so while it runs **no tab on the server
+updates**. A `time.sleep(5)`, a `requests.get`, a synchronous database driver or a model call
+all stall everyone. Awaiting is fine: `await asyncio.sleep(5)` yields to the other tabs.
+
+Run blocking work in a thread and await it:
+
+```python
+import asyncio
+import sqlite3
+
+import indah
+
+rows = indah.Signal([])
+
+
+def query(sql: str) -> list:  # blocking: never call it on the loop
+    with sqlite3.connect("app.db") as db:
+        db.row_factory = sqlite3.Row
+        return [dict(r) for r in db.execute(sql)]
+
+
+async def refresh():
+    rows.set(await asyncio.to_thread(query, "select id, text from entries limit 100"))
+
+
+page = indah.Column(
+    children=[
+        indah.Button("Refresh", on_click=refresh),
+        indah.Table(rows=rows, key="id", columns=[indah.Col("id"), indah.Col("text")]),
+    ]
+)
+```
+
+`Table(remote=loader)` already does this for you: a plain `def` loader runs in a worker thread,
+so a blocking database call there is fine. An `async def` loader runs on the loop, so the same
+rule applies inside it.
+
 ## Overlays, toasts and keys
 
 ```python
