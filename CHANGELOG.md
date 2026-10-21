@@ -11,14 +11,134 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-22
+
+Hosted use. This release adds what an app needs to run for real users behind a login: identity,
+signed per-user sessions, roles, one-time secrets, rate limits and a strict Content-Security-Policy,
+plus a code editor and a round of small requests from the first dashboard built on indah. Nothing
+is on by default: an app that worked on 0.3.0 behaves as before, with two small exceptions listed
+under "Upgrading". Start with the new guide, "Host an app for real users", on the docs site.
+
 ### Added
 
-- **`CodeEditor`**: a JSON, YAML and plain-text editor (CodeMirror 6) with highlighting,
+**Identity and sessions** (ADR-0033, ADR-0034)
+
+- `Principal` and an `Authenticator` (`create_app(auth=)`): a function from the request to who
+  the caller is. `ctx.user` carries it into the session factory, and each session is owned by it.
+  With `secure=True` and no `auth=`, Starlette's `scope["user"]` is used.
+- `create_app(secure=True)` makes identity a rule on every route that reaches a session: no
+  principal is `401`, no session id is `401`, another person's session is `403` (their file
+  download `404`), and a refused request creates no session. It needs a per-viewer
+  `session_factory` and a `secret` (16 bytes or more; a list rotates).
+- Signed session tokens: the shell trades its login for `<sid>.<signature>` with
+  `POST api/session`, and a reload keeps its session. The signature covers the principal and the
+  workspace, so ids cannot be chosen, replayed or moved.
+- An origin guard on a secure app (`allowed_origins=`), so a cross-site form or multipart POST
+  is refused before it is parsed. `ctx.sign_out()` ends every tab of a user and shows a
+  signed-out page; an open stream also ends when `Principal.expires_at` passes.
+- `trusted_proxies=`: `X-Forwarded-For`, `-Proto`, `-Host` and `-Prefix` are believed only from
+  the proxies you list (default none; `*` is refused). `ctx.conn.prefix` holds the forwarded
+  prefix.
+- `audit=` and `audit_payloads=`: a hook called after each UI event and upload with who, which
+  component, which event and the payload keys. Values are included only on request, and never
+  from a sensitive component.
+
+**Authorization and secrets** (ADR-0035, ADR-0036)
+
+- `Policy` (roles to permissions, with `*` and `prefix:*`), `ctx.can`, `ctx.require`, `ctx.only`
+  and `guard(perm)(handler)`. Restricted components are omitted when the tree is built for the
+  principal, because hidden components are still in the page. `guard` checks again when the
+  event arrives, against the person making that request, so a role revoked mid-session fails the
+  next action (`403`, a "not allowed" toast, not audited). `ctx.workspace` exposes the workspace
+  a session is bound to.
+- `SecretReveal`: shows a new API token once, with Copy and "I have saved it". The value is an
+  *ephemeral prop*: sent to the open tab only, never put in the `init` snapshot or the replay
+  history, and cleared on dismiss, on a fresh `init` and when the session closes. It is marked
+  sensitive for the audit hook. `Component.ephemeral`, `Component.forget()` and
+  `Hub.publish(record=False)` are the mechanism.
+
+**Hardening** (ADR-0037, ADR-0038)
+
+- `indah.hardening`: `Limits` (every bound optional; unset means as before), `Rate`,
+  `Limits.public()`, and the rate-limit and security-header middleware that used to live in the
+  public gallery's deploy code. `create_app(limits=, security_headers=)` adds a per-address,
+  per-route token bucket (`429` with `Retry-After`), a cap on open streams per address (`429`),
+  event and upload body caps (`413`), session count and idle bounds, and the headers
+  `X-Content-Type-Options`, `Referrer-Policy` and `X-Frame-Options`.
+- `create_app(csp="strict")`: a Content-Security-Policy with a fresh nonce on the shell's inline
+  tags, no inline script or `eval`, same-origin connections only, and a violation report
+  collector (`POST api/csp-report`, `app.state.csp_violations`). `csp_media_hosts=` lists extra
+  image and audio hosts; a `Map` registers its tile host. Off by default and in `launch()`. The
+  whole browser test suite now runs under it and fails on any violation.
+
+**Editor and recipes**
+
+- `CodeEditor`: a JSON, YAML and plain-text editor (CodeMirror 6) with highlighting,
   auto-indent, auto-closing brackets and quotes, bracket matching, folding, search, line
   numbers, JSON lint with the error position, a read-only mode, a Format button that keeps key
-  order, and a Ctrl/Cmd-S save hook. It loads lazily from `GET /api/editor.js` the first time
-  one renders (about 180 KB compressed, only for apps that use it), follows the app theme, and
-  falls back to a text area if it cannot load. ADR-0032.
+  order, a Ctrl/Cmd-S save hook and `{{placeholder}}` highlighting. It loads lazily from
+  `GET /api/editor.js` the first time one renders (about 180 KB compressed, only for apps that
+  use it), follows the app theme, and falls back to a text area if it cannot load. ADR-0032.
+- `examples/oidc_login.py`: a recipe for OpenID Connect login in the parent app with authlib
+  (PKCE, state, nonce, full ID-token verification), handing a `Principal` to indah. It fails
+  closed on any token that does not verify and is tested against an in-process provider. indah
+  itself has no authlib dependency, and there is no `indah[auth]`.
+- `make demo-hosted` now shows three roles (viewer, editor, admin), an admin-only API-token
+  screen (create with reveal-once, list, revoke with a confirm) and every hardening switch on.
+
+**Small requests from the first dashboard** (ADR-0031 amendment)
+
+- `py.typed`: the package ships type information.
+- `create_app(title_suffix=)` sets the page title's suffix (`""` gives the exact title) and
+  `create_app(max_width=)` sets the page frame's widest size (`"none"` fills the window).
+- `Theme(extra_light=, extra_dark=)`: an app's own `x-<name>` tokens, emitted as `--x-<name>`.
+- `Col(time_format="clock" | "datetime")`: absolute times in a table's time column.
+- Docs: a synchronous handler runs on the event loop (use `async def` for long work). The wire
+  protocol is published in full on the docs site, with a test that keeps the two copies equal.
+- `scripts/latency_probe.py` times an event round trip against a deployed app. On the public
+  gallery from Singapore, indah adds a few milliseconds, a hop to Fly about 16 ms, and the
+  Cloudflare path 100 to 200 ms per interaction, which is why checks run in the process rather
+  than calling an outside service per event.
+
+### Changed
+
+- `POST /api/event` requires `Content-Type: application/json` (`415` otherwise, before the body
+  is read), so a cross-site "simple" request cannot reach the handler.
+- An event with no session id is `400`, unless the app is one explicit shared `Session`
+  (`create_app(session=)`). Nothing falls back to a shared `default` session any more.
+- The public gallery no longer trusts a client-supplied `X-Forwarded-For` for rate limiting; it
+  uses Fly's `Fly-Client-IP`, else the socket peer. Its three routes now have a bucket each
+  rather than sharing one. In core, the client address is the socket peer, or the forwarded
+  address from a trusted proxy.
+- `authlib`, `itsdangerous` and `cryptography` joined the `dev` extra for the recipe's test.
+  They are not dependencies of indah.
+
+### Known limitations
+
+- Sessions are in memory. With more than one process, use sticky sessions at the gateway. There
+  is no external session store.
+- `trusted_proxies` is tested with simulated headers; it has not yet been checked against the
+  real Cloudflare and Fly path.
+- A role revoked mid-session stops actions at once, but components already sent stay on screen
+  until the session is rebuilt; a role added shows its components after a rebuild.
+- A `Map` with a custom tile host built after the first page load is allowed under a strict CSP
+  from the next load. Declare it with `csp_media_hosts=` to avoid that.
+- Limits are per process; several replicas multiply them.
+
+### Upgrading from 0.3.x
+
+No code changes are needed unless your code or a script posts events by hand:
+
+1. `POST /api/event` must send `Content-Type: application/json`. Anything else is now `415`.
+2. A `POST /api/event` with no `sid` is now `400` for an app built with `session_factory=` (the
+   shell always sends one). An app built with `session=` still accepts it. Tests that post
+   events directly should pass a `sid`, and open the stream with the same `?sid=`.
+3. If you copied the gallery's rate-limit or security-header middleware, import
+   `RateLimitMiddleware` and `SecurityHeadersMiddleware` from `indah.hardening` instead.
+
+To host an app for real users, follow "Host an app for real users" on the docs site. The new
+options (`auth`, `secure`, `limits`, `security_headers`, `csp`, `trusted_proxies`, `audit`, `policy`)
+are all off or unset by default.
 
 ## [0.3.0] - 2026-10-21
 
@@ -100,4 +220,5 @@ No code changes are required for an app that worked on 0.2.2. Check three things
 3. If you use `Theme`, you may now set `on-primary-container` and `on-secondary-container`;
    set them whenever you override the matching `*-container` role.
 
+[0.4.0]: https://github.com/leejianrong/indah/releases/tag/v0.4.0
 [0.3.0]: https://github.com/leejianrong/indah/releases/tag/v0.3.0
