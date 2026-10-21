@@ -147,6 +147,9 @@ fine). Anything else, including `text/plain`, a form or multipart type, or no ty
 rejected `415` before the body is read. That keeps a cross-site "simple" request (one a browser
 sends without a preflight) from reaching the handler.
 
+A handler that refuses the caller (`guard(...)` or `ctx.require(...)`, ADR-0035) makes the
+request answer `403`; the tab also receives a `toast` of kind `warn`.
+
 A malformed body is rejected `400`; a body that does not validate, `422`; an event
 for an unknown component or event, `400`. A body larger than `max_event_bytes`
 (`create_app` argument, default 1 MiB) is rejected `413` before it is parsed. A handler that raises does not take the

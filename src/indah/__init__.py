@@ -14,6 +14,7 @@ public contract (docs/protocol.md). See https://github.com/leejianrong/indah.
 
 from .app import build_demo_session, create_app, mock_llm
 from .auth import Authenticator, Principal
+from .authz import Forbidden, Policy, guard
 from .components import (
     Audio,
     Badge,
@@ -102,6 +103,9 @@ __all__ = [
     "Topic",
     "Context",
     "Principal",
+    "Policy",
+    "guard",
+    "Forbidden",
     "Authenticator",
     "ConnectionInfo",
     "DispatchResult",

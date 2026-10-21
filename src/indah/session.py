@@ -34,9 +34,10 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
+from .authz import Forbidden
 from .components import Chart, Component, Download, Heatmap, StreamText, walk
 from .context import Context
-from .protocol import error_message, patch_message
+from .protocol import error_message, patch_message, toast_message
 from .reactive import Computation, batch, effect
 from .transport import Hub
 
@@ -54,6 +55,7 @@ class DispatchResult:
 
     changes: list[dict[str, Any]] = field(default_factory=list)
     coro: Coroutine[Any, Any, Any] | None = None
+    forbidden: bool = False  # the handler refused the caller (guard / ctx.require): answer 403
 
 
 class Session:
@@ -183,6 +185,11 @@ class Session:
 
     def _report_error(self, exc: BaseException) -> None:
         """Log the traceback server-side and push a toast to clients; UI stays live."""
+        if isinstance(exc, Forbidden):  # a refusal, not a bug: no trace, a plain warning
+            logger.warning("indah refused an event: %s", exc)
+            if self._hub is not None:
+                self._hub.publish(toast_message("You are not allowed to do that.", "warn", 4.0))
+            return
         logger.exception("indah handler raised", exc_info=exc)
         if self._hub is not None:
             self._hub.publish(error_message(f"{type(exc).__name__}: {exc}"))
@@ -223,7 +230,7 @@ class Session:
         except Exception as exc:  # a synchronous handler blew up
             self._sink = None
             self._report_error(exc)
-            return DispatchResult()  # handled: UI stays live
+            return DispatchResult(forbidden=isinstance(exc, Forbidden))  # UI stays live
         finally:
             collected = self._sink
             self._sink = None
