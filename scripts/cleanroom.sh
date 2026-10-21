@@ -29,7 +29,7 @@ EOF
   chmod +x "$TRIP/$tool"
 done
 
-WHEEL="$(ls "$REPO"/dist/indah-*.whl 2>/dev/null | head -1 || true)"
+WHEEL="$(ls -t "$REPO"/dist/indah-*.whl 2>/dev/null | head -1 || true)"  # newest build
 if [ -z "$WHEEL" ]; then
   echo "!!! no wheel in $REPO/dist - run 'uv build' first" >&2
   exit 2
