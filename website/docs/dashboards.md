@@ -270,7 +270,9 @@ It highlights, indents, closes brackets and quotes, folds, searches, and for JSO
 parse error with its position. It is loaded the first time an editor appears, so apps without
 one never download it (about 180 KB compressed). A very large body is limited by
 `create_app(max_event_bytes=)`, 1 MiB by default. Tab indents; press Ctrl/Cmd-M to switch
-that off so the keyboard can leave the editor. If the editor cannot load, a plain text area
+that off so the keyboard can leave the editor. `{{name}}` placeholders (a template slot such
+as `{{now}}`) are highlighted in every language, as a visual cue only: names are not completed
+or checked. If the editor cannot load, a plain text area
 with the same binding is shown.
 
 For a variable number of editable rows, use a keyed `List`:

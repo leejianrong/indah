@@ -64,5 +64,7 @@ tokens in plain text (a possible later addition).
   an editor renders).
 - Large bodies are bounded by `max_event_bytes` (default 1 MiB); semula should raise it if its
   worst case reaches 500 KB of text plus overhead.
+- `{{name}}` placeholders get a token colour in every language (IND-138): a `MatchDecorator`
+  mark, so highlight only, no completion or validation.
 - Adding a language later is a small change in `frontend/editor/editor.js`; splitting languages
   into chunks is available if the set grows.
