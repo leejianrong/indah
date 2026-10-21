@@ -71,6 +71,7 @@ table = Table(
     key="id",
     columns=[
         Col("ts", "When", kind="time"),  # "3s ago", refreshed live
+        # Col("ts", "At", kind="time", time_format="clock"),  # 09:14:22.318, viewer's local time
         Col("id", kind="mono"),
         Col("result", kind="badge", tones={"hit": "ok", "miss": "warn", "error": "err"}),
         Col("ms", kind="number"),

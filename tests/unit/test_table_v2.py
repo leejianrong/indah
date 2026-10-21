@@ -186,3 +186,14 @@ def test_follow_needs_a_height_to_scroll_in():
 def test_the_classic_table_does_not_take_the_toolbar_flags(flag):
     with pytest.raises(ValueError, match="rows="):
         Table({"columns": ["a"], "rows": [[1]]}, **{flag: True})
+
+
+@pytest.mark.unit
+def test_time_columns_carry_an_absolute_format_only_when_asked():
+    assert "timeFormat" not in Col("ts", kind="time").wire()  # relative stays the default
+    assert Col("ts", kind="time", time_format="clock").wire()["timeFormat"] == "clock"
+    assert Col("ts", kind="time", time_format="datetime").wire()["timeFormat"] == "datetime"
+    with pytest.raises(ValueError):
+        Col("ts", kind="time", time_format="iso")
+    with pytest.raises(ValueError):  # a format on a non-time column is a mistake
+        Col("ts", time_format="clock")

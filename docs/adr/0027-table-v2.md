@@ -27,7 +27,9 @@ One `Table` component, two forms, chosen by the arguments:
 `Col(field, title, kind, width, sortable, tones)` types a column. The renderers are a
 closed set implemented in the shell and none interprets HTML (`text`, `mono`, `badge`,
 `time`, `number`), so cell content cannot inject markup. A `time` cell is shown relative
-("3s ago") and every such cell on the page shares one 1 s timer.
+("3s ago") and every such cell on the page shares one 1 s timer. `Col(time_format=)` (IND-135)
+switches a column to an absolute `clock` (`09:14:22.318`) or `datetime` reading in the
+viewer's local time; the tooltip stays the full ISO value.
 
 I extended `Table` rather than add a `DataTable`: the sorting, paging and select code is
 shared, and the classic contract is preserved by the argument-based split. The wire is

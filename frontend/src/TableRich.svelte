@@ -297,6 +297,19 @@
     if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
     return new Date(ms).toLocaleDateString();
   }
+  // The absolute forms read in the viewer's local time: "09:14:22.318", "2026-10-21 09:14:22".
+  const pad = (n, w = 2) => String(n).padStart(w, "0");
+  function fmtTime(v, format, nowMs) {
+    if (format !== "clock" && format !== "datetime") return relTime(v, nowMs);
+    const ms = toMs(v);
+    if (ms === null) return String(v ?? "");
+    const d = new Date(ms);
+    const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    if (format === "datetime") {
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${clock}`;
+    }
+    return `${clock}.${pad(d.getMilliseconds(), 3)}`;
+  }
   function absTime(v) {
     const ms = toMs(v);
     return ms === null ? "" : new Date(ms).toISOString();
@@ -330,7 +343,7 @@
               ><code class="cell-mono" title={v}>{v ?? ""}</code></td
             >
           {:else if col.kind === "time"}
-            <td title={absTime(v)}>{relTime(v, $now)}</td>
+            <td title={absTime(v)}>{fmtTime(v, col.timeFormat, $now)}</td>
           {:else if col.kind === "number"}
             <td class="num">{fmtNumber(v)}</td>
           {:else}
