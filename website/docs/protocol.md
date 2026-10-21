@@ -150,6 +150,10 @@ sends without a preflight) from reaching the handler.
 A handler that refuses the caller (`guard(...)` or `ctx.require(...)`, ADR-0035) makes the
 request answer `403`; the tab also receives a `toast` of kind `warn`.
 
+An app with `Limits` (ADR-0037) may also answer `429` (with `Retry-After`) on `api/event`,
+`api/upload` and `api/stream` when an address is over its rate, or has too many streams open;
+nothing is created for such a request. A client should back off for `Retry-After` seconds.
+
 A malformed body is rejected `400`; a body that does not validate, `422`; an event
 for an unknown component or event, `400`. A body larger than `max_event_bytes`
 (`create_app` argument, default 1 MiB) is rejected `413` before it is parsed. A handler that raises does not take the

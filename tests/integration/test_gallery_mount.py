@@ -14,6 +14,7 @@ import pytest
 
 from indah.app import create_app
 from indah.components import Button, Column, Text
+from indah.hardening import RateLimitMiddleware
 from indah.reactive import Signal
 from indah.session import Session
 from indah.session_store import InMemorySessionStore
@@ -193,8 +194,8 @@ async def test_rate_limiter_trips_per_ip_on_the_expensive_routes():
     # The gallery is wrapped SecurityHeaders(RateLimit(app)) - read the limiter's
     # capacity off the live instance rather than hardcoding the production default,
     # so this test doesn't silently stop covering anything if that default changes.
-    assert isinstance(gallery.app, gallery_app._RateLimitMiddleware)
-    capacity = gallery.app.capacity
+    assert isinstance(gallery.app, RateLimitMiddleware)
+    capacity = gallery.app.rates["/api/event"].burst
 
     async with _client(gallery) as client:
         payload = {"component": "n1", "event": "click"}
@@ -212,6 +213,28 @@ async def test_rate_limiter_trips_per_ip_on_the_expensive_routes():
             "/a/api/event", json=payload, headers={"Fly-Client-IP": "203.0.113.2"}
         )
         assert other.status_code == 200
+
+
+@pytest.mark.integration
+async def test_the_gallery_ignores_a_client_supplied_x_forwarded_for():
+    """ADR-0037: only Fly-Client-IP (or the socket peer) names the client, so rotating
+    X-Forwarded-For does not buy a fresh bucket."""
+    gallery_app = _load_gallery_module()
+    gallery = gallery_app.build_gallery(
+        [{"slug": "a", "title": "A", "emoji": "🅰️", "app": _counter_app()}]
+    )
+    capacity = gallery.app.rates["/api/event"].burst
+    async with _client(gallery) as client:
+        payload = {"component": "n1", "event": "click"}
+        codes = [
+            (
+                await client.post(
+                    "/a/api/event", json=payload, headers={"X-Forwarded-For": f"198.51.100.{i}"}
+                )
+            ).status_code
+            for i in range(capacity + 2)
+        ]
+    assert 429 in codes
 
 
 @pytest.mark.integration
