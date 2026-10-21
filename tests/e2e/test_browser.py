@@ -3108,3 +3108,168 @@ def test_semula_editor_demo_conflict_review_and_playground_flows():
                 browser.close()
     finally:
         handle.stop()
+
+
+def _code_editor_app(**kw):
+    import asyncio
+
+    from indah import CodeEditor, Column, Session, Signal, Text, create_app
+
+    text = Signal('{"a": 1}')
+    saves = Signal(0)
+
+    async def on_save():
+        saves.set(saves.value + 1)
+        await asyncio.sleep(0.3)  # a late server write while the editor still has focus
+        text.set('{"server": "late"}')
+
+    root = Column(
+        children=[
+            CodeEditor(text, label="Body", format_button=True, on_save=on_save, **kw),
+            Text(lambda: f"len {len(text.value)} saves {saves.value}"),
+        ]
+    )
+    return create_app(session=Session(root)), text
+
+
+@pytest.mark.e2e
+def test_code_editor_highlights_autocloses_indents_lints_and_stays_focus_safe():
+    app, text = _code_editor_app()
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            requests = []
+            page.on("request", lambda r: requests.append(r.url))
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                content = page.locator(".cm-content")
+                expect(content).to_be_visible(timeout=10_000)
+                assert any(u.endswith("api/editor.js") for u in requests)
+                # highlighting: the language chunk arrives async; a string token gets its own colour
+                page.wait_for_function(
+                    "() => new Set([...document.querySelectorAll('.cm-line span')]"
+                    ".map(s => getComputedStyle(s).color)).size > 1"
+                )
+
+                # auto-close brackets and quotes, and indent between braces
+                content.click()
+                page.keyboard.press("Control+a")
+                page.keyboard.press("Delete")
+                page.keyboard.type('{"k": [')
+                assert page.locator(".cm-line").first.inner_text().replace("​", "") == '{"k": []}'
+                page.keyboard.press("Control+a")
+                page.keyboard.press("Delete")
+                page.keyboard.type("{")
+                page.keyboard.press("Enter")
+                lines = [ln.inner_text() for ln in page.locator(".cm-line").all()]
+                assert lines[0] == "{" and lines[1].startswith("  ") and lines[2] == "}", lines
+                # the debounced edit reached the server signal
+                page.wait_for_timeout(400)
+                assert text.value == "{\n  \n}"
+
+                # lint: invalid JSON gets a marker with a message
+                page.keyboard.press("Control+a")
+                page.keyboard.type('{"a": }')
+                expect(page.locator(".cm-lint-marker-error").first).to_be_visible(timeout=5_000)
+
+                # focus safety: Ctrl-S saves; the late server write must not clobber focused text
+                page.keyboard.press("Control+a")
+                page.keyboard.type('{"mine": true}')
+                page.keyboard.press("Control+s")
+                expect(page.get_by_text("saves 1", exact=False)).to_be_visible()
+                page.keyboard.type(" ")
+                page.wait_for_timeout(700)  # the late write has landed
+                assert "mine" in page.locator(".cm-content").inner_text()
+                assert page.evaluate("document.activeElement.classList.contains('cm-content')")
+                # blur: the editor re-syncs to the server value
+                page.get_by_role("button", name="Format").focus()
+                expect(page.locator(".cm-content")).to_contain_text('"server"')
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_code_editor_format_button_read_only_and_lazy_loading():
+    from indah import Column, Session, Text, create_app
+
+    page_without = create_app(session=Session(Column(children=[Text("no editor here")])))
+    handle = launch(page_without, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            seen = []
+            page.on("request", lambda r: seen.append(r.url))
+            page.goto(handle.url, wait_until="networkidle")
+            assert not any("editor" in u for u in seen)  # an app without one never fetches it
+            browser.close()
+    finally:
+        handle.stop()
+
+    app, text = _code_editor_app()
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator(".cm-content")).to_be_visible(timeout=10_000)
+                page.locator(".cm-content").click()
+                page.keyboard.press("Control+a")
+                page.keyboard.type('{"z":1,"a":2}')
+                page.get_by_role("button", name="Format").click()
+                expect(page.locator(".cm-content")).to_contain_text('"z": 1')
+                assert text.value == '{\n  "z": 1,\n  "a": 2\n}'
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+    from indah import CodeEditor, Signal
+
+    ro = create_app(
+        session=Session(Column(children=[CodeEditor(Signal('{"ro": 1}'), read_only=True)]))
+    )
+    handle = launch(ro, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator(".cm-content")).to_be_visible(timeout=10_000)
+                assert page.locator(".cm-content").get_attribute("contenteditable") == "false"
+                page.locator(".cm-content").click()
+                page.keyboard.type("zzz")
+                assert "zzz" not in page.locator(".cm-content").inner_text()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_code_editor_falls_back_to_a_text_area_when_the_module_cannot_load():
+    app, text = _code_editor_app()
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.route("**/api/editor.js", lambda route: route.abort())
+                page.goto(handle.url, wait_until="domcontentloaded")
+                box = page.locator("textarea.code-fallback")
+                expect(box).to_be_visible(timeout=10_000)
+                box.fill('{"typed": 1}')
+                page.wait_for_timeout(400)
+                assert text.value == '{"typed": 1}'
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

@@ -42,3 +42,4 @@ website/site/
 # gzip+base64 cache actually shipped lives embedded in examples/map_poster.py.
 /cache/
 /examples/data/
+dist-editor/

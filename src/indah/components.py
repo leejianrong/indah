@@ -332,6 +332,97 @@ class TextArea(Component):
         return False
 
 
+CODE_LANGUAGES = ("json", "yaml", "text")
+
+
+class CodeEditor(Component):
+    """A syntax-aware editor for data and config text, two-way bound to a ``Signal[str]``
+    (ADR-0032): highlighting, auto-indent, auto-closing brackets and quotes, bracket
+    matching, folding, search, line numbers, and (for JSON) lint with the error position.
+
+    ``language`` is ``"json"`` (default), ``"yaml"`` or ``"text"``. ``read_only`` shows a
+    value without letting the viewer change it. ``lint=False`` turns the JSON check off.
+    ``height`` is a CSS length (default ``24rem``); the editor scrolls inside it.
+    ``format_button=True`` (JSON only, not read-only) adds a Format button that re-indents
+    the JSON with two spaces and keeps the key order; text that is not valid JSON is left
+    as it is. ``on_save`` makes Ctrl/Cmd-S call it, after the signal holds the latest text.
+
+    The editor is a separate same-origin file the shell fetches the first time one renders,
+    so apps without an editor never download it; if it cannot load, a plain text area with
+    the same binding is shown. Like the other inputs the focused editor is client-owned
+    (ADR-0013), keystrokes are debounced and flushed on blur, and a large value is bounded
+    by ``create_app(max_event_bytes=)``. Tab indents; press Ctrl-M (Cmd-M) to turn that off
+    so the keyboard can leave the editor.
+    """
+
+    type = "codeeditor"
+
+    def __init__(
+        self,
+        value: Signal[str],
+        *,
+        language: str = "json",
+        read_only: bool = False,
+        lint: bool = True,
+        height: str = "24rem",
+        label: str = "",
+        placeholder: str = "",
+        format_button: bool = False,
+        on_save: Callable[[], Any] | None = None,
+    ) -> None:
+        if language not in CODE_LANGUAGES:
+            raise ValueError(
+                f"CodeEditor language must be one of {CODE_LANGUAGES}, got {language!r}"
+            )
+        if not _CSS_LENGTH.match(height):
+            raise ValueError(f"CodeEditor height {height!r} must be a length like '24rem'")
+        super().__init__()
+        self._value = value
+        self._language = language
+        self._read_only = bool(read_only)
+        self._lint = bool(lint)
+        self._height = height
+        self._label = label
+        self._placeholder = placeholder
+        self._format = bool(format_button) and language == "json" and not read_only
+        self._on_save = on_save
+
+    def static_props(self) -> dict[str, Any]:
+        return {
+            "format": self._format,
+            "save": self._on_save is not None,
+            "language": self._language,
+            "readOnly": self._read_only,
+            "lint": self._lint,
+            "height": self._height,
+            "label": self._label,
+            "placeholder": self._placeholder,
+        }
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: str(self._value.value or "")}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if self._read_only or "value" not in payload:
+            return False
+        text = str(payload["value"])
+        if event == "input":
+            self._value.set(text)
+            return True
+        if event == "format" and self._format:
+            try:
+                text = json.dumps(json.loads(text), indent=2, ensure_ascii=False)
+            except ValueError:
+                return False  # not valid JSON: leave the text alone
+            self._value.set(text)
+            return True
+        if event == "save" and self._on_save is not None:
+            self._value.set(text)
+            result = self._on_save()
+            return result if inspect.iscoroutine(result) else True
+        return False
+
+
 class Checkbox(Component):
     """A checkbox two-way bound to a ``Signal[bool]`` (R5)."""
 

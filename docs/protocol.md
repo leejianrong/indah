@@ -22,6 +22,8 @@ HTTP POSTs. Both ride one port so Colab's and Runpod's proxies pass them
   [File upload and download](#file-upload-and-download).
 - `GET /api/file/{sid}/{token}` — download a file the app handed back (server →
   client); see [File upload and download](#file-upload-and-download).
+- `GET /api/editor.js` — the code editor module (ADR-0032), an ES module the shell
+  `import()`s on the first `codeeditor` render; an asset route, not a protocol message.
 
 Every message on the SSE stream is a JSON object with a `v` field (the protocol
 version) and a `type`. The upload and file routes carry bytes, not JSON messages,
@@ -185,6 +187,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label` | `input` `{value}` |
 | `textarea` | input | `value`, `placeholder`, `label`, `rows` | `input` `{value}` (debounced 150 ms, flushed on blur) |
+| `codeeditor` | input | `value`, `language` (`json`/`yaml`/`text`), `readOnly`, `lint`, `height`, `label`, `placeholder`, `format` (a Format button), `save` (Ctrl/Cmd-S) | `input` `{value}` (debounced 150 ms, flushed on blur), `format` `{value}` (JSON re-indent, key order kept), `save` `{value}` |
 | `select` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
 | `checkbox` | input | `checked`, `label` | `change` `{value}` |
 | `switch` | input | `checked`, `label` (a `role=switch` toggle) | `change` `{value}` |

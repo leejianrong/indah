@@ -40,3 +40,10 @@ installing and running it never does.
 - Because the shell is internal, swapping frameworks later is possible but means a
   full shell rewrite — the JSON protocol (ADR-0005) is the stable boundary that
   makes that survivable.
+
+## Amendment (ADR-0032): lazily loaded same-origin modules are allowed
+
+The shell still fetches nothing from a third party at runtime. A module the app serves
+itself, fetched on demand, is fine: `static/editor.js` (the code editor) is loaded the first
+time a `codeeditor` renders. It ships in the same wheel, so install and runtime still need no
+Node, and the CI `frontend` job checks it is not stale.

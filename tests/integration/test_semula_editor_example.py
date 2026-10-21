@@ -38,7 +38,7 @@ def test_save_bumps_the_version_and_a_stale_save_opens_the_conflict_diff():
     store, a = _tab()
     s = a.session
     modal = _find(s, "modal")
-    area = _find(s, "textarea", lambda c: c._label.startswith("Response"))
+    area = _find(s, "codeeditor", lambda c: c._label.startswith("Response"))
     mine = json.dumps({"answer": "my edit", "confidence": 0.5})
     s.dispatch(area.id, "input", {"value": mine})
     s.dispatch(_button(s, "Save").id, "click", {})
@@ -62,7 +62,7 @@ def test_save_bumps_the_version_and_a_stale_save_opens_the_conflict_diff():
 def test_take_theirs_reloads_the_stored_version_and_invalid_json_is_not_saved():
     store, a = _tab()
     s = a.session
-    area = _find(s, "textarea", lambda c: c._label.startswith("Response"))
+    area = _find(s, "codeeditor", lambda c: c._label.startswith("Response"))
     store.other_editor()
     s.dispatch(area.id, "input", {"value": "{not json"})
     s.dispatch(_button(s, "Save").id, "click", {})

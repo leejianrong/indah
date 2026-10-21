@@ -21,6 +21,7 @@ set shipped in 0.2.0.
 | `Number` | a plain numeric input with optional bounds |
 | `TextInput` | a single-line text box |
 | `TextArea` | a multi-line text box |
+| `CodeEditor` | a JSON / YAML / text editor: highlighting, auto-indent, auto-closing brackets and quotes, folding, search, JSON lint |
 | `Switch` | an on/off toggle bound to a `Signal[bool]` |
 | `Select` | a single-choice dropdown |
 | `MultiSelect` | a multi-choice select |

@@ -15,6 +15,7 @@
   import SplitPane from "./SplitPane.svelte";
   import JsonTree from "./JsonTree.svelte";
   import Diff from "./Diff.svelte";
+  import CodeEditor from "./CodeEditor.svelte";
 
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
@@ -381,6 +382,8 @@
       onblur={onAreaBlur}
     ></textarea>
   </div>
+{:else if node.type === "codeeditor"}
+  <CodeEditor {props} nodeId={node.id} />
 {:else if node.type === "switch"}
   <div class="switch-row">
     <button
