@@ -34,22 +34,47 @@ subprocess.
 
 Scored against the section 8 criteria with what runs today. The plan names no numeric
 thresholds ("your thresholds"), so this records the numbers and a read, and the owner decides.
-Everything here is **local**: no gateway, one machine, demo data. Nothing is measured on the
-hosted path yet.
+Everything in this table is **local**: no gateway, one machine, demo data. Gateway latency
+is measured in the next subsection.
 
 | Criterion | Measured | Read |
 |-----------|----------|------|
 | Server memory per open tab | 7 to 22 KB per session (reactive graph + hub, no socket), over 300 sessions of each demo: log 14 KB, pending 22 KB, entries 7 KB, routes 13 KB. Excludes per-tab rows held by a `ctx.tail` Stream (up to its limit) and the hub's 512-message history | Small for hundreds of tabs. The per-tab row copies and history are the real cost to measure under load. Browser-side memory not measured |
-| p95 interaction latency | POST `/api/event` to the patch on the SSE stream, 300 samples: p50 1.6 ms, p95 3.5 ms, max 5.6 ms on localhost | Says nothing about the gateway; the Colab proxy added round trips that ADR-0013 exists for. Needs the same probe through the real gateway |
+| p95 interaction latency | | POST `/api/event` to the patch on the SSE stream, 300 samples: p50 1.6 ms, p95 3.5 ms, max 5.6 ms on localhost. Through the gateway: see "Gateway latency" below | Gateway numbers now exist; the cost is the edge path, not indah |
 | Bundle growth vs plan | Shell 502 KB raw / 219 KB gzip, from 460 / 208 KB (+9% raw, +5% gzip) for overlays, toasts, shortcuts, tables (remote, virtual), panes, routing, JsonTree and Diff. `CodeEditor` (the +80% item) is not built | Well under the plan's worst case |
 | Effort vs estimates | S2 (20 pts), S3 (15), S4 (10) and the JsonTree/Diff half of S5a (8) delivered at their planned points, 15 cards plus one bug (IND-123), as PRs #116 to #132 | On plan in points. Calendar days are not tracked here |
 | Screens wanting something the set lacked | Six gaps surfaced while building the three demos, each fixed in its slice: `Link(to=)` as a callable, `Table(density=)` as a signal, no untracked read in the switcher effect (`peek` existed), single-segment deep links resolving `api/*` wrongly, `LaunchHandle.stop()` with an open stream, a sort whitelist for SQL | None blocked a screen. Two are gaps a SPA does not have (pages run their reactive code even when hidden; select-all on a remote table covers loaded rows only) |
+
+### Gateway latency (2026-10-21, IND-140)
+
+`scripts/latency_probe.py` posts `api/event` and times the matching `patch` on the open SSE
+stream (a background reader stamps arrival, so a patch that beats the POST response is not
+penalised). Target: the public gallery's poster demo, `TextInput` title edit (a small SVG
+patch), 100 events at 1.5/s (under the gallery's 2/s rate limit). Client: Singapore (Starhub),
+app: Fly `indah-demos` (events arrive via Fly's `nrt` edge); Colab's proxy was not measured
+(it needs a live Colab session).
+
+| Path | event to patch p50 / p95 / max | POST response p50 / p95 / max |
+|------|-------------------------------|-------------------------------|
+| localhost (starter app, 300 samples) | 3.6 / 4.4 / 5.4 ms | 3.5 / 4.3 / 5.2 ms |
+| Fly direct (`indah-demos.fly.dev`) | 15.9 / 31.7 / 58.7 ms | 17.4 / 32.6 / 59.3 ms |
+| Cloudflare Worker + Fly (`indah.abangai.dev`), run 1 | 110 / 194 / 596 ms | 225 / 355 / 710 ms |
+| Cloudflare Worker + Fly (`indah.abangai.dev`), run 2 | 189 / 312 / 624 ms | 251 / 374 / 690 ms |
+
+Read: indah itself adds a few ms; a hop to the Fly app is about 16 ms from Singapore. The
+Cloudflare path costs 100 to 200 ms per interaction, with a visible spread between runs
+(the requests are routed via Hong Kong and Tokyo, two edge hops plus a Worker). The patch
+arrives 60 to 115 ms before the POST response returns, so the UI updates before the POST
+finishes. Consequences for the hosted design: a signed token (HMAC, microseconds) and a
+per-event authz check are noise against a 100 ms+ edge; a per-event call to an external
+service (IdP, database, Redis session store) is not, because it adds to the same path.
+The numbers argue for keeping auth and authz in-process, which is what H-A and H-B do.
 
 Still true from section 8, not changed by building: every interaction is a round trip, state
 lives per tab on the server, authorization stays in-process and hidden pages are in the
 snapshot, and there is no optimistic or offline UX. IND-E25 and IND-E26 remain gated on the
 owner's decision; nothing in the build so far argues for leaving, and nothing yet argues for
-committing to H2b or H4 either, because the gateway numbers are missing.
+committing to H2b or H4 either (the gateway numbers above are in, and favour in-process auth).
 
 ## Summary
 
