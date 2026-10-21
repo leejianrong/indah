@@ -304,6 +304,6 @@ token names and what each is for.
 
 ## Hosted use
 
-indah keeps one session per open tab, in memory, on the server. Authentication,
-authorization and rate limits belong in the app that mounts it for now; the ADRs under
-`docs/adr/` (0025 to 0030) describe the decisions behind each feature above.
+indah keeps one session per open tab, in memory, on the server. To put a dashboard in front of real
+users (login, per-user sessions, roles, limits, a CSP), read [Host an app for real users](hosting.md).
+The ADRs under `docs/adr/` (0025 to 0038) describe the decisions behind each feature above.

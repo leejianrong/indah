@@ -20,6 +20,7 @@ nav = [
   { "Guides" = [
     { "Build a chatbot" = "chatbot.md" },
     { "Build a dashboard" = "dashboards.md" },
+    { "Host an app for real users" = "hosting.md" },
   ] },
   { "Reference" = [
     { "Components" = "components.md" },
