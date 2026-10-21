@@ -22,6 +22,7 @@ from starlette.routing import Mount, Route
 import indah
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import semula_editor  # noqa: E402
 import semula_entries  # noqa: E402
 import semula_log  # noqa: E402
 import semula_pending  # noqa: E402
@@ -171,7 +172,14 @@ def build_app(*, seed: int | None = 1) -> Starlette:
     pending = semula_pending.build_app(seed=seed)
     entries = semula_entries.build_app()
     routes = semula_routes.build_app()
-    children = {"log": log, "pending": pending, "entries": entries, "routes": routes}
+    editor = semula_editor.build_app()
+    children = {
+        "log": log,
+        "pending": pending,
+        "entries": entries,
+        "routes": routes,
+        "editor": editor,
+    }
 
     @contextlib.asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
