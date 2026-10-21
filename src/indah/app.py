@@ -19,7 +19,7 @@ import os
 import re
 import time
 import urllib.parse
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from datetime import datetime
 from html import escape
 from importlib.resources import files
@@ -88,6 +88,13 @@ from .components import (
 from .context import ConnectionInfo, Context
 from .custom import custom, register_component
 from .guard import OriginGuard, normalize_origins
+from .hardening import (
+    Limits,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    StreamLimiter,
+    peer_address,
+)
 from .protocol import EventIn, init_message, patch_message, ping_message, signed_out_message
 from .proxy import ProxyHeaders, parse_trusted
 from .reactive import Signal
@@ -512,6 +519,8 @@ def create_app(
     audit: AuditHook | None = None,
     audit_payloads: bool = False,
     policy: Policy | None = None,
+    limits: Limits | None = None,
+    security_headers: bool | Mapping[str, str] = False,
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
     """Build the ASGI app.
@@ -567,6 +576,14 @@ def create_app(
     role name. A guarded handler is checked against the principal of the request that runs it,
     so a role revoked mid-session fails closed on the next action.
 
+    ``limits`` (:class:`~indah.hardening.Limits`) bounds a public app: a per-address rate limit
+    on ``api/event``/``api/upload``/``api/stream`` (``429``), a cap on open streams per address
+    (``429``), the event and upload body caps (``413``), and session count/idle bounds. Every
+    field defaults to unset, which leaves today's behaviour. ``security_headers=True`` adds
+    ``nosniff``, a ``Referrer-Policy`` and ``X-Frame-Options: DENY`` to every response (a mapping
+    replaces individual ones, ``""`` drops one). The address used is the socket peer, so behind a
+    gateway also set ``trusted_proxies`` (ADR-0037).
+
     A secure app also needs ``secret`` (at least 16 random bytes; a list rotates: the first
     signs, any verifies). The shell trades its login for a signed session token with
     ``POST api/session`` and sends that token as its session id, so a client cannot choose an
@@ -618,7 +635,29 @@ def create_app(
         else:
             store = InMemorySessionStore(session_factory or build_demo_session)
 
+    limits = limits or Limits()
+    if limits.max_event_bytes is not None:
+        max_event_bytes = limits.max_event_bytes
+    if limits.max_upload_mb is not None:
+        max_upload_mb = limits.max_upload_mb
+    if isinstance(store, InMemorySessionStore):
+        if limits.max_sessions is not None:
+            store.max_sessions = limits.max_sessions
+        if limits.session_idle_seconds is not None:
+            store.idle_timeout_seconds = limits.session_idle_seconds
+
+    # Outermost first: resolve the client address, then headers, then the rate limit, then
+    # (secure apps) the origin guard, so a flood is turned away before it is parsed.
     middleware = [Middleware(ProxyHeaders, trusted=parse_trusted(trusted_proxies))]
+    if security_headers:
+        middleware.append(
+            Middleware(
+                SecurityHeadersMiddleware,
+                headers=None if security_headers is True else security_headers,
+            )
+        )
+    if limits.rate:
+        middleware.append(Middleware(RateLimitMiddleware, rates=limits.rate))
     if secure:
         middleware.append(
             Middleware(OriginGuard, allowed_origins=normalize_origins(allowed_origins))
@@ -645,6 +684,7 @@ def create_app(
     app.state.audit = audit
     app.state.audit_payloads = audit_payloads
     app.state.policy = policy
+    app.state.stream_limiter = StreamLimiter(limits.max_streams_per_ip)
     if hasattr(store, "app"):
         store.app = app  # so each session's Context can reach its ASGI app
     app.state.heartbeat_seconds = heartbeat_seconds
@@ -1011,6 +1051,33 @@ async def _session(request: Request) -> JSONResponse:
 
 
 async def _stream(request: Request) -> Response:
+    """``GET api/stream``, within the per-address stream cap (ADR-0037, ``Limits``).
+
+    A slot is taken before anything else (so a refused stream creates no session) and given
+    back exactly once: on any refusal, when the stream ends, or if building it raises."""
+    limiter: StreamLimiter = request.app.state.stream_limiter
+    address = peer_address(request.scope)
+    if not limiter.acquire(address):
+        return _denied(429, "too many streams")
+    freed = False
+
+    def release() -> None:
+        nonlocal freed
+        if not freed:
+            freed = True
+            limiter.release(address)
+
+    try:
+        response = await _open_stream(request, release)
+    except BaseException:
+        release()
+        raise
+    if not isinstance(response, StreamingResponse):
+        release()
+    return response
+
+
+async def _open_stream(request: Request, release: Callable[[], None]) -> Response:
     app = request.app
     # One session per browser tab, keyed by the id the shell sends (?sid=...).
     # An id-less connection shares the default session (ADR-0010), unless the app is secure.
@@ -1066,6 +1133,7 @@ async def _stream(request: Request) -> Response:
                 yield chunk
         finally:
             hub.unsubscribe(queue)
+            release()
 
     return StreamingResponse(event_source(), media_type="text/event-stream", headers=_SSE_HEADERS)
 

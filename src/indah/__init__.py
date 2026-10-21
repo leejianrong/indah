@@ -75,6 +75,7 @@ from .components import (
 from .context import ConnectionInfo, Context
 from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
+from .hardening import Limits, Rate
 from .launch import LaunchHandle, launch
 from .push import Topic
 from .reactive import Computed, Signal, batch, computed, effect
@@ -105,6 +106,8 @@ __all__ = [
     "Context",
     "Principal",
     "Policy",
+    "Limits",
+    "Rate",
     "guard",
     "Forbidden",
     "Authenticator",

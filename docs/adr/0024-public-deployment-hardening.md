@@ -1,6 +1,6 @@
 # ADR-0024: Public-deployment hardening for the Fly demo gallery
 
-- Status: Accepted
+- Status: Accepted (the rate limiter, security headers and unconditional X-Forwarded-For trust are superseded in part by ADR-0037 and ADR-0034; CSP by IND-121)
 - Date: 2026-09-20
 - Deciders: Jian (owner)
 
