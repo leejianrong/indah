@@ -5,7 +5,10 @@
 // colours.
 import { Annotation, Compartment, EditorState } from "@codemirror/state";
 import {
+  Decoration,
   EditorView,
+  MatchDecorator,
+  ViewPlugin,
   drawSelection,
   dropCursor,
   highlightActiveLine,
@@ -35,6 +38,25 @@ import { yaml } from "@codemirror/lang-yaml";
 import { tags as t } from "@lezer/highlight";
 
 const External = Annotation.define();
+
+// `{{name}}` template placeholders (semula answers carry {{now}}, {{uuid}}) get a token
+// colour in every language, so they read as slots rather than as text. Highlight only: the
+// names are not completed or validated (IND-138).
+const placeholderMatcher = new MatchDecorator({
+  regexp: /\{\{[^{}\n]*\}\}/g,
+  decoration: Decoration.mark({ class: "cm-tpl" }),
+});
+const placeholderTokens = ViewPlugin.fromClass(
+  class {
+    constructor(view) {
+      this.decorations = placeholderMatcher.createDeco(view);
+    }
+    update(update) {
+      this.decorations = placeholderMatcher.updateDeco(update, this.decorations);
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
 
 export const LANGUAGES = ["json", "yaml", "text"];
 
@@ -108,6 +130,11 @@ const theme = EditorView.theme({
   },
   ".cm-selectionMatch": { backgroundColor: "color-mix(in srgb, var(--secondary) 20%, transparent)" },
   ".cm-placeholder": { color: "var(--muted)" },
+  ".cm-tpl": {
+    color: "var(--secondary)",
+    backgroundColor: "color-mix(in srgb, var(--secondary) 16%, transparent)",
+    borderRadius: "3px",
+  },
   ".cm-panels": {
     backgroundColor: "var(--surface)",
     color: "var(--text)",
@@ -179,6 +206,7 @@ export function createEditor(parent, opts = {}) {
         highlightActiveLine(),
         highlightSelectionMatches(),
         EditorView.lineWrapping,
+        placeholderTokens,
         theme,
         opts.placeholder ? placeholder(opts.placeholder) : [],
         lang.of([]),

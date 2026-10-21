@@ -3369,3 +3369,44 @@ def test_theme_extra_tokens_resolve_in_both_schemes():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_code_editor_highlights_placeholder_tokens_in_text_and_json():
+    """IND-138: {{name}} placeholders get a token colour, and keep it while editing."""
+    from indah import CodeEditor, Column, Session, Signal, create_app
+
+    body = Signal("Hello {{name}}, it is {{now}}.\nPlain {braces} stay plain.")
+    cfg = Signal('{"id": "{{uuid}}"}')
+    root = Column(
+        children=[
+            CodeEditor(body, label="Text", language="text"),
+            CodeEditor(cfg, label="Json", language="json"),
+        ]
+    )
+    handle = launch(create_app(session=Session(root)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator(".cm-content").first).to_be_visible(timeout=10_000)
+                tpl = page.locator(".cm-tpl")
+                expect(tpl).to_have_count(3)
+                assert [t.inner_text() for t in tpl.all()] == ["{{name}}", "{{now}}", "{{uuid}}"]
+                plain = page.locator(".cm-content").first.locator(".cm-line").nth(1)
+                assert plain.locator(".cm-tpl").count() == 0  # single braces are not placeholders
+                # a placeholder typed in picks up the highlight too
+                page.locator(".cm-content").first.click()
+                page.keyboard.press("Control+End")
+                page.keyboard.type(" {{typed}}")
+                expect(page.locator(".cm-tpl", has_text="{{typed}}")).to_have_count(1)
+                # it takes a token colour, not the plain text colour
+                colour = page.locator(".cm-tpl").first.evaluate("e => getComputedStyle(e).color")
+                base = page.locator(".cm-content").first.evaluate("e => getComputedStyle(e).color")
+                assert colour != base
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
