@@ -255,6 +255,19 @@
     postEvent(nodeId, "check", { keys: [...next] });
   }
 
+  // A remote table holds one window, so the header box ticks only the rows on screen. The
+  // bar below says how many are ticked of how many match, and "Select all" asks the server
+  // to gather every matching key (up to props.checkAllMax).
+  let remoteBar = $derived(isRemote && props.checkable && checkedKeys.size > 0);
+  let total = $derived(shown?.total ?? 0);
+  let canSelectAll = $derived(total > checkedKeys.size && total <= (props.checkAllMax ?? 0));
+  function selectAllMatching() {
+    postEvent(nodeId, "check_all", {});
+  }
+  function clearChecked() {
+    postEvent(nodeId, "check", { keys: [] });
+  }
+
   // Row actions: one with `confirm` asks first, the rest post straight away.
   let pending = $state(null); // {action, key}
   function runAction(action, row) {
@@ -383,6 +396,17 @@
       {/if}
     </div>
   {/if}
+  {#if remoteBar}
+    <div class="table-selection" role="status">
+      <span>{checkedKeys.size} of {total} selected</span>
+      {#if canSelectAll}
+        <button type="button" class="ghost" onclick={selectAllMatching}>Select all {total}</button>
+      {:else if total > (props.checkAllMax ?? 0)}
+        <span class="table-count">Too many to select all; narrow the search first</span>
+      {/if}
+      <button type="button" class="ghost" onclick={clearChecked}>Clear</button>
+    </div>
+  {/if}
   <div
     class="table-scroll rich"
     class:virtual={isVirtual}
@@ -400,7 +424,8 @@
             <th class="check-col">
               <input
                 type="checkbox"
-                aria-label="Select all rows"
+                aria-label={isRemote ? "Select the rows on screen" : "Select all rows"}
+                title={isRemote ? "Selects the rows shown; use Select all for every match" : null}
                 checked={allChecked}
                 onchange={toggleAll}
               />

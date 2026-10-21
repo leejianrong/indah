@@ -329,7 +329,7 @@ filtered as they land), a column picker remembered in the browser, and follow-th
 that pauses when the viewer scrolls up. `actions:[{id,label,variant,confirm?}]` adds a button
 per row that posts `action` `{action,key}` (a `confirm` text asks in a dialog first, a UX
 guard only); `checkable` adds a checkbox column whose full set of checked keys is posted as
-`check` `{keys:[...]}` and echoed back in the reactive `checked` prop. Neither changes
+`check` `{keys:[...]}` (and, on a remote table, `check_all` `{}`, which makes the server tick every row matching the current query up to the advertised `checkAllMax`) and echoed back in the reactive `checked` prop. Neither changes
 `select`. **Remote mode** (`remote: true`, no `rows`): the shell debounces (150 ms) search, sort
 and paging into `query` `{search, filters, sort:[field,"asc"|"desc"]|null, offset, limit, seq}`
 and the server answers through one reactive prop, `window` `{rows, total, offset, seq}`, so

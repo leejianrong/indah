@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from indah.components import Col, Table, TableQuery
+from indah.components import MAX_CHECK_ALL, Col, Table, TableQuery
 from indah.reactive import Signal
 
 ROWS = [{"id": f"r{i:03d}", "n": i, "name": f"call {i}"} for i in range(95)]
@@ -174,3 +174,48 @@ def test_virtual_needs_a_height_and_the_rich_form_and_is_a_static_prop():
         _table(virtual=True)  # the body must scroll inside a fixed height
     with pytest.raises(ValueError):
         Table([{"a": 1}], virtual=True, height="10rem")  # classic form
+
+
+# -- select all matches, not just the loaded window (IND-124) ----------------------
+
+
+def _checkable(**kw):
+    checked: Signal[list] = Signal([])
+    return _table(checked=checked, **kw), checked
+
+
+@pytest.mark.unit
+async def test_check_all_collects_every_matching_key_across_windows():
+    t, checked = _checkable()
+    await _ask(t, search="call 1")  # call 1, 10-19, 100+ -> 11 matches in the 95 rows
+    expected = [r["id"] for r in ROWS if "call 1" in r["name"]]
+    assert len(expected) > 1
+    await t.handle("check_all", {})
+    assert checked.value == expected
+
+
+@pytest.mark.unit
+async def test_check_all_walks_more_than_one_loader_window():
+    t, checked = _checkable()
+    await _ask(t)
+    await t.handle("check_all", {})
+    assert len(checked.value) == len(ROWS) == 95  # more than the 50-row window
+    assert t.static_props()["checkAllMax"] == MAX_CHECK_ALL
+
+
+@pytest.mark.unit
+async def test_check_all_keeps_existing_ticks_and_respects_the_cap(monkeypatch):
+    monkeypatch.setattr("indah.components.MAX_CHECK_ALL", 10)
+    t, checked = _checkable()
+    await _ask(t)
+    checked.set(["r094"])
+    await t.handle("check_all", {})
+    assert checked.value[0] == "r094"  # kept, in front
+    assert len(checked.value) == 11  # 10 loaded plus the one already ticked, no duplicates
+
+
+@pytest.mark.unit
+def test_check_all_needs_a_checkable_remote_table_and_a_first_query():
+    assert _table().handle("check_all", {}) is False  # no checked= signal
+    t, _ = _checkable()
+    assert t.handle("check_all", {}) is False  # nothing has been shown yet
