@@ -2916,3 +2916,69 @@ def test_remote_table_select_all_gathers_every_match_not_just_the_window():
                 browser.close()
     finally:
         handle.stop()
+
+
+_RESTART_ROUTED_SERVER = """
+import sys, uvicorn
+from indah.app import create_app
+from indah.components import Column, Link, Router, Text
+from indah.session import Session
+
+word, port = sys.argv[1], int(sys.argv[2])
+
+def factory(ctx):
+    pages = Router(ctx, routes={"/": Text(word + " home"), "/two": Text(word + " two")})
+    return Session(Column(children=[Link(ctx, "go two", to="/two"), pages]))
+
+uvicorn.run(
+    create_app(session_factory=factory, spa=True), host="127.0.0.1", port=port, log_level="error"
+)
+"""
+
+
+@pytest.mark.e2e
+def test_navigated_tab_reopens_on_its_current_page_after_a_server_restart():
+    """IND-126: the reconnect reuses the stream URL from the first connect, so its `path`
+    is the page the tab *started* on. After a restart the tab must land on the page it is
+    on now, not one it left."""
+    import subprocess
+    import sys
+    import time
+    import urllib.request
+
+    from indah.launch import find_free_port
+
+    def start(word: str, port: int):
+        proc = subprocess.Popen([sys.executable, "-c", _RESTART_ROUTED_SERVER, word, str(port)])
+        for _ in range(100):
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.5)
+                return proc
+            except OSError:
+                time.sleep(0.1)
+        proc.kill()
+        raise RuntimeError("server did not start")
+
+    port = find_free_port(18600)
+    proc = start("v1", port)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(f"http://127.0.0.1:{port}/", wait_until="domcontentloaded")
+                expect(page.locator("div.text", has_text="v1 home")).to_be_visible()
+                page.get_by_role("link", name="go two").click()
+                expect(page.locator("div.text", has_text="v1 two")).to_be_visible()
+
+                proc.kill()
+                proc.wait()
+                proc = start("v2", port)
+
+                expect(page.locator("div.text", has_text="v2 two")).to_be_visible(timeout=20_000)
+                assert page.url.endswith("/two")
+            finally:
+                browser.close()
+    finally:
+        proc.kill()
+        proc.wait()
