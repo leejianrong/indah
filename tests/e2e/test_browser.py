@@ -2835,3 +2835,41 @@ def test_search_inputs_are_rounded_and_a_sticky_header_hides_scrolled_rows():
             browser.close()
     finally:
         handle.stop()
+
+
+def _tooltip_app():
+    from indah import Column, Session, Text, Theme, create_app
+
+    return create_app(
+        session_factory=lambda: Session(
+            Column(children=[Text("Hover this wide line", tooltip="Over here")])
+        ),
+        theme=Theme(light={"primary": "#1f6feb"}, dark={"primary": "#79b8ff"}),
+    )
+
+
+@pytest.mark.e2e
+def test_default_logo_ignores_the_app_theme_and_a_tooltip_follows_the_pointer():
+    """A themed app keeps the Bunga colours (they are brand, not a theme role), and a
+    tooltip on a full-width element opens at the pointer, not at the element's centre."""
+    handle = launch(_tooltip_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 1200, "height": 700})
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                petal = page.locator("header.brand svg.mark path").first
+                assert petal.evaluate("e => getComputedStyle(e).fill") == "rgb(181, 41, 107)"
+                line = page.get_by_text("Hover this wide line")
+                box = line.bounding_box()
+                line.hover(position={"x": 30, "y": 5})
+                tip = page.locator("[role=tooltip]")
+                expect(tip).to_be_visible()
+                tb = tip.bounding_box()
+                assert abs(tb["x"] - (box["x"] + 30)) < 12  # at the pointer, not the middle
+                assert tb["y"] > box["y"]  # below it
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
