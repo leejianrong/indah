@@ -78,3 +78,11 @@ runs its reactive code, with empty params. The mitigation is the rule already st
 read params with `ctx.params.value.get(...)`, never `[...]`, and keep expensive work behind a
 `computed` so it runs only when its inputs exist. `tests/unit/test_router.py` pins the
 behaviour, and the user docs carry the rule next to `Router`.
+
+## Amendment (IND-126): a re-init re-sends the current path
+
+An automatic `EventSource` reconnect reuses the stream URL from the first connect, so its
+`path` can be a page the tab has since left. After a server restart the fresh session was built
+for that old path and the tab showed it until a reload. Now, on any `init` after the first, the
+shell finds the `router` node and posts `navigate {path: appPath()}`; the server updates
+`ctx.path` and the page patches in. No wire change: `navigate` already existed.

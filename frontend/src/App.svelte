@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { apiUrl, streamUrl, pushPath, PROTOCOL_VERSION } from "./api.js";
+  import { apiUrl, streamUrl, pushPath, appPath, postEvent, PROTOCOL_VERSION } from "./api.js";
   import { structure, nodeProps, status, toasts, shortcutRegistry, helpOpen } from "./stores.js";
   import Node from "./Node.svelte";
   import Overlay from "./Overlay.svelte";
@@ -34,6 +34,16 @@
     if (ttl > 0) setTimeout(() => dismissToast(id), ttl * 1000);
   }
 
+  function findRouter(node) {
+    if (node.type === "router") return node;
+    for (const child of node.children || []) {
+      const hit = findRouter(child);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  let inits = 0;
   function applyMessage(msg) {
     if (!msg || msg.v !== PROTOCOL_VERSION) {
       status.set({ live: false, text: "protocol mismatch, reload" });
@@ -43,6 +53,11 @@
       const map = new Map();
       structure.set(splitTree(msg.root, map));
       nodeProps.set(map);
+      // A re-init (the server restarted, or the buffer had a gap) was built for the path in
+      // the stream URL from the first connect, which may be a page the tab has left. Tell the
+      // server which page the address bar is on now; the reply is an ordinary patch.
+      const router = inits++ > 0 ? findRouter(msg.root) : null;
+      if (router) postEvent(router.id, "navigate", { path: appPath() });
     } else if (msg.type === "patch") {
       nodeProps.update((map) => {
         for (const change of msg.changes || []) {
