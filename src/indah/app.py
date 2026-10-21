@@ -12,6 +12,7 @@ Everything is served from one Starlette app to survive the Colab/Runpod proxies
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import math
 import os
@@ -548,6 +549,7 @@ def create_app(
             Route("/api/stream", _stream, methods=["GET"]),
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
+            Route("/api/editor.js", _editor_js, methods=["GET"]),
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
             *([Route("/api/brand/logo", _logo, methods=["GET"])] if logo is not None else []),
             *([Route("/{path:path}", _spa_index, methods=["GET"])] if spa else []),
@@ -645,6 +647,25 @@ async def _spa_index(request: Request) -> Response:
     if path == "api" or path.startswith("api/"):
         return Response(status_code=404)
     return await _index(request)
+
+
+_EDITOR_ETAG: str | None = None
+
+
+async def _editor_js(request: Request) -> Response:
+    """The lazily loaded code editor module (ADR-0032), served from the wheel. Revalidated
+    with an ETag so a new indah version is picked up, but never re-downloaded needlessly."""
+    global _EDITOR_ETAG
+    try:
+        data = files("indah.static").joinpath("editor.js").read_bytes()
+    except FileNotFoundError:
+        return Response(status_code=404)
+    if _EDITOR_ETAG is None:
+        _EDITOR_ETAG = '"' + hashlib.sha1(data).hexdigest()[:16] + '"'
+    headers = {"ETag": _EDITOR_ETAG, "Cache-Control": "no-cache"}
+    if request.headers.get("if-none-match") == _EDITOR_ETAG:
+        return Response(status_code=304, headers=headers)
+    return Response(data, media_type="text/javascript", headers=headers)
 
 
 _MAX_LOGO_BYTES = 512 * 1024

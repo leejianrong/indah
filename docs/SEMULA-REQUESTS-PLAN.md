@@ -17,7 +17,7 @@
 | IND-E21 | S2 overlays + pending queue | **Done** (PRs #116-#122); `make demo-pending` |
 | IND-E22 | S3 big tables, panes | **Done** (PRs #124-#127); `make demo-entries` |
 | IND-E23 | S4 routing | **Done** (PRs #128-#130); `make demo-routes` |
-| IND-E24 | S5 editors, dynamic rows | In progress (IND-108 JsonTree, IND-109 Diff, IND-110 keyed `List`, IND-112 demo done; IND-111 held for Q4) |
+| IND-E24 | S5 editors, dynamic rows | In progress (IND-108 JsonTree, IND-109 Diff, IND-110 keyed `List`, IND-112 demo done; IND-111 `CodeEditor` built after the owner's Q4 call, ADR-0032) |
 | IND-E25 | H-A identity | Not started (gated by Q1 checkpoint after S3) |
 | IND-E26 | H-B authz, secrets, hardening | Not started |
 

@@ -209,6 +209,29 @@ marked as such.
 `TextArea(signal, label=, rows=)` is a multi-line input. Like every input, the browser owns
 the text while the viewer is typing in it, so a late echo from the server never overwrites it.
 
+### `CodeEditor` for JSON and YAML
+
+```python
+body = indah.Signal('{"model": "gpt-4o"}')
+
+indah.CodeEditor(
+    body,
+    language="json",  # "json" (default), "yaml" or "text"
+    label="Request",
+    height="24rem",
+    format_button=True,  # JSON only: re-indent, keeping key order
+    on_save=save,  # Ctrl/Cmd-S, called with the signal already up to date
+)
+indah.CodeEditor(old_revision, read_only=True)  # a history snapshot
+```
+
+It highlights, indents, closes brackets and quotes, folds, searches, and for JSON marks a
+parse error with its position. It is loaded the first time an editor appears, so apps without
+one never download it (about 180 KB compressed). A very large body is limited by
+`create_app(max_event_bytes=)`, 1 MiB by default. Tab indents; press Ctrl/Cmd-M to switch
+that off so the keyboard can leave the editor. If the editor cannot load, a plain text area
+with the same binding is shown.
+
 For a variable number of editable rows, use a keyed `List`:
 
 ```python

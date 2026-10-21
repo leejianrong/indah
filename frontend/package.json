@@ -6,10 +6,20 @@
   "description": "Pre-built Svelte shell for indah. Bundled into the Python wheel; never installed at runtime.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "build:indah": "vite build && node -e \"require('fs').copyFileSync('dist/index.html','../src/indah/static/index.html')\""
+    "build": "vite build && vite build -c vite.editor.config.js",
+    "build:indah": "npm run build && node -e \"const fs=require('fs');fs.copyFileSync('dist/index.html','../src/indah/static/index.html');fs.copyFileSync('dist-editor/editor.js','../src/indah/static/editor.js')\""
   },
   "devDependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-yaml": "^6.1.3",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "@lezer/highlight": "^1.2.5",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "leaflet": "^1.9.4",
     "svelte": "^5.19.0",

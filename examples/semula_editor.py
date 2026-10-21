@@ -13,7 +13,7 @@ Three tabs:
 * **Playground** - a keyed ``List`` of messages (role ``select``, a textarea, remove), add and
   edit them freely, then Run to stream a reply into ``StreamText``.
 
-What it shows (IND-E24): ``TextArea``, ``Switch``, ``Modal``, ``Diff``, ``Badge``,
+What it shows (IND-E24): ``CodeEditor``, ``Switch``, ``Modal``, ``Diff``, ``Badge``,
 ``Button(confirm=)``, ``ctx.toast``, ``Tabs``, the keyed ``List`` with ``on_item``, and
 ``StreamText``. Nothing here is real semula data.
 """
@@ -150,8 +150,16 @@ def build_editor_app(store: EntryStore) -> Any:
                         indah.Switch(pinned, label="Pinned"),
                     ]
                 ),
-                indah.TextArea(request, label="Request (JSON)", rows=8),
-                indah.TextArea(response, label="Response (JSON)", rows=8),
+                indah.CodeEditor(
+                    request, label="Request (JSON)", height="12rem", format_button=True
+                ),
+                indah.CodeEditor(
+                    response,
+                    label="Response (JSON)",
+                    height="12rem",
+                    format_button=True,
+                    on_save=save,  # Ctrl/Cmd-S
+                ),
                 indah.Row(
                     children=[
                         indah.Button("Save", save),

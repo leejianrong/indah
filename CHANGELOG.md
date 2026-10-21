@@ -9,6 +9,17 @@ version, `protocol_version`, and it is still **1**: every change below is additi
 Earlier releases (0.1.0 to 0.2.2) are described on the
 [GitHub Releases page](https://github.com/leejianrong/indah/releases).
 
+## [Unreleased]
+
+### Added
+
+- **`CodeEditor`**: a JSON, YAML and plain-text editor (CodeMirror 6) with highlighting,
+  auto-indent, auto-closing brackets and quotes, bracket matching, folding, search, line
+  numbers, JSON lint with the error position, a read-only mode, a Format button that keeps key
+  order, and a Ctrl/Cmd-S save hook. It loads lazily from `GET /api/editor.js` the first time
+  one renders (about 180 KB compressed, only for apps that use it), follows the app theme, and
+  falls back to a text area if it cannot load. ADR-0032.
+
 ## [0.3.0] - 2026-10-21
 
 Dashboard support. This release adds what an app needs when indah lives inside a larger

@@ -72,3 +72,10 @@ def test_runtime_dependencies_are_python_only():
         assert not any(tool in name for tool in _JS_TOOLCHAIN), (
             f"runtime dependency {dep!r} pulls in a JS toolchain (violates R4)"
         )
+
+
+@pytest.mark.unit
+def test_code_editor_module_ships_in_the_package():
+    editor = files("indah.static").joinpath("editor.js").read_bytes()
+    assert len(editor) > 100_000  # CodeMirror, not a placeholder
+    assert b"createEditor" in editor
