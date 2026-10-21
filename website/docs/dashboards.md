@@ -16,12 +16,12 @@ from starlette.routing import Mount
 import indah
 
 ui = indah.create_app(
-    session_factory=build,          # called once per open tab
+    session_factory=build,  # called once per open tab
     title="my service",
     theme=indah.Theme(light={"primary": "#1f6feb"}, dark={"primary": "#79b8ff"}),
-    density="compact",              # tighter tables across the app
+    density="compact",  # tighter tables across the app
     spa=True,
-    proxy_flush=False,              # no window-buffering proxy in front of you
+    proxy_flush=False,  # no window-buffering proxy in front of you
 )
 app = Starlette(routes=[Mount("/ui", app=ui)])
 ```
@@ -44,14 +44,15 @@ A `Topic` lives at app level. Any task publishes to it, and each tab follows it,
 updates while per-tab state (filters, selection) stays per tab.
 
 ```python
-requests = indah.Topic("requests", replay=1000)      # app level, keeps the last 1000
+requests = indah.Topic("requests", replay=1000)  # app level, keeps the last 1000
 
 requests.publish({"id": "01J...", "result": "hit"})  # from a task on the event loop
-requests.publish_threadsafe({...})                   # from any other thread
+requests.publish_threadsafe({...})  # from any other thread
+
 
 def build(ctx):
-    rows = ctx.tail(requests, limit=1000)            # a bounded Stream, seeded from history
-    waiting = ctx.latest(pending, initial=[])        # a signal with the newest item
+    rows = ctx.tail(requests, limit=1000)  # a bounded Stream, seeded from history
+    waiting = ctx.latest(pending, initial=[])  # a signal with the newest item
 ```
 
 A `Stream` sends only new rows to the browser, so a growing log costs O(new rows), not
@@ -66,20 +67,20 @@ from indah import Table, Col, RowAction, Signal
 
 checked = Signal([])
 table = Table(
-    rows=rows,                                   # a list, a signal, or a Stream
+    rows=rows,  # a list, a signal, or a Stream
     key="id",
     columns=[
-        Col("ts", "When", kind="time"),          # "3s ago", refreshed live
+        Col("ts", "When", kind="time"),  # "3s ago", refreshed live
         Col("id", kind="mono"),
         Col("result", kind="badge", tones={"hit": "ok", "miss": "warn", "error": "err"}),
         Col("ms", kind="number"),
     ],
-    height="24rem",                              # the body scrolls under a sticky header
-    search=True,                                 # a filter box
+    height="24rem",  # the body scrolls under a sticky header
+    search=True,  # a filter box
     column_toggle=True,
-    follow=True,                                 # keep the newest row in view (streamed rows)
+    follow=True,  # keep the newest row in view (streamed rows)
     actions=[RowAction("Reject", reject, confirm="Reject this call?")],
-    checked=checked,                             # a checkbox column plus select-all
+    checked=checked,  # a checkbox column plus select-all
 )
 ```
 
@@ -97,14 +98,15 @@ def loader(q: indah.TableQuery):
     rows, total = db.page(search=q.search, sort=q.sort, offset=q.offset, limit=q.limit)
     return rows, total
 
+
 table = Table(
     columns=[Col("id", kind="mono"), Col("name")],
     key="id",
-    remote=loader,                  # sync loaders run in a worker thread
-    virtual=True,                   # render only the rows in view
+    remote=loader,  # sync loaders run in a worker thread
+    virtual=True,  # render only the rows in view
     height="30rem",
     search=True,
-    reload_on=[project],            # re-run the last query when a signal changes
+    reload_on=[project],  # re-run the last query when a signal changes
 )
 ```
 
@@ -122,20 +124,22 @@ Things to know about a remote table:
 ```python
 open_ = indah.Signal(False)
 
-indah.Button("Delete", delete, confirm="Delete this entry?")   # asks first
+indah.Button("Delete", delete, confirm="Delete this entry?")  # asks first
 indah.Modal(title="Conflict", open=open_, size="lg", children=[...])
 indah.Drawer(title="Review", open=open_, side="right", children=[...])
 
-ctx.toast("Saved", kind="success")            # info, success, warn or error; ttl=0 sticks
+ctx.toast("Saved", kind="success")  # info, success, warn or error; ttl=0 sticks
 indah.Badge(lambda: f"{n.value} waiting", tone="warn")
 indah.Switch(pinned, label="Pinned")
 indah.Text("hover me", tooltip="Shown on hover and on keyboard focus")
 
-indah.Shortcuts({
-    "j": (next_row, "Next call"),             # the optional text feeds the ? help
-    "a": (approve, "Approve"),
-    "g l": (go_log, "Go to the log"),         # a sequence
-})
+indah.Shortcuts(
+    {
+        "j": (next_row, "Next call"),  # the optional text feeds the ? help
+        "a": (approve, "Approve"),
+        "g l": (go_log, "Go to the log"),  # a sequence
+    }
+)
 ```
 
 `confirm=` is a UX guard only: the server still runs any click it receives, so check
@@ -156,10 +160,12 @@ def build(ctx):
         },
         not_found=indah.Text("No such page"),
     )
-    nav = indah.Column(children=[
-        indah.Link(ctx, "Overview", to="/"),
-        indah.Link(ctx, "Projects", to="/projects", match="prefix"),
-    ])
+    nav = indah.Column(
+        children=[
+            indah.Link(ctx, "Overview", to="/"),
+            indah.Link(ctx, "Projects", to="/projects", match="prefix"),
+        ]
+    )
     return indah.Session(indah.Sidebar(children=[nav, pages]))
 ```
 
@@ -179,15 +185,19 @@ page it is on now.
 
 ```python
 indah.SplitPane(left, right, direction="horizontal", initial=0.4, height="30rem")
-indah.MasterDetail(table, detail, open=drawer_open)   # a drawer on a narrow screen
+indah.MasterDetail(table, detail, open=drawer_open)  # a drawer on a narrow screen
 ```
 
 ## Viewers: `JsonTree` and `Diff`
 
 ```python
-indah.JsonTree(lambda: entry.value, expanded=2)          # search, collapse all, copy path
-indah.Diff(old_text, new_text, mode="split",             # or "unified"
-           labels=("cached", "incoming"))
+indah.JsonTree(lambda: entry.value, expanded=2)  # search, collapse all, copy path
+indah.Diff(
+    old_text,
+    new_text,
+    mode="split",  # or "unified"
+    labels=("cached", "incoming"),
+)
 ```
 
 `Diff` is computed in Python over pretty-printed, key-sorted JSON (text that is not JSON is
@@ -204,11 +214,13 @@ For a variable number of editable rows, use a keyed `List`:
 ```python
 rows = indah.Signal([{"id": "m1", "role": "user", "content": "hi"}])
 
-def on_item(key, event, value):                          # sync or async
+
+def on_item(key, event, value):  # sync or async
     if event == "remove":
         rows.set([r for r in rows.value if r["id"] != key])
     elif event == "content":
         rows.set([{**r, "content": value} if r["id"] == key else r for r in rows.value])
+
 
 indah.List(rows, key="id", item=ROW_SPEC, on_item=on_item)
 ```
