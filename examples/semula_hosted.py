@@ -11,12 +11,25 @@ Starlette's ``scope["user"]``, and ``create_app(secure=True)`` does the rest.
 What it shows (IND-E25): ``ctx.user`` in the session factory, one signed session per login
 (a reload keeps its counter and notes), another user's session id refused, ``ctx.sign_out()``
 ending every tab of one user (and the fake login with it), cross-origin POSTs refused, and an
-audit hook feeding a per-user table. It is a stand-in: never use a cookie like this for real.
+audit hook feeding a per-user table.
+
+And (IND-E26): three roles with a ``Policy``. The viewer (bob) has no "Add entry" button and no
+token screen in their page at all (omitted when the tree is built, not hidden); the editor
+(alice) may add entries; the admin (carol) also gets an API-tokens screen: create a token (it is
+revealed once, with Copy, and never replayed on a reload), list the tokens, revoke one with a
+confirm. Every action is also guarded where it runs, so a role revoked mid-session fails the next
+click. The app runs with the hardening switched on: a strict CSP, security headers, rate and
+stream limits. The login is a stand-in: never use a cookie like this for real. For a real login
+see ``examples/oidc_login.py``.
 """
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
 import html
+import secrets
+import time
 from typing import Any
 
 from starlette.applications import Starlette
@@ -30,13 +43,19 @@ import indah
 
 SECRET = "demo-only-secret-change-me-0123456789"  # a real app reads this from its environment
 
-# name -> (display name, roles). Roles are shown, and drive authorization in a later slice.
+# name -> (display name, roles). Roles drive what each page contains (see POLICY).
 USERS: dict[str, tuple[str, frozenset[str]]] = {
     "alice": ("Alice Tan", frozenset({"editor"})),
     "bob": ("Bob Lim", frozenset({"viewer"})),
     "carol": ("Carol Ng", frozenset({"admin"})),
 }
 COOKIE = "demo_user"
+
+# Roles to permissions (ADR-0035): viewers read, editors do anything to entries, admins manage
+# tokens too. indah supplies the mechanism; this table is the app's policy.
+POLICY = indah.Policy(
+    {"viewer": ["entries:read"], "editor": ["entries:*"], "admin": ["*"]},
+)
 
 
 class FakeIdp:
@@ -79,7 +98,46 @@ def _authenticator(request: Request) -> indah.Principal | None:
     return indah.Principal(id=user.username, name=display, roles=roles, workspace="demo")
 
 
-def build_ui(topics: dict[str, indah.Topic], revoked: set[str]) -> Any:
+class TokenRegistry:
+    """API tokens for the whole app (semula's core would own these). Only a hash is kept: the
+    secret exists in the page of whoever created it, once, and nowhere else."""
+
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+        self.digests: dict[str, str] = {}
+        self.topic: indah.Topic = indah.Topic("tokens", replay=1)
+
+    def snapshot(self) -> list[dict[str, Any]]:
+        return sorted(self.rows.values(), key=lambda r: -r["created"])
+
+    def create(self, name: str, owner: str) -> str:
+        secret = "ind_" + secrets.token_urlsafe(24)
+        token_id = secret[4:12]
+        self.digests[token_id] = hashlib.sha256(secret.encode()).hexdigest()
+        self.rows[token_id] = {
+            "id": token_id,
+            "name": name,
+            "owner": owner,
+            "created": int(time.time() * 1000),
+            "status": "active",
+        }
+        self.topic.publish(self.snapshot())
+        return secret
+
+    def revoke(self, token_id: str) -> bool:
+        row = self.rows.get(token_id)  # a stale row may name a token that is gone: tolerate it
+        if row is None or row["status"] == "revoked":
+            return False
+        self.rows[token_id] = {**row, "status": "revoked"}
+        self.topic.publish(self.snapshot())
+        return True
+
+
+def build_ui(
+    topics: dict[str, indah.Topic], revoked: set[str], registry: TokenRegistry | None = None
+) -> Any:
+    registry = registry or TokenRegistry()
+
     def build(ctx: indah.Context) -> indah.Session:
         me = ctx.user
         assert me is not None  # secure=True: a factory only ever runs for a signed-in user
@@ -88,6 +146,57 @@ def build_ui(topics: dict[str, indah.Topic], revoked: set[str]) -> Any:
         notes = indah.Signal("")
         topic = topics.setdefault(me.id, indah.Topic(f"audit-{me.id}", replay=50))
         audit = ctx.tail(topic, limit=50)
+
+        entries: indah.Signal[list[str]] = indah.Signal([])
+
+        @indah.guard("entries:write")
+        def add_entry() -> None:
+            entries.set([*entries.value, f"entry {len(entries.value) + 1}"])
+
+        def tokens_card() -> indah.Component:
+            """The admin-only screen: create (revealed once), list, revoke with a confirm."""
+            label = indah.Signal("")
+            revealed: indah.Signal[str | None] = indah.Signal(None)
+            rows = ctx.latest(registry.topic, initial=registry.snapshot())
+
+            @indah.guard("tokens:manage")
+            def create() -> None:
+                revealed.set(registry.create(label.value.strip() or "unnamed", me.id))
+                label.set("")
+                ctx.toast("Token created. Copy it now: it is shown once.", kind="success")
+
+            @indah.guard("tokens:manage")
+            def revoke(token_id: str) -> None:
+                if registry.revoke(token_id):
+                    ctx.toast("Token revoked.", kind="warn")
+
+            return indah.Card(
+                title="API tokens (admins only)",
+                children=[
+                    indah.TextInput(
+                        label, label="Name", placeholder="ci-pipeline", on_submit=create
+                    ),
+                    indah.Button("Create token", create),
+                    indah.SecretReveal(revealed, label="New API token"),
+                    indah.Table(
+                        rows=rows,
+                        key="id",
+                        height="12rem",
+                        columns=[
+                            indah.Col("name"),
+                            indah.Col("id", "Token id", kind="mono"),
+                            indah.Col("owner"),
+                            indah.Col("created", "Created", kind="time", time_format="clock"),
+                            indah.Col(
+                                "status", kind="badge", tones={"active": "ok", "revoked": "err"}
+                            ),
+                        ],
+                        actions=[
+                            indah.RowAction("Revoke", revoke, confirm="Revoke this token?"),
+                        ],
+                    ),
+                ],
+            )
 
         def sign_out() -> None:
             revoked.add(me.id)  # the fake login ends too; a real app clears its own cookie
@@ -147,6 +256,18 @@ def build_ui(topics: dict[str, indah.Topic], revoked: set[str]) -> Any:
                             )
                         ],
                     ),
+                    indah.Card(
+                        title="Entries",
+                        children=[
+                            indah.Text(lambda: f"{len(entries.value)} entries (you can read)"),
+                            # omitted from a viewer's page entirely, and guarded where it runs
+                            *ctx.only(
+                                "entries:write",
+                                lambda: indah.Button("Add entry", add_entry, variant="tonal"),
+                            ),
+                        ],
+                    ),
+                    *ctx.only("tokens:manage", lambda: tokens_card()),
                 ]
             )
         )
@@ -159,6 +280,12 @@ def build_ui(topics: dict[str, indah.Topic], revoked: set[str]) -> Any:
         secure=True,
         secret=SECRET,
         auth=_authenticator,
+        policy=POLICY,
+        # hardening for a hosted app (ADR-0037, ADR-0038): the public rate limits plus a stream
+        # cap, security headers and a strict CSP. Behind a gateway also set trusted_proxies.
+        limits=dataclasses.replace(indah.Limits.public(), max_streams_per_ip=10),
+        security_headers=True,
+        csp="strict",
         proxy_flush=False,
         audit=lambda e: _record(topics, e),
     )
@@ -203,7 +330,8 @@ def _login_page() -> str:
 def build_app() -> Starlette:
     revoked: set[str] = set()
     topics: dict[str, indah.Topic] = {}
-    ui = FakeIdp(build_ui(topics, revoked), revoked)
+    registry = TokenRegistry()
+    ui = FakeIdp(build_ui(topics, revoked, registry), revoked)
 
     async def login(request: Request) -> Response:
         name = request.query_params.get("user")
@@ -220,6 +348,7 @@ def build_app() -> Starlette:
     app = Starlette(routes=[Route("/", root), Route("/login", login), Mount("/ui", app=ui)])
     app.state.revoked = revoked
     app.state.topics = topics
+    app.state.tokens = registry
     app.state.ui = ui
     return app
 

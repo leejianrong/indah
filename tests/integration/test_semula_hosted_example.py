@@ -104,3 +104,126 @@ async def test_signing_out_revokes_the_fake_login_until_the_next_sign_in():
         assert (
             await c.post("/ui/api/session", json={}, headers={"X-User": "alice"})
         ).status_code == 200
+
+
+def _find(node, **want):
+    """The first node in a snapshot whose type and props match ``want`` (props by name)."""
+    props = node.get("props", {})
+    if all(node.get(k, props.get(k)) == v for k, v in want.items()):
+        return node
+    for child in node.get("children", []):
+        found = _find(child, **want)
+        if found:
+            return found
+    return None
+
+
+def _all(node, type_):
+    found = [node] if node.get("type") == type_ else []
+    for child in node.get("children", []):
+        found += _all(child, type_)
+    return found
+
+
+async def _open(app, c, user):
+    token = await _token(c, user)
+    # touch the session so it exists (an unknown component is a 400 and creates it)
+    await c.post(
+        "/ui/api/event",
+        json={"sid": token, "component": "none", "event": "x"},
+        headers={"X-User": user},
+    )
+    session = app.state.ui.app.state.store.get(token.split(".")[0]).session
+    return token, session
+
+
+async def _click(c, user, token, node_id, event="click", payload=None):
+    return await c.post(
+        "/ui/api/event",
+        json={"sid": token, "component": node_id, "event": event, "payload": payload or {}},
+        headers={"X-User": user},
+    )
+
+
+@pytest.mark.integration
+async def test_each_role_gets_only_the_ui_it_may_use():
+    app = ex.build_app()
+    async with _client(app) as c:
+        trees = {}
+        for user in ("bob", "alice", "carol"):
+            _, session = await _open(app, c, user)
+            trees[user] = session.snapshot()
+    add = {u: _find(t, type="button", label="Add entry") for u, t in trees.items()}
+    tokens = {u: _find(t, type="secretreveal") for u, t in trees.items()}
+    assert add["bob"] is None and add["alice"] and add["carol"]  # viewer: no editing at all
+    assert tokens["bob"] is None and tokens["alice"] is None and tokens["carol"]  # admin only
+    assert "API tokens" not in str(trees["bob"]) and "API tokens" not in str(trees["alice"])
+
+
+@pytest.mark.integration
+async def test_admin_creates_a_token_it_is_shown_once_listed_and_revoked_with_a_hash_only_store():
+    app = ex.build_app()
+    async with _client(app) as c:
+        token, session = await _open(app, c, "carol")
+        hub = app.state.ui.app.state.store.get(token.split(".")[0]).hub
+        queue = hub.subscribe()
+        name = _find(session.snapshot(), type="textinput", label="Name")
+        create = _find(session.snapshot(), type="button", label="Create token")
+        await _click(c, "carol", token, name["id"], "input", {"value": "ci"})
+        ok = await _click(c, "carol", token, create["id"])
+        assert ok.status_code == 200
+        (row,) = app.state.tokens.snapshot()
+        assert row["name"] == "ci" and row["owner"] == "carol" and row["status"] == "active"
+        reveal = session.find(_find(session.snapshot(), type="secretreveal")["id"])
+        secret = reveal._value.value  # noqa: SLF001
+        assert secret.startswith("ind_") and secret[4:12] == row["id"]
+        # delivered live to the creating tab, kept out of the snapshot and the replay history
+        live = str([m for _, m in list(queue._queue)])  # noqa: SLF001
+        assert secret in live
+        assert secret not in str(session.snapshot()) and secret not in str(hub.history())
+        assert secret not in str(app.state.tokens.rows) and secret not in str(
+            app.state.tokens.digests
+        )
+        # revoke it from the table's row action
+        (table,) = [t for t in _all(session.snapshot(), "table") if t["props"].get("actions")]
+        revoke_id = table["props"]["actions"][0]["id"]
+        gone = await c.post(
+            "/ui/api/event",
+            json={
+                "sid": token,
+                "component": table["id"],
+                "event": "action",
+                "payload": {"action": revoke_id, "key": row["id"]},
+            },
+            headers={"X-User": "carol"},
+        )
+        assert gone.status_code == 200
+        assert app.state.tokens.rows[row["id"]]["status"] == "revoked"
+
+
+@pytest.mark.integration
+async def test_a_role_revoked_mid_session_cannot_create_a_token_any_more():
+    app = ex.build_app()
+    async with _client(app) as c:
+        token, session = await _open(app, c, "carol")
+        create = _find(session.snapshot(), type="button", label="Create token")
+        original = ex.USERS["carol"]
+        ex.USERS["carol"] = (original[0], frozenset({"viewer"}))  # the admin was demoted
+        try:
+            resp = await _click(c, "carol", token, create["id"])
+        finally:
+            ex.USERS["carol"] = original
+    assert resp.status_code == 403 and app.state.tokens.snapshot() == []
+
+
+@pytest.mark.integration
+async def test_an_editor_adds_an_entry_and_a_viewer_who_forges_the_click_is_refused():
+    app = ex.build_app()
+    async with _client(app) as c:
+        a_token, a_session = await _open(app, c, "alice")
+        add = _find(a_session.snapshot(), type="button", label="Add entry")
+        assert (await _click(c, "alice", a_token, add["id"])).status_code == 200
+        assert "1 entries" in str(a_session.snapshot())
+        b_token, b_session = await _open(app, c, "bob")
+        # bob's tree has no such button, but he can still POST its id: the guard stops it
+        assert (await _click(c, "bob", b_token, add["id"])).status_code == 400  # not in his tree
