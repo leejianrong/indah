@@ -54,3 +54,14 @@ per-component rules.
   their text colour changed slightly. No wire change, no `protocol_version` bump.
 - Known gaps, recorded rather than hidden: states are still per-component rules, text sizes
   are literals on a ladder, `Modal` has no position option, and `Button` has no disabled state.
+
+## Amendment (2026-10-21, IND-134): app-defined `x-` tokens
+
+Decision 5 says a new role is a design decision. An app that needs its own role (semula wanted
+a row-hover fill and a status colour) is not asking the framework for one, so `Theme` gains
+`extra_light=` and `extra_dark=`: names must be `x-<lowercase words>` and are emitted as
+`--x-<name>`. The prefix means an extra can never shadow a core role, and `light=` / `dark=`
+still reject anything outside the core set, so the framework's roles stay closed. Values pass
+the same allowlist as every other theme value. Components inside indah never read an `x-`
+token; only the app's own CSS does, so nothing in the shell depends on an app's choice. The
+drift test is unchanged, because it checks core roles, not the open `x-` space.

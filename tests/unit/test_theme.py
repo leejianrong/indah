@@ -77,3 +77,29 @@ def test_ordinary_css_values_are_accepted():
         },
         font='"IBM Plex Sans", system-ui, sans-serif',
     )
+
+
+@pytest.mark.unit
+def test_extra_tokens_are_emitted_per_scheme_and_stay_prefixed():
+    css = Theme(
+        extra_light={"x-brand": "#b5296b", "--x-row-hover": "rgba(0, 0, 0, .04)"},
+        extra_dark={"x-brand": "#ff7ab6"},
+    ).css()
+    assert "--x-brand: #b5296b;" in css and "--x-row-hover: rgba(0, 0, 0, .04);" in css
+    assert css.index("--x-brand: #b5296b;") < css.index('[data-theme="dark"]')
+    assert "--x-brand: #ff7ab6;" in css.split('[data-theme="dark"]')[1]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("name", ["brand", "x_brand", "X-brand", "x-", "x-a b", "primary", "x-a;b"])
+def test_extra_token_names_must_be_x_prefixed_words(name):
+    with pytest.raises(ValueError, match="x-<name>"):
+        Theme(extra_light={name: "#fff"})
+
+
+@pytest.mark.unit
+def test_extra_token_values_get_the_same_checks_and_core_roles_stay_closed():
+    with pytest.raises(ValueError, match="allowed CSS value"):
+        Theme(extra_light={"x-bad": "red; } body { display: none"})
+    with pytest.raises(ValueError, match="unknown light theme token"):
+        Theme(light={"x-brand": "#fff"})  # an extra goes in extra_light, not light
