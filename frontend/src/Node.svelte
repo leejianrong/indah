@@ -258,9 +258,16 @@
     {#if (props.items ?? []).length === 0}
       {#if props.empty}<div class="list-empty">{props.empty}</div>{/if}
     {:else}
-      {#each props.items ?? [] as item, i (item?.key ?? item?.id ?? i)}
+      {#each props.items ?? [] as item, i (props.keyField ? item[props.keyField] : (item?.key ?? item?.id ?? i))}
         {#if props.template}
-          <div class="list-item"><Custom spec={props.template} props={item} nodeId={node.id} /></div>
+          <div class="list-item">
+            <Custom
+              spec={props.template}
+              props={item}
+              nodeId={node.id}
+              row={props.keyField ? { key: item[props.keyField], index: i } : null}
+            />
+          </div>
         {:else}
           <div class="list-item">{item}</div>
         {/if}

@@ -2982,3 +2982,72 @@ def test_navigated_tab_reopens_on_its_current_page_after_a_server_restart():
     finally:
         proc.kill()
         proc.wait()
+
+
+def _keyed_list_app():
+    import asyncio
+
+    from indah import Column, List, Session, Signal, Text, create_app
+
+    rows = Signal(
+        [
+            {"id": "a", "text": "one", "label": "remove"},
+            {"id": "b", "text": "two", "label": "remove"},
+        ]
+    )
+    item = {
+        "tag": "div",
+        "children": [
+            {"tag": "textarea", "bind": {"value": "text"}, "on": {"input": {"event": "edit"}}},
+            {"tag": "button", "text": "label", "on": {"click": {"event": "remove"}}},
+        ],
+    }
+
+    async def on_item(key, event, value):
+        if event == "edit":
+            await asyncio.sleep(0.4)  # a laggy round trip: echoes land while the user types
+            rows.set([{**r, "text": value} if r["id"] == key else r for r in rows.value])
+        elif event == "remove":
+            rows.set([r for r in rows.value if r["id"] != key])
+
+    root = Column(
+        children=[
+            List(rows, key="id", item=item, on_item=on_item),
+            Text(lambda: " | ".join(r["text"] for r in rows.value)),
+        ]
+    )
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_keyed_list_row_keeps_focus_and_text_through_late_echoes_and_removals():
+    """IND-110: typing in a row while stale echoes arrive keeps the typed text and focus
+    (ADR-0013), events carry the row key, and removing a row leaves the others in place."""
+    handle = launch(_keyed_list_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                boxes = page.locator(".list-item textarea")
+                expect(boxes).to_have_count(2)
+                second = boxes.nth(1)
+                second.evaluate("e => (e.dataset.mark = 'b')")
+                first = boxes.first
+                first.click()
+                first.press("End")
+                first.press_sequentially("abc", delay=120)  # echoes for "one", "oneab" arrive late
+                page.wait_for_timeout(1200)
+                assert first.input_value() == "oneabc"
+                assert first.evaluate("e => document.activeElement === e")
+                expect(page.get_by_text("oneabc | two")).to_be_visible()
+
+                page.get_by_role("button", name="remove").first.click()
+                expect(boxes).to_have_count(1)
+                assert boxes.first.get_attribute("data-mark") == "b"  # row b was not rebuilt
+                expect(page.get_by_text("two", exact=True)).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
