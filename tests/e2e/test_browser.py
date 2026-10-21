@@ -3714,3 +3714,62 @@ def test_roles_omit_restricted_components_and_a_revoked_role_fails_the_next_clic
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_secret_reveal_shows_once_copies_dismisses_and_never_returns_on_reload():
+    """IND-119: the token appears in the tab that asked, Copy puts it on the clipboard, a
+    reload (a fresh init) does not bring it back, and dismissing clears it."""
+    from indah import Button, Column, SecretReveal, Session, Signal, create_app
+
+    secret = "tok_live_E2E-ONCE-ONLY"
+
+    def build():
+        token = Signal(None)
+        return Session(
+            Column(
+                children=[
+                    Button("create token", on_click=lambda: token.set(secret)),
+                    SecretReveal(token, label="New API token"),
+                ]
+            )
+        )
+
+    app = create_app(session_factory=build)
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            ctx = browser.new_context()
+            ctx.grant_permissions(["clipboard-read", "clipboard-write"], origin=handle.url)
+            page = ctx.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_role("button", name="create token")).to_be_visible()
+                assert page.locator(".secret").count() == 0
+                page.get_by_role("button", name="create token").click()
+                expect(page.locator(".secret-value")).to_have_text(secret)
+                page.locator(".secret").screenshot(path="/tmp/secret_reveal.png")
+                page.get_by_role("button", name="Copy").click()
+                expect(page.get_by_role("button", name="Copied")).to_be_visible()
+                assert page.evaluate("navigator.clipboard.readText()") == secret
+
+                # the same session, a fresh init (reload): the secret is not in it
+                page.reload(wait_until="domcontentloaded")
+                expect(page.get_by_role("button", name="create token")).to_be_visible()
+                page.wait_for_timeout(300)
+                assert page.locator(".secret").count() == 0
+                assert secret not in page.content()
+                # and the server forgot it, rather than holding it for a tab that cannot show it
+                (only,) = app.state.store._handles.values()  # noqa: SLF001
+                assert only.session.find("n2")._value.value is None  # noqa: SLF001
+
+                # reveal again, then dismiss: gone, and the server cleared it
+                page.get_by_role("button", name="create token").click()
+                expect(page.locator(".secret-value")).to_have_text(secret)
+                page.get_by_role("button", name="I have saved it").click()
+                expect(page.locator(".secret")).to_have_count(0)
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

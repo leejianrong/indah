@@ -20,6 +20,25 @@
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
 
+  // SecretReveal (ADR-0036): the value only ever arrives as a live patch; copy it, or say it
+  // is saved. Clipboard needs a secure context, so fall back to selecting the text.
+  let secretEl = $state();
+  let copied = $state(false);
+  async function copySecret() {
+    try {
+      await navigator.clipboard.writeText(props.value);
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(secretEl);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      try { document.execCommand("copy"); } catch {}
+    }
+    copied = true;
+    setTimeout(() => (copied = false), 2000);
+  }
+
   // Value-bearing inputs (text box, slider) are two-way bound: a keystroke/drag is
   // POSTed and the server echoes the new value back as a patch. If we let that echo
   // re-set the DOM value *while the user is editing*, a stale echo (the round-trip
@@ -398,6 +417,18 @@
   </div>
 {:else if node.type === "shortcuts"}
   <Shortcuts {node} {props} />
+{:else if node.type === "secretreveal"}
+  {#if props.value}
+    <div class="secret" role="group" aria-label={props.label || "Secret"}>
+      {#if props.label}<div class="secret-label">{props.label}</div>{/if}
+      <code class="secret-value" bind:this={secretEl}>{props.value}</code>
+      <div class="secret-note">This is shown once. Copy it now; it cannot be shown again.</div>
+      <div class="secret-actions">
+        <button type="button" class="tonal" onclick={copySecret}>{copied ? "Copied" : "Copy"}</button>
+        <button type="button" onclick={() => postEvent(node.id, "dismiss", {})}>I have saved it</button>
+      </div>
+    </div>
+  {/if}
 {:else if node.type === "badge"}
   <span class="badge tone-{props.tone ?? 'neutral'}">{props.text ?? ""}</span>
 {:else if node.type === "checkbox"}

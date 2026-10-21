@@ -91,7 +91,7 @@ from .guard import OriginGuard, normalize_origins
 from .protocol import EventIn, init_message, patch_message, ping_message, signed_out_message
 from .proxy import ProxyHeaders, parse_trusted
 from .reactive import Signal
-from .session import Session
+from .session import DispatchResult, Session
 from .session_store import (
     InMemorySessionStore,
     SessionHandle,
@@ -99,7 +99,7 @@ from .session_store import (
     SharedSessionStore,
 )
 from .theme import Theme
-from .transport import Item
+from .transport import Hub, Item
 
 DEFAULT_HEARTBEAT_SECONDS = 15.0
 
@@ -941,6 +941,14 @@ def _audit(
     )
 
 
+def _publish_result(hub: Hub, result: DispatchResult) -> None:
+    """Broadcast a dispatch's patches; secrets go out live but are kept out of the replay."""
+    if result.changes:
+        hub.publish(patch_message(result.changes))
+    if result.transient:
+        hub.publish(patch_message(result.transient), record=False)
+
+
 def _denied(status: int, error: str) -> JSONResponse:
     return JSONResponse({"ok": False, "error": error}, status_code=status)
 
@@ -1035,6 +1043,7 @@ async def _stream(request: Request) -> Response:
     if last_event_id is None or replay is None:
         # Fresh connect, or a buffer gap: send a full snapshot (always correct
         # because a StreamText snapshot carries its full accumulated text).
+        session.forget_ephemeral()  # a secret shown earlier cannot be in this snapshot
         init_payload: dict[str, Any] | None = init_message(session.snapshot())
         replay = []
     else:
@@ -1130,8 +1139,7 @@ async def _event(request: Request) -> JSONResponse:
     if result.forbidden:
         return _denied(403, "forbidden")
     _audit(request, handle, principal, event.component, event.event, event.payload)
-    if result.changes:
-        hub.publish(patch_message(result.changes))
+    _publish_result(hub, result)
     return JSONResponse({"ok": True})
 
 
@@ -1187,8 +1195,7 @@ async def _upload(request: Request) -> JSONResponse:
         request, handle, principal, component_id, "upload", {"files": [f.filename for f in files]}
     )
 
-    if result.changes:
-        handle.hub.publish(patch_message(result.changes))
+    _publish_result(handle.hub, result)
     return JSONResponse({"ok": True, "files": [f.filename for f in files]})
 
 
