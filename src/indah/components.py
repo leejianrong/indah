@@ -2638,6 +2638,13 @@ class List(Component):
     e.g. ``items.set(items.value + [row])``). Pass an ``item`` render spec (the
     ADR-0012 vocabulary, binding each item's fields) to shape each row; without one
     each item renders as text. ``empty`` is shown when the list is empty.
+
+    Editable rows (ADR-0016 amendment, IND-110): give ``key="id"`` and every item must be
+    a dict with a unique ``id``. The shell then keys each row by it, so adding, removing or
+    reordering keeps every other row (and the cursor in a focused input) in place. A
+    template event (an ``on={...}`` in the spec) is delivered to
+    ``on_item(key, event, value)`` -- sync or ``async`` -- for the row it came from; update
+    the signal from there. A key that is not a current row is refused.
     """
 
     type = "list"
@@ -2648,10 +2655,18 @@ class List(Component):
         *,
         item: dict[str, Any] | RenderSpec | None = None,
         empty: str = "",
+        key: str | None = None,
+        on_item: Callable[[Any, str, Any], Any] | None = None,
     ) -> None:
         super().__init__()
+        if on_item is not None and key is None:
+            raise ValueError("List on_item= needs key= (events refer to rows by key)")
+        if key is not None and isinstance(items, Stream):
+            raise ValueError("a keyed List takes a signal or callable, not a Stream")
         self._items = items
         self._empty = empty
+        self._key = key
+        self._on_item = on_item
         if item is None:
             self._template: dict[str, Any] | None = None
         else:
@@ -2662,15 +2677,46 @@ class List(Component):
         props: dict[str, Any] = {"empty": self._empty}
         if self._template is not None:
             props["template"] = self._template
+        if self._key is not None:
+            props["keyField"] = self._key
         return props
 
+    def _current(self) -> list[Any]:
+        items = _to_items(_read(self._items))
+        if self._key is not None:
+            seen: set[Any] = set()
+            for row in items:
+                if not isinstance(row, dict):
+                    raise ValueError(f"List key={self._key!r} needs dict items, got {row!r}")
+                if self._key not in row:
+                    raise ValueError(f"List item is missing its key {self._key!r}: {row!r}")
+                if row[self._key] in seen:
+                    raise ValueError(f"List keys must be unique; {row[self._key]!r} repeats")
+                seen.add(row[self._key])
+        return items
+
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"items": lambda: _to_items(_read(self._items))}
+        return {"items": self._current}
 
     def stream_props(self) -> dict[str, tuple[Stream, Callable[[list[Any]], list[Any]]]]:
-        if isinstance(self._items, Stream):
+        if isinstance(self._items, Stream) and self._key is None:
             return {"items": (self._items, _to_items)}
         return {}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if self._on_item is None or "key" not in payload:
+            return False
+        key = payload["key"]
+        try:
+            known = any(row.get(self._key) == key for row in self._current())
+        except ValueError:
+            return False
+        if not known:
+            return False
+        result = self._on_item(key, event, payload.get("value"))
+        if inspect.iscoroutine(result):
+            return result
+        return True
 
 
 def _to_messages(value: Any) -> list[dict[str, str]]:

@@ -208,7 +208,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
 | `spinner` | display | `active`, `label` | — |
-| `list` | display | `items:[...]` (a `Signal[list]`), `template` (item render spec), `empty` | — |
+| `list` | display / input | `items:[...]` (a `Signal[list]`), `template` (item render spec), `empty`, `keyField` (when keyed) | each template event, as named in the spec's `on`, with `{value, key, index}` (keyed lists only) |
 | `chat` | display | `messages:[{role,content}]`, `pending`, `label` | — |
 | `gallery` | display | `images:[{src,alt,caption}]`, `columns`, `label` | — |
 | `row` | container | `gap`, `wrap`, `align` | — |
@@ -354,6 +354,13 @@ change over the `patch` op -- no structural children op and no version bump (ADR
 `list` renders each item through an optional `template` (the same render-spec
 vocabulary as `_spec`, binding the item's fields) or as text; `chat` and `gallery`
 use a built-in per-item template.
+
+A **keyed** list (`keyField` set, IND-110) renders each row under `item[keyField]`, so
+adding, removing or reordering keeps the other rows' DOM nodes. A template event carries
+the row it came from as `key` and `index` beside `value`; the server refuses a `key` that is
+not a current row. A bound `value` on an `input`, `textarea` or `select` in a template is
+client-owned while that element has focus (ADR-0013), so a late echo never overwrites typing.
+Additive: an older shell ignores `keyField` and renders by `key`/`id`/index as before.
 
 A `text` node with `markdown:true` carries a `blocks` tree instead of `text`: the
 backend parses a safe subset of Markdown (server-side) into nodes the shell renders

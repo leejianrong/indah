@@ -52,3 +52,19 @@ structural op is the deferred general one.
   template is needed) is the substance of the slice.
 - Reordering/removal semantics (keys, stable identity) are defined here so a later
   structural op stays consistent with them.
+
+## Amendment (IND-110): keyed rows with item events
+
+The semula dashboard edits rows in place (tool-call fields, a message stack), which the
+deferral above did not forbid but the first `List` could not do safely. Homogeneous, keyed rows
+cover it, still without a structural op or a `protocol_version` bump:
+
+- `List(items, key="id", item=..., on_item=fn)`. Every item is a dict with a unique `id`
+  (checked when the prop is built). The shell keys each row by it (`keyField`), so adding or
+  removing a row leaves the others' DOM, focus and cursor alone.
+- A template event posts `{value, key, index}`; `on_item(key, event, value)` (sync or async)
+  receives it. A key that is not a current row is refused. Add and remove are `items.set(...)`.
+- In a template, a bound `value` on `input`/`textarea`/`select` is client-owned while focused
+  (ADR-0013 extended to custom-render inputs), and resynced on blur.
+- A keyed list takes a signal or callable, not a `Stream`. Heterogeneous children stay the
+  deferred v2 op.

@@ -123,3 +123,64 @@ def test_gallery_reacts_to_signal():
     assert g.reactive_props()["images"]() == []
     images.set(["a.png"])
     assert g.reactive_props()["images"]() == [{"src": "a.png", "alt": "", "caption": ""}]
+
+
+# -- keyed rows with item events (IND-110) ---------------------------------------
+
+ROWS = [{"id": "a", "role": "user", "text": "hi"}, {"id": "b", "role": "assistant", "text": "yo"}]
+ITEM = {
+    "tag": "div",
+    "children": [
+        {"tag": "textarea", "bind": {"value": "text"}, "on": {"input": {"event": "edit"}}},
+        {"tag": "button", "text": "x", "on": {"click": {"event": "remove"}}},
+    ],
+}
+
+
+@pytest.mark.unit
+def test_key_is_a_static_prop_and_items_stay_plain_dicts():
+    lst = List(Signal(ROWS), key="id", item=ITEM)
+    assert lst.static_props()["keyField"] == "id"
+    assert lst.reactive_props()["items"]() == ROWS
+    assert "keyField" not in List(Signal(ROWS)).static_props()
+
+
+@pytest.mark.unit
+def test_keyed_items_need_a_unique_key_each():
+    with pytest.raises(ValueError, match="unique"):
+        List(Signal([{"id": 1}, {"id": 1}]), key="id").reactive_props()["items"]()
+    with pytest.raises(ValueError, match="'id'"):
+        List(Signal([{"id": 1}, {"name": "x"}]), key="id").reactive_props()["items"]()
+    with pytest.raises(ValueError, match="dict"):
+        List(Signal(["a", "b"]), key="id").reactive_props()["items"]()
+
+
+@pytest.mark.unit
+def test_on_item_gets_the_row_key_event_and_value():
+    seen = []
+    lst = List(Signal(ROWS), key="id", item=ITEM, on_item=lambda *a: seen.append(a))
+    assert lst.handle("edit", {"value": "hello", "key": "b", "index": 1}) is True
+    assert lst.handle("remove", {"key": "a", "index": 0}) is True
+    assert seen == [("b", "edit", "hello"), ("a", "remove", None)]
+
+
+@pytest.mark.unit
+async def test_on_item_may_be_async_and_unknown_keys_are_refused():
+    seen = []
+
+    async def on_item(key, event, value):
+        seen.append((key, event, value))
+
+    lst = List(Signal(ROWS), key="id", item=ITEM, on_item=on_item)
+    result = lst.handle("edit", {"value": "x", "key": "a"})
+    await result
+    assert seen == [("a", "edit", "x")]
+    assert lst.handle("edit", {"value": "x", "key": "zzz"}) is False  # not a current row
+    assert lst.handle("edit", {"value": "x"}) is False  # no key
+    assert List(Signal(ROWS), key="id").handle("edit", {"key": "a"}) is False  # no on_item
+
+
+@pytest.mark.unit
+def test_on_item_needs_key():
+    with pytest.raises(ValueError, match="key"):
+        List(Signal(ROWS), on_item=lambda *a: None)
