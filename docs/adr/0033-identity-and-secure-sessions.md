@@ -1,7 +1,7 @@
 # ADR-0033: Identity seams and secure sessions
 
-- Status: Accepted (principal and ownership built, IND-113; signed tokens, IND-114; request guard
-  and sign-out follow in IND-115)
+- Status: Accepted (principal and ownership, IND-113; signed tokens, IND-114; origin guard and
+  sign-out, IND-115)
 - Date: 2026-10-21
 - Deciders: Jian (owner)
 
@@ -43,6 +43,19 @@ paid on top of that.
   principal), tampered and unsigned ids are all 403 and create nothing. The store is keyed by the
   `sid` part; the signature never reaches it. `InMemorySessionStore.discard_where(owner=)` drops
   a user's sessions.
+- **Origin guard (IND-115).** A secure app refuses cross-origin requests (`indah.guard`): every
+  state-changing request plus `api/stream` and `api/file`. `Sec-Fetch-Site: same-origin|none`
+  passes; `same-site` and `cross-site` pass only when `Origin` is in `create_app(allowed_origins=)`.
+  Without Fetch Metadata, an `Origin` must equal the server's own origin or be allowed; no
+  `Origin` at all is a non-browser client and passes. The refusal is a 403 before anything is
+  parsed or created. This is what stops a cross-site multipart upload (a "simple" request, so no
+  preflight). Behind a proxy that rewrites `Host`, same-origin browsers still pass on
+  `Sec-Fetch-Site`; `allowed_origins` covers a gateway on another origin.
+- **Sign-out (IND-115).** `ctx.sign_out()` publishes a `signed_out` message to every session
+  the user owns and discards them (`discard_where(owner=, farewell=)`); the stream ends after
+  it, the shell stops reconnecting and shows "You are signed out" with its tree dropped. The
+  parent app must still end its own login. A stream also ends with `signed_out` when
+  `Principal.expires_at` passes, so a lapsed login does not keep an open stream alive.
 - With `auth=` but not `secure=`, the principal is only attached (`ctx.user`): enforcement is
   opt-in, so notebooks and the gallery are unchanged.
 
@@ -62,6 +75,8 @@ paid on top of that.
 - `ConnectionInfo.user` and `ctx.user` carry the principal for the session's lifetime. A role
   revoked mid-session is not reflected there; authorization (a later slice) re-checks at
   dispatch.
-- No wire change: new refusals are HTTP statuses on existing routes, so `protocol_version` stays 1.
+- Wire changes are additive, so `protocol_version` stays 1: the `signed_out` server message
+  (an unknown type is ignored by older shells), the `POST api/session` route, and HTTP
+  statuses on existing routes.
 - Amends ADR-0008 (auth stays out of core by default; core gains these seams), ADR-0010
   (`SessionHandle.owner` is now set) and ADR-0025 (`Context.user` is now populated).

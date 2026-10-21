@@ -291,3 +291,98 @@ async def test_discard_where_owner_drops_only_that_users_sessions():
     assert len(store) == 3
     assert store.discard_where(owner="alice") == 2
     assert len(store) == 1 and store.get(b1.split(".")[0]).owner == "bob"
+
+
+@pytest.mark.integration
+async def test_cross_origin_requests_are_refused_before_anything_is_parsed_or_created():
+    app, asgi, seen = _app(secure=True)
+    store = app.state.store
+    async with _client(asgi) as client:
+        token = await _login(client, "alice")
+        evil = {"X-User": "alice", "Origin": "https://evil.example"}
+        cross = {"X-User": "alice", "Sec-Fetch-Site": "cross-site"}
+        for hdrs in (evil, cross):
+            assert (await client.post("/api/session", json={}, headers=hdrs)).status_code == 403
+            assert (await _click(client, token, headers=hdrs)).status_code == 403
+            up = await client.post(
+                "/api/upload",
+                data={"component": "n1", "sid": token},
+                files={"file": ("a", b"x")},
+                headers=hdrs,
+            )
+            assert up.status_code == 403
+            stream = await client.get("/api/stream", params={"sid": token}, headers=hdrs)
+            assert stream.status_code == 403
+            assert (await client.get("/api/file/x/y", headers=hdrs)).status_code == 403
+        # the same requests from the app's own origin go through
+        mine = {"X-User": "alice", "Origin": "http://test", "Sec-Fetch-Site": "same-origin"}
+        assert (await _click(client, token, headers=mine)).status_code == 200
+        # the shell itself and the health check are not guarded
+        assert (await client.get("/", headers=evil)).status_code == 200
+    assert len(store) == 1 and [p.id for p in seen] == ["alice"]  # only the allowed click built one
+
+
+@pytest.mark.integration
+async def test_allowed_origins_admit_a_gateway_on_another_origin():
+    app, asgi, _ = _app(secure=True, allowed_origins=["https://portal.example.com/"])
+    async with _client(asgi) as client:
+        hdrs = {
+            "X-User": "a",
+            "Origin": "https://portal.example.com",
+            "Sec-Fetch-Site": "same-site",
+        }
+        assert (await client.post("/api/session", json={}, headers=hdrs)).status_code == 200
+        hdrs["Origin"] = "https://other.example.com"
+        assert (await client.post("/api/session", json={}, headers=hdrs)).status_code == 403
+    with pytest.raises(ValueError, match="allowed_origins"):
+        _app(secure=True, allowed_origins=["*"])
+
+
+@pytest.mark.integration
+async def test_sign_out_ends_every_session_of_that_user_and_tells_each_stream():
+    holder: dict = {}
+
+    def build(ctx) -> Session:
+        holder.setdefault(ctx.user.id, []).append(ctx)
+        return Session(
+            Column(
+                children=[
+                    Button("noop", on_click=lambda: None),
+                    Button("out", on_click=ctx.sign_out),
+                ]
+            )
+        )
+
+    app = create_app(session_factory=build, secure=True, secret=SECRET)
+    store = app.state.store
+    async with _client(FakeIdp(app)) as client:
+        a1, a2 = await _login(client, "alice"), await _login(client, "alice")
+        b1 = await _login(client, "bob")
+        for t, u in ((a1, "alice"), (a2, "alice"), (b1, "bob")):
+            await _click(client, t, headers={"X-User": u})
+        hubs = [store.get(t.split(".")[0]).hub for t in (a1, a2, b1)]
+        queues = [h.subscribe() for h in hubs]
+        out = await client.post(
+            "/api/event",
+            json={"sid": a1, "component": "n2", "event": "click"},
+            headers={"X-User": "alice"},
+        )
+        assert out.status_code == 200
+    assert len(store) == 1 and store.get(b1.split(".")[0]) is not None  # only bob's remains
+    types = [[m["type"] for _, m in list(q._queue)] for q in queues]  # noqa: SLF001
+    assert "signed_out" in types[0] and "signed_out" in types[1]  # both of alice's tabs
+    assert "signed_out" not in types[2]
+
+
+@pytest.mark.integration
+async def test_signed_out_user_gets_a_fresh_empty_session_not_the_old_one():
+    app, asgi, _ = _app(secure=True)
+    store = app.state.store
+    async with _client(asgi) as client:
+        token = await _login(client, "alice")
+        await _click(client, token, headers={"X-User": "alice"})
+        assert store.discard_where(owner="alice") == 1
+        # the old token still verifies (same principal) but the state is gone: a new session
+        await _click(client, token, headers={"X-User": "alice"})
+    text = store.get(token.split(".")[0]).session.snapshot()["children"][1]["props"]["text"]
+    assert text == "alice:1"  # one click on the rebuilt session, not two

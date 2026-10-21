@@ -51,6 +51,16 @@
     return null;
   }
 
+  // Set when the login ended (a signed_out message, a refused handshake). The tree is dropped,
+  // so nothing the user saw stays in memory or on screen, and the stream is not reopened.
+  let signedOut = $state(false);
+  function endSession(text) {
+    signedOut = true;
+    structure.set(null);
+    nodeProps.set(new Map());
+    status.set({ live: false, text });
+  }
+
   let inits = 0;
   function applyMessage(msg) {
     if (!msg || msg.v !== PROTOCOL_VERSION) {
@@ -99,6 +109,8 @@
       showToast(msg.message || "Something went wrong", "error", 6);
     } else if (msg.type === "navigate") {
       pushPath(msg.path || "/", !!msg.replace); // ctx.navigate from server code
+    } else if (msg.type === "signed_out") {
+      endSession("signed out");
     } else if (msg.type === "toast") {
       showToast(msg.message || "", msg.kind || "info", msg.ttl ?? 4);
     }
@@ -109,32 +121,45 @@
     // the missed messages, so a dropped stream resumes without extra client code.
     let source = null;
     let closed = false;
+    let restarts = 0;
 
     function connect() {
       source = new EventSource(streamUrl());
       source.onopen = () => status.set({ live: true, text: "live" });
       source.onmessage = (event) => {
+        if (signedOut) return;
         status.set({ live: true, text: "live" });
         try {
-          applyMessage(JSON.parse(event.data));
+          const msg = JSON.parse(event.data);
+          applyMessage(msg);
+          if (msg && msg.type === "signed_out") source.close(); // no reconnect after sign-out
         } catch (err) {
           /* ignore malformed frame */
         }
       };
-      source.onerror = () => status.update((s) => ({ ...s, live: false, text: "reconnecting…" }));
+      source.onerror = () => {
+        if (signedOut) return;
+        status.update((s) => ({ ...s, live: false, text: "reconnecting…" }));
+        // CLOSED means the server refused the stream (401/403), not a dropped connection
+        // (which EventSource retries itself): get a session again, once or twice, then give up.
+        if (source.readyState === EventSource.CLOSED && restarts++ < 2) start();
+      };
     }
 
     // A secure app hands out the session id (a signed token) first; a plain app connects at once.
-    ensureSession()
-      .then(() => {
-        if (!closed) connect();
-      })
-      .catch((err) =>
-        status.set({
-          live: false,
-          text: err && err.status === 401 ? "signed out" : "could not start a session",
-        }),
-      );
+    function start() {
+      if (source) source.close();
+      ensureSession()
+        .then(() => {
+          if (!closed) connect();
+        })
+        .catch((err) =>
+          err && err.status === 401
+            ? endSession("signed out")
+            : status.set({ live: false, text: "could not start a session" }),
+        );
+    }
+    start();
     return () => {
       closed = true;
       if (source) source.close();
@@ -256,7 +281,13 @@
       </button>
     </div>
   </header>
-  {#if $structure}
+  {#if signedOut}
+    <div class="signed-out" role="alert">
+      <h2>You are signed out</h2>
+      <p>Your session has ended. Sign in again to continue.</p>
+      <button type="button" onclick={() => location.reload()}>Sign in again</button>
+    </div>
+  {:else if $structure}
     <Node node={$structure} />
   {/if}
   <div class="status">

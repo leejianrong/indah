@@ -134,6 +134,12 @@ def navigate_message(path: str, replace: bool = False) -> dict[str, Any]:
     return {"v": PROTOCOL_VERSION, "type": "navigate", "path": path, "replace": bool(replace)}
 
 
+def signed_out_message() -> dict[str, Any]:
+    """The caller's login ended (``ctx.sign_out()`` or ``Principal.expires_at``). The server
+    closes the stream after it; the shell stops reconnecting and shows a signed-out state."""
+    return {"v": PROTOCOL_VERSION, "type": "signed_out"}
+
+
 def ping_message() -> dict[str, Any]:
     return {"v": PROTOCOL_VERSION, "type": "ping"}
 

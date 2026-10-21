@@ -3417,15 +3417,26 @@ class _FakeIdp:
 
     def __init__(self, app):
         self.app = app
+        self.log: list[tuple[str, str, int]] = []  # (method, path, status) as the server answered
+        self.bodies: list[bytes] = []  # every response body, in the same order
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            who = dict(scope["headers"]).get(b"x-user")
-            if who:
-                from starlette.authentication import SimpleUser
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        who = dict(scope["headers"]).get(b"x-user")
+        if who:
+            from starlette.authentication import SimpleUser
 
-                scope["user"] = SimpleUser(who.decode())
-        await self.app(scope, receive, send)
+            scope["user"] = SimpleUser(who.decode())
+
+        async def spy(message):
+            if message["type"] == "http.response.start":
+                self.log.append((scope["method"], scope["path"], message["status"]))
+            elif message["type"] == "http.response.body" and scope["path"] == "/api/upload":
+                self.bodies.append(message.get("body", b""))
+            await send(message)
+
+        await self.app(scope, receive, spy)
 
 
 def _secure_counter_app():
@@ -3437,6 +3448,7 @@ def _secure_counter_app():
             Column(
                 children=[
                     Button("inc", on_click=lambda: n.set(n.value + 1)),
+                    Button("out", on_click=ctx.sign_out),
                     Text(lambda: f"{ctx.user.id}:{n.value}"),
                 ]
             )
@@ -3494,10 +3506,73 @@ def test_secure_app_isolates_users_resumes_on_reload_and_refuses_anonymous():
 
                 # an anonymous visitor never gets a session or a UI
                 anon.goto(handle.url, wait_until="domcontentloaded")
-                expect(anon.get_by_text("signed out")).to_be_visible()
+                expect(anon.locator(".signed-out")).to_contain_text("signed out")
                 assert anon.locator("button", has_text="inc").count() == 0
             finally:
                 browser.close()
     finally:
         handle.stop()
     assert len(app.state.store) == 2  # alice and bob only
+
+
+@pytest.mark.e2e
+def test_secure_app_signs_out_every_tab_and_refuses_cross_site_posts():
+    """IND-115: ctx.sign_out() ends all of a user's tabs (and only theirs); a cross-site
+    multipart POST is refused before it reaches a session."""
+    app, asgi = _secure_counter_app()
+    handle = launch(asgi, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            ctx_a = browser.new_context(extra_http_headers={"X-User": "alice"})
+            tab1, tab2 = ctx_a.new_page(), ctx_a.new_page()
+            bob = browser.new_context(extra_http_headers={"X-User": "bob"}).new_page()
+            try:
+                for page in (tab1, tab2, bob):
+                    page.goto(handle.url, wait_until="domcontentloaded")
+                expect(tab1.get_by_text("alice:0")).to_be_visible()
+                expect(tab2.get_by_text("alice:0")).to_be_visible()
+                expect(bob.get_by_text("bob:0")).to_be_visible()
+                assert len(app.state.store) == 3
+
+                # a page on another site posts a multipart upload with alice's cookies/headers
+                attacker = ctx_a.new_page()
+                # `localhost` is a different site from the app's 127.0.0.1 yet on the same
+                # private network, so the browser sends the request (a public site would be
+                # stopped by the browser's own private-network rule before it got here). Any
+                # page there will do as the attacker's origin; the app's own shell is handy.
+                attacker.goto(handle.url.replace("127.0.0.1", "localhost"))
+                expect(attacker.get_by_text("alice:0")).to_be_visible()
+                before = len(app.state.store)  # the shell there made its own (legitimate) session
+                attacker.evaluate(
+                    """async (u) => { const f = new FormData(); f.append('component', 'n1');
+                        f.append('sid', 'anything'); f.append('file', new Blob(['x']), 'a.txt');
+                        try { await fetch(u + 'api/upload', {method: 'POST', body: f,
+                            mode: 'no-cors', credentials: 'include'}); } catch (e) {} }""",
+                    handle.url.rstrip("/") + "/",
+                )
+                attacker.wait_for_timeout(500)
+                # the server itself refused it: 403 on the upload route, before any session work
+                assert ("POST", "/api/upload", 403) in asgi.log, asgi.log[-6:]
+                # ...and it was the origin guard that said no (not the token check behind it)
+                assert any(b"cross-origin" in body for body in asgi.bodies), asgi.bodies
+                attacker.close()
+                assert len(app.state.store) == before  # the refused POST created nothing
+
+                # sign out from one tab: both of alice's tabs end, bob's keeps running
+                tab1.get_by_role("button", name="out").click()
+                expect(tab1.locator(".signed-out")).to_be_visible()
+                expect(tab2.locator(".signed-out")).to_be_visible()
+                assert tab1.locator("button", has_text="inc").count() == 0
+                expect(bob.get_by_text("bob:0")).to_be_visible()
+                bob.get_by_role("button", name="inc").click()
+                expect(bob.get_by_text("bob:1")).to_be_visible()
+                assert len(app.state.store) == 1
+
+                # the parent app has not ended the login, so reloading signs in to a fresh session
+                tab1.reload(wait_until="domcontentloaded")
+                expect(tab1.get_by_text("alice:0")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

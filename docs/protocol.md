@@ -91,6 +91,7 @@ The UI is a tree of nodes. A node is:
 | `navigate` | `{"v","type":"navigate","path","replace"}` | `ctx.navigate(...)`: the shell pushes (or, with `replace`, rewrites) its history entry to the in-app `path`. An older shell ignores it |
 | `toast` | `{"v","type":"toast","message","kind","ttl"}` | Feedback from `ctx.toast(...)`: `kind` is `info`/`success`/`warn`/`error`, `ttl` seconds (`0` = until dismissed). Sent to the calling session only; an older shell ignores it |
 | `ping` | `{"v","type":"ping"}` | Heartbeat, so idle-timeout proxies keep the stream open |
+| `signed_out` | `{"v","type":"signed_out"}` | The caller's login ended (`ctx.sign_out()` or `Principal.expires_at`); the server closes the stream after it, and the shell stops reconnecting and shows a signed-out page (secure apps, ADR-0033) |
 
 A patch `change` is one of:
 
@@ -154,7 +155,7 @@ shell learns the app is secure from `"secure": true` in `window.__INDAH_CHROME__
 token wherever it would send a `sid`. Every route then identifies the caller first. A request
 with no authenticated principal, or with no session id, is rejected `401` (an id-less request
 never falls back to the default session). A token that does not verify for the caller (forged,
-tampered, or another user's) is rejected `403`; a download of another principal's file is `404`. These are plain
+tampered, or another user's) is rejected `403`. A secure app also rejects a cross-origin request (a cross-site `Sec-Fetch-Site`, or an `Origin` that is neither its own nor in `allowed_origins`) with `403` on every state-changing route, `api/stream` and `api/file`; a download of another principal's file is `404`. These are plain
 HTTP statuses on the existing routes, not protocol messages.
 
 ## File upload and download
