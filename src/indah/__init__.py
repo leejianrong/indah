@@ -69,6 +69,7 @@ from .components import (
     Upload,
     UploadedFile,
 )
+from .auth import Authenticator, Principal
 from .context import ConnectionInfo, Context
 from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
@@ -100,6 +101,8 @@ __all__ = [
     "Theme",
     "Topic",
     "Context",
+    "Principal",
+    "Authenticator",
     "ConnectionInfo",
     "DispatchResult",
     # per-session state seam (ADR-0010)

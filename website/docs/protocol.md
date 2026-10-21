@@ -144,6 +144,14 @@ for an unknown component or event, `400`. A body larger than `max_event_bytes`
 (`create_app` argument, default 1 MiB) is rejected `413` before it is parsed. A handler that raises does not take the
 UI down: the traceback is logged server-side and an `error` message is pushed.
 
+### Secure apps
+
+With `create_app(secure=True)` (ADR-0033) every route above first identifies the caller. A
+request with no authenticated principal, or with no session id, is rejected `401` (an id-less
+request never falls back to the default session). A session id that belongs to another
+principal is rejected `403`; a download of another principal's file is `404`. These are plain
+HTTP statuses on the existing routes, not protocol messages.
+
 ## File upload and download
 
 Binary rides its own routes, not the JSON event path, so a file never bloats an

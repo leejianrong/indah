@@ -60,8 +60,8 @@ class SessionHandle:
 
     session: Session
     hub: Hub
-    # The authenticated principal that owns this session, once identity lands (always
-    # None until then). Lets a store drop every session a user holds.
+    # The id of the principal that owns this session (ADR-0033), or None for an app with no
+    # authenticator. A secure app refuses any other principal; a store can drop a user's sessions.
     owner: str | None = None
 
 
@@ -149,13 +149,14 @@ class InMemorySessionStore:
         handle = self._handles.get(session_id)
         if handle is None:
             ctx = Context(session_id, ctx_info, app=self.app)
+            owner = ctx.user.id if ctx.user is not None else None
             hub = Hub()
             ctx._bind_hub(hub)
             session = self._factory(ctx) if self._wants_ctx else self._factory()
             session.ctx = ctx
             session.session_id = session_id  # so served file URLs route back here
             session.bind_hub(hub)
-            handle = SessionHandle(session=session, hub=hub)
+            handle = SessionHandle(session=session, hub=hub, owner=owner)
             self._handles[session_id] = handle
             if self.max_sessions is not None:
                 while len(self._handles) > self.max_sessions:
