@@ -3642,3 +3642,75 @@ def test_semula_hosted_demo_two_users_reload_cross_user_and_sign_out():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_roles_omit_restricted_components_and_a_revoked_role_fails_the_next_click():
+    """IND-118: a viewer's page and snapshot have no admin subtree; a guarded button refuses a
+    viewer; revoking an editor's role after the page loaded makes their next click fail closed."""
+    import json
+
+    from indah import Button, Column, Policy, Principal, Session, Signal, Text, create_app, guard
+
+    roles = {"alice": {"admin"}, "eve": {"editor"}, "vera": {"viewer"}}
+
+    def who(request):
+        user = request.headers.get("x-user")
+        return Principal(id=user, roles=frozenset(roles[user])) if user in roles else None
+
+    def build(ctx):
+        n = Signal(0)
+        return Session(
+            Column(
+                children=[
+                    Text(lambda: f"count {n.value}"),
+                    Button("edit", on_click=guard("entries:write")(lambda: n.set(n.value + 1))),
+                    *ctx.only("tokens:manage", lambda: Text("ADMIN-ONLY-PANEL")),
+                ]
+            )
+        )
+
+    app = create_app(
+        session_factory=build,
+        auth=who,
+        secure=True,
+        secret="e2e-secret-value-0123456789abcdef",
+        policy=Policy({"viewer": ["entries:read"], "editor": ["entries:*"], "admin": ["*"]}),
+    )
+    handle = launch(_FakeIdp(app), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            pages = {
+                u: browser.new_context(extra_http_headers={"X-User": u}).new_page()
+                for u in ("alice", "eve", "vera")
+            }
+            try:
+                for page in pages.values():
+                    page.goto(handle.url, wait_until="domcontentloaded")
+                    expect(page.get_by_text("count 0")).to_be_visible()
+                expect(pages["alice"].get_by_text("ADMIN-ONLY-PANEL")).to_be_visible()
+                for user in ("eve", "vera"):
+                    assert pages[user].get_by_text("ADMIN-ONLY-PANEL").count() == 0
+                    assert pages[user].content().count("ADMIN-ONLY-PANEL") == 0
+                # and not in what the server holds for them either (the init snapshot)
+                owned = {h.owner: h for h in app.state.store._handles.values()}  # noqa: SLF001
+                assert "ADMIN-ONLY-PANEL" not in json.dumps(owned["vera"].session.snapshot())
+                assert "ADMIN-ONLY-PANEL" in json.dumps(owned["alice"].session.snapshot())
+
+                # a viewer is refused, and told so
+                pages["vera"].get_by_role("button", name="edit").click()
+                expect(pages["vera"].get_by_text("not allowed", exact=False)).to_be_visible()
+                expect(pages["vera"].get_by_text("count 0")).to_be_visible()
+
+                # an editor may; then the IdP revokes the role and the next click fails closed
+                pages["eve"].get_by_role("button", name="edit").click()
+                expect(pages["eve"].get_by_text("count 1")).to_be_visible()
+                roles["eve"] = {"viewer"}
+                pages["eve"].get_by_role("button", name="edit").click()
+                expect(pages["eve"].get_by_text("not allowed", exact=False)).to_be_visible()
+                expect(pages["eve"].get_by_text("count 1")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

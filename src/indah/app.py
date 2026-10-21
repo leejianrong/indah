@@ -54,6 +54,7 @@ from .auth import (
     authenticate,
     default_authenticator,
 )
+from .authz import Policy, authz_scope
 from .components import (
     DENSITIES,
     Button,
@@ -510,6 +511,7 @@ def create_app(
     trusted_proxies: Sequence[str] = (),
     audit: AuditHook | None = None,
     audit_payloads: bool = False,
+    policy: Policy | None = None,
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
     """Build the ASGI app.
@@ -559,6 +561,11 @@ def create_app(
     cannot pick its own address, scheme or prefix. ``audit`` is called with an
     :class:`~indah.audit.AuditEvent` after each UI event (who, which component, which event,
     the payload keys; values only with ``audit_payloads=True``, never from a sensitive field).
+
+    ``policy`` (a :class:`~indah.authz.Policy`: roles to permissions) backs ``ctx.can``,
+    ``ctx.require`` and :func:`~indah.authz.guard` (ADR-0035). Without one a permission is a
+    role name. A guarded handler is checked against the principal of the request that runs it,
+    so a role revoked mid-session fails closed on the next action.
 
     A secure app also needs ``secret`` (at least 16 random bytes; a list rotates: the first
     signs, any verifies). The shell trades its login for a signed session token with
@@ -637,6 +644,7 @@ def create_app(
     app.state.signer = signer
     app.state.audit = audit
     app.state.audit_payloads = audit_payloads
+    app.state.policy = policy
     if hasattr(store, "app"):
         store.app = app  # so each session's Context can reach its ASGI app
     app.state.heartbeat_seconds = heartbeat_seconds
@@ -1108,18 +1116,22 @@ async def _event(request: Request) -> JSONResponse:
         return denied
     hub = handle.hub
     session = handle.session
-    result = session.dispatch(event.component, event.event, event.payload)
+    # The handler runs as *this request's* principal (re-authenticated just now), so a guard
+    # sees a role revoked since the session was built. A spawned task copies this scope.
+    with authz_scope(principal, request.app.state.policy):
+        result = session.dispatch(event.component, event.event, event.payload)
+        if result is not None and not result.forbidden and result.coro is not None:
+            # Run the async handler in the background: the POST returns now and the
+            # work streams over SSE, so it never holds the request open past the
+            # proxy timeout, nor blocks the event loop or other sessions (R3).
+            session.spawn(result.coro)
     if result is None:
         return JSONResponse({"ok": False, "error": "unknown event"}, status_code=400)
+    if result.forbidden:
+        return _denied(403, "forbidden")
     _audit(request, handle, principal, event.component, event.event, event.payload)
-
     if result.changes:
         hub.publish(patch_message(result.changes))
-    if result.coro is not None:
-        # Run the async handler in the background: the POST returns now and the
-        # work streams over SSE, so it never holds the request open past the
-        # proxy timeout, nor blocks the event loop or other sessions (R3).
-        session.spawn(result.coro)
     return JSONResponse({"ok": True})
 
 
@@ -1163,17 +1175,20 @@ async def _upload(request: Request) -> JSONResponse:
     handle, denied, principal = await _open_session(request, sid)
     if handle is None:
         return denied
-    result = handle.session.dispatch(component_id, "upload", {"files": files})
+    with authz_scope(principal, request.app.state.policy):
+        result = handle.session.dispatch(component_id, "upload", {"files": files})
+        if result is not None and not result.forbidden and result.coro is not None:
+            handle.session.spawn(result.coro)
     if result is None:
         return JSONResponse({"ok": False, "error": "unknown component"}, status_code=400)
+    if result.forbidden:
+        return _denied(403, "forbidden")
     _audit(
         request, handle, principal, component_id, "upload", {"files": [f.filename for f in files]}
     )
 
     if result.changes:
         handle.hub.publish(patch_message(result.changes))
-    if result.coro is not None:
-        handle.session.spawn(result.coro)
     return JSONResponse({"ok": True, "files": [f.filename for f in files]})
 
 

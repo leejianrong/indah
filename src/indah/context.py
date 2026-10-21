@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from .auth import Principal
+from .authz import Forbidden, Policy, current_principal
+from .authz import can as _can
 from .protocol import navigate_message, signed_out_message, toast_message
 from .proxy import forwarded_prefix
 from .reactive import Computed, Signal
@@ -114,6 +116,37 @@ class Context:
         message_ = toast_message(message, kind, ttl)  # validate even when unbound
         if self._hub is not None:
             self._hub.publish(message_)
+
+    @property
+    def workspace(self) -> str | None:
+        """The workspace this session belongs to (``Principal.workspace``), or ``None``. The
+        session token is signed for it, so another workspace never reaches this session."""
+        return self.user.workspace if self.user is not None else None
+
+    def can(self, perm: str) -> bool:
+        """Whether the user holds ``perm`` (a role name, or a permission the app's ``Policy``
+        grants one of their roles). While a handler runs this is the principal of *that*
+        request, so a role revoked since the session was built is honoured; while the tree is
+        built it is ``ctx.user``. No user, or an empty ``perm``, is ``False``.
+
+        Use it to **omit** restricted components when building the tree (hidden is still sent),
+        and :func:`~indah.authz.guard` or :meth:`require` to refuse an action."""
+        principal = current_principal() or self.user
+        policy: Policy | None = getattr(getattr(self.app, "state", None), "policy", None)
+        return _can(principal, perm, policy)
+
+    def require(self, perm: str) -> None:
+        """Raise :class:`~indah.authz.Forbidden` unless :meth:`can`. In a handler this answers
+        the event ``403`` and shows the tab a "not allowed" toast."""
+        if not self.can(perm):
+            raise Forbidden(f"not allowed: {perm}")
+
+    def only(self, perm: str, build: Callable[[], T]) -> list[T]:
+        """``[build()]`` if the user holds ``perm``, else ``[]``, so a restricted component is
+        never even constructed for someone who may not see it::
+
+            children=[Overview(), *ctx.only("admin", lambda: AdminPanel())]"""
+        return [build()] if self.can(perm) else []
 
     def sign_out(self) -> int:
         """End every session this user holds (every open tab), and show each a signed-out page.
