@@ -79,3 +79,9 @@ def test_code_editor_module_ships_in_the_package():
     editor = files("indah.static").joinpath("editor.js").read_bytes()
     assert len(editor) > 100_000  # CodeMirror, not a placeholder
     assert b"createEditor" in editor
+
+
+@pytest.mark.unit
+def test_py_typed_marker_ships_in_the_package():
+    # PEP 561: without the marker, strict mypy ignores indah's inline annotations.
+    assert files("indah").joinpath("py.typed").is_file()
