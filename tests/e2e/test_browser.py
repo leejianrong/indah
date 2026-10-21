@@ -3338,3 +3338,34 @@ def test_time_column_absolute_formats():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_theme_extra_tokens_resolve_in_both_schemes():
+    """IND-134: an app-defined --x-* token is available to CSS in light and in dark."""
+    from indah import Column, Session, Text, Theme, create_app
+
+    theme = Theme(extra_light={"x-brand": "#b5296b"}, extra_dark={"x-brand": "#ff7ab6"})
+    app = create_app(session=Session(Column(children=[Text("hi")])), theme=theme)
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("hi")).to_be_visible()
+
+                def brand():
+                    return page.evaluate(
+                        "getComputedStyle(document.documentElement).getPropertyValue('--x-brand').trim()"
+                    )
+
+                page.get_by_role("button", name="Light theme").click()
+                assert brand() == "#b5296b"
+                page.get_by_role("button", name="Dark theme").click()
+                assert brand() == "#ff7ab6"
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

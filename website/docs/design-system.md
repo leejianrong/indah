@@ -29,6 +29,23 @@ If you override a `*-container` role, also override its `on-*-container` partner
 stays readable. The Bunga logo is brand identity, not a theme role: a theme never recolours
 it. To use your own mark, pass `logo=`.
 
+### Your own tokens
+
+An app can add roles the core set does not have, such as a row-hover fill or a status colour.
+Name them `x-<name>` and pass them per scheme; they are emitted as `--x-<name>` for your CSS
+to read (a custom component's styles, for example).
+
+```python
+indah.Theme(
+    extra_light={"x-brand": "#b5296b", "x-row-hover": "rgba(0, 0, 0, 0.04)"},
+    extra_dark={"x-brand": "#ff7ab6", "x-row-hover": "rgba(255, 255, 255, 0.06)"},
+)
+```
+
+Define a token in both schemes if it should differ, because one set only in `extra_dark` has no
+value in light. Values are checked like any other theme value. The core roles stay a closed
+set: `Theme(light={"x-brand": ...})` raises, and so does an extra that does not start `x-`.
+
 The page frame is 1080px wide at most. `create_app(max_width="none")` lets it fill the window
 (a dashboard with a left rail wants this), and `max_width="1400px"` or `"90rem"` sets another
 cap. Anything else raises an error. It is applied as the `--page-max` token.

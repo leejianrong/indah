@@ -57,6 +57,24 @@ def _value(name: str, value: str) -> str:
     return text
 
 
+# An app's own roles (ADR-0031 amendment, IND-134): ``x-`` then lowercase words, so they can
+# never shadow a core role and the core set stays closed.
+_EXTRA_NAME = re.compile(r"x-[a-z0-9]+(-[a-z0-9]+)*")
+
+
+def _extras(scheme: str, tokens: Mapping[str, str] | None) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for raw, value in (tokens or {}).items():
+        name = str(raw).removeprefix("--")
+        if not _EXTRA_NAME.fullmatch(name):
+            raise ValueError(
+                f"extra {scheme} theme token {raw!r} must be named x-<name>, "
+                "lowercase letters, digits and hyphens (e.g. 'x-brand')"
+            )
+        out[name] = _value(name, value)
+    return out
+
+
 def _tokens(scheme: str, tokens: Mapping[str, str] | None) -> dict[str, str]:
     out: dict[str, str] = {}
     for raw, value in (tokens or {}).items():
@@ -70,7 +88,12 @@ def _tokens(scheme: str, tokens: Mapping[str, str] | None) -> dict[str, str]:
 
 class Theme:
     """Token overrides for one app. ``light``/``dark`` map a token name (with or without
-    the leading ``--``) to a CSS value; ``radius`` and ``font`` apply to both schemes."""
+    the leading ``--``) to a CSS value; ``radius`` and ``font`` apply to both schemes.
+
+    ``extra_light`` / ``extra_dark`` add the app's own tokens, which must be named ``x-<name>``
+    and are emitted as ``--x-<name>`` for the app's own CSS to read. The core roles above stay a
+    closed set. Define an extra in both schemes if it should differ, since a token set only in
+    ``extra_dark`` has no value in the light scheme."""
 
     def __init__(
         self,
@@ -79,9 +102,11 @@ class Theme:
         dark: Mapping[str, str] | None = None,
         radius: str | None = None,
         font: str | None = None,
+        extra_light: Mapping[str, str] | None = None,
+        extra_dark: Mapping[str, str] | None = None,
     ) -> None:
-        self.light = _tokens("light", light)
-        self.dark = _tokens("dark", dark)
+        self.light = _tokens("light", light) | _extras("light", extra_light)
+        self.dark = _tokens("dark", dark) | _extras("dark", extra_dark)
         self.radius = _value("radius", radius) if radius is not None else None
         self.font = _value("font", font) if font is not None else None
 
