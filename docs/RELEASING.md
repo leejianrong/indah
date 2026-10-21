@@ -109,7 +109,9 @@ Then every release is:
 1. Bump `version` in `pyproject.toml` and `__version__` in `src/indah/__init__.py`
    (keep them in lockstep - `tests/unit/test_version.py` and the packaging tests
    guard the invariants).
-2. Run `make cleanroom` and `make check` - the R4 proof and the fast gate.
-3. Commit, tag (`git tag vX.Y.Z`), push the tag.
-4. Create a GitHub Release for that tag. The `publish.yml` workflow builds and
+2. Add the release's section to `CHANGELOG.md` (Keep a Changelog; hyphens, no em-dashes),
+   and use that section as the GitHub Release notes.
+3. Run `make cleanroom` and `make check` - the R4 proof and the fast gate.
+4. Commit, tag (`git tag vX.Y.Z`), push the tag.
+5. Create a GitHub Release for that tag. The `publish.yml` workflow builds and
    publishes automatically.
