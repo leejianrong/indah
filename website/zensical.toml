@@ -23,6 +23,7 @@ nav = [
   { "Reference" = [
     { "Components" = "components.md" },
     { "Custom components" = "custom-components.md" },
+    { "Design system" = "design-system.md" },
     { "Protocol" = "protocol.md" },
   ] },
 ]
