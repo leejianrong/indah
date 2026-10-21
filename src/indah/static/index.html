@@ -99,7 +99,7 @@
         -webkit-font-smoothing: antialiased;
       }
       /* The app frame: content floats on the warm page ground, no chrome itself. */
-      .shell { max-width: 1080px; margin: 0 auto; }
+      .shell { max-width: var(--page-max, 1080px); margin: 0 auto; }
 
       /* Card: a surface panel that floats on the ground (the Studio "panels on
          porcelain" look). The building block layout components sit inside. */
