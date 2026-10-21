@@ -36,7 +36,9 @@ Layout:
   demo-semula`; the requests behind it are in `docs/SEMULA-REQUESTS-PLAN.md`),
   `examples/semula_pending.py` the pending queue with drawer, toast and shortcuts (`make demo-pending`),
   `examples/semula_entries.py` the 20k-row SQLite entries browser (`make demo-entries`),
-  `examples/semula_routes.py` the routed dashboard with deep links under `/ui` (`make demo-routes`);
+  `examples/semula_routes.py` the routed dashboard with deep links under `/ui` (`make demo-routes`),
+  `examples/semula_editor.py` the entry editor, conflict diff, review card and playground (`make demo-editor`),
+  `examples/semula_review.py` every semula demo behind one index (`make demo-review`);
   `docs/DEV-DOCKER.md` the Docker/Traefik flow
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
 - `docs/` PLAN, SLICES, QUESTIONS, RELEASING, `protocol.md` (the public wire

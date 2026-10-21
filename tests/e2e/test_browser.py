@@ -3051,3 +3051,60 @@ def test_keyed_list_row_keeps_focus_and_text_through_late_echoes_and_removals():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_semula_editor_demo_conflict_review_and_playground_flows():
+    """IND-112: all four flows of examples/semula_editor.py in a real browser."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "semula_editor.py"
+    spec = importlib.util.spec_from_file_location("semula_editor_e2e", path)
+    ex = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = ex
+    spec.loader.exec_module(ex)
+
+    handle = launch(ex.build_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 1200, "height": 900})
+            try:
+                page.goto(handle.url + "/ui/", wait_until="domcontentloaded")
+                # 1. save, then a conflict: keep mine
+                page.get_by_label("Response (JSON)").fill('{"answer": "mine"}')
+                page.get_by_role("button", name="Save", exact=True).click()
+                expect(page.get_by_text("Saved as version 2")).to_be_visible()
+                page.get_by_role("button", name="Simulate another editor").click()
+                page.get_by_label("Response (JSON)").fill('{"answer": "mine 2"}')
+                page.get_by_role("button", name="Save", exact=True).click()
+                dialog = page.get_by_role("dialog")
+                expect(dialog).to_be_visible()
+                expect(dialog.get_by_text("their version")).to_be_visible()
+                dialog.get_by_role("button", name="Keep mine").click()
+                expect(dialog).to_have_count(0)
+                expect(page.get_by_text("Saved as version 4")).to_be_visible()
+                # 2. review
+                page.get_by_role("tab", name="Review").click()
+                page.get_by_role("button", name="Approve").click()
+                expect(page.get_by_text("approved", exact=True)).to_be_visible()
+                # 3. playground: keyed rows, a typed edit survives, remove, and a streamed reply
+                page.get_by_role("tab", name="Playground").click()
+                boxes = page.locator(".list-item textarea")
+                expect(boxes).to_have_count(2)
+                boxes.nth(1).fill("Tell me about refunds")
+                page.get_by_role("button", name="Add message").click()
+                expect(boxes).to_have_count(3)
+                expect(boxes.nth(1)).to_have_value("Tell me about refunds")
+                page.get_by_role("button", name="Remove").first.click()
+                expect(boxes).to_have_count(2)
+                page.get_by_role("button", name="Run", exact=True).click()
+                expect(page.get_by_text("Annual plans can be refunded")).to_be_visible(
+                    timeout=10_000
+                )
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
