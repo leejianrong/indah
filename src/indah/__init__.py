@@ -13,6 +13,7 @@ public contract (docs/protocol.md). See https://github.com/leejianrong/indah.
 """
 
 from .app import build_demo_session, create_app, mock_llm
+from .auth import Authenticator, Principal
 from .components import (
     Audio,
     Badge,
@@ -69,7 +70,6 @@ from .components import (
     Upload,
     UploadedFile,
 )
-from .auth import Authenticator, Principal
 from .context import ConnectionInfo, Context
 from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
