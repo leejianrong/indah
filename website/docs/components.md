@@ -163,9 +163,14 @@ page = Column(
 )
 ```
 
-An `on_click` handler may be `async def`. It runs in the background, so a slow
-handler (a model call, an HTTP request) never blocks the event loop or other
-viewers, and the rest of the UI stays responsive while it runs.
+An `on_click` handler may be `async def`. It runs in the background, so a handler that
+*awaits* (an async HTTP call, `asyncio.sleep`) never holds up other viewers, and the rest of
+the UI stays responsive while it runs.
+
+A plain `def` handler runs **on the event loop**, and so does any blocking call inside an
+`async def` one. While it runs, every tab on that server waits. Move blocking work (a
+database query, `requests`, a model forward pass) off the loop with `await
+asyncio.to_thread(...)`; see [Slow handlers](dashboards.md#slow-handlers-keep-the-loop-free).
 
 ## Streaming
 
