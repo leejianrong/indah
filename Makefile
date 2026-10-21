@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help demo demo-semula demo-pending demo-entries demo-routes demo-editor demo-review demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e build cleanroom docs docs-serve check clean
+.PHONY: help demo demo-semula demo-pending demo-entries demo-routes demo-editor demo-hosted demo-review demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e build cleanroom docs docs-serve check clean
 
 # Print a free host port (stdlib only; no lsof/nc needed).
 FREE_PORT := python3 -c 'import socket;s=socket.socket();s.bind(("",0));p=s.getsockname()[1];s.close();print(p)'
@@ -26,6 +26,9 @@ demo-routes: ## Run the semula-shaped routed dashboard (deep links under /ui/)
 
 demo-editor: ## Run the semula-shaped entry editor, review card and playground (open /ui/)
 	uv run python examples/semula_editor.py
+
+demo-hosted: ## Run the two-user hosted demo (sign in as alice and bob in two browser profiles)
+	uv run python examples/semula_hosted.py
 
 demo-review: ## Run ALL semula demos behind one URL with an index page (for review)
 	uv run python examples/semula_review.py

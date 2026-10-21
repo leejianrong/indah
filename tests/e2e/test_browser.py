@@ -3576,3 +3576,69 @@ def test_secure_app_signs_out_every_tab_and_refuses_cross_site_posts():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_semula_hosted_demo_two_users_reload_cross_user_and_sign_out():
+    """IND-117: the hosted demo in two browser profiles. Each user sees only their own state,
+    a reload resumes it, the audit table holds keys not text, another user's token is refused,
+    and signing out ends that user's tab (only theirs)."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "semula_hosted.py"
+    spec = importlib.util.spec_from_file_location("semula_hosted_e2e", path)
+    example = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = example
+    spec.loader.exec_module(example)
+
+    handle = launch(example.build_app(), block=False, open_inline=False)
+    base = handle.url.rstrip("/") + "/"
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            alice = browser.new_context().new_page()
+            bob = browser.new_context().new_page()
+            try:
+                alice.goto(base + "ui/")  # anonymous: sent to the login page
+                expect(alice.get_by_text("Sign in (fake identity provider)")).to_be_visible()
+                alice.goto(base + "login?user=alice")
+                bob.goto(base + "login?user=bob")
+                expect(alice.get_by_text("Alice Tan")).to_be_visible()
+                expect(bob.get_by_text("Bob Lim")).to_be_visible()
+
+                for _ in range(3):
+                    alice.get_by_role("button", name="Count").click()
+                alice.get_by_label("Private notes").fill("alice private note")
+                alice.wait_for_timeout(600)
+                expect(alice.get_by_text("count = 3")).to_be_visible()
+                expect(bob.get_by_text("count = 0")).to_be_visible()
+
+                alice.reload()  # the signed token resumes the same session
+                expect(alice.get_by_text("count = 3")).to_be_visible()
+                assert alice.get_by_label("Private notes").input_value() == "alice private note"
+                expect(alice.locator("tbody tr").first).to_be_visible()
+                assert "alice private" not in alice.locator("tbody").inner_text()  # keys only
+                assert bob.locator("tbody tr").count() == 0  # bob's trail is his own
+
+                token = alice.evaluate("sessionStorage.getItem('indah-sid')")
+                status = bob.evaluate(
+                    """async (t) => (await fetch('api/event', {method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({sid: t, component: 'n6', event: 'click'})
+                    })).status""",
+                    token,
+                )
+                assert status == 403
+
+                alice.get_by_role("button", name="Sign out everywhere").click()
+                alice.get_by_role("button", name="Sign out everywhere").last.click()  # confirm
+                expect(alice.locator(".signed-out")).to_be_visible()
+                expect(bob.get_by_text("Bob Lim")).to_be_visible()
+                alice.get_by_role("button", name="Sign in again").click()
+                expect(alice.get_by_text("Sign in (fake identity provider)")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

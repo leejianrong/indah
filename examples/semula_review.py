@@ -24,6 +24,7 @@ import indah
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import semula_editor  # noqa: E402
 import semula_entries  # noqa: E402
+import semula_hosted  # noqa: E402
 import semula_log  # noqa: E402
 import semula_pending  # noqa: E402
 import semula_routes  # noqa: E402
@@ -146,6 +147,11 @@ DEMOS: list[tuple[str, str, str]] = [
         "Click through projects/entries; paste a deep link in a new tab; use Back.",
     ),
     (
+        "hosted",
+        "Hosted: two users, one app",
+        "Sign in as alice and as bob in two browser profiles; reload, sign out, audit trail.",
+    ),
+    (
         "showcase",
         "Component showcase",
         "Modal, Drawer, toasts, Badge, Switch, tooltip, Shortcuts, JsonTree, Diff, SplitPane.",
@@ -173,12 +179,14 @@ def build_app(*, seed: int | None = 1) -> Starlette:
     entries = semula_entries.build_app()
     routes = semula_routes.build_app()
     editor = semula_editor.build_app()
+    hosted = semula_hosted.build_app()
     children = {
         "log": log,
         "pending": pending,
         "entries": entries,
         "routes": routes,
         "editor": editor,
+        "hosted": hosted,
     }
 
     @contextlib.asynccontextmanager
