@@ -137,8 +137,15 @@ check. `init` and `ping` carry no id. See ADR-0011.
 - `component` — the node id the event came from.
 - `event` — the event name (e.g. `click`, `input`, `change`).
 - `payload` — event data; value-bearing inputs send `{ "value": ... }`.
-- `sid` — the sender's session id (optional; see [Sessions](#sessions)). Omitted, the
-  event lands on the default session.
+- `sid` — the sender's session id (see [Sessions](#sessions)). Required, except on an app
+  built on one explicit shared `Session` (`create_app(session=)`), where an omitted `sid` lands
+  on that session. On any other app an event with no `sid` is rejected `400`; nothing falls
+  through to a shared `default` session.
+
+The body must be sent as `Content-Type: application/json` (parameters such as `charset` are
+fine). Anything else, including `text/plain`, a form or multipart type, or no type at all, is
+rejected `415` before the body is read. That keeps a cross-site "simple" request (one a browser
+sends without a preflight) from reaching the handler.
 
 A malformed body is rejected `400`; a body that does not validate, `422`; an event
 for an unknown component or event, `400`. A body larger than `max_event_bytes`
