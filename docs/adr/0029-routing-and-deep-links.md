@@ -69,3 +69,12 @@ be shared. ADR-0016 deferred the structural children op, so pages cannot be adde
 - Redirects, guards and lazy or nested routers are out of scope.
 - A server restart loses the session, and the reconnecting tab starts from the path in its
   original stream URL, which can be one page behind. A reload fixes it.
+
+## Amendment (IND-125): hidden pages stay eager, the rule is pinned
+
+Lazy page building was considered and rejected: it needs a structural children op (the v2
+protocol change ADR-0016 defers). The cost is that a page whose route is not showing still
+runs its reactive code, with empty params. The mitigation is the rule already stated above:
+read params with `ctx.params.value.get(...)`, never `[...]`, and keep expensive work behind a
+`computed` so it runs only when its inputs exist. `tests/unit/test_router.py` pins the
+behaviour, and the user docs carry the rule next to `Router`.
