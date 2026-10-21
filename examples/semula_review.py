@@ -149,7 +149,7 @@ DEMOS: list[tuple[str, str, str]] = [
     (
         "hosted",
         "Hosted: two users, one app",
-        "Sign in as alice and as bob in two browser profiles; reload, sign out, audit trail.",
+        "Sign in as bob (viewer), alice (editor), carol (admin) in separate profiles.",
     ),
     (
         "showcase",
