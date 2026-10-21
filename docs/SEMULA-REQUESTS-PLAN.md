@@ -18,8 +18,8 @@
 | IND-E22 | S3 big tables, panes | **Done** (PRs #124-#127); `make demo-entries` |
 | IND-E23 | S4 routing | **Done** (PRs #128-#130); `make demo-routes` |
 | IND-E24 | S5 editors, dynamic rows | In progress (IND-108 JsonTree, IND-109 Diff, IND-110 keyed `List`, IND-112 demo done; IND-111 `CodeEditor` built after the owner's Q4 call, ADR-0032) |
-| IND-E25 | H-A identity | Not started (gated by Q1 checkpoint after S3) |
-| IND-E26 | H-B authz, secrets, hardening | Not started |
+| IND-E25 | H-A identity | **Done** (PRs #157-#161): `Principal`/`secure=True` (ADR-0033), signed tokens, origin guard, sign-out, trusted proxies + audit (ADR-0034); `make demo-hosted` |
+| IND-E26 | H-B authz, secrets, hardening | Not started (owner approved 2026-10-21 after the gateway numbers; no OIDC module, no external store, protocol stays v1) |
 
 Where the build differs from the plan text below: the context ADR is **0025**, push is
 **0026** and Table v2 is **0027** (as planned); app theming became an **amendment to
