@@ -183,3 +183,24 @@ def test_link_to_may_be_a_callable_that_follows_the_params():
     assert link.reactive_props()["active"]() is False
     ctx.navigate("/p/docs")
     assert link.reactive_props()["active"]() is True
+
+
+@pytest.mark.unit
+def test_hidden_pages_still_run_their_reactive_code_with_empty_params():
+    """Pinned rule (IND-125, ADR-0029): every page is built and evaluated up front, so a
+    page whose route is not showing runs with no params. ``.get`` is safe, ``[...]`` is not."""
+    ctx = Context("s")
+    seen: list[object] = []
+
+    def detail() -> str:
+        seen.append(ctx.params.value.get("entry"))
+        return f"entry {ctx.params.value.get('entry')}"
+
+    page = Text(detail)
+    Router(ctx, routes={"/": Text("home"), "/e/{entry}": page})
+    assert page.reactive_props()["text"]() == "entry None"  # at "/": the page is hidden
+    assert seen == [None]
+    with pytest.raises(KeyError):
+        ctx.params.value["entry"]  # the trap the rule exists for
+    ctx.navigate("/e/7")
+    assert page.reactive_props()["text"]() == "entry 7"
