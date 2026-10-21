@@ -206,7 +206,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
 | `map` | display | `center:[lat,lon]`, `zoom`, `markers:[{lat,lon,label?,color?,radius?}]`, `polygons:[{points:[[lat,lon],...],label?,color?,fillOpacity?}]`, `polylines:[{points:[[lat,lon],...],label?,color?,weight?}]`, `tileUrl`, `attribution`, `height`, `label` | — (pan/zoom is client-side only, not reported back) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
-| `table` | display/input | classic: `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index). Rich: `columns:[{field,title,kind,width?,sortable,tones?}]`, `rows:[{...}]`, `rowKey`, `height`, `search`, `columnToggle`, `follow`, `pageSize`, `selectable`, `value` (selected row key) | `select` `{index}` or, in rich mode, `{key}` |
+| `table` | display/input | classic: `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index). Rich: `columns:[{field,title,kind,width?,sortable,tones?,timeFormat?}]`, `rows:[{...}]`, `rowKey`, `height`, `search`, `columnToggle`, `follow`, `pageSize`, `selectable`, `value` (selected row key) | `select` `{index}` or, in rich mode, `{key}` |
 | `stat` | display | `value`, `label`, `delta`, `help` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
@@ -325,7 +325,9 @@ is a list of objects (replacing `data`), each with a stable `rowKey` field, and 
 is the selected row's **key**, so a selection survives sorting and new rows. A column's
 `kind` picks a shell-side renderer that never interprets HTML: `text`, `mono`, `badge`
 (`tones` maps a value to `ok|warn|err|info|neutral`), `time` (ISO string or epoch ms/s,
-shown relative and refreshed live) and `number`. `height` makes the body scroll under a
+shown relative and refreshed live unless the column sets `timeFormat: "clock"`
+(`09:14:22.318`) or `"datetime"` (`2026-10-21 09:14:22`), shown in the viewer's local time)
+and `number`. `height` makes the body scroll under a
 sticky header. `search`, `columnToggle` and `follow` switch on a toolbar that is entirely
 client-side (no event): a case-insensitive filter over every column (so streamed rows are
 filtered as they land), a column picker remembered in the browser, and follow-the-tail

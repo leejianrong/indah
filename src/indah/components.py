@@ -1322,6 +1322,9 @@ class Col:
     ``mono`` (truncated, full value on hover), ``badge`` (a pill; ``tones`` maps a cell
     value to ``ok|warn|err|info|neutral``), ``time`` (an ISO string or epoch ms/s shown
     relative, "3s ago", refreshed live) and ``number`` (right-aligned, grouped).
+    ``time_format`` (for ``kind="time"`` only) picks how a time reads: ``"relative"`` (the
+    default), ``"clock"`` (``09:14:22.318``) or ``"datetime"`` (``2026-10-21 09:14:22``), both in
+    the viewer's local time. The tooltip always carries the full ISO (UTC) value.
     """
 
     field: str
@@ -1330,10 +1333,15 @@ class Col:
     width: str | None = None
     sortable: bool = True
     tones: dict[str, str] | None = None
+    time_format: str = "relative"
 
     def __post_init__(self) -> None:
         if self.kind not in _COL_KINDS:
             raise ValueError(f"Col kind {self.kind!r} not in {sorted(_COL_KINDS)}")
+        if self.time_format not in _TIME_FORMATS:
+            raise ValueError(f"Col time_format {self.time_format!r} not in {_TIME_FORMATS}")
+        if self.time_format != "relative" and self.kind != "time":
+            raise ValueError("Col time_format only applies to kind='time'")
         for value, tone in (self.tones or {}).items():
             if tone not in _TONES:
                 raise ValueError(f"Col tone {tone!r} for {value!r} not in {sorted(_TONES)}")
@@ -1351,10 +1359,13 @@ class Col:
             out["width"] = self.width
         if self.tones:
             out["tones"] = dict(self.tones)
+        if self.time_format != "relative":
+            out["timeFormat"] = self.time_format
         return out
 
 
 DENSITIES = ("comfortable", "compact")
+_TIME_FORMATS = ("relative", "clock", "datetime")
 MAX_TABLE_LIMIT = 500
 MAX_CHECK_ALL = 10_000  # most keys a remote table's "select all" will gather
 _MAX_SEARCH = 200

@@ -3302,3 +3302,39 @@ def test_max_width_widens_the_page_frame():
     assert widths["default"] == 1080  # unchanged
     assert widths["cap"] == 1400
     assert widths["wide"] > 1700  # fills the window (less the page gutter)
+
+
+@pytest.mark.e2e
+def test_time_column_absolute_formats():
+    """IND-135: Col(time_format=) shows a clock or date-time instead of "3s ago"; the
+    tooltip keeps the full ISO value."""
+    from indah import Col, Column, Session, Table, create_app
+
+    ts = "2026-10-21T09:14:22.318Z"
+    table = Table(
+        rows=[{"id": "a", "clock": ts, "dt": ts, "rel": ts}],
+        key="id",
+        columns=[
+            Col("clock", kind="time", time_format="clock"),
+            Col("dt", kind="time", time_format="datetime"),
+            Col("rel", kind="time"),
+        ],
+    )
+    handle = launch(
+        create_app(session=Session(Column(children=[table]))), block=False, open_inline=False
+    )
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context(timezone_id="UTC").new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                cells = page.locator("tbody tr td")
+                expect(cells.nth(0)).to_have_text("09:14:22.318")
+                expect(cells.nth(1)).to_have_text("2026-10-21 09:14:22")
+                expect(cells.nth(2)).to_have_text(re.compile(r"ago|\d{4}"))  # relative, unchanged
+                assert cells.nth(0).get_attribute("title") == ts
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
