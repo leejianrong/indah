@@ -1068,7 +1068,18 @@ async def _read_capped(request: Request, limit: int) -> bytes | None:
     return b"".join(chunks)
 
 
+def _is_json(request: Request) -> bool:
+    """True for ``application/json`` (any case, any parameters) and ``+json`` types.
+
+    A browser can send ``text/plain``, form and multipart bodies cross-site without a
+    preflight; requiring JSON means a cross-site "simple" request cannot reach the handler."""
+    media = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    return media == "application/json" or media.endswith("+json")
+
+
 async def _event(request: Request) -> JSONResponse:
+    if not _is_json(request):
+        return _denied(415, "content type must be application/json")
     body = await _read_capped(request, request.app.state.max_event_bytes)
     if body is None:
         return JSONResponse({"ok": False, "error": "event too large"}, status_code=413)
@@ -1086,6 +1097,12 @@ async def _event(request: Request) -> JSONResponse:
 
     # Route the event to the sender's session (ADR-0010): its handler runs on its
     # own signals and its patches go only to its own hub -- never another viewer's.
+    # An event with no session id never falls through to a shared ``default`` session: only
+    # an app built on one explicit shared Session (``create_app(session=)``) has one. (A
+    # secure app refuses it with 401 in ``_open_session``.)
+    if not event.sid and not request.app.state.secure:
+        if not isinstance(request.app.state.store, SharedSessionStore):
+            return _denied(400, "session id required")
     handle, denied, principal = await _open_session(request, event.sid)
     if handle is None:
         return denied

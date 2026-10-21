@@ -1,6 +1,6 @@
 # ADR-0034: Trusted proxies, forwarded prefix and an audit hook
 
-- Status: Accepted (IND-116)
+- Status: Accepted (IND-116; event hygiene, IND-139)
 - Date: 2026-10-21
 - Deciders: Jian (owner)
 
@@ -36,6 +36,12 @@ The gallery trusted `X-Forwarded-For` unconditionally (ADR-0024); that is the th
   password `TextInput`; `SecretReveal` later). The hook may be sync or async; one that raises is
   logged and does not affect the request. Rejected events (unknown component, 401/403) are not
   audited; that is the access log's job.
+
+- **Event hygiene (IND-139).** `POST /api/event` requires a JSON content type (`415` otherwise,
+  before the body is read) so a cross-site "simple" request cannot reach it, and an event with
+  no `sid` is `400` unless the app is one explicit shared `Session` (`create_app(session=)`).
+  Nothing falls through to a shared `default` session any more. The `Origin` guard (ADR-0033)
+  stays the control for secure apps; this closes the same door for apps that are not.
 
 ## Alternatives considered
 

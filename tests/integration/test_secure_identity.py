@@ -96,7 +96,7 @@ async def test_an_authenticator_alone_gives_ctx_user_without_enforcing_anything(
     )
     async with _client(app) as client:
         assert (await _click(client, "t")).status_code == 200
-        assert (await _click(client, "")).status_code == 200  # id-less still shares `default`
+        assert (await _click(client, "")).status_code == 400  # id-less never shares (IND-139)
     assert seen[0].id == "svc" and seen[0].roles == frozenset({"admin"})
 
 
@@ -208,10 +208,11 @@ async def test_non_secure_apps_are_unchanged():
     app = create_app(session_factory=_factory([]))
     async with _client(app) as client:
         assert (await _click(client, "t")).status_code == 200
+        # an id-less event no longer falls through to a shared session (IND-139)
         assert (
             await client.post("/api/event", json={"component": "n1", "event": "click"})
-        ).status_code == 200
-    assert app.state.store.get("default") is not None
+        ).status_code == 400
+    assert app.state.store.get("default") is None
 
 
 @pytest.mark.integration

@@ -40,7 +40,7 @@ async def test_streaming_demo_streams_tokens_incrementally_and_stays_responsive(
         async with httpx.AsyncClient(base_url=handle.url, timeout=15.0) as client:
             assert (await client.get("/health")).status_code == 200
 
-            async with client.stream("GET", "/api/stream") as response:
+            async with client.stream("GET", "/api/stream", params={"sid": "t1"}) as response:
                 lines = response.aiter_lines()
 
                 init = await _next_data(lines)
@@ -53,7 +53,8 @@ async def test_streaming_demo_streams_tokens_incrementally_and_stays_responsive(
                 # Click Generate: the assistant reply must arrive as many small
                 # `pending` patches (token by token), not a single final dump.
                 posted = await client.post(
-                    "/api/event", json={"component": button_node["id"], "event": "click"}
+                    "/api/event",
+                    json={"sid": "t1", "component": button_node["id"], "event": "click"},
                 )
                 assert posted.status_code == 200
 
@@ -78,6 +79,7 @@ async def test_streaming_demo_streams_tokens_incrementally_and_stays_responsive(
                         await client.post(
                             "/api/event",
                             json={
+                                "sid": "t1",
                                 "component": slider_node["id"],
                                 "event": "input",
                                 "payload": {"value": 7},
@@ -100,7 +102,7 @@ async def test_registered_custom_component_renders_and_responds():
     handle = launch(block=False, open_inline=False)
     try:
         async with httpx.AsyncClient(base_url=handle.url, timeout=15.0) as client:
-            async with client.stream("GET", "/api/stream") as response:
+            async with client.stream("GET", "/api/stream", params={"sid": "t1"}) as response:
                 lines = response.aiter_lines()
                 init = await _next_data(lines)
                 picker = _find(init["root"], "colorpicker")
@@ -112,6 +114,7 @@ async def test_registered_custom_component_renders_and_responds():
                 await client.post(
                     "/api/event",
                     json={
+                        "sid": "t1",
                         "component": picker["id"],
                         "event": "input",
                         "payload": {"value": "#00ff00"},
