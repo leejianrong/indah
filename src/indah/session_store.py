@@ -176,6 +176,15 @@ class InMemorySessionStore:
         if handle is not None:
             handle.session.close()
 
+    def discard_where(self, *, owner: str) -> int:
+        """Discard every session owned by ``owner`` (sign-out, a revoked login); returns how
+        many. Not part of the ``SessionStore`` protocol: a store that lacks it just cannot be
+        signed out this way."""
+        mine = [sid for sid, h in self._handles.items() if h.owner == owner]
+        for sid in mine:
+            self.discard(sid)
+        return len(mine)
+
     def __len__(self) -> int:
         return len(self._handles)
 

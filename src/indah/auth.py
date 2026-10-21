@@ -18,10 +18,15 @@ authenticator that raises, or returns something that is not a ``Principal``, is 
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import inspect
 import logging
+import re
+import secrets
 import time
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -94,3 +99,49 @@ async def authenticate(request: Request, auth: Authenticator | None) -> Principa
         logger.error("indah authenticator returned %r, not a Principal", type(result).__name__)
         return None
     return None if result.expired else result
+
+
+_SID = re.compile(r"[A-Za-z0-9_-]{16,64}")
+_MIN_SECRET_BYTES = 16
+
+
+class TokenSigner:
+    """Signed session tokens: ``<sid>.<HMAC-SHA256(secret, sid | principal | workspace)>``.
+
+    The ``sid`` is 128 random bits and keys the session store. The signature binds it to one
+    principal (and workspace), so a client can neither choose an id nor present another
+    user's. ``secret`` may be a list for rotation: new tokens use the first, any verifies, so
+    a deploy can add a new secret in front and drop the old one later."""
+
+    def __init__(self, secret: str | bytes | Sequence[str | bytes]) -> None:
+        raw = [secret] if isinstance(secret, (str, bytes)) else list(secret)
+        keys = [s.encode() if isinstance(s, str) else bytes(s) for s in raw]
+        if not keys or any(len(k) < _MIN_SECRET_BYTES for k in keys):
+            raise ValueError(
+                f"secret must be at least {_MIN_SECRET_BYTES} bytes (use a long random value)"
+            )
+        self._keys = keys
+
+    @staticmethod
+    def _message(sid: str, principal: Principal) -> bytes:
+        return f"indah-session-v1|{sid}|{principal.id}|{principal.workspace or ''}".encode()
+
+    def _sign(self, key: bytes, sid: str, principal: Principal) -> str:
+        digest = hmac.new(key, self._message(sid, principal), hashlib.sha256).digest()
+        return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
+    def mint(self, principal: Principal, sid: str | None = None) -> str:
+        sid = sid or secrets.token_urlsafe(16)
+        return f"{sid}.{self._sign(self._keys[0], sid, principal)}"
+
+    def verify(self, token: object, principal: Principal) -> str | None:
+        """The ``sid`` if ``token`` was signed for exactly this principal, else ``None``."""
+        if not isinstance(token, str) or token.count(".") != 1 or len(token) > 200:
+            return None
+        sid, _, signature = token.partition(".")
+        if not _SID.fullmatch(sid):
+            return None
+        ok = False
+        for key in self._keys:  # check every key, so timing does not reveal which matched
+            ok |= hmac.compare_digest(self._sign(key, sid, principal), signature)
+        return sid if ok else None

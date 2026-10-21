@@ -146,10 +146,15 @@ UI down: the traceback is logged server-side and an `error` message is pushed.
 
 ### Secure apps
 
-With `create_app(secure=True)` (ADR-0033) every route above first identifies the caller. A
-request with no authenticated principal, or with no session id, is rejected `401` (an id-less
-request never falls back to the default session). A session id that belongs to another
-principal is rejected `403`; a download of another principal's file is `404`. These are plain
+With `create_app(secure=True)` (ADR-0033) the session id is a signed token, not a browser-minted
+id. The shell first calls `POST /api/session` with `{"resume": <old token or null>}` and
+receives `{"ok": true, "token": "<sid>.<signature>", "user": {"id", "name"}}`; a `resume` that
+still verifies for the same caller comes back unchanged (so a reload keeps its session). The
+shell learns the app is secure from `"secure": true` in `window.__INDAH_CHROME__`, and sends the
+token wherever it would send a `sid`. Every route then identifies the caller first. A request
+with no authenticated principal, or with no session id, is rejected `401` (an id-less request
+never falls back to the default session). A token that does not verify for the caller (forged,
+tampered, or another user's) is rejected `403`; a download of another principal's file is `404`. These are plain
 HTTP statuses on the existing routes, not protocol messages.
 
 ## File upload and download

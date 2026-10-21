@@ -3410,3 +3410,93 @@ def test_code_editor_highlights_placeholder_tokens_in_text_and_json():
                 browser.close()
     finally:
         handle.stop()
+
+
+class _FakeIdp:
+    """A parent app's login: turns an ``X-User`` header into Starlette's ``scope["user"]``."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            who = dict(scope["headers"]).get(b"x-user")
+            if who:
+                from starlette.authentication import SimpleUser
+
+                scope["user"] = SimpleUser(who.decode())
+        await self.app(scope, receive, send)
+
+
+def _secure_counter_app():
+    from indah import Button, Column, Session, Signal, Text, create_app
+
+    def build(ctx):
+        n = Signal(0)
+        return Session(
+            Column(
+                children=[
+                    Button("inc", on_click=lambda: n.set(n.value + 1)),
+                    Text(lambda: f"{ctx.user.id}:{n.value}"),
+                ]
+            )
+        )
+
+    app = create_app(session_factory=build, secure=True, secret="e2e-secret-value-0123456789abcdef")
+    return app, _FakeIdp(app)
+
+
+@pytest.mark.e2e
+def test_secure_app_isolates_users_resumes_on_reload_and_refuses_anonymous():
+    """IND-114: each login gets its own signed session; a reload resumes it; another user
+    cannot drive it with its id; an anonymous visitor gets no session."""
+    app, asgi = _secure_counter_app()
+    handle = launch(asgi, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            alice = browser.new_context(extra_http_headers={"X-User": "alice"}).new_page()
+            bob = browser.new_context(extra_http_headers={"X-User": "bob"}).new_page()
+            anon = browser.new_context().new_page()
+            try:
+                alice.goto(handle.url, wait_until="domcontentloaded")
+                bob.goto(handle.url, wait_until="domcontentloaded")
+                expect(alice.get_by_text("alice:0")).to_be_visible()
+                expect(bob.get_by_text("bob:0")).to_be_visible()
+
+                alice.get_by_role("button", name="inc").click()
+                alice.get_by_role("button", name="inc").click()
+                expect(alice.get_by_text("alice:2")).to_be_visible()
+                expect(bob.get_by_text("bob:0")).to_be_visible()  # untouched
+
+                # a reload keeps alice's session (the token resumes) and its state
+                alice.reload(wait_until="domcontentloaded")
+                expect(alice.get_by_text("alice:2")).to_be_visible()
+
+                # bob presents alice's real token: refused, and alice's state does not move
+                token = alice.evaluate("sessionStorage.getItem('indah-sid')")
+                assert token and "." in token
+                status = bob.evaluate(
+                    """async (t) => (await fetch('api/event', {method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({sid: t, component: 'n1', event: 'click'})})).status""",
+                    token,
+                )
+                assert status == 403
+                stream = bob.evaluate(
+                    "async (t) => (await fetch('api/stream?sid=' + encodeURIComponent(t))).status",
+                    token,
+                )
+                assert stream == 403
+                alice.wait_for_timeout(300)
+                expect(alice.get_by_text("alice:2")).to_be_visible()
+
+                # an anonymous visitor never gets a session or a UI
+                anon.goto(handle.url, wait_until="domcontentloaded")
+                expect(anon.get_by_text("signed out")).to_be_visible()
+                assert anon.locator("button", has_text="inc").count() == 0
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+    assert len(app.state.store) == 2  # alice and bob only

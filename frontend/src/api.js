@@ -35,6 +35,43 @@ function newId() {
   return "sid-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+// A secure app (ADR-0033) does not accept a browser-minted id: the shell first trades the
+// caller's login for a signed session token with POST api/session, and that token is the
+// session id from then on. The old token is sent as `resume`, so a reload keeps its session
+// when it is still this user's. Resolves to the token, or rejects with the HTTP status.
+const SECURE = !!(typeof window !== "undefined" && (window.__INDAH_CHROME__ || {}).secure);
+
+export function isSecure() {
+  return SECURE;
+}
+
+export async function ensureSession(fresh = false) {
+  if (!SECURE) return sessionId();
+  let resume = null;
+  if (!fresh) {
+    try {
+      resume = sessionStorage.getItem("indah-sid");
+    } catch (e) {
+      resume = _sid || null;
+    }
+  }
+  const resp = await fetch(apiUrl("api/session"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ resume }),
+    credentials: "same-origin",
+  });
+  if (!resp.ok) throw Object.assign(new Error("session " + resp.status), { status: resp.status });
+  const { token } = await resp.json();
+  _sid = token;
+  try {
+    sessionStorage.setItem("indah-sid", token);
+  } catch (e) {
+    /* storage blocked: the in-memory token still works for this load */
+  }
+  return token;
+}
+
 export function sessionId() {
   if (_sid) return _sid;
   try {
