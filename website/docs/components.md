@@ -20,6 +20,8 @@ set shipped in 0.2.0.
 | `Slider` | a numeric input on a track |
 | `Number` | a plain numeric input with optional bounds |
 | `TextInput` | a single-line text box |
+| `TextArea` | a multi-line text box |
+| `Switch` | an on/off toggle bound to a `Signal[bool]` |
 | `Select` | a single-choice dropdown |
 | `MultiSelect` | a multi-choice select |
 | `Radio` | a radio group |
@@ -30,7 +32,8 @@ set shipped in 0.2.0.
 
 | Component | Use |
 |-----------|-----|
-| `Button` | an `on_click` handler (sync or `async def`) |
+| `Button` | an `on_click` handler (sync or `async def`); `confirm=` asks first |
+| `Shortcuts` | keyboard shortcuts for the page, with a `?` help overlay |
 
 ### Layout
 
@@ -43,6 +46,10 @@ set shipped in 0.2.0.
 | `Tabs` | a tabbed container, one panel at a time |
 | `Sidebar` | a persistent side region plus a main region |
 | `Expander` | a collapsible labelled section |
+| `SplitPane` | two panels with a draggable divider |
+| `MasterDetail` | a list beside its detail, a drawer on a narrow screen |
+| `Router` / `Link` | pages chosen by the URL, and links between them |
+| `Modal` / `Drawer` | a dialog and a side panel, opened from a signal |
 
 ### Charts and data
 
@@ -55,13 +62,15 @@ set shipped in 0.2.0.
 | `DataFrame` | a pandas frame, a `{columns, rows}` dict, or record dicts |
 | `Table` | an interactive table: sort, page, and select |
 | `Stat` | a metric / KPI card: a big value with a label and optional delta |
+| `JsonTree` | a collapsible, searchable JSON viewer |
+| `Diff` | a split or unified diff of two texts or JSON values |
 
 ### Streaming and data-driven lists
 
 | Component | Use |
 |-----------|-----|
 | `StreamText` | a string that grows token by token over SSE |
-| `List` | a data-driven list bound to a `Signal[list]` |
+| `List` | a data-driven list bound to a `Signal[list]`; `key=` and `on_item=` make rows editable |
 | `Chat` | a chat transcript of role bubbles bound to a `Signal[list]` |
 | `Gallery` | an image grid bound to a `Signal[list]` |
 
@@ -73,6 +82,11 @@ set shipped in 0.2.0.
 | `Download` | a link that hands the user a file back |
 | `Progress` | a progress bar bound to a source |
 | `Spinner` | an indeterminate busy indicator |
+| `Badge` | a small status pill |
+
+Every component also takes `tooltip="..."`, and `ctx.toast(message)` shows a transient message in the
+current tab. For the live-data, table, overlay and routing features, see
+[Build a dashboard](dashboards.md).
 
 ## Display
 

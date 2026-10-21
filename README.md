@@ -126,7 +126,9 @@ The starter set covers a typical AI demo (input, run, streamed output):
 That is the starter subset. 0.2.0 also ships layout containers (`Row`, `Grid`, `Card`,
 `Tabs`, `Sidebar`, `Expander`), more inputs (`Checkbox`, `Number`, `Radio`,
 `MultiSelect`, `Date`), charting (`Chart`, `Heatmap`, `Table`, `Stat`, `ImageOverlay`),
-data-driven `List` / `Chat` / `Gallery`, and file `Upload` / `Download` - see the full
+data-driven `List` / `Chat` / `Gallery`, and file `Upload` / `Download`. Building a dashboard
+that sits inside a service (live push, big tables, overlays, routing, editors)? Start with
+[Build a dashboard](https://indah.abangai.dev/docs/dashboards/). The full list is in the
 [Components reference](https://indah.abangai.dev/docs/components/).
 
 Need something the set does not cover? Register a custom component against the

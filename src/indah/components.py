@@ -1371,7 +1371,10 @@ class Table(Component):
     end is pulled back to the last window. ``reload_on=[signal, ...]`` re-runs the last query
     when one changes (a project picker, say), ``query=`` mirrors the latest ``TableQuery``
     into a signal and ``page_size`` is the window size (default 50). Sorting and ``search=``
-    are server-side here; the loader is the one place that honours them.
+    are server-side here; the loader is the one place that honours them. ``follow=`` is not
+    available with ``remote=`` (it raises ``ValueError``). The header checkbox ticks only the
+    rows shown; with ``checked=`` a "Select all M" button gathers every match, up to
+    ``MAX_CHECK_ALL`` keys.
 
     ``virtual=True`` (rich or remote form, needs ``height``) renders only the rows in view
     plus a small overscan, with spacers standing in for the rest, so the DOM stays small at
