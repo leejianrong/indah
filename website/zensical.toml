@@ -19,6 +19,7 @@ nav = [
   ] },
   { "Guides" = [
     { "Build a chatbot" = "chatbot.md" },
+    { "Build a dashboard" = "dashboards.md" },
   ] },
   { "Reference" = [
     { "Components" = "components.md" },
