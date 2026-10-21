@@ -1,7 +1,7 @@
 # ADR-0033: Identity seams and secure sessions
 
-- Status: Accepted (principal and ownership built, IND-113; signed tokens, request guard and
-  sign-out follow in IND-114 and IND-115)
+- Status: Accepted (principal and ownership built, IND-113; signed tokens, IND-114; request guard
+  and sign-out follow in IND-115)
 - Date: 2026-10-21
 - Deciders: Jian (owner)
 
@@ -33,6 +33,16 @@ paid on top of that.
 - **Fail closed.** An authenticator that raises, or returns a non-`Principal`, is "nobody".
   `secure=True` with a single shared `Session` raises at `create_app`, because one state for
   every user cannot be secure.
+- **Signed session tokens (IND-114).** A secure app needs `secret=` (at least 16 bytes; a list
+  rotates, the first signs and any verifies). `POST api/session {resume}` authenticates the
+  caller and returns `token = sid + "." + base64url(HMAC-SHA256(secret, "indah-session-v1" | sid |
+  principal.id | workspace))`, with `sid` 128 random bits. A `resume` token that verifies for the
+  same principal comes back unchanged, so a reload keeps its session; anything else mints a new
+  one. The shell sends the token as its session id on every route, and the server verifies it
+  against the *current* principal before the store is touched: forged, replayed (other
+  principal), tampered and unsigned ids are all 403 and create nothing. The store is keyed by the
+  `sid` part; the signature never reaches it. `InMemorySessionStore.discard_where(owner=)` drops
+  a user's sessions.
 - With `auth=` but not `secure=`, the principal is only attached (`ctx.user`): enforcement is
   opt-in, so notebooks and the gallery are unchanged.
 
@@ -46,8 +56,9 @@ paid on top of that.
 
 ## Consequences
 
-- Ownership by id alone relies on session ids being unguessable (128 random bits from the shell).
-  IND-114 signs them so a client cannot mint or choose one.
+- A token never expires by itself: the login does (`Principal.expires_at`, checked on every
+  request), and the signature only proves which principal a session id was issued to. Rotating
+  the secret to nothing-in-common invalidates every session.
 - `ConnectionInfo.user` and `ctx.user` carry the principal for the session's lifetime. A role
   revoked mid-session is not reflected there; authorization (a later slice) re-checks at
   dispatch.

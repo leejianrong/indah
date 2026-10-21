@@ -23,12 +23,19 @@ print(elapsed, ",".join(heavy))
 """
 
 
-@pytest.mark.unit
-def test_import_is_fast_and_pulls_no_heavy_libraries():
+def _import_once() -> tuple[float, list[str]]:
     out = subprocess.run(
         [sys.executable, "-c", _PROBE % (_HEAVY,)], capture_output=True, text=True, check=True
     ).stdout.split()
-    elapsed = float(out[0])
-    loaded = out[1].split(",") if len(out) > 1 else []
+    return float(out[0]), (out[1].split(",") if len(out) > 1 else [])
+
+
+@pytest.mark.unit
+def test_import_is_fast_and_pulls_no_heavy_libraries():
+    # Best of three: a host stall (seen on a busy WSL box: one 27 s outlier next to 0.2 s runs)
+    # says nothing about indah, but a real regression is slow every time.
+    runs = [_import_once() for _ in range(3)]
+    loaded = runs[0][1]
     assert not loaded, f"import indah eagerly pulled in {loaded}; import it lazily"
+    elapsed = min(t for t, _ in runs)
     assert elapsed < 1.5, f"import indah took {elapsed:.2f}s (was about 0.15 s)"

@@ -18,7 +18,7 @@ import math
 import os
 import re
 import urllib.parse
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from datetime import datetime
 from html import escape
 from importlib.resources import files
@@ -43,7 +43,13 @@ except Exception:  # pragma: no cover - starlette always ships these
     UploadFile = None  # type: ignore[assignment,misc]
     MultiPartException = Exception  # type: ignore[assignment,misc]
 
-from .auth import Authenticator, Principal, authenticate, default_authenticator
+from .auth import (
+    Authenticator,
+    Principal,
+    TokenSigner,
+    authenticate,
+    default_authenticator,
+)
 from .components import (
     DENSITIES,
     Button,
@@ -493,6 +499,7 @@ def create_app(
     max_width: str = DEFAULT_MAX_WIDTH,
     auth: Authenticator | None = None,
     secure: bool = False,
+    secret: str | bytes | Sequence[str | bytes] | None = None,
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
     """Build the ASGI app.
@@ -533,6 +540,11 @@ def create_app(
     ``scope["user"]`` (a parent app's ``AuthenticationMiddleware``) is used. It needs a
     per-viewer ``session_factory``: one shared ``Session`` cannot be secure.
 
+    A secure app also needs ``secret`` (at least 16 random bytes; a list rotates: the first
+    signs, any verifies). The shell trades its login for a signed session token with
+    ``POST api/session`` and sends that token as its session id, so a client cannot choose an
+    id or present another user's (ADR-0033).
+
     ``theme`` overrides the shell's design tokens for this app (IND-88, see
     :class:`~indah.theme.Theme`). ``max_width`` is the page frame's widest size (a CSS length
     such as ``"1400px"`` or ``"90rem"``, or ``"none"`` to fill the window); the default is
@@ -560,7 +572,11 @@ def create_app(
     if len(given) > 1:
         raise ValueError(f"pass at most one of session/session_factory/store, got {given}")
 
+    signer: TokenSigner | None = None
     if secure:
+        if secret is None:
+            raise ValueError("secure=True needs secret= (a long random value, e.g. from the env)")
+        signer = TokenSigner(secret)
         if auth is None:
             auth = default_authenticator
         if session is not None or isinstance(store, SharedSessionStore):
@@ -579,6 +595,7 @@ def create_app(
         routes=[
             Route("/", _index, methods=["GET"]),
             Route("/health", _health, methods=["GET"]),
+            *([Route("/api/session", _session, methods=["POST"])] if secure else []),
             Route("/api/stream", _stream, methods=["GET"]),
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
@@ -591,6 +608,7 @@ def create_app(
     app.state.store = store
     app.state.auth = auth
     app.state.secure = secure
+    app.state.signer = signer
     if hasattr(store, "app"):
         store.app = app  # so each session's Context can reach its ASGI app
     app.state.heartbeat_seconds = heartbeat_seconds
@@ -659,6 +677,7 @@ def _chrome_html(state: Any, base_href: str | None = None) -> str:
         "title": title,
         "logoUrl": "api/brand/logo" if getattr(state, "logo", None) else None,
         "brandName": title if getattr(state, "logo", None) else None,
+        "secure": True if getattr(state, "secure", False) else None,
     }
     if getattr(state, "density", "comfortable") != "comfortable":
         html_text = html_text.replace(
@@ -869,6 +888,12 @@ async def _open_session(
             return None, _denied(401, "unauthenticated")
         if not sid:
             return None, _denied(401, "session id required")
+        # The id the shell sends is a signed token: only the one minted for this principal
+        # verifies, so a forged, replayed or other user's id never reaches the store.
+        real_sid = state.signer.verify(sid, principal)
+        if real_sid is None:
+            return None, _denied(403, "forbidden")
+        sid = real_sid
         existing = store.get(sid)
         if existing is not None and existing.owner != principal.id:
             return None, _denied(403, "forbidden")
@@ -876,6 +901,31 @@ async def _open_session(
         sid or DEFAULT_SESSION_ID, ConnectionInfo.from_request(request, app_path, principal)
     )
     return handle, None
+
+
+async def _session(request: Request) -> JSONResponse:
+    """``POST api/session {resume}``: trade the caller's login for a signed session token.
+
+    Only mounted on a secure app. A ``resume`` token that verifies for this same principal
+    comes back unchanged, so a reload keeps its session; anything else gets a fresh one."""
+    state = request.app.state
+    principal = await authenticate(request, state.auth)
+    if principal is None:
+        return _denied(401, "unauthenticated")
+    body = await _read_capped(request, 4096)
+    if body is None:
+        return _denied(413, "request too large")
+    try:
+        raw = json.loads(body) if body else {}
+    except ValueError:
+        return _denied(400, "invalid json")
+    resume = raw.get("resume") if isinstance(raw, dict) else None
+    sid = state.signer.verify(resume, principal) if resume else None
+    token = state.signer.mint(principal, sid)
+    return JSONResponse(
+        {"ok": True, "token": token, "user": {"id": principal.id, "name": principal.name}},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 async def _stream(request: Request) -> Response:

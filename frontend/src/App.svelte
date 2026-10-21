@@ -1,6 +1,14 @@
 <script>
   import { onMount } from "svelte";
-  import { apiUrl, streamUrl, pushPath, appPath, postEvent, PROTOCOL_VERSION } from "./api.js";
+  import {
+    apiUrl,
+    streamUrl,
+    ensureSession,
+    pushPath,
+    appPath,
+    postEvent,
+    PROTOCOL_VERSION,
+  } from "./api.js";
   import { structure, nodeProps, status, toasts, shortcutRegistry, helpOpen } from "./stores.js";
   import Node from "./Node.svelte";
   import Overlay from "./Overlay.svelte";
@@ -99,19 +107,37 @@
   onMount(() => {
     // EventSource resends Last-Event-Id on reconnect natively; the server replays
     // the missed messages, so a dropped stream resumes without extra client code.
-    const source = new EventSource(streamUrl());
-    source.onopen = () => status.set({ live: true, text: "live" });
-    source.onmessage = (event) => {
-      status.set({ live: true, text: "live" });
-      try {
-        applyMessage(JSON.parse(event.data));
-      } catch (err) {
-        /* ignore malformed frame */
-      }
-    };
-    source.onerror = () => status.update((s) => ({ ...s, live: false, text: "reconnecting…" }));
+    let source = null;
+    let closed = false;
+
+    function connect() {
+      source = new EventSource(streamUrl());
+      source.onopen = () => status.set({ live: true, text: "live" });
+      source.onmessage = (event) => {
+        status.set({ live: true, text: "live" });
+        try {
+          applyMessage(JSON.parse(event.data));
+        } catch (err) {
+          /* ignore malformed frame */
+        }
+      };
+      source.onerror = () => status.update((s) => ({ ...s, live: false, text: "reconnecting…" }));
+    }
+
+    // A secure app hands out the session id (a signed token) first; a plain app connects at once.
+    ensureSession()
+      .then(() => {
+        if (!closed) connect();
+      })
+      .catch((err) =>
+        status.set({
+          live: false,
+          text: err && err.status === 401 ? "signed out" : "could not start a session",
+        }),
+      );
     return () => {
-      source.close();
+      closed = true;
+      if (source) source.close();
     };
   });
 
