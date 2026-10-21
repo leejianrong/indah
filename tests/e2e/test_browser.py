@@ -3479,7 +3479,8 @@ def test_secure_app_isolates_users_resumes_on_reload_and_refuses_anonymous():
                 status = bob.evaluate(
                     """async (t) => (await fetch('api/event', {method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({sid: t, component: 'n1', event: 'click'})})).status""",
+                        body: JSON.stringify({sid: t, component: 'n1', event: 'click'})
+                    })).status""",
                     token,
                 )
                 assert status == 403
