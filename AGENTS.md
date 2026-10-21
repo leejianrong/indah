@@ -14,13 +14,14 @@ Slider, TextInput, Select, Image, Plot, DataFrame, StreamText, Column), and a
 documented as a versioned public contract (`docs/protocol.md`, ADR-0005). Post-MVP
 slices are also in: per-session state (ADR-0010), layout and data-driven lists, media
 upload, hybrid charting, the Studio design system, a Zensical docs site (ADR-0007) and a
-public demo gallery. Current work is the **semula requests**: enhancements for the
-semula dashboard (live push, a rich Table, overlays, routing, editors, then hosted
-identity/authz/hardening). The plan is `docs/SEMULA-REQUESTS-PLAN.md`; progress is board
-IND (epics IND-E19..E26, label `semula`). Done so far: mount-safe shell, `Context`, app
-theme, `Topic`/`Stream`, Table v2 core, the live-log demo (`make demo-semula`), and the
-overlays slice (TextArea, Modal/Drawer/confirm, toasts, Badge/Switch/tooltip, Shortcuts, Table
-row actions and multi-select, `make demo-pending`).
+public demo gallery. The **semula requests** (enhancements for the semula dashboard) are done and ship as 0.4.0: mount-safe
+shell, `Context`, app theme, `Topic`/`Stream`, Table v2, overlays, routing, editors, `CodeEditor`, and
+the hosted layer: identity and signed sessions (`auth.py`, ADR-0033), trusted proxies and audit
+(ADR-0034), authz (`authz.py`, ADR-0035), `SecretReveal` and ephemeral props (ADR-0036), hardening
+(`hardening.py`, ADR-0037) and CSP (`csp.py`, ADR-0038). All of it is off by default. The plan is
+`docs/SEMULA-REQUESTS-PLAN.md`; progress is board IND (label `semula`). The user guide for hosting is
+`website/docs/hosting.md`. The whole e2e suite runs under `csp="strict"` (`tests/e2e/conftest.py`) and
+fails on any CSP violation.
 Trust the code over any doc where they disagree, and fix the doc.
 
 Layout:
@@ -38,7 +39,8 @@ Layout:
   `examples/semula_entries.py` the 20k-row SQLite entries browser (`make demo-entries`),
   `examples/semula_routes.py` the routed dashboard with deep links under `/ui` (`make demo-routes`),
   `examples/semula_editor.py` the entry editor, conflict diff, review card and playground (`make demo-editor`),
-  `examples/semula_hosted.py` two users, one app: signed sessions, sign-out, audit (`make demo-hosted`),
+  `examples/semula_hosted.py` two users, three roles, an admin token screen, hardening on (`make demo-hosted`),
+  `examples/oidc_login.py` the OIDC login recipe (authlib in the parent app; no indah dependency),
   `examples/semula_review.py` every semula demo behind one index (`make demo-review`);
   `docs/DEV-DOCKER.md` the Docker/Traefik flow
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
