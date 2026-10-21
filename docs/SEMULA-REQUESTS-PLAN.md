@@ -19,7 +19,7 @@
 | IND-E23 | S4 routing | **Done** (PRs #128-#130); `make demo-routes` |
 | IND-E24 | S5 editors, dynamic rows | In progress (IND-108 JsonTree, IND-109 Diff, IND-110 keyed `List`, IND-112 demo done; IND-111 `CodeEditor` built after the owner's Q4 call, ADR-0032) |
 | IND-E25 | H-A identity | **Done** (PRs #157-#161): `Principal`/`secure=True` (ADR-0033), signed tokens, origin guard, sign-out, trusted proxies + audit (ADR-0034); `make demo-hosted` |
-| IND-E26 | H-B authz, secrets, hardening | In progress: IND-139, IND-118, IND-119, IND-120 done |
+| IND-E26 | H-B authz, secrets, hardening | In progress: IND-139, IND-118, IND-119, IND-120, IND-121 done; IND-122 (OIDC recipe, hosted demo) left |
 
 Where the build differs from the plan text below: the context ADR is **0025**, push is
 **0026** and Table v2 is **0027** (as planned); app theming became an **amendment to

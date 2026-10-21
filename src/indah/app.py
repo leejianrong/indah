@@ -14,11 +14,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import math
 import os
 import re
 import time
 import urllib.parse
+from collections import deque
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from datetime import datetime
 from html import escape
@@ -86,6 +88,13 @@ from .components import (
     UploadedFile,
 )
 from .context import ConnectionInfo, Context
+from .csp import (
+    add_nonce,
+    build_csp,
+    known_img_hosts,
+    new_nonce,
+    render_custom,
+)
 from .custom import custom, register_component
 from .guard import OriginGuard, normalize_origins
 from .hardening import (
@@ -112,6 +121,8 @@ DEFAULT_HEARTBEAT_SECONDS = 15.0
 
 # An id-less connection (a test, a curl, an old shell) shares this one session.
 # The real shell mints a per-tab id, so real viewers never land here together.
+logger = logging.getLogger("indah")
+
 DEFAULT_SESSION_ID = "default"
 
 # The server-side hard cap on an uploaded file (ADR-0017 / Q-sec). The app author
@@ -520,6 +531,8 @@ def create_app(
     audit_payloads: bool = False,
     policy: Policy | None = None,
     limits: Limits | None = None,
+    csp: str | None = None,
+    csp_media_hosts: Sequence[str] = (),
     security_headers: bool | Mapping[str, str] = False,
     logo: str | os.PathLike[str] | bytes | None = None,
 ) -> Starlette:
@@ -584,6 +597,14 @@ def create_app(
     replaces individual ones, ``""`` drops one). The address used is the socket peer, so behind a
     gateway also set ``trusted_proxies`` (ADR-0037).
 
+    ``csp="strict"`` serves the shell with a Content-Security-Policy: a per-response nonce on
+    its inline ``<script>``/``<style>`` tags and nothing else allowed to run (ADR-0038). Images
+    and audio may come from ``'self'``, ``data:``, ``blob:`` and the tile hosts of any ``Map`` (plus
+    ``csp_media_hosts``, a list of ``https://host`` sources). Violations are reported to
+    ``POST api/csp-report`` and kept in ``app.state.csp_violations``. Any other string is used
+    as the policy, with ``{nonce}`` replaced per response. Off by default, and in ``launch()``:
+    a notebook frames the app, which a fixed policy would break.
+
     A secure app also needs ``secret`` (at least 16 random bytes; a list rotates: the first
     signs, any verifies). The shell trades its login for a signed session token with
     ``POST api/session`` and sends that token as its session id, so a client cannot choose an
@@ -598,6 +619,8 @@ def create_app(
     reads ``"<title> - indah"``; ``title_suffix`` replaces that suffix (``""`` gives the exact
     ``title``).
     """
+    if csp is not None and (not isinstance(csp, str) or not csp.strip()):
+        raise ValueError("csp must be None, 'strict', or a policy string")
     if density not in DENSITIES:
         raise ValueError(f"density must be one of {DENSITIES}, got {density!r}")
     if max_width != "none" and not _LENGTH.fullmatch(max_width):
@@ -672,6 +695,7 @@ def create_app(
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
             Route("/api/editor.js", _editor_js, methods=["GET"]),
+            *([Route("/api/csp-report", _csp_report, methods=["POST"])] if csp == "strict" else []),
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
             *([Route("/api/brand/logo", _logo, methods=["GET"])] if logo is not None else []),
             *([Route("/{path:path}", _spa_index, methods=["GET"])] if spa else []),
@@ -684,6 +708,9 @@ def create_app(
     app.state.audit = audit
     app.state.audit_payloads = audit_payloads
     app.state.policy = policy
+    app.state.csp = csp
+    app.state.csp_media_hosts = tuple(csp_media_hosts)
+    app.state.csp_violations = deque(maxlen=100)
     app.state.stream_limiter = StreamLimiter(limits.max_streams_per_ip)
     if hasattr(store, "app"):
         store.app = app  # so each session's Context can reach its ASGI app
@@ -773,8 +800,44 @@ def _chrome_html(state: Any, base_href: str | None = None) -> str:
 
 
 async def _index(request: Request) -> HTMLResponse:
+    state = request.app.state
     base = _base_href(request.scope.get("path", "/"), request.scope.get("root_path", ""))
-    return HTMLResponse(_chrome_html(request.app.state, base))
+    html_text = _chrome_html(state, base)
+    if not state.csp:
+        return HTMLResponse(html_text)
+    nonce = new_nonce()
+    if state.csp == "strict":
+        policy = build_csp(
+            nonce,
+            img_hosts=[*known_img_hosts(), *state.csp_media_hosts],
+            report_uri=f"{base or ''}api/csp-report",
+        )
+    else:
+        policy = render_custom(state.csp, nonce)
+    return HTMLResponse(
+        add_nonce(html_text, nonce),
+        headers={"Content-Security-Policy": policy, "Cache-Control": "no-store"},
+    )
+
+
+async def _csp_report(request: Request) -> Response:
+    """Collect a browser's CSP violation report (``report-uri``). Untrusted input: capped,
+    parsed leniently, kept in a bounded deque, and always answered ``204``."""
+    body = await _read_capped(request, 8192)
+    try:
+        raw = json.loads(body) if body else {}
+        report = raw.get("csp-report") if isinstance(raw, dict) else None
+    except ValueError:
+        report = None
+    if isinstance(report, dict):
+        keep = {
+            k: str(v)[:300]
+            for k, v in report.items()
+            if k in ("violated-directive", "effective-directive", "blocked-uri", "document-uri")
+        }
+        request.app.state.csp_violations.append(keep)
+        logger.warning("indah CSP violation reported: %s", keep)
+    return Response(status_code=204)
 
 
 async def _spa_index(request: Request) -> Response:

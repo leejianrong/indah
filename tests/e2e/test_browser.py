@@ -868,7 +868,8 @@ def _audio_app():
         clip.set(b"RIFFtinywavbytes")
 
     root = Column(children=[Audio(clip, media_type="audio/wav"), Button("swap", on_click=swap)])
-    return create_app(session=Session(root))
+    # a remote clip is the app's choice, so under CSP it declares the host (ADR-0038)
+    return create_app(session=Session(root), csp_media_hosts=["https://example.com"])
 
 
 @pytest.mark.e2e
@@ -3439,7 +3440,7 @@ class _FakeIdp:
         await self.app(scope, receive, spy)
 
 
-def _secure_counter_app():
+def _secure_counter_app(**kw):
     from indah import Button, Column, Session, Signal, Text, create_app
 
     def build(ctx):
@@ -3454,7 +3455,9 @@ def _secure_counter_app():
             )
         )
 
-    app = create_app(session_factory=build, secure=True, secret="e2e-secret-value-0123456789abcdef")
+    app = create_app(
+        session_factory=build, secure=True, secret="e2e-secret-value-0123456789abcdef", **kw
+    )
     return app, _FakeIdp(app)
 
 
@@ -3519,7 +3522,9 @@ def test_secure_app_isolates_users_resumes_on_reload_and_refuses_anonymous():
 def test_secure_app_signs_out_every_tab_and_refuses_cross_site_posts():
     """IND-115: ctx.sign_out() ends all of a user's tabs (and only theirs); a cross-site
     multipart POST is refused before it reaches a session."""
-    app, asgi = _secure_counter_app()
+    # No CSP here: the "attacker" page is this same app on another host, and its policy would
+    # block the cross-site fetch in the browser. The test is about the *server* refusing it.
+    app, asgi = _secure_counter_app(csp=None)
     handle = launch(asgi, block=False, open_inline=False)
     try:
         with sync_playwright() as p:
@@ -3773,3 +3778,45 @@ def test_secret_reveal_shows_once_copies_dismisses_and_never_returns_on_reload()
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+@pytest.mark.expects_csp_violation
+def test_the_strict_policy_really_blocks_injected_script_and_style_and_reports_it():
+    """IND-121: proof the whole-suite zero-violation check is not vacuous. Inline script and an
+    inline event handler do not run, a nonce-less <style> does not apply, and the browser
+    reports each to the server."""
+    from indah import Column, Session, Text, create_app
+
+    app = create_app(session=Session(Column(children=[Text("hi")])), csp="strict")
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("hi")).to_be_visible()
+                page.evaluate(
+                    """() => {
+                        window.__ran = [];
+                        const s = document.createElement('script');
+                        s.textContent = 'window.__ran.push("script")';
+                        document.body.appendChild(s);
+                        const d = document.createElement('div');
+                        d.innerHTML = '<img src=x onerror="window.__ran.push(\\'handler\\')">';
+                        document.body.appendChild(d);
+                        const st = document.createElement('style');
+                        st.textContent = 'body { outline: 9px solid red }';
+                        document.head.appendChild(st);
+                    }"""
+                )
+                page.wait_for_timeout(500)
+                assert page.evaluate("window.__ran") == []
+                assert page.evaluate("getComputedStyle(document.body).outlineWidth") != "9px"
+                assert len(page.evaluate("window.__cspViolations")) >= 2
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+    assert len(app.state.csp_violations) >= 2  # and the server heard about them

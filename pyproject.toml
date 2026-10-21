@@ -67,6 +67,7 @@ markers = [
     "unit: fast, isolated tests of a single unit",
     "integration: tests across the HTTP/SSE boundary without a browser",
     "e2e: end-to-end tests through a real launched app / browser",
+    "expects_csp_violation: this e2e test provokes a CSP violation on purpose (see conftest)",
 ]
 asyncio_mode = "auto"
 
