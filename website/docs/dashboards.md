@@ -114,6 +114,13 @@ table = Table(
   ellipsis and shows the full text on hover; `wrap=True` lets it wrap instead (not with
   `virtual=True`). Both are off by default. The Studio page "Table: composite cells" shows them.
 - `density="compact"` shrinks one table. Pass a `Signal[str]` to let the viewer toggle it.
+- `on_open=fn` (or `keyboard=True`) makes the table drivable from the keyboard. Tab or click to
+  focus it, then `j`/`k` or the arrows move the active row, `Home`/`End` jump, `PageUp`/`PageDown`
+  move a screenful, Space ticks a row of a `checked=` table, and **Enter calls `fn(key)`** (sync or
+  `async`; without `on_open`, Enter selects like a click). Moving never posts anything. The active
+  row is held by key, so streamed rows, sorting and `follow=` do not move it (`End` resumes
+  following), and at the edge of a paged or remote table the arrow turns the page. Escape or Tab
+  leaves the table. Off by default, so an existing table is unchanged. See "Keys and focus" below.
 
 ### Tens of thousands of rows: `remote=` and `virtual=`
 
@@ -216,6 +223,15 @@ one. A toast's `action=` button runs its function once as that tab's user, so a 
 checked at the click, and a second click or a stale toast does nothing. Give an undo a longer `ttl`
 than the default 4 seconds. `Shortcuts` bare keys are ignored while the viewer types or a dialog is open, and a map
 is active only while it is in the rendered tree.
+
+### Keys and focus
+
+A widget that owns keys while it has focus (the keyboard `Table`, and later the command
+palette) goes first. It acts only on keys aimed at itself, never on a key typed into an input
+inside it or one with `ctrl`, `cmd` or `alt` held, and it marks the key as handled, which
+`Shortcuts` respects. So with a keyboard `Table` focused, `j` moves its row; anywhere else the
+same `j` runs your `Shortcuts` binding, and `mod+k` is always yours. Tab and Escape always
+leave. Use `mod+` or `alt+` combos for page-wide actions and bare keys for the focused widget.
 
 ## Several pages with `Router`
 

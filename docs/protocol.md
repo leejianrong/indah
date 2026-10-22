@@ -395,6 +395,11 @@ only if its `seq` is at least the last `seq` it sent; the server drops a superse
 clamps `limit` to 1..500, and pulls an offset past `total` back to the last window.
 A table may carry `density` (`comfortable`/`compact`), which sets `data-density` on it; the
 app-wide default is `data-density` on `<html>` (`create_app(density=)`, ADR-0014).
+`keyboard: true` (rich and remote tables) makes the table one tab stop (`role=grid`, an active row
+named by `aria-activedescendant`) driven by `j`/`k`, the arrows, `Home`/`End`, `PageUp`/`PageDown`,
+Space (ticks a `checkable` row) and Enter; moving the active row is client-side and posts nothing.
+Enter posts `open` `{key}` when `openable: true` (`Table(on_open=)`), else it selects like a click.
+Both props are omitted by default, so `protocol_version` stays 1 and an existing table is unchanged.
 `virtual: true` (needs `height`) renders only the rows in view plus an overscan between two
 spacer rows, at one fixed row height (`--row-h`, 36px). In remote mode the shell requests
 block-aligned windows as the viewer scrolls (the same `query`, `limit` up to 500), keeps the

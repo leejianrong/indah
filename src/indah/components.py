@@ -1851,6 +1851,14 @@ class Table(Component):
     ``density="compact"`` shrinks this table's rows (the app-wide default is
     ``create_app(density=)``); pass a ``Signal[str]`` to let the viewer toggle it.
 
+    **Keyboard** (rich and remote forms): ``on_open=fn`` makes the table drivable from the
+    keyboard and calls ``fn(key)`` (sync or ``async``) when the viewer presses Enter on a row.
+    ``keyboard=True`` turns the same navigation on without an open handler (Enter then selects,
+    if ``selected=`` is bound). Focus the table with Tab or a click: ``j``/``k`` or the arrows
+    move the active row, ``Home``/``End`` jump, ``PageUp``/``PageDown`` move a screenful, Space
+    ticks a ``checked=`` row, and Escape or Tab leaves. Moving does not select or post anything;
+    only Enter does. Off by default, so existing tables are unchanged (ADR-0030 note on keys).
+
     Sorting and paging are client-side; the data rides ordinary reactive props, so no
     ``protocol_version`` bump. Use ``DataFrame`` when you only need to show a table.
     """
@@ -1878,8 +1886,12 @@ class Table(Component):
         query: Signal[TableQuery | None] | None = None,
         virtual: bool = False,
         density: str | Signal[str] | None = None,
+        on_open: Callable[[Any], Any] | None = None,
+        keyboard: bool = False,
     ) -> None:
         super().__init__()
+        if (on_open is not None or keyboard) and rows is None and remote is None:
+            raise ValueError("Table on_open=/keyboard= need the rich form: pass rows= and key=")
         if isinstance(density, str) and density not in DENSITIES:
             raise ValueError(f"Table density must be one of {DENSITIES}, got {density!r}")
         if virtual and (height is None or (rows is None and remote is None)):
@@ -1933,6 +1945,8 @@ class Table(Component):
         self._checked = checked
         self._virtual = bool(virtual)
         self._density = density
+        self._on_open = on_open
+        self._keyboard = bool(keyboard) or on_open is not None
         self._loader = remote
         if remote is not None and not page_size:
             self._page_size = 50
@@ -1990,6 +2004,10 @@ class Table(Component):
             if isinstance(self._density, str):
                 props["density"] = self._density
             props["checkable"] = self._checked is not None
+            if self._keyboard:
+                props["keyboard"] = True
+            if self._on_open is not None:
+                props["openable"] = True
             if self._loader is not None:
                 props["remote"] = True
                 if self._checked is not None:
@@ -2051,6 +2069,11 @@ class Table(Component):
         if event == "check_all" and self._checked is not None and self._loader is not None:
             if self._last_query is not None:
                 return self._check_all(self._last_query)
+        if event == "open" and self._on_open is not None and "key" in payload:
+            result = self._on_open(payload["key"])
+            if inspect.iscoroutine(result):
+                return result
+            return True
         if event == "action" and "key" in payload:
             actions = {f"a{i}": a for i, a in enumerate(self._actions)}
             action = actions.get(str(payload.get("action")))
