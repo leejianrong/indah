@@ -19,6 +19,16 @@ def test_uploaded_file_size_and_text():
 
 
 @pytest.mark.unit
+def test_uploaded_file_text_errors_mode():
+    f = UploadedFile(filename="b.txt", content_type="text/plain", data=b"ok \xff end")
+    with pytest.raises(UnicodeDecodeError):  # strict stays the default
+        f.text()
+    assert f.text(errors="replace") == "ok \ufffd end"
+    assert f.text(errors="ignore") == "ok  end"
+    assert f.text("latin-1", "strict") == "ok \xff end"
+
+
+@pytest.mark.unit
 def test_upload_serialises_its_ui_hints():
     u = Upload(label="Pick a file", accept="image/*", multiple=True)
     assert u.static_props() == {"label": "Pick a file", "accept": "image/*", "multiple": True}

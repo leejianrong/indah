@@ -2066,8 +2066,11 @@ class UploadedFile:
     def size(self) -> int:
         return len(self.data)
 
-    def text(self, encoding: str = "utf-8") -> str:
-        return self.data.decode(encoding)
+    def text(self, encoding: str = "utf-8", errors: str = "strict") -> str:
+        """The file decoded as text. ``errors`` is passed to ``bytes.decode``: the default
+        ``"strict"`` raises on bad bytes; use ``"replace"`` or ``"ignore"`` for a file that
+        is not clean text."""
+        return self.data.decode(encoding, errors)
 
 
 class Upload(Component):

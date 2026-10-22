@@ -368,7 +368,7 @@ def upload_page(ctx: indah.Context) -> indah.Component:
     report = indah.Signal("No file yet.")
 
     def on_upload(file: indah.UploadedFile) -> None:
-        lines = len(file.text().splitlines())
+        lines = len(file.text(errors="replace").splitlines())  # a stray byte will not raise
         report.set(
             f"Got {file.filename} ({file.content_type}), {file.size} bytes, {lines} line(s)."
         )
