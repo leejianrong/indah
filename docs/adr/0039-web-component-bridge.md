@@ -34,10 +34,10 @@ module once, defines a custom element from it, and keeps that element in sync wi
 ```python
 indah.register_component(
     "tier-rail",
-    module="static/tier-rail.js",        # a path or bytes, read once at registration
-    events=["pick"],                     # CustomEvent names forwarded to Python
-    two_way={"value": "change"},         # prop -> CustomEvent whose detail.value writes it back
-    fallback="steps",                    # a prop shown as text if the module cannot run
+    module="static/tier-rail.js",  # a path or bytes, read once at registration
+    events=["pick"],  # CustomEvent names forwarded to Python
+    two_way={"value": "change"},  # prop -> CustomEvent whose detail.value writes it back
+    fallback="steps",  # a prop shown as text if the module cannot run
 )
 
 rail = indah.custom("tier-rail", steps=steps_signal, value=picked, on_pick=handle_pick)
