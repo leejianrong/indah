@@ -151,6 +151,7 @@
 {:else if node.type === "row"}
   <div
     class="row"
+    class:fit={(props.align ?? "stretch") !== "stretch"}
     style="gap: {props.gap ?? '1rem'}; flex-wrap: {props.wrap === false
       ? 'nowrap'
       : 'wrap'}; align-items: {props.align ?? 'stretch'};"

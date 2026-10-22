@@ -88,7 +88,8 @@ The rules:
 |-------|-------|-----|
 | `radius` | 14px | cards, dialogs, panels |
 | `radius-sm` | 10px | inputs, buttons inside dense UI, images, tooltips |
-| `radius-pill` | 24px | buttons, badges, chips |
+| `radius-pill` | 24px | chips and pills |
+| `radius-control` | `radius-pill` | buttons and badges; `Theme(radius=)` sets it, so a squarer theme squares them too |
 | `font-display` | Bricolage Grotesque | headings and the wordmark |
 | `font-body` | IBM Plex Sans | body text and controls |
 | `font-mono` | IBM Plex Mono | ids, numbers, table headers, code |

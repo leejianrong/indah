@@ -115,6 +115,7 @@ class Theme:
         base = dict(self.light)
         if self.radius:
             base["radius"] = self.radius
+            base["radius-control"] = self.radius  # buttons and badges follow it too
         rules = []
         if base or self.font:
             body = [f"--{k}: {v};" for k, v in base.items()]

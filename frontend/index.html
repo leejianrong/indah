@@ -50,6 +50,7 @@
         --radius: 14px;
         --radius-sm: 10px;
         --radius-pill: 24px;
+        --radius-control: var(--radius-pill);  /* buttons and badges; Theme(radius=) sets it */
 
         --font-display: "Bricolage Grotesque", system-ui, sans-serif;
         --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto,
@@ -200,6 +201,8 @@
          Row/Grid take gap + columns as inline style from static props. */
       .row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: stretch; }
       .row > * { flex: 1 1 0; min-width: 0; }
+      /* An explicit align= means "size to content": buttons and badges stop stretching. */
+      .row.fit > button, .row.fit > .badge { flex: 0 0 auto; }
       .grid { display: grid; gap: 1rem; }
       .sidebar-layout { display: flex; gap: 1.5rem; align-items: flex-start; }
       .sidebar-layout > .sidebar-aside { flex: 0 0 min(240px, 34%); }
@@ -692,7 +695,7 @@
         color: var(--on-primary);
         background: var(--primary);
         border: 0;
-        border-radius: var(--radius-pill);
+        border-radius: var(--radius-control);
         padding: 0.55rem 1.3rem;
         cursor: pointer;
         align-self: flex-start;
@@ -720,7 +723,7 @@
         padding: 0.1rem 0.55rem;
         font-size: 0.75rem;
         font-weight: 600;
-        border-radius: var(--radius-pill);
+        border-radius: var(--radius-control);
         background: var(--surface-2);
         color: var(--muted);
       }

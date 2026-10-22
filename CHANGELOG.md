@@ -144,6 +144,11 @@ under "Upgrading". Start with the new guide, "Host an app for real users", on th
 - A render spec takes `"literal"` for fixed text, so a `List` row button reads `"Remove"` without a
   `"Remove"` field on every item (`text` still names a prop or item field). The spec field is
   additive and `protocol_version` stays 1.
+- `Row(align=...)` is honoured for buttons and badges: with any `align` other than the default
+  `"stretch"` they size to their content instead of growing to share the row (a Badge beside two
+  Buttons no longer stretches). The default row is unchanged.
+- `Theme(radius=)` now reaches buttons and badges, which were always pill-shaped. They use a new
+  `--radius-control` token that defaults to `--radius-pill`, so apps without a theme look as before.
 
 ### Known limitations
 

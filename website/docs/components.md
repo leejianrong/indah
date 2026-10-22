@@ -41,7 +41,7 @@ set shipped so far.
 | Component | Use |
 |-----------|-----|
 | `Column` | a vertical stack |
-| `Row` | a horizontal flex row that wraps |
+| `Row` | a horizontal flex row that wraps; children share the width, unless `align=` is set to anything but `"stretch"`, which sizes buttons and badges to their content |
 | `Grid` | an N-column grid that collapses to one column on phones |
 | `Card` | a titled surface panel |
 | `Tabs` | a tabbed container, one panel at a time |
