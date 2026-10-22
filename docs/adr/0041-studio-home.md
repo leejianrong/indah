@@ -1,4 +1,4 @@
-# ADR-0040: Where the Studio lives, and how the docs reuse its pages
+# ADR-0041: Where the Studio lives, and how the docs reuse its pages
 
 - Status: **Proposed** (IND-168; the owner reviews it before IND-169 is built)
 - Date: 2026-10-22

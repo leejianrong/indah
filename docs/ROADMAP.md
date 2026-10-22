@@ -161,7 +161,7 @@ Owner decides or does by hand:
 
 ## 0.7.0 (provisional): hosted Studio, command palette, promoted visuals, live docs, 28 points
 
-Theme: host the Studio (ADR-0040), make the docs interactive, finish semula's list.
+Theme: host the Studio (ADR-0041), make the docs interactive, finish semula's list.
 
 | Card | Pts |
 |------|-----|
@@ -170,8 +170,8 @@ Theme: host the Studio (ADR-0040), make the docs interactive, finish semula's li
 | IND-157 Marked | 3 |
 | IND-162 BarStrip | 3 |
 | IND-163 Steps | 3 |
-| IND-173 Studio hosted mode and /embed/ route (new, ADR-0040) | 3 |
-| IND-174 Deploy the hosted Studio and post-deploy check (new, ADR-0040) | 3 |
+| IND-173 Studio hosted mode and /embed/ route (new, ADR-0041) | 3 |
+| IND-174 Deploy the hosted Studio and post-deploy check (new, ADR-0041) | 3 |
 | IND-176 Pyodide spike, IND-83a (new, split from IND-83) | 3 |
 | IND-175 Release checklist: redeploy Studio and gallery (new) | 1 |
 
@@ -180,7 +180,7 @@ the 5 point build (83b) and stays in "later" until the spike passes.
 
 IND-61 (DataFrame explorer, 3) and IND-159 (InfoTip, 2) move to "later" to make room for the hosted Studio.
 
-ADRs first: ADR-0040 (Studio home, Proposed) must be accepted before IND-173 starts. Order: IND-173, then
+ADRs first: ADR-0041 (Studio home, Proposed) must be accepted before IND-173 starts. Order: IND-173, then
 IND-174, then IND-169 and IND-175; IND-176 runs alongside and does not block IND-169.
 
 Risks:
@@ -192,7 +192,7 @@ Risks:
 
 Owner decides:
 - Built-in or semula-owned for 157, 162, 163.
-- Accept ADR-0040: a hosted Studio as its own container beside the gallery, no playground, iframes in the docs.
+- Accept ADR-0041: a hosted Studio as its own container beside the gallery, no playground, iframes in the docs.
 - Approve the `pypi` environment run.
 
 ## 0.8.0 (provisional): live media and annotation, 22 points
