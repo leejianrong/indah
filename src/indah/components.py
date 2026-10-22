@@ -129,7 +129,20 @@ class Component:
 
 
 class Column(Component):
+    """A vertical stack of children. ``gap`` (a CSS length) overrides the default spacing."""
+
     type = "column"
+
+    def __init__(self, children: list[Component] | None = None, *, gap: str = "") -> None:
+        super().__init__(children)
+        self._gap = gap
+
+    def static_props(self) -> dict[str, Any]:
+        return {"gap": self._gap} if self._gap else {}
+
+
+_CARD_VARIANTS = ("outlined", "flat", "tonal")
+_JUSTIFY = ("start", "center", "end", "between", "around")
 
 
 class Card(Component):
@@ -137,17 +150,36 @@ class Card(Component):
 
     The building block of the "panels on warm porcelain" Studio layout -- wrap a
     region's children in a ``Card`` to give it a surface, radius, and soft shadow.
-    ``title`` renders a small uppercase panel heading.
+    ``title`` renders a small uppercase panel heading. ``variant`` is ``"outlined"`` (the
+    default: border and shadow), ``"flat"`` (no border, no shadow, no surface: the children
+    sit on the page) or ``"tonal"`` (a tinted fill, no border). ``padding`` is a CSS length
+    that replaces the default inner padding.
     """
 
     type = "card"
 
-    def __init__(self, children: list[Component] | None = None, *, title: str = "") -> None:
+    def __init__(
+        self,
+        children: list[Component] | None = None,
+        *,
+        title: str = "",
+        variant: str = "outlined",
+        padding: str = "",
+    ) -> None:
         super().__init__(children)
+        if variant not in _CARD_VARIANTS:
+            raise ValueError(f"Card variant must be one of {_CARD_VARIANTS}, got {variant!r}")
         self._title = title
+        self._variant = variant
+        self._padding = padding
 
     def static_props(self) -> dict[str, Any]:
-        return {"title": self._title}
+        props: dict[str, Any] = {"title": self._title}
+        if self._variant != "outlined":
+            props["variant"] = self._variant
+        if self._padding:
+            props["padding"] = self._padding
+        return props
 
 
 class Text(Component):
@@ -2229,7 +2261,13 @@ def _as_signal(value: Any, default: Any, cast: Callable[[Any], Any]) -> Signal:
 
 
 class Row(Component):
-    """A horizontal flex row of children, wrapping onto the next line as needed."""
+    """A horizontal flex row of children, wrapping onto the next line as needed.
+
+    ``justify`` spaces the children along the row: ``"start"``, ``"center"``, ``"end"``,
+    ``"between"`` or ``"around"``. Setting it (like ``align``) sizes the children to their
+    content instead of sharing the width, so ``Row(justify="between")`` with a title and a
+    button puts one at each end. A ``Spacer`` between children does the same job.
+    """
 
     type = "row"
 
@@ -2240,14 +2278,48 @@ class Row(Component):
         gap: str = "1rem",
         wrap: bool = True,
         align: str = "stretch",
+        justify: str = "",
     ) -> None:
         super().__init__(children)
+        if justify and justify not in _JUSTIFY:
+            raise ValueError(f"Row justify must be one of {_JUSTIFY}, got {justify!r}")
         self._gap = gap
         self._wrap = wrap
         self._align = align
+        self._justify = justify
 
     def static_props(self) -> dict[str, Any]:
-        return {"gap": self._gap, "wrap": bool(self._wrap), "align": self._align}
+        props: dict[str, Any] = {"gap": self._gap, "wrap": bool(self._wrap), "align": self._align}
+        if self._justify:
+            props["justify"] = self._justify
+        return props
+
+
+class Spacer(Component):
+    """Flexible empty space: it grows to fill a ``Row`` (or ``Column``), pushing what follows
+    to the far end. ``size`` (a CSS length) makes a fixed gap instead."""
+
+    type = "spacer"
+
+    def __init__(self, *, size: str = "") -> None:
+        super().__init__()
+        self._size = size
+
+    def static_props(self) -> dict[str, Any]:
+        return {"size": self._size} if self._size else {}
+
+
+class Divider(Component):
+    """A thin rule between groups. ``vertical=True`` draws it between the children of a ``Row``."""
+
+    type = "divider"
+
+    def __init__(self, *, vertical: bool = False) -> None:
+        super().__init__()
+        self._vertical = vertical
+
+    def static_props(self) -> dict[str, Any]:
+        return {"vertical": True} if self._vertical else {}
 
 
 class Grid(Component):

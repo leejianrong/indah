@@ -40,10 +40,12 @@ set shipped so far.
 
 | Component | Use |
 |-----------|-----|
-| `Column` | a vertical stack |
-| `Row` | a horizontal flex row that wraps; children share the width, unless `align=` is set to anything but `"stretch"`, which sizes buttons and badges to their content |
+| `Column` | a vertical stack; `gap=` sets the spacing |
+| `Row` | a horizontal flex row that wraps; children share the width, unless `align=` is set to anything but `"stretch"` (buttons and badges size to their content) or `justify=` (`"start"`, `"center"`, `"end"`, `"between"`, `"around"`) is set (every child sizes to its content) |
+| `Spacer` | free space that grows to fill a `Row`, pushing what follows to the far end; `Spacer(size="2rem")` is a fixed gap |
+| `Divider` | a thin rule; `Divider(vertical=True)` between the children of a `Row` |
 | `Grid` | an N-column grid that collapses to one column on phones |
-| `Card` | a titled surface panel |
+| `Card` | a titled surface panel; `variant="flat"` drops the frame, `"tonal"` tints it, `padding=` sets the inner space |
 | `Tabs` | a tabbed container, one panel at a time |
 | `Sidebar` | a persistent side region plus a main region |
 | `Expander` | a collapsible labelled section |

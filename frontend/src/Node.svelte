@@ -11,6 +11,14 @@
   import ImageOverlay from "./ImageOverlay.svelte";
   import Overlay from "./Overlay.svelte";
   import Tip from "./Tip.svelte";
+
+  const JUSTIFY = {
+    start: "flex-start",
+    center: "center",
+    end: "flex-end",
+    between: "space-between",
+    around: "space-around",
+  };
   import Shortcuts from "./Shortcuts.svelte";
   import SplitPane from "./SplitPane.svelte";
   import JsonTree from "./JsonTree.svelte";
@@ -136,13 +144,18 @@
 
 {#snippet body()}
 {#if node.type === "column"}
-  <div class="column">
+  <div class="column" style={props.gap ? `gap: ${props.gap};` : undefined}>
     {#each node.children as child (child.id)}
       <Self node={child} />
     {/each}
   </div>
 {:else if node.type === "card"}
-  <section class="card">
+  <section
+    class="card"
+    class:card-flat={props.variant === "flat"}
+    class:card-tonal={props.variant === "tonal"}
+    style={props.padding ? `padding: ${props.padding};` : undefined}
+  >
     {#if props.title}<h3 class="card-title">{props.title}</h3>{/if}
     {#each node.children as child (child.id)}
       <Self node={child} />
@@ -152,14 +165,25 @@
   <div
     class="row"
     class:fit={(props.align ?? "stretch") !== "stretch"}
+    class:justified={!!props.justify}
     style="gap: {props.gap ?? '1rem'}; flex-wrap: {props.wrap === false
       ? 'nowrap'
-      : 'wrap'}; align-items: {props.align ?? 'stretch'};"
+      : 'wrap'}; align-items: {props.align ?? 'stretch'};{props.justify
+      ? ` justify-content: ${JUSTIFY[props.justify] ?? 'flex-start'};`
+      : ''}"
   >
     {#each node.children as child (child.id)}
       <Self node={child} />
     {/each}
   </div>
+{:else if node.type === "spacer"}
+  <div class="spacer" aria-hidden="true" style={props.size ? `flex: 0 0 ${props.size};` : undefined}></div>
+{:else if node.type === "divider"}
+  {#if props.vertical}
+    <div class="divider divider-vertical" role="separator" aria-orientation="vertical"></div>
+  {:else}
+    <hr class="divider" />
+  {/if}
 {:else if node.type === "grid"}
   <div
     class="grid"

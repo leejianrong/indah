@@ -11,6 +11,15 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+
+- Layout primitives: `Row(justify=)` (`start`, `center`, `end`, `between`, `around`), `Column(gap=)`,
+  `Spacer` (grows to fill a row, or `size=` for a fixed gap), `Divider` (`vertical=` for a column rule)
+  and `Card(variant=, padding=)` with `"outlined"` (the default and the current look), `"flat"` and
+  `"tonal"`. A title on the left and actions on the right is now `Row(justify="between")`. Every new
+  prop is optional and left off the wire at its default, so an app that does not use them sends and
+  looks as before; `spacer` and `divider` are new component types (additive, `protocol_version` stays 1).
+
 ## [0.4.0] - 2026-10-22
 
 Hosted use. This release adds what an app needs to run for real users behind a login: identity,
