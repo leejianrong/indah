@@ -33,15 +33,15 @@ Layout:
 - `examples/demo.ipynb` the notebook demo, `examples/starter_components.py` a
   ~20-line app, `examples/chatbot.py` + `examples/chatbot_colab.ipynb` the
   flagship "real LLM in Colab" chatbot (transformers is the user's dep, not
-  indah's); `examples/semula_log.py` the semula-shaped live request log (`make
-  demo-semula`; the requests behind it are in `docs/SEMULA-REQUESTS-PLAN.md`),
-  `examples/semula_pending.py` the pending queue with drawer, toast and shortcuts (`make demo-pending`),
-  `examples/semula_entries.py` the 20k-row SQLite entries browser (`make demo-entries`),
-  `examples/semula_routes.py` the routed dashboard with deep links under `/ui` (`make demo-routes`),
-  `examples/semula_editor.py` the entry editor, conflict diff, review card and playground (`make demo-editor`),
-  `examples/semula_hosted.py` two users, three roles, an admin token screen, hardening on (`make demo-hosted`),
-  `examples/oidc_login.py` the OIDC login recipe (authlib in the parent app; no indah dependency),
-  `examples/semula_review.py` every semula demo behind one index (`make demo-review`);
+  indah's); `examples/semula_log.py` the semula-shaped live request log (the requests behind
+  these demos are in `docs/SEMULA-REQUESTS-PLAN.md`),
+  `examples/semula_pending.py`, `semula_entries.py`, `semula_routes.py`, `semula_editor.py`,
+  `semula_hosted.py` (two users, three roles, token screen, hardening on), `semula_showcase.py`: the
+  full apps, each runnable alone and mounted in the Studio;
+  `examples/oidc_login.py` the OIDC login recipe (authlib in the parent app; no indah dependency);
+  `examples/studio/` the **indah Studio** (`make demo`): one app showing every feature, a page per
+  feature with its source, plus the full apps and a playground (read `docs/STUDIO.md`; a new public
+  name needs a page, enforced by `tests/unit/test_studio_coverage.py`);
   `docs/DEV-DOCKER.md` the Docker/Traefik flow
 - `tests/unit`, `tests/integration` (fast layer, no infra), `tests/e2e` (heavy)
 - `docs/` PLAN, SLICES, QUESTIONS, RELEASING, `protocol.md` (the public wire
@@ -62,7 +62,7 @@ and 0003 on the reactive model before touching those areas).
 Toolchain is `uv` (not plain pip/venv). Common commands (see `make help`):
 
 - Setup: `uv sync --extra dev`
-- Try the demo: `make demo` (prints a URL; binds the first free port from 8000);
+- Try the demo: `make demo` (the Studio; prints a URL; binds the first free port from 8000);
   `make demo-notebook` (inline in JupyterLab); `make demo-docker` (Docker, free
   port); `make demo-traefik` (Docker via a machine-wide Traefik at indah.localhost)
 - Fast gate (run before pushing): `make check` (ruff + `pytest -m "unit or integration"`)

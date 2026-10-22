@@ -2,7 +2,7 @@
 
 indah's dashboard features are for apps that live inside a bigger service: a live log, a
 queue people act on, a big table, several pages, forms that edit data. The semula demos in
-the repo (`make demo-review` serves all of them) are the worked examples, and every snippet
+the repo (`make demo` serves all of them in the Studio, under Full apps) are the worked examples, and every snippet
 below is taken from them.
 
 ## Mount it under your app

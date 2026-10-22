@@ -1,5 +1,5 @@
 """The last three semula screens: an entry editor with a version conflict, a review card,
-and a playground message stack (``make demo-editor``).
+and a playground message stack (``make demo``, under Full apps).
 
     python examples/semula_editor.py        # prints a URL; open /ui/
 

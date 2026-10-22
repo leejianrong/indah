@@ -12,6 +12,9 @@
     "p", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "code",
     "blockquote", "ul", "ol", "li", "strong", "em", "span",
   ]);
+  // A link to another page of the same site (/path, #anchor, ./x, ../x) is navigation: it opens in
+  // this tab. Anything else (http(s), mailto) leaves the app and opens in a new one.
+  const isLocal = (href) => /^(\/(?!\/)|#|\.\.?\/)/.test(href || "");
   const tagOf = (node) => (ALLOWED.has(node.tag) ? node.tag : "span");
 </script>
 
@@ -19,8 +22,8 @@
   {#if typeof node === "string"}{node}{:else if node.tag === "br"}<br />{:else if node.tag === "hr"}<hr
     />{:else if node.tag === "a"}<a
       href={node.href}
-      target="_blank"
-      rel="noopener noreferrer nofollow"><Self nodes={node.children ?? []} /></a
+      target={isLocal(node.href) ? null : "_blank"}
+      rel={isLocal(node.href) ? null : "noopener noreferrer nofollow"}><Self nodes={node.children ?? []} /></a
     >{:else}<svelte:element this={tagOf(node)}><Self nodes={node.children ?? []} /></svelte:element
     >{/if}
 {/each}

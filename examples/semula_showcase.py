@@ -1,33 +1,18 @@
-"""One server for reviewing every semula demo (``make demo-review``).
+"""A component showcase in one screen: overlays, toasts, badge, switch, tooltips, shortcuts,
+JsonTree, Diff, SplitPane and table density.
 
-An index page at ``/`` links to each demo, each mounted under its own prefix
-(``/log/ui/``, ``/pending/ui/``, ``/entries/ui/``, ``/routes/ui/``), plus a small
-component showcase at ``/showcase/ui/``: Modal, Drawer, toast, Badge, Switch, tooltip,
-Shortcuts, JsonTree, Diff, SplitPane and table density.
+It is a chapter of the Studio (``make demo``, under Full apps); run it alone with
+``python examples/semula_showcase.py``.
 """
 
 from __future__ import annotations
 
-import contextlib
-import sys
-from collections.abc import AsyncIterator
-from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import HTMLResponse
-from starlette.routing import Mount, Route
+from starlette.routing import Mount
 
 import indah
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import semula_editor  # noqa: E402
-import semula_entries  # noqa: E402
-import semula_hosted  # noqa: E402
-import semula_log  # noqa: E402
-import semula_pending  # noqa: E402
-import semula_routes  # noqa: E402
 
 THEME = indah.Theme(light={"primary": "#1f6feb"}, dark={"primary": "#79b8ff"})
 
@@ -124,90 +109,11 @@ def build_showcase_app() -> Any:
     )
 
 
-# What to click through on each screen, shown on the index page.
-DEMOS: list[tuple[str, str, str]] = [
-    (
-        "log",
-        "Live request log",
-        "Watch rows stream in; open two tabs; search, toggle columns, pause/follow.",
-    ),
-    (
-        "pending",
-        "Pending queue",
-        "Two tabs: release a call in one, it leaves both. j/k/a/r/Enter and ? for keys.",
-    ),
-    (
-        "entries",
-        "Entries browser (20k rows)",
-        "Scroll fast, sort, search; pin a row to the side pane; flip density.",
-    ),
-    (
-        "routes",
-        "Routed dashboard",
-        "Click through projects/entries; paste a deep link in a new tab; use Back.",
-    ),
-    (
-        "hosted",
-        "Hosted: two users, one app",
-        "Sign in as bob (viewer), alice (editor), carol (admin) in separate profiles.",
-    ),
-    (
-        "showcase",
-        "Component showcase",
-        "Modal, Drawer, toasts, Badge, Switch, tooltip, Shortcuts, JsonTree, Diff, SplitPane.",
-    ),
-]
-
-
-def _index_html() -> str:
-    items = "".join(
-        f'<li><a href="{key}/ui/">{title}</a><br><small>{hint}</small></li>'
-        for key, title, hint in DEMOS
-    )
-    return (
-        "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-        "<title>semula review</title>"
-        "<style>body{font:16px system-ui;max-width:42rem;margin:3rem auto;padding:0 1rem}"
-        "li{margin:1rem 0}small{color:#666}</style>"
-        f"<h1>semula demos</h1><ul>{items}</ul>"
-    )
-
-
-def build_app(*, seed: int | None = 1) -> Starlette:
-    log = semula_log.build_app(rate=20.0, seed=seed)
-    pending = semula_pending.build_app(seed=seed)
-    entries = semula_entries.build_app()
-    routes = semula_routes.build_app()
-    editor = semula_editor.build_app()
-    hosted = semula_hosted.build_app()
-    children = {
-        "log": log,
-        "pending": pending,
-        "entries": entries,
-        "routes": routes,
-        "editor": editor,
-        "hosted": hosted,
-    }
-
-    @contextlib.asynccontextmanager
-    async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        # Mount does not run a sub-app's lifespan, so enter the ones that have a producer.
-        async with contextlib.AsyncExitStack() as stack:
-            for child in (log, pending):
-                await stack.enter_async_context(child.router.lifespan_context(child))
-            yield
-
-    async def index(request: Request) -> HTMLResponse:
-        return HTMLResponse(_index_html())
-
-    return Starlette(
-        routes=[
-            Route("/", index),
-            *(Mount(f"/{name}", app=child) for name, child in children.items()),
-            Mount("/showcase", app=Starlette(routes=[Mount("/ui", app=build_showcase_app())])),
-        ],
-        lifespan=lifespan,
-    )
+def build_app() -> Starlette:
+    ui = build_showcase_app()
+    app = Starlette(routes=[Mount("/ui", app=ui)])
+    app.state.ui = ui
+    return app
 
 
 if __name__ == "__main__":
