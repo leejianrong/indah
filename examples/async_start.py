@@ -31,7 +31,7 @@ def build_ui(delay: float = 2.5, timeout: float = 1.0) -> Any:
         return indah.Session(
             indah.Column(
                 children=[
-                    indah.Text("Overview"),
+                    indah.Text("Overview", variant="title"),
                     indah.Row(
                         children=[
                             indah.Stat(data["projects"], label="Projects"),
