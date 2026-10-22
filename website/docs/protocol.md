@@ -219,7 +219,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 |--------|------|-----------|------------------|
 | `column` | container | — | — |
 | `card` | container | `title` (a surface panel) | — |
-| `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree) | — |
+| `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree); optional `size:"body"` (plain text only; absent = the large readout) | — |
 | `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`), `confirm` (text: the shell asks first and posts `click` only once accepted) | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label` | `input` `{value}` |

@@ -107,7 +107,14 @@ page = Column(
 ```
 
 `Text` accepts a string, a `Signal`, a `computed`, or a plain `lambda` - anything
-that reads signals reactively. `DataFrame` duck-types its input: a pandas frame
+that reads signals reactively.
+
+Plain `Text` is a *readout*: large and semi-bold, made for a counter or a figure. For
+a status line or a short note use `Text(..., size="body")`, which has normal size and
+weight and keeps newlines. Plain text never interprets markup, so backticks stay
+literal; use `Text(..., markdown=True)` for code, emphasis, links and headings.
+
+`DataFrame` duck-types its input: a pandas frame
 (via `to_dict(orient="split")`), a `{columns, rows}` dict, or a list of record
 dicts. Neither pandas nor Matplotlib is a hard dependency; each is only touched if
 you pass it.
