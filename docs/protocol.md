@@ -250,7 +250,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
 | `map` | display | `center:[lat,lon]`, `zoom`, `markers:[{lat,lon,label?,color?,radius?}]`, `polygons:[{points:[[lat,lon],...],label?,color?,fillOpacity?}]`, `polylines:[{points:[[lat,lon],...],label?,color?,weight?}]`, `tileUrl`, `attribution`, `height`, `label` | — (pan/zoom is client-side only, not reported back) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
-| `table` | display/input | classic: `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index). Rich: `columns:[{field,title,kind,width?,sortable,tones?,timeFormat?}]`, `rows:[{...}]`, `rowKey`, `height`, `search`, `columnToggle`, `follow`, `pageSize`, `selectable`, `value` (selected row key) | `select` `{index}` or, in rich mode, `{key}` |
+| `table` | display/input | classic: `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index). Rich: `columns:[{field,title,kind,width?,sortable,tones?,timeFormat?,render?,sortKey?,truncate?,maxWidth?,wrap?}]`, `rows:[{...}]`, `rowKey`, `height`, `search`, `columnToggle`, `follow`, `pageSize`, `selectable`, `value` (selected row key) | `select` `{index}` or, in rich mode, `{key}` |
 | `stat` | display | `value`, `label`, `delta`, `help` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
@@ -373,7 +373,13 @@ is the selected row's **key**, so a selection survives sorting and new rows. A c
 (`tones` maps a value to `ok|warn|err|info|neutral`), `time` (ISO string or epoch ms/s,
 shown relative and refreshed live unless the column sets `timeFormat: "clock"`
 (`09:14:22.318`) or `"datetime"` (`2026-10-21 09:14:22`), shown in the viewer's local time)
-and `number`. `height` makes the body scroll under a
+`number`, and `cell`. A `cell` column carries a `render` spec once, in the column (the `List` item
+vocabulary and tag allowlist, display only: no `on`), and draws one per row from that row's fields,
+so a Stream-fed table sends it once, not per row. It sorts and is searched by `sortKey` (a row
+field; for a remote table that is the field the `query` sort names). `truncate` (with `maxWidth`,
+default `32ch`) clips a text or cell value with an ellipsis and a tooltip, and `wrap` lets it wrap
+(not in a `virtual` table, which has one row height); all are optional and omitted at their
+defaults, so `protocol_version` stays 1. `height` makes the body scroll under a
 sticky header. `search`, `columnToggle` and `follow` switch on a toolbar that is entirely
 client-side (no event): a case-insensitive filter over every column (so streamed rows are
 filtered as they land), a column picker remembered in the browser, and follow-the-tail
