@@ -11,6 +11,7 @@
   import ImageOverlay from "./ImageOverlay.svelte";
   import Overlay from "./Overlay.svelte";
   import Tip from "./Tip.svelte";
+  import Choice from "./Choice.svelte";
 
   const JUSTIFY = {
     start: "flex-start",
@@ -538,6 +539,8 @@
       {/each}
     </div>
   </fieldset>
+{:else if node.type === "chips" || node.type === "segmented"}
+  <Choice {node} {props} />
 {:else if node.type === "streamtext"}
   <div class="field">
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}

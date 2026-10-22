@@ -769,6 +769,120 @@ class MultiSelect(Component):
         return False
 
 
+def _normalise_choice(option: Any, tones: dict[str, str] | None = None) -> dict[str, Any]:
+    """An option for Chips or Segmented: ``"a"``, ``("value", "Label")`` or a dict with
+    ``value``, ``label`` and optionally ``count`` (an int shown beside the label) and ``tone``
+    (one of ``BADGE_TONES``). ``tones`` maps a value to a tone for the whole control."""
+    if isinstance(option, dict):
+        value = str(option["value"])
+        out: dict[str, Any] = {"value": value, "label": str(option.get("label", value))}
+        count, tone = option.get("count"), option.get("tone")
+    else:
+        out = _normalise_option(option)
+        value, count, tone = out["value"], None, None
+    if tones and value in tones:
+        tone = tones[value]
+    if count is not None:
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise ValueError(f"an option's count must be an int, got {count!r}")
+        out["count"] = count
+    if tone is not None:
+        if tone not in BADGE_TONES:
+            raise ValueError(f"an option's tone must be one of {BADGE_TONES}, got {tone!r}")
+        out["tone"] = tone
+    return out
+
+
+class Chips(Component):
+    """Filter chips: a row of pill buttons two-way bound to a signal.
+
+    With ``multi=False`` (the default) the signal is a ``Signal[str]`` and the chips behave
+    like a radio group; with ``multi=True`` it is a ``Signal[list[str]]`` and each chip toggles.
+    An option is ``"a"``, ``(value, label)`` or ``{"value", "label", "count", "tone"}``: a
+    ``count`` shows beside the label and a ``tone`` (``ok``/``warn``/``err``/``info``) tints it.
+    Arrow keys move between chips; Space or Enter selects.
+    """
+
+    type = "chips"
+
+    def __init__(
+        self,
+        value: Signal[Any],
+        *,
+        options: list[Any],
+        multi: bool = False,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._value = value
+        self._multi = multi
+        self._options = [_normalise_choice(o) for o in options]
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"options": self._options, "label": self._label}
+        if self._multi:
+            props["multi"] = True
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        if self._multi:
+            return {"value": lambda: list(self._value.value)}
+        return {"value": lambda: self._value.value}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event not in ("change", "input") or "value" not in payload:
+            return False
+        raw = payload["value"]
+        if self._multi:
+            if not isinstance(raw, (list, tuple)):
+                return False
+            self._value.set([str(v) for v in raw])
+            return True
+        if isinstance(raw, (list, tuple, dict)):
+            return False
+        self._value.set(str(raw))
+        return True
+
+
+class Segmented(Component):
+    """A segmented control: a joined row of options, one selected, bound to a ``Signal[str]``.
+
+    Options are as for :class:`Chips`. ``tones`` maps an option's value to a tone (so the
+    "record" segment can be red) without spelling out dicts. Arrow keys move and select.
+    """
+
+    type = "segmented"
+
+    def __init__(
+        self,
+        value: Signal[str],
+        *,
+        options: list[Any],
+        tones: dict[str, str] | None = None,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._value = value
+        self._options = [_normalise_choice(o, tones) for o in options]
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"options": self._options, "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: self._value.value}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event in ("change", "input") and "value" in payload:
+            raw = payload["value"]
+            if isinstance(raw, (list, tuple, dict)):
+                return False
+            self._value.set(str(raw))
+            return True
+        return False
+
+
 class Image(Component):
     """An image bound to a source that yields a URL or a ``data:`` URI (R5).
 

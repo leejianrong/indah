@@ -904,3 +904,58 @@ def test_appshell_main_may_be_a_list_and_rejects_a_bad_width():
     assert main["type"] == "column" and len(main["children"]) == 2
     with pytest.raises(ValueError, match="rail_width"):
         AppShell(rail=Text("r"), main=Text("m"), rail_width="wide")
+
+
+def test_chips_single_and_multi_wire_and_events():
+    from indah import Chips
+    from indah.protocol import BUILTIN_TYPES
+
+    assert {"chips", "segmented"} <= BUILTIN_TYPES
+    one = Signal("all")
+    chips = Chips(one, options=["all", ("err", "Errors")])
+    node = chips.to_json()
+    assert node["type"] == "chips"
+    assert node["props"]["options"] == [
+        {"value": "all", "label": "all"},
+        {"value": "err", "label": "Errors"},
+    ]
+    assert node["props"]["value"] == "all" and "multi" not in node["props"]
+    assert chips.handle("change", {"value": "err"}) is True and one.value == "err"
+
+    many = Signal(["a"])
+    multi = Chips(many, options=["a", "b"], multi=True, label="Filter")
+    props = multi.to_json()["props"]
+    assert props["multi"] is True and props["value"] == ["a"] and props["label"] == "Filter"
+    assert multi.handle("change", {"value": ["b", "a"]}) is True and many.value == ["b", "a"]
+    assert multi.handle("change", {"value": "b"}) is False  # a multi value is a list
+    assert chips.handle("change", {"value": ["x"]}) is False  # a single value is a string
+
+
+@pytest.mark.unit
+def test_segmented_options_carry_counts_and_tones():
+    from indah import Segmented
+
+    sig = Signal("replay")
+    seg = Segmented(
+        sig,
+        options=[("replay", "Replay"), {"value": "record", "label": "Record", "count": 3}],
+        tones={"record": "err"},
+    )
+    assert seg.to_json()["props"]["options"] == [
+        {"value": "replay", "label": "Replay"},
+        {"value": "record", "label": "Record", "count": 3, "tone": "err"},
+    ]
+    assert seg.handle("change", {"value": "record"}) is True and sig.value == "record"
+    with pytest.raises(ValueError, match="tone"):
+        Segmented(sig, options=["a"], tones={"a": "purple"})
+    with pytest.raises(ValueError, match="tone"):
+        Segmented(sig, options=[{"value": "a", "tone": "purple"}])
+    with pytest.raises(ValueError, match="count"):
+        Segmented(sig, options=[{"value": "a", "count": "many"}])
+
+
+@pytest.mark.unit
+def test_existing_option_components_keep_their_wire():
+    assert Select(Signal("a"), options=["a"]).to_json()["props"]["options"] == [
+        {"value": "a", "label": "a"}
+    ]

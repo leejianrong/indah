@@ -71,6 +71,8 @@ BUILTIN_TYPES = frozenset(
         "number",
         "radio",
         "multiselect",
+        "chips",
+        "segmented",
         "date",
         "progress",
         "spinner",

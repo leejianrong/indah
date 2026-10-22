@@ -26,6 +26,8 @@ set shipped so far.
 | `Select` | a single-choice dropdown |
 | `MultiSelect` | a list of checkboxes; the value is the list of checked options |
 | `Radio` | a radio group |
+| `Chips` | filter chips, single (`Signal[str]`) or `multi=True` (`Signal[list]`); an option may carry a `count` and a `tone` |
+| `Segmented` | a joined row of options, one selected; `tones={value: tone}` tints a segment |
 | `Checkbox` | a boolean checkbox |
 | `Date` | a date picker (ISO `YYYY-MM-DD`) |
 
