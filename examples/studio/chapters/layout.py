@@ -42,6 +42,78 @@ def containers_check(pw) -> None:
     assert d["y"] > a["y"] + 20  # the fourth tile wraps to a second row
 
 
+def spacing(ctx: indah.Context) -> indah.Component:
+    def export() -> indah.Component:
+        return indah.Button("Export", on_click=lambda: None, variant="ghost")
+
+    return indah.Column(
+        gap="1.25rem",
+        children=[
+            indah.Text('Title on the left, actions on the right, with `justify="between"`:'),
+            indah.Row(
+                align="center",
+                justify="between",
+                children=[indah.Text("Requests", size="body"), export()],
+            ),
+            indah.Text("The same with a Spacer that takes the free width:", size="body"),
+            indah.Row(
+                align="center",
+                children=[indah.Text("Errors", size="body"), indah.Spacer(), export()],
+            ),
+            indah.Divider(),
+            indah.Row(
+                align="center",
+                justify="start",
+                gap="0.75rem",
+                children=[
+                    indah.Text("Left", size="body"),
+                    indah.Divider(vertical=True),
+                    indah.Text("Right", size="body"),
+                ],
+            ),
+            indah.Row(
+                children=[
+                    indah.Card(title="Outlined", children=[indah.Text("The default")]),
+                    indah.Card(title="Flat", variant="flat", children=[indah.Text("No frame")]),
+                    indah.Card(
+                        title="Tonal",
+                        variant="tonal",
+                        padding="0.75rem",
+                        children=[indah.Text("A tinted fill")],
+                    ),
+                ]
+            ),
+        ],
+    )
+
+
+def spacing_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.get_by_text("A tinted fill")).to_be_visible()
+    rows = page.locator(".row")
+    for i in range(2):  # justify="between" and a Spacer both pin the button to the far edge
+        row = rows.nth(i)
+        box = row.bounding_box()
+        title = row.get_by_text("Requests" if i == 0 else "Errors", exact=True).bounding_box()
+        button = row.get_by_role("button", name="Export").bounding_box()
+        assert title["x"] < box["x"] + 20, (i, title)
+        assert button["x"] + button["width"] > box["x"] + box["width"] - 20, (i, button)
+        assert button["x"] - (title["x"] + title["width"]) > 100, (i, "no space between")
+
+    def card(title: str):
+        return (
+            page.locator(".card").filter(has=page.locator(f".card-title:text-is('{title}')")).last
+        )
+
+    expect(card("Outlined")).to_have_css("border-top-width", "1px")
+    expect(card("Flat")).to_have_css("box-shadow", "none")
+    expect(card("Tonal")).to_have_css("padding-top", "12px")
+    assert page.locator("hr.divider").count() == 1
+    assert page.locator(".divider-vertical").bounding_box()["height"] > 10
+
+
 def tabs(ctx: indah.Context) -> indah.Component:
     active = indah.Signal(0)
     more = indah.Signal(False)
@@ -347,6 +419,16 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(15,),
             check=containers_check,
+        ),
+        Page(
+            slug="spacing",
+            title="Spacer, Divider and Card variants",
+            summary="`Row(justify=)` or a `Spacer` splits a header; `Divider` rules; `Card(variant=)` softens the frame.",
+            build=spacing,
+            covers=("Spacer", "Divider"),
+            docs="components.md",
+            adr=(15,),
+            check=spacing_check,
         ),
         Page(
             slug="tabs",

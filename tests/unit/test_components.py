@@ -831,3 +831,42 @@ def test_text_size_body_is_a_static_prop_and_readout_is_the_default():
     assert Text("x", size="body").to_json()["props"]["size"] == "body"
     with pytest.raises(ValueError):
         Text("x", size="huge")
+
+
+@pytest.mark.unit
+def test_layout_primitives_keep_the_default_wire_unchanged():
+    """New layout props are omitted at their defaults, so an existing app sends what it did."""
+    assert Column().to_json()["props"] == {}
+    assert Card(title="t").to_json()["props"] == {"title": "t"}
+    assert Row().to_json()["props"] == {"gap": "1rem", "wrap": True, "align": "stretch"}
+
+
+@pytest.mark.unit
+def test_row_justify_and_column_gap_serialise_when_set():
+    assert Row(justify="between").to_json()["props"]["justify"] == "between"
+    assert Column(gap="0.25rem").to_json()["props"] == {"gap": "0.25rem"}
+    with pytest.raises(ValueError, match="justify"):
+        Row(justify="sideways")
+
+
+@pytest.mark.unit
+def test_card_variant_and_padding():
+    flat = Card(variant="flat", padding="0.5rem").to_json()["props"]
+    assert flat == {"title": "", "variant": "flat", "padding": "0.5rem"}
+    assert Card(variant="tonal").to_json()["props"]["variant"] == "tonal"
+    assert "variant" not in Card(variant="outlined").to_json()["props"]
+    with pytest.raises(ValueError, match="variant"):
+        Card(variant="glass")
+
+
+@pytest.mark.unit
+def test_spacer_and_divider_are_builtin_nodes():
+    from indah import Divider, Spacer
+    from indah.protocol import BUILTIN_TYPES
+
+    assert {"spacer", "divider"} <= BUILTIN_TYPES
+    assert Spacer().to_json()["type"] == "spacer" and Spacer().to_json()["props"] == {}
+    assert Spacer(size="2rem").to_json()["props"] == {"size": "2rem"}
+    assert Divider().to_json()["props"] == {}
+    assert Divider(vertical=True).to_json()["props"] == {"vertical": True}
+    assert Divider().handle("click", {}) is False

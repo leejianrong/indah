@@ -79,6 +79,8 @@ BUILTIN_TYPES = frozenset(
         "gallery",
         "row",
         "grid",
+        "spacer",
+        "divider",
         "tabs",
         "sidebar",
         "expander",

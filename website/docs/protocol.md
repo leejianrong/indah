@@ -217,8 +217,10 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 
 | `type` | Kind | Key props | Events (payload) |
 |--------|------|-----------|------------------|
-| `column` | container | — | — |
-| `card` | container | `title` (a surface panel) | — |
+| `column` | container | optional `gap` (a CSS length) | — |
+| `card` | container | `title` (a surface panel); optional `variant` (`flat` / `tonal`; absent = outlined) and `padding` (a CSS length) | — |
+| `spacer` | layout | optional `size` (a CSS length; absent = grows to fill the free space) | — |
+| `divider` | layout | optional `vertical` | — |
 | `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree); optional `size:"body"` (plain text only; absent = the large readout) | — |
 | `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`), `confirm` (text: the shell asks first and posts `click` only once accepted) | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
@@ -252,7 +254,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `list` | display / input | `items:[...]` (a `Signal[list]`), `template` (item render spec), `empty`, `keyField` (when keyed) | each template event, as named in the spec's `on`, with `{value, key, index}` (keyed lists only) |
 | `chat` | display | `messages:[{role,content}]`, `pending`, `label` | — |
 | `gallery` | display | `images:[{src,alt,caption}]`, `columns`, `label` | — |
-| `row` | container | `gap`, `wrap`, `align` | — |
+| `row` | container | `gap`, `wrap`, `align`; optional `justify` (`start` / `center` / `end` / `between` / `around`) | — |
 | `grid` | container | `columns`, `gap` | — |
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
