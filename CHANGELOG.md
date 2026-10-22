@@ -176,6 +176,10 @@ No code changes are needed unless your code or a script posts events by hand:
 3. If you copied the gallery's rate-limit or security-header middleware, import
    `RateLimitMiddleware` and `SecurityHeadersMiddleware` from `indah.hardening` instead.
 
+Two things look different without any code change: `MultiSelect` is now a list of checkboxes
+(same value, same events), and an app that sets `Theme(radius=)` now gets that radius on its
+buttons and badges too (they were always pill-shaped). Neither changes the wire protocol.
+
 To host an app for real users, follow "Host an app for real users" on the docs site. The new
 options (`auth`, `secure`, `limits`, `security_headers`, `csp`, `trusted_proxies`, `audit`, `policy`)
 are all off or unset by default.
