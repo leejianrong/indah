@@ -167,7 +167,12 @@ class Context:
 
     def _set_routes(self, routes: list[Route]) -> None:
         if self._routes.value is not None:
-            raise ValueError("a session can have only one Router")
+            raise ValueError(
+                "a session can have only one Router: the address bar is one path per tab, so "
+                "two Routers would both answer it. Build one Router at the top of the session "
+                "and give each page its own route; for a switcher inside a page that is not "
+                "an address, use Tabs or a Signal and a computed instead"
+            )
         self._routes.set(routes)
 
     def navigate(self, path: str, *, replace: bool = False) -> None:

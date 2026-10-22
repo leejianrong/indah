@@ -101,6 +101,19 @@ indah.launch(indah.create_app(session=Session(page)))
 the same shape - it never imports indah, so your generation logic stays plain
 Python.
 
+## Batching writes
+
+Writing two signals that one effect reads would normally run the effect twice. Wrap the
+writes in `indah.batch` to run it once, after both:
+
+```python
+indah.batch(lambda: (first.set("Ada"), last.set("Lovelace")))
+```
+
+You rarely need it in a click or input handler: indah already runs every synchronous handler
+inside a `batch`, so two writes there cause one update. `batch` matters after an `await`, where
+that wrapper has ended, and in background tasks and threads you start yourself.
+
 ## Next
 
 - [Components](components.md) - the full starter set.

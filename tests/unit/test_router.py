@@ -140,8 +140,9 @@ def test_a_computed_over_params_only_recomputes_when_its_inputs_change():
 def test_only_one_router_per_context():
     ctx = Context("s")
     Router(ctx, routes={"/": Text("a")})
-    with pytest.raises(ValueError, match="one Router"):
+    with pytest.raises(ValueError, match="one Router") as err:
         Router(ctx, routes={"/": Text("b")})
+    assert "Tabs" in str(err.value)  # the message says what to do instead
 
 
 @pytest.mark.unit

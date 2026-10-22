@@ -135,11 +135,15 @@ under "Upgrading". Start with the new guide, "Host an app for real users", on th
   still shows backticks literally: use `markdown=True` for markup.
 - `UploadedFile.text()` takes `errors=` (`"strict"` by default, as before), so a file that is not
   clean UTF-8 can be read with `"replace"` or `"ignore"` instead of raising.
+- The "only one Router per session" error now explains the limit and what to do instead.
 - A custom component's nested `on` now round-trips. `register_component` built its event map from
   the top-level spec only, so an `input` inside a `children` tree changed nothing on the server.
 
 ### Known limitations
 
+- A session can have only one `Router`, because the address bar is one path per tab. A second
+  one raises an error that says so and what to use instead (`Tabs`, or a `Signal`); a Router
+  cannot be demonstrated inside a page of another routed app. Nested routers are not planned.
 - Sessions are in memory. With more than one process, use sticky sessions at the gateway. There
   is no external session store.
 - `trusted_proxies` is tested with simulated headers; it has not yet been checked against the
