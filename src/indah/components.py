@@ -676,11 +676,69 @@ def _normalise_option(option: Any) -> dict[str, str]:
     return {"value": str(option), "label": str(option)}
 
 
+def _options_are_live(options: Any) -> bool:
+    """True when ``options`` is a Signal, a Computed or a callable (not a plain list)."""
+    return isinstance(options, (Signal, Computed)) or (
+        callable(options) and not isinstance(options, (list, tuple))
+    )
+
+
+def _wire_options(
+    comp: Component, options: Any, normalise: Callable[[Any], dict[str, Any]]
+) -> None:
+    """Remember where a control's options come from; read them now so a bad option fails at
+    construction, as before. A live source is re-read whenever the signals it uses change."""
+    comp._options_src = options  # type: ignore[attr-defined]
+    comp._options_live = _options_are_live(options)  # type: ignore[attr-defined]
+    comp._options_norm = normalise  # type: ignore[attr-defined]
+    comp._options = [normalise(o) for o in _read(options)]  # type: ignore[attr-defined]
+
+
+def _options_static(comp: Component) -> dict[str, Any]:
+    return {} if comp._options_live else {"options": comp._options}  # type: ignore[attr-defined]
+
+
+def _options_reactive(comp: Component) -> dict[str, Callable[[], Any]]:
+    if not comp._options_live:  # type: ignore[attr-defined]
+        return {}
+    return {
+        "options": lambda: [
+            comp._options_norm(o)  # type: ignore[attr-defined]
+            for o in _read(comp._options_src)  # type: ignore[attr-defined]
+        ]
+    }
+
+
+def _prune_to_options(comp: Component, value: Signal[Any]) -> None:
+    """For a multi-value control with live options: when the options change, drop selected
+    values that are no longer offered. A single-value control is left alone."""
+    if not comp._options_live:  # type: ignore[attr-defined]
+        return
+    armed = False
+
+    def run() -> None:
+        nonlocal armed
+        present = {
+            comp._options_norm(o)["value"]  # type: ignore[attr-defined]
+            for o in _read(comp._options_src)  # type: ignore[attr-defined]
+        }
+        if armed:
+            current = list(value.peek())
+            kept = [v for v in current if v in present]
+            if kept != current:
+                value.set(kept)
+        armed = True
+
+    comp._options_effect = effect(run)  # type: ignore[attr-defined]
+
+
 class Select(Component):
     """A drop-down two-way bound to a ``Signal[str]`` (R5, value-bearing).
 
     Set the signal from Python and the selection updates; choose in the UI and the
-    signal is readable in Python (via the ``change`` event).
+    signal is readable in Python (via the ``change`` event). ``options`` may be a list, or a
+    Signal, Computed or callable returning one: the control follows it with no reload, and the
+    signal is left alone (a value no longer offered is for the app to handle).
     """
 
     type = "select"
@@ -694,14 +752,14 @@ class Select(Component):
     ) -> None:
         super().__init__()
         self._value = value
-        self._options = [_normalise_option(o) for o in options]
+        _wire_options(self, options, _normalise_option)
         self._label = label
 
     def static_props(self) -> dict[str, Any]:
-        return {"options": self._options, "label": self._label}
+        return {**_options_static(self), "label": self._label}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"value": lambda: self._value.value}
+        return {"value": lambda: self._value.value, **_options_reactive(self)}
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event in ("change", "input") and "value" in payload:
@@ -722,14 +780,14 @@ class Radio(Component):
     def __init__(self, value: Signal[str], *, options: list[Any], label: str = "") -> None:
         super().__init__()
         self._value = value
-        self._options = [_normalise_option(o) for o in options]
+        _wire_options(self, options, _normalise_option)
         self._label = label
 
     def static_props(self) -> dict[str, Any]:
-        return {"options": self._options, "label": self._label}
+        return {**_options_static(self), "label": self._label}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"value": lambda: self._value.value}
+        return {"value": lambda: self._value.value, **_options_reactive(self)}
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event in ("change", "input") and "value" in payload:
@@ -742,7 +800,9 @@ class MultiSelect(Component):
     """A multi-select two-way bound to a ``Signal[list[str]]`` (R5).
 
     The signal holds the list of selected string values; choosing in the UI
-    replaces it. Options are ``"a"`` or ``(value, label)`` tuples, same as Select.
+    replaces it. Options are ``"a"`` or ``(value, label)`` tuples, same as Select, and may be
+    a Signal, Computed or callable; when they change, selected values no longer offered are
+    dropped from the signal.
     """
 
     type = "multiselect"
@@ -750,14 +810,15 @@ class MultiSelect(Component):
     def __init__(self, value: Signal[list], *, options: list[Any], label: str = "") -> None:
         super().__init__()
         self._value = value
-        self._options = [_normalise_option(o) for o in options]
+        _wire_options(self, options, _normalise_option)
+        _prune_to_options(self, value)
         self._label = label
 
     def static_props(self) -> dict[str, Any]:
-        return {"options": self._options, "label": self._label}
+        return {**_options_static(self), "label": self._label}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"value": lambda: list(self._value.value)}
+        return {"value": lambda: list(self._value.value), **_options_reactive(self)}
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event in ("change", "input") and "value" in payload:
@@ -816,19 +877,21 @@ class Chips(Component):
         super().__init__()
         self._value = value
         self._multi = multi
-        self._options = [_normalise_choice(o) for o in options]
+        _wire_options(self, options, _normalise_choice)
+        if multi:
+            _prune_to_options(self, value)
         self._label = label
 
     def static_props(self) -> dict[str, Any]:
-        props: dict[str, Any] = {"options": self._options, "label": self._label}
+        props: dict[str, Any] = {**_options_static(self), "label": self._label}
         if self._multi:
             props["multi"] = True
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         if self._multi:
-            return {"value": lambda: list(self._value.value)}
-        return {"value": lambda: self._value.value}
+            return {"value": lambda: list(self._value.value), **_options_reactive(self)}
+        return {"value": lambda: self._value.value, **_options_reactive(self)}
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event not in ("change", "input") or "value" not in payload:
@@ -864,14 +927,14 @@ class Segmented(Component):
     ) -> None:
         super().__init__()
         self._value = value
-        self._options = [_normalise_choice(o, tones) for o in options]
+        _wire_options(self, options, lambda o: _normalise_choice(o, tones))
         self._label = label
 
     def static_props(self) -> dict[str, Any]:
-        return {"options": self._options, "label": self._label}
+        return {**_options_static(self), "label": self._label}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"value": lambda: self._value.value}
+        return {"value": lambda: self._value.value, **_options_reactive(self)}
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event in ("change", "input") and "value" in payload:

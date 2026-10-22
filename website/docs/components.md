@@ -153,6 +153,25 @@ page = Column(
 label are the same. Read the current value anywhere with `.value`; it stays in
 sync with what the user picked.
 
+Options may change while the page is open. Pass a `Signal`, a `computed` or a function
+instead of a list (to `Select`, `Radio`, `MultiSelect`, `Chips` or `Segmented`) and the
+control follows it with no reload. A selection whose value is still offered is kept. A
+multi-value control (`MultiSelect`, `Chips(multi=True)`) drops values that are no longer
+offered; a single-value control leaves its signal alone, so your code decides what a
+removed project should fall back to.
+
+```python
+projects = Signal(["alpha", "beta"])
+current = Signal("beta")
+Select(current, options=projects, label="Project")
+projects.set([*projects.value, "gamma"])   # "gamma" appears; "beta" stays selected
+```
+
+`Chips` (filter chips, single or `multi=True`) and `Segmented` (a joined row, one
+selected) take the same options plus an optional count and tone per option:
+`{"value": "err", "label": "Errors", "count": 2, "tone": "err"}`, or
+`Segmented(mode, options=[...], tones={"record": "err"})`.
+
 `TextInput(value, password=True)` masks the field (an `<input type="password">`) for
 secrets like an API key. It is only display masking - the value still round-trips like
 any input, so keep it in per-session state and never log it.
