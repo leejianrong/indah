@@ -114,6 +114,69 @@ def spacing_check(pw) -> None:
     assert page.locator(".divider-vertical").bounding_box()["height"] > 10
 
 
+def appshell(ctx: indah.Context) -> indah.Component:
+    section = indah.Signal("Overview")
+    sections = ["Overview", "Requests", "Settings"]
+
+    def nav(name: str) -> indah.Component:
+        return indah.Button(
+            name,
+            lambda: section.set(name),
+            variant="tonal" if name == "Overview" else "ghost",
+        )
+
+    rail = indah.Column(
+        gap="0.5rem",
+        children=[indah.Text("indah app", size="body"), *[nav(n) for n in sections]],
+    )
+    top = indah.Row(
+        align="center",
+        justify="between",
+        children=[
+            indah.Text(lambda: f"Section: {section.value}", size="body"),
+            indah.Button("Refresh", lambda: None, variant="ghost"),
+        ],
+    )
+    filler = [
+        indah.Text(f"Row {i}: the rail stays while this column scrolls.", size="body")
+        for i in range(40)
+    ]
+    return indah.AppShell(
+        rail=rail,
+        top=top,
+        main=[indah.Card(title="Main", children=filler)],
+        rail_width="220px",
+    )
+
+
+def appshell_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    page.set_viewport_size({"width": 1280, "height": 700})
+    rail = page.locator("aside.rail")
+    expect(rail).to_be_visible()
+    page.mouse.wheel(0, 900)
+    page.wait_for_timeout(300)
+    assert page.evaluate("window.scrollY") > 300, "the page did not scroll"
+    after = rail.bounding_box()
+    assert after["y"] >= 0 and after["y"] < 100, ("rail scrolled away", after)
+    expect(page.get_by_text("Section: Overview")).to_be_visible()
+
+    page.set_viewport_size({"width": 560, "height": 700})  # narrow: a drawer behind a menu button
+    menu = page.get_by_role("button", name="Open the menu")
+    expect(menu).to_be_visible()
+    expect(rail).to_be_hidden()
+    menu.click()
+    expect(rail).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(rail).to_be_hidden()
+    menu.click()
+    rail.get_by_role("button", name="Requests").click()
+    expect(rail).to_be_hidden()  # choosing something closes the drawer
+    expect(page.get_by_text("Section: Requests")).to_be_visible()
+
+
 def tabs(ctx: indah.Context) -> indah.Component:
     active = indah.Signal(0)
     more = indah.Signal(False)
@@ -439,6 +502,16 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(15,),
             check=tabs_check,
+        ),
+        Page(
+            slug="appshell",
+            title="AppShell",
+            summary="A pinned rail beside a scrolling main, with a top bar; a drawer on a narrow screen.",
+            build=appshell,
+            covers=("AppShell",),
+            docs="components.md",
+            adr=(14, 15),
+            check=appshell_check,
         ),
         Page(
             slug="sidebar",

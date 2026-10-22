@@ -2743,6 +2743,44 @@ class Sidebar(Component):
     type = "sidebar"
 
 
+class AppShell(Component):
+    """The frame of an app: a pinned rail beside a scrolling main region, with an optional top bar.
+
+    ``rail`` (a component, usually a ``Column`` with the logo, a switcher and ``NavItem``s or
+    ``Link``s) stays in place while the page scrolls. ``main`` is the content (a component, or a
+    list that is wrapped in a ``Column``) and keeps the app's ``max_width``. ``top`` is an
+    optional bar above ``main``. ``rail_width`` is a CSS length (default ``"256px"``). On a
+    narrow screen the rail becomes a drawer behind a menu button; choosing a link or button in
+    it closes the drawer. Works inside a ``Router`` page and with ``create_app(spa=True)``.
+    """
+
+    type = "appshell"
+
+    def __init__(
+        self,
+        *,
+        rail: Component,
+        main: Component | list[Component],
+        top: Component | None = None,
+        rail_width: str = "256px",
+    ) -> None:
+        if not _CSS_LENGTH.match(rail_width):
+            raise ValueError(f"rail_width must be a CSS length like '256px', got {rail_width!r}")
+        if isinstance(main, list):
+            main = Column(children=main)
+        super().__init__([rail, main] + ([top] if top is not None else []))
+        self._has_top = top is not None
+        self._rail_width = rail_width
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if self._has_top:
+            props["hasTop"] = True
+        if self._rail_width != "256px":
+            props["railWidth"] = self._rail_width
+        return props
+
+
 class Expander(Component):
     """A collapsible section: a labelled header that shows/hides its children.
 

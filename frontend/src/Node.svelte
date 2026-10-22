@@ -21,6 +21,7 @@
   };
   import Shortcuts from "./Shortcuts.svelte";
   import SplitPane from "./SplitPane.svelte";
+  import AppShell from "./AppShell.svelte";
   import JsonTree from "./JsonTree.svelte";
   import Diff from "./Diff.svelte";
   import CodeEditor from "./CodeEditor.svelte";
@@ -205,6 +206,12 @@
       {/each}
     </div>
   </div>
+{:else if node.type === "appshell"}
+  <AppShell railWidth={props.railWidth} hasTop={props.hasTop}>
+    {#snippet rail()}<Self node={node.children[0]} />{/snippet}
+    {#snippet main()}<Self node={node.children[1]} />{/snippet}
+    {#snippet top()}{#if props.hasTop}<Self node={node.children[2]} />{/if}{/snippet}
+  </AppShell>
 {:else if node.type === "diff"}
   <Diff {props} />
 {:else if node.type === "jsontree"}

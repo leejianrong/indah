@@ -258,6 +258,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `grid` | container | `columns`, `gap` | — |
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
+| `appshell` | container | optional `railWidth` (a CSS length, default `256px`), `hasTop` (children are `[rail, main]`, plus the top bar third when `hasTop`) | — (the drawer is client-side) |
 | `jsontree` | display | `doc:{data,error}` (JSON-safe document or an error line), `expanded`, `search`, `label` | — (all client-side) |
 | `diff` | display | `diff:{rows,stats,same,truncated,approximate}`, `mode` (`split`/`unified`), `labels` | — (the layout toggle is client-side) |
 | `router` | container | `routes:[pattern]`, `notFound`, `active` (index of the shown child, -1 for none) | `navigate` `{path}` (Back/Forward) |
@@ -320,7 +321,7 @@ bottom). `colormap` picks a built-in ramp (`"magma"`, `"viridis"`, `"gray"`); `z
 delta is a list of new columns (`{"append": {"z": [[...]]}}`), so it costs O(column)
 on the wire. The snapshot carries the full field for a resume.
 
-The layout containers (`row`, `grid`, `tabs`, `sidebar`, `expander`, `splitpane`) only arrange
+The layout containers (`row`, `grid`, `tabs`, `sidebar`, `appshell`, `expander`, `splitpane`) only arrange
 existing `children`, so they add no protocol capability: show/active/open state
 rides ordinary reactive props merged by the `patch` op. `tabs` and `expander`
 render only the active/open region; `textinput`'s `submit` event (Enter) carries no

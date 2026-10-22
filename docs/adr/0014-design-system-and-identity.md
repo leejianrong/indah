@@ -119,3 +119,21 @@ user-selectable *theme switcher*: `create_app(theme=Theme(...), logo=...)` (IND-
   (`Table(density=)`), and the cascade does the rest.
 - A virtual table's fixed row is the same `--row-h`, so compact mode also packs more rows
   into the viewport. No user-facing density switch yet; the app chooses.
+
+## Amendment (IND-147): the app frame
+
+- `AppShell(rail=, main=, top=, rail_width=)` is the frame for an app that is more than a page: a
+  rail pinned beside a scrolling main, an optional top bar above main, and no change to any
+  existing layout. `Sidebar` is unchanged and still flows with the page.
+- The rail is `position: sticky` inside the page scroll (no inner scroll container for main), so
+  the browser's own scrolling, find-in-page and anchors keep working; a rail taller than the
+  window scrolls on its own. `.shell` drops its `max-width` when an `AppShell` is present
+  (`:has(.appshell)`); the shell itself is then `max_width + rail_width + gap` wide and centred, so
+  main still honours `create_app(max_width=)`.
+- Under 760px the rail is a drawer: off screen and `inert` while closed, a menu button in the top
+  bar opens it, and Escape, the backdrop, or choosing a link or button in it closes it (a field
+  such as a project switcher does not). The drawer is client-side state; nothing goes to the server.
+- Wire: a new `appshell` node type with optional `railWidth` and `hasTop` props and children
+  `[rail, main]` plus the top bar third. Additive, so `protocol_version` stays 1.
+- Colours, radius and shadow are the existing tokens, so `Theme` and the light and dark toggle
+  apply with no new token.

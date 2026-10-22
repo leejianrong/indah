@@ -870,3 +870,37 @@ def test_spacer_and_divider_are_builtin_nodes():
     assert Divider().to_json()["props"] == {}
     assert Divider(vertical=True).to_json()["props"] == {"vertical": True}
     assert Divider().handle("click", {}) is False
+
+
+@pytest.mark.unit
+def test_appshell_is_a_builtin_node_with_rail_main_and_optional_top():
+    from indah import AppShell
+    from indah.protocol import BUILTIN_TYPES
+
+    assert "appshell" in BUILTIN_TYPES
+    rail, main, top = Text("rail"), Text("main"), Text("top")
+    shell = AppShell(rail=rail, main=main)
+    shell.id = "n0"
+    node = shell.to_json()
+    assert node["type"] == "appshell"
+    assert node["props"] == {}  # defaults stay off the wire
+    assert [c["type"] for c in node["children"]] == ["text", "text"]
+
+    with_top = AppShell(rail=rail, main=main, top=top, rail_width="18rem")
+    with_top.id = "n0"
+    node = with_top.to_json()
+    assert node["props"] == {"hasTop": True, "railWidth": "18rem"}
+    assert len(node["children"]) == 3  # rail, main, top
+    assert shell.handle("click", {}) is False
+
+
+@pytest.mark.unit
+def test_appshell_main_may_be_a_list_and_rejects_a_bad_width():
+    from indah import AppShell
+
+    shell = AppShell(rail=Text("r"), main=[Text("a"), Text("b")])
+    shell.id = "n0"
+    main = shell.to_json()["children"][1]
+    assert main["type"] == "column" and len(main["children"]) == 2
+    with pytest.raises(ValueError, match="rail_width"):
+        AppShell(rail=Text("r"), main=Text("m"), rail_width="wide")

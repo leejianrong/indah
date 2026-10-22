@@ -16,6 +16,7 @@ from .app import build_demo_session, create_app, mock_llm
 from .auth import Authenticator, Principal
 from .authz import Forbidden, Policy, guard
 from .components import (
+    AppShell,
     Audio,
     Badge,
     Button,
@@ -185,6 +186,7 @@ __all__ = [
     "Shortcuts",
     "MasterDetail",
     "Sidebar",
+    "AppShell",
     "Drawer",
     "Expander",
     # custom components (R7)
