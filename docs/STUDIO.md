@@ -68,4 +68,5 @@ For a whole app (not a snippet), add an `AppEntry` to the `apps` chapter.
 
 `/c/playground/` runs code the viewer types: `def build(): return <component>`. It **executes in
 the server process**, so it is offered to loopback clients only and the page says so. Each run is
-mounted under `/play/<id>/` (the last 16 are kept).
+mounted under `/play/<id>/` (the last 16 are kept). A snippet that loops forever is reported after 5
+seconds, but Python cannot kill a thread, so it keeps running until the server restarts.

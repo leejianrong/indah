@@ -56,3 +56,12 @@ async def test_unknown_playground_runs_are_404_and_known_ones_redirect_to_a_slas
 def test_run_snippet_reports_problems_instead_of_raising(code, needle):
     run_id, error = run_snippet(code)
     assert run_id is None and needle in error
+
+
+@pytest.mark.integration
+def test_a_snippet_that_never_returns_times_out(monkeypatch):
+    import examples.studio.playground as pg
+
+    monkeypatch.setattr(pg, "TIMEOUT_SECONDS", 0.3)
+    run_id, error = pg.run_snippet("while True:\n    pass\n")
+    assert run_id is None and "Timed out" in error
