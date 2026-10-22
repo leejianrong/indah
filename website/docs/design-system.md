@@ -27,7 +27,9 @@ Only the colour roles below can be overridden, per scheme (`light` and `dark`). 
 `font` apply to both. An unknown token name raises an error, so a typo cannot pass silently.
 If you override a `*-container` role, also override its `on-*-container` partner so the text
 stays readable. The Bunga logo is brand identity, not a theme role: a theme never recolours
-it. To use your own mark, pass `logo=`.
+it. To use your own mark, pass `logo=`. A mark that vanishes on one background needs a pair:
+`logo=(light_mark, dark_mark)` shows the one that matches indah's light/dark toggle (an SVG that
+relies on `currentColor` does not work, since the logo is shown in an `<img>`).
 
 ### Your own tokens
 

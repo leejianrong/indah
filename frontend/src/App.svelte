@@ -213,7 +213,15 @@
       aria-label={chrome.homeUrl ? "Back to the gallery" : null}
     >
       {#if chrome.logoUrl}
-        <img class="mark" src={apiUrl(chrome.logoUrl)} alt={chrome.brandName || "logo"} />
+        <img
+          class="mark"
+          class:mark-light={chrome.logoDarkUrl}
+          src={apiUrl(chrome.logoUrl)}
+          alt={chrome.brandName || "logo"}
+        />
+        {#if chrome.logoDarkUrl}
+          <img class="mark mark-dark" src={apiUrl(chrome.logoDarkUrl)} alt="" />
+        {/if}
       {:else}
         <svg class="mark" viewBox="0 0 32 32" aria-label="indah" role="img">
           <path d="M16 16C11.7 12.4 11.7 6 16 3.6C20.3 6 20.3 12.4 16 16Z" fill="var(--brand-a)" />

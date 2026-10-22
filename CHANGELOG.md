@@ -24,6 +24,8 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   (`ok`, `warn`, `err`, `info`) tints it. A single choice is a radio group (arrow keys move and select, with a
   roving tab stop); multi chips are toggle buttons. New component types, nothing existing changes
   (additive, `protocol_version` stays 1).
+- `create_app(logo=(light, dark))`: a mark per colour scheme, chosen by indah's own light/dark toggle, so a
+  dark mark no longer vanishes on the dark page. A single `logo=` is unchanged (`protocol_version` stays 1).
 - `NavItem(ctx, label, to=, badge=, icon=, match=)`: a `Link` for a rail or sidebar with a live count badge
   that hides when it is empty or zero. A new component type (additive, `protocol_version` stays 1).
 - Layout primitives: `Row(justify=)` (`start`, `center`, `end`, `between`, `around`), `Column(gap=)`,
