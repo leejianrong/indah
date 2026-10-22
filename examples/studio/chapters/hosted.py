@@ -77,7 +77,7 @@ def policy_check(pw) -> None:
 
     page = pw.page
     expect(page.get_by_text("entries:read: yes, entries:write: no")).to_be_visible()
-    page.get_by_label("Roles of the visitor").select_option(["viewer", "admin"])
+    page.get_by_role("group", name="Roles of the visitor").get_by_label("admin").check()
     expect(page.get_by_text("tokens:manage: yes")).to_be_visible()
 
 
