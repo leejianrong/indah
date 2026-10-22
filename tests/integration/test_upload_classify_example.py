@@ -84,6 +84,24 @@ def test_sample_photos_are_real_and_classify_confidently():
 
 
 @pytest.mark.integration
+def test_the_first_sample_is_classified_when_the_page_opens():
+    """A visitor sees a result at once, not a broken image and an empty chart."""
+    example = _load_example()
+    session = example.build_session()
+    _slug, (label, b64) = next(iter(example._SAMPLES.items()))
+    assert _image_node(session).reactive_props()["src"]() == f"data:image/jpeg;base64,{b64}"
+    predicted, _confidence = example.classify(base64.b64decode(b64))
+    download = _node(session, "download")
+    assert download.reactive_props()["href"]().startswith("api/file/")
+    texts = [
+        str(c.reactive_props()["blocks"]())
+        for c in session._by_id.values()
+        if c.type == "text" and "blocks" in c.reactive_props()
+    ]
+    assert any(predicted in t for t in texts), (predicted, texts)
+
+
+@pytest.mark.integration
 async def test_uploading_an_image_classifies_it_and_offers_a_report():
     example = _load_example()
     session = example.build_session()
@@ -136,9 +154,7 @@ async def test_non_image_upload_is_rejected_without_classifying():
         return str(blocks()) if blocks is not None else ""
 
     result_text = next(
-        c
-        for c in session._by_id.values()
-        if c.type == "text" and "No prediction yet" in _blocks_text(c)
+        c for c in session._by_id.values() if c.type == "text" and "Prediction:" in _blocks_text(c)
     )
 
     result = session.dispatch(
@@ -151,7 +167,9 @@ async def test_non_image_upload_is_rejected_without_classifying():
 
     assert "Unsupported file type" in str(result_text.reactive_props()["blocks"]())
     image = _image_node(session)
-    assert image.reactive_props()["src"]() == ""  # preview untouched, nothing classified
+    _slug, (_label, first_b64) = next(iter(example._SAMPLES.items()))
+    # the preview is untouched: still the opening sample, not the rejected file
+    assert image.reactive_props()["src"]() == f"data:image/jpeg;base64,{first_b64}"
 
 
 @pytest.mark.integration

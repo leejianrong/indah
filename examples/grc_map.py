@@ -806,7 +806,8 @@ def build() -> indah.Session:
 
     chart = indah.Plot(lambda: render_choropleth(year.value), alt="electoral divisions choropleth")
 
-    stats = indah.Row(
+    stats = indah.Grid(
+        columns=3,
         children=[
             indah.Stat(value=lambda: f"{_stats(year.value)['total']:,}", label="Total electors"),
             indah.Stat(value=lambda: str(_stats(year.value)["count"]), label="Divisions"),
@@ -814,7 +815,7 @@ def build() -> indah.Session:
                 value=lambda: (_stats(year.value)["biggest"] or {}).get("name", "-"),
                 label="Largest division",
             ),
-        ]
+        ],
     )
 
     table = indah.Table(lambda: _table_source(year.value), label="Every division")

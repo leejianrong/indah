@@ -120,7 +120,8 @@ def build() -> indah.Session:
     )
 
     # Live metrics as KPI cards that update in place, instead of one big number string.
-    metrics = indah.Row(
+    metrics = indah.Grid(
+        columns=4,
         children=[
             indah.Stat(
                 value=lambda: f"{m.step_i.value}/{m.total.value}" if m.total.value else "-",

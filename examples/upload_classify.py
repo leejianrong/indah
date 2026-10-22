@@ -313,16 +313,9 @@ def build_session() -> Session:
     report: Signal = Signal(None)
     busy: Signal[bool] = Signal(False)
 
-    async def _run(data: bytes, preview_uri: str, source: str) -> None:
-        busy.set(True)
-        result.set("")
-        predictions.set([])
-        report.set(None)
+    def _show(top: list, preview_uri: str, source: str) -> None:
+        """Put one classification on screen: the picture, the chart, the text, the report."""
         preview.set(preview_uri)
-        # onnxruntime inference is synchronous CPU work; run it off the event loop
-        # so it never blocks the UI, the same guarantee chatbot.py's
-        # asyncio.to_thread call gives its (also synchronous, thread-run) generation.
-        top = await asyncio.to_thread(classify_topk, data, 5)
         predictions.set(top)
         label, confidence = top[0]
         result.set(f"Prediction: **{label}**  \nConfidence: **{confidence:.0%}**")
@@ -336,6 +329,18 @@ def build_session() -> Session:
         report.set(
             DownloadFile(summary.encode(), filename="prediction.txt", media_type="text/plain")
         )
+
+    async def _run(data: bytes, preview_uri: str, source: str) -> None:
+        busy.set(True)
+        result.set("")
+        predictions.set([])
+        report.set(None)
+        preview.set(preview_uri)
+        # onnxruntime inference is synchronous CPU work; run it off the event loop
+        # so it never blocks the UI, the same guarantee chatbot.py's
+        # asyncio.to_thread call gives its (also synchronous, thread-run) generation.
+        top = await asyncio.to_thread(classify_topk, data, 5)
+        _show(top, preview_uri, source)
         busy.set(False)
 
     async def on_upload(file: UploadedFile) -> None:
@@ -360,6 +365,17 @@ def build_session() -> Session:
             for slug, (label, _b64) in _SAMPLES.items()
         ],
         gap="0.5rem",
+        align="start",  # size to content, so the pills wrap on a phone instead of overlapping
+    )
+
+    # Classify the first sample right away, so a visitor sees a result with no click
+    # (the same first-open behaviour as object_detection.py); Upload stays the "or try
+    # your own" path. Signals are read at snapshot time, so setting them here is enough.
+    _first_slug, (first_label, first_b64) = next(iter(_SAMPLES.items()))
+    _show(
+        classify_topk(base64.b64decode(first_b64), 5),
+        f"data:image/jpeg;base64,{first_b64}",
+        f"sample photo '{first_label}'",
     )
 
     return Session(
@@ -394,7 +410,7 @@ def build_session() -> Session:
                             ],
                             gap="1rem",
                         ),
-                        Text(lambda: result.value or "_No prediction yet._", markdown=True),
+                        Text(lambda: result.value or "_Classifying..._", markdown=True),
                         Download(report, label="Download report", filename="prediction.txt"),
                     ],
                 ),

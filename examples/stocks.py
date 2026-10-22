@@ -128,7 +128,8 @@ def build() -> indah.Session:
         return PEERS[focus.value if focus.value is not None else 0]
 
     header = indah.Text(lambda: f"{focused()['name']} ({focused()['ticker']})")
-    metrics = indah.Row(
+    metrics = indah.Grid(
+        columns=4,
         children=[
             indah.Stat(value=lambda: f"${focused()['price']:,.2f}", label="Price"),
             indah.Stat(value=lambda: f"${focused()['cap']:,}B", label="Market cap"),
