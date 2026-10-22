@@ -25,6 +25,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 - In an `AppShell` on a narrow screen, a button that only opens something (it has `aria-haspopup`, like a
   `Menu` trigger) no longer closes the drawer; choosing a link or an ordinary button still does.
 
+- `ctx.title` and `ctx.favicon`: set the tab's title and icon from the server, with no reload, for an
+  attention cue like "(2) semula" with a red dot. Icons are registered with
+  `create_app(favicons={name: path-or-bytes})` (PNG, SVG, ICO, JPEG or WebP, up to 64 KB, at most 16) and
+  served by the app (`GET api/brand/favicon/<name>`), so they work under `csp="strict"`. `None` puts the
+  app's own back. A change reaches that session only; a reload or a reconnect keeps it, and a new session
+  starts with the defaults. A new `chrome` message and an optional `chrome` key on `init` (additive,
+  `protocol_version` stays 1); apps that do not use them are unchanged.
 - Table keyboard navigation: `Table(on_open=fn)` (or `keyboard=True`) makes a rich or remote table one
   tab stop (`role=grid`) that `j`/`k` and the arrows, `Home`/`End`, `PageUp`/`PageDown`, Space (ticks a
   `checked=` row) and Enter drive; Enter calls `fn(key)` (sync or `async`), or selects like a click

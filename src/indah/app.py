@@ -551,6 +551,7 @@ def create_app(
     csp_media_hosts: Sequence[str] = (),
     security_headers: bool | Mapping[str, str] = False,
     logo: str | os.PathLike[str] | bytes | tuple[Any, Any] | None = None,
+    favicons: Mapping[str, str | os.PathLike[str] | bytes] | None = None,
     factory_timeout: float = DEFAULT_FACTORY_TIMEOUT,
     factory_placeholder: Callable[[], Component] | None = None,
 ) -> Starlette:
@@ -647,6 +648,11 @@ def create_app(
     cannot inherit the page's colour. Pass a pair instead.) The tab
     reads ``"<title> - indah"``; ``title_suffix`` replaces that suffix (``""`` gives the exact
     ``title``).
+
+    ``favicons`` maps a name (lower-case words, up to 16 of them) to an icon (a PNG, SVG, ICO,
+    JPEG or WebP path or bytes, up to 64 KB). A session switches its tab's icon to one by name
+    with ``ctx.favicon.set("alert")`` and its title with ``ctx.title.set("(2) app")``; both
+    go back to the app's own with ``None`` (IND-152).
     """
     if csp is not None and (not isinstance(csp, str) or not csp.strip()):
         raise ValueError("csp must be None, 'strict', or a policy string")
@@ -732,6 +738,7 @@ def create_app(
             *([Route("/api/csp-report", _csp_report, methods=["POST"])] if csp == "strict" else []),
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
             *([Route("/api/brand/logo", _logo, methods=["GET"])] if logo is not None else []),
+            *([Route("/api/brand/favicon/{name}", _favicon, methods=["GET"])] if favicons else []),
             *([Route("/{path:path}", _spa_index, methods=["GET"])] if spa else []),
         ],
     )
@@ -772,6 +779,7 @@ def create_app(
     else:
         app.state.logo = _load_logo(logo) if logo is not None else None
         app.state.logo_dark = None
+    app.state.favicons = _load_favicons(favicons)
     # Back-compat: a single-shared app still exposes .session/.hub for callers and
     # tests that introspect the one graph. A per-session app has neither -- there is
     # no single session to name; go through the store (keyed by sid) instead.
@@ -942,6 +950,14 @@ def _load_logo(logo: str | os.PathLike[str] | bytes) -> tuple[bytes, str]:
     data = bytes(logo) if isinstance(logo, bytes) else Path(logo).read_bytes()
     if len(data) > _MAX_LOGO_BYTES:
         raise ValueError(f"logo is {len(data)} bytes; the limit is {_MAX_LOGO_BYTES}")
+    try:
+        return _sniff_image(data)
+    except ValueError:
+        raise ValueError("logo must be an SVG, PNG, JPEG or WebP image") from None
+
+
+def _sniff_image(data: bytes) -> tuple[bytes, str]:
+    """``(data, media type)`` for a PNG, JPEG, WebP or SVG, by its first bytes."""
     for magic, media_type in _LOGO_MAGIC:
         if data.startswith(magic):
             return data, media_type
@@ -949,7 +965,60 @@ def _load_logo(logo: str | os.PathLike[str] | bytes) -> tuple[bytes, str]:
         return data, "image/webp"
     if b"<svg" in data[:2048].lower():
         return data, "image/svg+xml"
-    raise ValueError("logo must be an SVG, PNG, JPEG or WebP image")
+    raise ValueError("not a PNG, JPEG, WebP or SVG image")
+
+
+_MAX_FAVICON_BYTES = 64 * 1024
+_MAX_FAVICONS = 16
+_FAVICON_NAME = re.compile(r"[a-z][a-z0-9_-]{0,31}")
+
+
+def _load_favicons(
+    favicons: Mapping[str, str | os.PathLike[str] | bytes] | None,
+) -> dict[str, tuple[bytes, str]]:
+    """Read and sniff the registered favicons. Fails at app creation, not on first request."""
+    out: dict[str, tuple[bytes, str]] = {}
+    if not favicons:
+        return out
+    if len(favicons) > _MAX_FAVICONS:
+        raise ValueError(f"at most {_MAX_FAVICONS} favicons, got {len(favicons)}")
+    for name, source in favicons.items():
+        if not isinstance(name, str) or not _FAVICON_NAME.fullmatch(name):
+            raise ValueError(f"favicon name {name!r} must be lower-case letters, digits, _ or -")
+        data = bytes(source) if isinstance(source, bytes) else Path(source).read_bytes()
+        if len(data) > _MAX_FAVICON_BYTES:
+            raise ValueError(
+                f"favicon {name!r} is {len(data)} bytes; the limit is {_MAX_FAVICON_BYTES}"
+            )
+        if data.startswith(b"\x00\x00\x01\x00"):
+            out[name] = (data, "image/x-icon")
+            continue
+        try:
+            out[name] = _sniff_image(data)
+        except ValueError:
+            raise ValueError(
+                f"favicon {name!r} must be a PNG, SVG, ICO, JPEG or WebP image"
+            ) from None
+    return out
+
+
+async def _favicon(request: Request) -> Response:
+    """A registered favicon by name. The name must already be in the registry, so nothing from
+    the client reaches a file path; ``sandbox`` stops script in an SVG opened directly."""
+    name = request.path_params["name"]
+    entry = request.app.state.favicons.get(name) if _FAVICON_NAME.fullmatch(name) else None
+    if entry is None:
+        return Response(status_code=404)
+    data, media_type = entry
+    return Response(
+        data,
+        media_type=media_type,
+        headers={
+            "Content-Security-Policy": "sandbox",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-cache",
+        },
+    )
 
 
 async def _logo(request: Request) -> Response:
@@ -1244,7 +1313,10 @@ async def _open_stream(request: Request, release: Callable[[], None]) -> Respons
         # Fresh connect, or a buffer gap: send a full snapshot (always correct
         # because a StreamText snapshot carries its full accumulated text).
         session.forget_ephemeral()  # a secret shown earlier cannot be in this snapshot
-        init_payload: dict[str, Any] | None = init_message(session.snapshot())
+        ctx = getattr(session, "ctx", None)
+        init_payload: dict[str, Any] | None = init_message(
+            session.snapshot(), chrome=ctx._chrome() if ctx is not None else None
+        )
         replay = []
     else:
         # A clean resume: the client already has the tree; replay what it missed.

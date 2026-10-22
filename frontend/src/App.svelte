@@ -68,6 +68,23 @@
     status.set({ live: false, text });
   }
 
+  // The tab's own title and icon, as the page loaded, so ctx.title / ctx.favicon can be undone
+  // (a null puts them back). Only a favicon this app registered is ever applied (IND-152).
+  const ownTitle = document.title;
+  const iconLink = document.querySelector('link[rel~="icon"]');
+  const ownIcon = iconLink ? iconLink.getAttribute("href") : null;
+  function applyChrome(chrome) {
+    const title = chrome && typeof chrome.title === "string" ? chrome.title : null;
+    document.title = title ?? ownTitle;
+    if (!iconLink) return;
+    const icon = chrome && typeof chrome.favicon === "string" ? chrome.favicon : null;
+    const registered = icon && icon.startsWith("api/brand/favicon/");
+    const href = registered ? icon : ownIcon;
+    if (href !== null) iconLink.setAttribute("href", href);
+    // Pages with an SVG-only default carry a `type`; a registered PNG would be ignored under it.
+    if (registered) iconLink.removeAttribute("type");
+  }
+
   let inits = 0;
   function applyMessage(msg) {
     if (!msg || msg.v !== PROTOCOL_VERSION) {
@@ -75,6 +92,7 @@
       return;
     }
     if (msg.type === "init") {
+      applyChrome(msg.chrome); // a fresh init restores the session's title and icon, or the app's
       const map = new Map();
       structure.set(splitTree(msg.root, map));
       nodeProps.set(map);
@@ -116,7 +134,10 @@
       showToast(msg.message || "Something went wrong", "error", 6);
     } else if (msg.type === "navigate") {
       pushPath(msg.path || "/", !!msg.replace); // ctx.navigate from server code
+    } else if (msg.type === "chrome") {
+      applyChrome(msg);
     } else if (msg.type === "signed_out") {
+      applyChrome(null);
       endSession("signed out");
     } else if (msg.type === "toast") {
       const a = msg.action && msg.action.id && msg.action.label ? msg.action : null;

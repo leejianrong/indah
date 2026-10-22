@@ -101,6 +101,35 @@ exception is logged once and the loop carries on (it logs again only after a suc
 one bad fetch does not stop the refresh. Call them from the session factory or a handler, where an
 event loop is running; a plain function you pass to `every` runs on that loop, so keep it short.
 
+### The tab's title and icon: `ctx.title` and `ctx.favicon`
+
+A parked call should show in the browser tab, even when the viewer is on another tab. Set
+`ctx.title` (the whole title) and `ctx.favicon` (the name of an icon you registered) from any
+handler or `ctx.every` loop:
+
+```python
+app = indah.create_app(
+    session_factory=build,
+    title="semula",
+    favicons={"alert": "static/red-dot.svg"},  # a PNG, SVG, ICO, JPEG or WebP, up to 64 KB each
+)
+
+
+def build(ctx):
+    def refresh():
+        n = parked.value
+        ctx.title.set(f"({n}) semula" if n else None)  # None puts the app's own title back
+        ctx.favicon.set("alert" if n else None)
+
+    ctx.every(5, refresh, immediately=True)
+    ...
+```
+
+The change reaches this session's tab only, with no reload, and a reload or a reconnect keeps it. A
+new session starts with the app's own title and icon. Titles are cut at 200 characters. A favicon
+name that is not registered is ignored with a warning. The icons are served by the app itself, so
+this works under `csp="strict"`.
+
 ## Show and act on rows with `Table`
 
 The rich `Table` takes dict rows with a stable key and typed columns.
