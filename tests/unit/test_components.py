@@ -823,3 +823,11 @@ def test_table_density_may_be_a_signal():
     assert t.reactive_props()["density"]() == "compact"
     dense.set("tiny")  # a bad value from a signal falls back rather than breaking the table
     assert t.reactive_props()["density"]() == "comfortable"
+
+
+@pytest.mark.unit
+def test_text_size_body_is_a_static_prop_and_readout_is_the_default():
+    assert "size" not in Text("x").to_json()["props"]
+    assert Text("x", size="body").to_json()["props"]["size"] == "body"
+    with pytest.raises(ValueError):
+        Text("x", size="huge")

@@ -335,7 +335,7 @@
   {#if props.markdown}
     <div class="markdown"><Markdown nodes={props.blocks ?? []} /></div>
   {:else}
-    <div class="text">{props.text ?? ""}</div>
+    <div class="text" class:body={props.size === "body"}>{props.text ?? ""}</div>
   {/if}
 {:else if node.type === "progress"}
   <div class="field">

@@ -51,7 +51,7 @@ def inputs(ctx: indah.Context) -> indah.Component:
             indah.Checkbox(spicy, label="Make it spicy"),
             indah.Number(count, min=1, max=9, label="How many"),
             indah.Date(day, label="Day"),
-            indah.Text(lambda: summary.value),
+            indah.Text(lambda: summary.value, size="body"),
         ]
     )
 
@@ -63,6 +63,9 @@ def inputs_check(pw) -> None:
     expect(
         page.get_by_text("Ada orders 2 medium pizza(s) with olives, for 2026-10-22.")
     ).to_be_visible()
+    sentence = page.get_by_text("Ada orders 2 medium pizza(s)")
+    expect(sentence).to_have_css("font-size", "15.2px")  # size="body", not the large readout
+    expect(sentence).to_have_css("font-weight", "400")
     page.get_by_label("Name").fill("Grace")
     page.get_by_label("Large").check()
     page.get_by_label("Make it spicy").check()
@@ -91,8 +94,8 @@ def actions(ctx: indah.Context) -> indah.Component:
                     indah.Button("Reset", lambda: clicks.set(0), variant="ghost"),
                 ]
             ),
-            indah.Text(lambda: f"Clicked {clicks.value} time(s)."),
-            indah.Text(lambda: log.value),
+            indah.Text(lambda: f"Clicked {clicks.value} time(s).", size="body"),
+            indah.Text(lambda: log.value, size="body"),
         ]
     )
 

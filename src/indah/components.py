@@ -157,17 +157,28 @@ class Text(Component):
     is parsed (server-side) into a block tree the shell renders through its safe DOM
     builder, so raw HTML stays literal and nothing can inject script (see
     ``markdown.py``). The node then carries ``blocks`` instead of ``text``.
+
+    Plain text is a *readout*: large and semi-bold, made for a counter or a figure.
+    ``size="body"`` renders it as ordinary body text instead (normal size and weight,
+    newlines kept), for a status line or a short note. Plain text never interprets
+    markup; use ``markdown=True`` for backticks, emphasis or links.
     """
 
     type = "text"
 
-    def __init__(self, source: Source, *, markdown: bool = False) -> None:
+    def __init__(self, source: Source, *, markdown: bool = False, size: str = "readout") -> None:
         super().__init__()
+        if size not in ("readout", "body"):
+            raise ValueError(f"size must be 'readout' or 'body', not {size!r}")
         self._source = source
         self._markdown = markdown
+        self._size = size
 
     def static_props(self) -> dict[str, Any]:
-        return {"markdown": True} if self._markdown else {}
+        props: dict[str, Any] = {"markdown": True} if self._markdown else {}
+        if self._size == "body":
+            props["size"] = "body"
+        return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         if self._markdown:

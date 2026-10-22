@@ -129,6 +129,10 @@ under "Upgrading". Start with the new guide, "Host an app for real users", on th
 
 ### Fixed
 
+- `Text(size="body")`: plain `Text` is a large readout by design, which made status lines and
+  notes look like headings. `size="body"` renders normal body text with newlines kept; the
+  default is unchanged. It is an additive optional prop (`protocol_version` stays 1). Plain text
+  still shows backticks literally: use `markdown=True` for markup.
 - A custom component's nested `on` now round-trips. `register_component` built its event map from
   the top-level spec only, so an `input` inside a `children` tree changed nothing on the server.
 
