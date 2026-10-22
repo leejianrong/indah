@@ -164,7 +164,7 @@ removed project should fall back to.
 projects = Signal(["alpha", "beta"])
 current = Signal("beta")
 Select(current, options=projects, label="Project")
-projects.set([*projects.value, "gamma"])   # "gamma" appears; "beta" stays selected
+projects.set([*projects.value, "gamma"])  # "gamma" appears; "beta" stays selected
 ```
 
 `Chips` (filter chips, single or `multi=True`) and `Segmented` (a joined row, one
