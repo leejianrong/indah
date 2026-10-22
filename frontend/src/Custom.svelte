@@ -35,7 +35,9 @@
     if (serverValue !== undefined && el && el.value !== String(serverValue)) el.value = serverValue;
   }
 
-  let text = $derived(spec.text != null ? (props[spec.text] ?? "") : null);
+  let text = $derived(
+    spec.literal != null ? spec.literal : spec.text != null ? (props[spec.text] ?? "") : null,
+  );
   let children = $derived(spec.children || []);
 
   // Wire declared DOM events back as indah events, posting {value: element value}

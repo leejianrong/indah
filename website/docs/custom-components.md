@@ -35,7 +35,8 @@ current value with `colour.value` - it follows what the user picked.
 | `tag` | The HTML element to create, from a safe allowlist (no `script` / `iframe` / `style`) |
 | `attrs` | Static attributes `{name: value}` |
 | `class` | A static class string |
-| `text` | A node prop whose value becomes the element's text content |
+| `text` | A node prop (in a `List`, an item field) whose value becomes the element's text content |
+| `literal` | Fixed text content, shown as written, such as `"Remove"` on a button; not together with `text` |
 | `bind` | `{attribute: prop}` - the element attribute follows the node prop, patched reactively |
 | `on` | `{domEvent: {event, prop}}` - a DOM event posts the indah `event`; `prop` names the signal the value is written into |
 | `children` | Nested render specs, for a small composite. A nested spec's `on` round-trips like the top-level one |

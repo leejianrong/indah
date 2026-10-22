@@ -193,6 +193,9 @@ class RenderSpec(BaseModel):
     attrs: dict[str, str] = Field(default_factory=dict)
     class_: str = Field(default="", alias="class")
     text: str | None = None
+    # Fixed text content, shown as written. ``text`` names a node prop (or, in a List, an
+    # item field); ``literal`` is the text itself, so a "Remove" button needs no field.
+    literal: str | None = None
     bind: dict[str, str] = Field(default_factory=dict)
     on: dict[str, EventSpec] = Field(default_factory=dict)
     children: list[RenderSpec] = Field(default_factory=list)
@@ -204,6 +207,8 @@ class RenderSpec(BaseModel):
                 f"render tag {self.tag!r} is not allowed "
                 f"(allowed: {', '.join(sorted(ALLOWED_TAGS))})"
             )
+        if self.text is not None and self.literal is not None:
+            raise ValueError("a render spec takes either text (a prop name) or literal, not both")
         for child in self.children:
             child.validated()
         return self

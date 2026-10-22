@@ -86,7 +86,7 @@ ROW_SPEC: dict[str, Any] = {
             ],
         },
         {"tag": "textarea", "bind": {"value": "content"}, "on": {"input": {"event": "content"}}},
-        {"tag": "button", "text": "remove_label", "on": {"click": {"event": "remove"}}},
+        {"tag": "button", "literal": "Remove", "on": {"click": {"event": "remove"}}},
     ],
 }
 
@@ -96,7 +96,6 @@ def message(n: int, role: str = "user", content: str = "") -> dict[str, Any]:
         "id": f"m{n}",
         "role": role,
         "content": content,
-        "remove_label": "Remove",
         **{f"label_{r}": r for r in ROLES},
     }
 

@@ -76,7 +76,7 @@ TASK_SPEC = {
     "class": "pg-row",
     "children": [
         {"tag": "input", "bind": {"value": "title"}, "on": {"input": {"event": "title"}}},
-        {"tag": "button", "text": "remove_label", "on": {"click": {"event": "remove"}}},
+        {"tag": "button", "literal": "Remove", "on": {"click": {"event": "remove"}}},
     ],
 }
 
@@ -405,8 +405,8 @@ def stat_check(pw) -> None:
 def keyed_list(ctx: indah.Context) -> indah.Component:
     tasks = indah.Signal(
         [
-            {"id": "t1", "title": "Write docs", "remove_label": "Remove"},
-            {"id": "t2", "title": "Ship it", "remove_label": "Remove"},
+            {"id": "t1", "title": "Write docs"},
+            {"id": "t2", "title": "Ship it"},
         ]
     )
     nxt = {"n": 2}
@@ -422,7 +422,7 @@ def keyed_list(ctx: indah.Context) -> indah.Component:
         tasks.set(
             [
                 *tasks.value,
-                {"id": f"t{nxt['n']}", "title": f"Task {nxt['n']}", "remove_label": "Remove"},
+                {"id": f"t{nxt['n']}", "title": f"Task {nxt['n']}"},
             ]
         )
 

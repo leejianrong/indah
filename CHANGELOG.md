@@ -141,6 +141,9 @@ under "Upgrading". Start with the new guide, "Host an app for real users", on th
 - The "only one Router per session" error now explains the limit and what to do instead.
 - A custom component's nested `on` now round-trips. `register_component` built its event map from
   the top-level spec only, so an `input` inside a `children` tree changed nothing on the server.
+- A render spec takes `"literal"` for fixed text, so a `List` row button reads `"Remove"` without a
+  `"Remove"` field on every item (`text` still names a prop or item field). The spec field is
+  additive and `protocol_version` stays 1.
 
 ### Known limitations
 
