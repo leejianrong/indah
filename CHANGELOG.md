@@ -23,8 +23,6 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   leave. Off by default, so no existing table changes. New optional props `keyboard` and `openable`
   and an `open` event (additive, `protocol_version` stays 1). The key-routing rule is in ADR-0030.
 
-### Added
-
 - `ctx.toast(message, action=("Undo", fn), ttl=)`: a toast with a button. Clicking it runs `fn` once
   (a plain function or `async def`, checked by `guard()` at the click) and dismisses the toast. It goes to
   this tab only; a second click or a stale toast does nothing. The pending handlers are held per session
