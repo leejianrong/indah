@@ -115,10 +115,21 @@ page = Column(
 `Text` accepts a string, a `Signal`, a `computed`, or a plain `lambda` - anything
 that reads signals reactively.
 
-Plain `Text` is a *readout*: large and semi-bold, made for a counter or a figure. For
-a status line or a short note use `Text(..., size="body")`, which has normal size and
-weight and keeps newlines. Plain text never interprets markup, so backticks stay
-literal; use `Text(..., markdown=True)` for code, emphasis, links and headings.
+Plain `Text` is body text: normal size and weight, with line breaks kept. Pick a role with
+`variant=`:
+
+| `variant` | Use |
+|-----------|-----|
+| `"body"` (default) | paragraphs, status lines, notes |
+| `"title"` | a heading for a block that is not Markdown |
+| `"label"` | the name of a field or group (muted) |
+| `"caption"` | help text, timestamps, fine print (muted) |
+| `"mono"` | ids, paths, numbers that must line up |
+| `"readout"` | a counter or a figure: large, semi-bold, tabular numbers |
+
+Plain text never interprets markup, so backticks stay literal; use `Text(..., markdown=True)`
+for code, emphasis, links and headings (a Markdown text takes no `variant`). `size="body"` and
+`size="readout"` from 0.4.0 still work and mean `variant="body"` and `variant="readout"`.
 
 `DataFrame` duck-types its input: a pandas frame
 (via `to_dict(orient="split")`), a `{columns, rows}` dict, or a list of record

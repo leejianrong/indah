@@ -223,7 +223,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `card` | container | `title` (a surface panel); optional `variant` (`flat` / `tonal`; absent = outlined) and `padding` (a CSS length) | — |
 | `spacer` | layout | optional `size` (a CSS length; absent = grows to fill the free space) | — |
 | `divider` | layout | optional `vertical` | — |
-| `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree); optional `size:"body"` (plain text only; absent = the large readout) | — |
+| `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree); optional `variant` (plain text only: `title` / `label` / `caption` / `mono` / `readout`; absent = body text, ADR-0040) | — |
 | `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`), `confirm` (text: the shell asks first and posts `click` only once accepted) | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label` | `input` `{value}` |

@@ -445,8 +445,18 @@ def build_demo_session() -> Session:
                     Grid(
                         columns=2,
                         children=[
-                            Column(children=[Text("Runs"), Text(lambda: str(runs.value))]),
-                            Column(children=[Text("Tiles"), Text(lambda: str(len(images.value)))]),
+                            Column(
+                                children=[
+                                    Text("Runs", variant="label"),
+                                    Text(lambda: str(runs.value), variant="readout"),
+                                ]
+                            ),
+                            Column(
+                                children=[
+                                    Text("Tiles", variant="label"),
+                                    Text(lambda: str(len(images.value)), variant="readout"),
+                                ]
+                            ),
                         ],
                     ),
                 ],
