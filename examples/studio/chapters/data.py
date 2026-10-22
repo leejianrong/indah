@@ -479,6 +479,37 @@ def dataframe_check(pw) -> None:
 # -- Stat ---------------------------------------------------------------------------------------
 
 
+def empty_and_code(ctx: indah.Context) -> indah.Component:
+    output = indah.Signal("")
+
+    def send() -> None:
+        output.set("GET /v1/models 200 12ms")
+
+    return indah.Column(
+        children=[
+            indah.Empty(
+                "No requests yet",
+                "Start the proxy and every request appears here.",
+                children=[indah.Code("semula log --follow", language="bash")],
+                action=indah.Button("Send a test request", send),
+            ),
+            indah.Code(lambda: output.value or "(nothing yet)", language="output", copy=False),
+        ]
+    )
+
+
+def empty_and_code_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.get_by_text("No requests yet")).to_be_visible()
+    page.get_by_role("button", name="Copy").first.click()
+    expect(page.get_by_text("Copied", exact=True).first).to_be_visible()
+    assert page.evaluate("navigator.clipboard.readText()") == "semula log --follow"
+    page.get_by_role("button", name="Send a test request").click()
+    expect(page.get_by_text("GET /v1/models 200 12ms")).to_be_visible()
+
+
 def stat(ctx: indah.Context) -> indah.Component:
     hour = indah.Signal(0)
     requests = [1200, 1340, 1105, 1580]
@@ -709,6 +740,19 @@ CHAPTER = Chapter(
             covers=("DataFrame", "Slider"),
             docs="components.md",
             check=dataframe_check,
+        ),
+        Page(
+            slug="empty-code",
+            title="Empty state and Code",
+            summary=(
+                "`Empty(title, body, action=, children=)` says what to do when there is nothing "
+                "yet. `Code(text, language=, copy=True)` is a read-only block whose Copy button "
+                "puts the plain text on the clipboard and shows a toast."
+            ),
+            build=empty_and_code,
+            covers=("Empty", "Code", "Button"),
+            docs="components.md",
+            check=empty_and_code_check,
         ),
         Page(
             slug="stat",

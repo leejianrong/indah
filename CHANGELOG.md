@@ -32,6 +32,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   app's own back. A change reaches that session only; a reload or a reconnect keeps it, and a new session
   starts with the defaults. A new `chrome` message and an optional `chrome` key on `init` (additive,
   `protocol_version` stays 1); apps that do not use them are unchanged.
+- `Empty(title, body, action=, children=)` and `Code(text, language=, copy=True)`. `Empty` is a centred
+  empty state (the one command that fills a log, with a button); `Code` is a read-only monospace block
+  that keeps newlines and indentation, with a Copy button that puts the plain text on the clipboard and
+  shows a "Copied" toast in that tab (no server round trip). Where the browser blocks the clipboard the
+  text is selected and the toast asks for Ctrl+C. Both are new component types (additive,
+  `protocol_version` stays 1) and nothing existing changes.
 - Table keyboard navigation: `Table(on_open=fn)` (or `keyboard=True`) makes a rich or remote table one
   tab stop (`role=grid`) that `j`/`k` and the arrows, `Home`/`End`, `PageUp`/`PageDown`, Space (ticks a
   `checked=` row) and Enter drive; Enter calls `fn(key)` (sync or `async`), or selects like a click
