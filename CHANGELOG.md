@@ -13,6 +13,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- Reactive options: `Select`, `Radio`, `MultiSelect`, `Chips` and `Segmented` take `options=` as a
+  list, or a `Signal`, `Computed` or callable returning one, and follow it with no reload (a project
+  created after the page loads appears in the switcher). A selection whose value is still offered is kept;
+  a multi-value control (`MultiSelect`, `Chips(multi=True)`) drops values that are no longer offered, and a
+  single-value control leaves its signal alone. A list works exactly as before and stays static on the wire;
+  a live source sends `options` as a patch (additive, `protocol_version` stays 1).
 - `AppShell(rail=, main=, top=, rail_width=)`: the frame of an app, with a rail that stays put while
   main scrolls, an optional top bar, main keeping `create_app(max_width=)`, and on a narrow screen a
   drawer behind a menu button (Escape, the backdrop or choosing a link closes it). It works inside a

@@ -959,3 +959,92 @@ def test_existing_option_components_keep_their_wire():
     assert Select(Signal("a"), options=["a"]).to_json()["props"]["options"] == [
         {"value": "a", "label": "a"}
     ]
+
+
+_OPTION_CASES = [
+    (Select, {}),
+    (Radio, {}),
+    (MultiSelect, {}),
+    ("Chips", {}),
+    ("Segmented", {}),
+]
+
+
+def _option_cls(c):
+    import indah
+
+    return getattr(indah, c) if isinstance(c, str) else c
+
+
+def _initial(cls):
+    return ["a"] if cls.__name__ == "MultiSelect" else "a"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("cls_name,_", _OPTION_CASES)
+def test_static_options_stay_static_on_the_wire(cls_name, _):
+    cls = _option_cls(cls_name)
+    node = cls(Signal(_initial(cls)), options=["a", "b"]).to_json()
+    assert [o["value"] for o in node["props"]["options"]] == ["a", "b"]
+    assert "options" not in cls(Signal(_initial(cls)), options=["a"]).reactive_props()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("source", ["signal", "computed", "callable"])
+@pytest.mark.parametrize("cls_name,_", _OPTION_CASES)
+def test_options_may_be_reactive(cls_name, _, source):
+    from indah.reactive import computed
+
+    cls = _option_cls(cls_name)
+    names = Signal(["a", "b"])
+    options = {
+        "signal": names,
+        "computed": computed(lambda: [n for n in names.value]),
+        "callable": lambda: list(names.value),
+    }[source]
+    comp = cls(Signal(_initial(cls)), options=options)
+    assert "options" in comp.reactive_props() and "options" not in comp.static_props()
+    assert [o["value"] for o in comp.to_json()["props"]["options"]] == ["a", "b"]
+    names.set(["a", "b", "c"])
+    assert [o["value"] for o in comp.to_json()["props"]["options"]] == ["a", "b", "c"]
+
+
+@pytest.mark.unit
+def test_a_new_option_reaches_the_client_as_a_patch():
+    from indah.session import Session
+
+    names = Signal(["a"])
+    sel = Select(Signal("a"), options=names)
+    add = Button("add", on_click=lambda: names.set(["a", "new"]))
+    session = Session(Column(children=[sel, add]))
+    result = session.dispatch(add.id, "click", {})
+    assert result.changes == [
+        {
+            "target": sel.id,
+            "props": {"options": [{"value": "a", "label": "a"}, {"value": "new", "label": "new"}]},
+        }
+    ]
+
+
+@pytest.mark.unit
+def test_selection_survives_when_its_value_remains_and_a_multi_prunes_the_rest():
+    from indah import Chips
+
+    names = Signal(["a", "b", "c"])
+    one = Signal("b")
+    keep = [Select(one, options=names), Radio(one, options=names)]
+    names.set(["b", "d"])
+    assert one.value == "b"  # still offered: untouched
+    names.set(["x"])
+    assert one.value == "b"  # a single value is left for the app to decide
+
+    many = Signal(["a", "b"])
+    keep.append(MultiSelect(many, options=names))
+    names.set(["a", "c"])
+    assert many.value == ["a"]  # only values still present are kept
+    chips = Signal(["a", "c"])
+    keep.append(Chips(chips, options=names, multi=True))
+    names.set(["c"])
+    assert chips.value == ["c"]
+    names.set(["c", "z"])
+    assert chips.value == ["c"]  # growing the options changes nothing

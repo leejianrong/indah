@@ -145,6 +145,60 @@ def choices_check(pw) -> None:
     expect(page.get_by_text(", record.")).to_be_visible()
 
 
+def live_options(ctx: indah.Context) -> indah.Component:
+    projects = indah.Signal(["alpha", "beta"])
+    current = indah.Signal("beta")
+    tags = indah.Signal(["alpha", "beta"])
+
+    def add() -> None:
+        projects.set([*projects.value, f"project-{len(projects.value) + 1}"])
+
+    def drop() -> None:
+        if len(projects.value) > 1:
+            projects.set(projects.value[:-1])
+
+    return indah.Column(
+        gap="1rem",
+        children=[
+            indah.Select(current, options=projects, label="Project"),
+            indah.Segmented(current, options=projects, label="The same signal"),
+            indah.Chips(tags, options=projects, multi=True, label="Tags"),
+            indah.Row(
+                children=[
+                    indah.Button("Add a project", on_click=add),
+                    indah.Button("Remove the last", on_click=drop, variant="ghost"),
+                ]
+            ),
+            indah.Text(
+                lambda: f"Project {current.value}; tags {', '.join(tags.value) or 'none'}.",
+                size="body",
+            ),
+        ],
+    )
+
+
+def live_options_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    select = page.get_by_label("Project")
+    expect(select.locator("option")).to_have_count(2)
+    expect(select).to_have_value("beta")
+    page.get_by_role("button", name="Add a project").click()
+    expect(select.locator("option")).to_have_count(3)  # no reload
+    expect(select).to_have_value("beta")  # the selection survives
+    expect(
+        page.get_by_role("radiogroup", name="The same signal").get_by_role("radio")
+    ).to_have_count(3)
+    expect(page.get_by_role("group", name="Tags").get_by_role("button")).to_have_count(3)
+    page.get_by_role("button", name="Remove the last").click()
+    page.get_by_role("button", name="Remove the last").click()
+    expect(select.locator("option")).to_have_count(1)
+    expect(
+        page.get_by_text("tags alpha.")
+    ).to_be_visible()  # a multi value is pruned to what is offered
+
+
 def actions(ctx: indah.Context) -> indah.Component:
     clicks = indah.Signal(0)
     log = indah.Signal("Nothing yet.")
@@ -266,6 +320,15 @@ CHAPTER = Chapter(
             covers=("Chips", "Segmented"),
             docs="components.md",
             check=choices_check,
+        ),
+        Page(
+            slug="live-options",
+            title="Options that change",
+            summary="`options=` takes a signal, a computed or a callable: a new project appears with no reload.",
+            build=live_options,
+            covers=(),
+            docs="components.md",
+            check=live_options_check,
         ),
         Page(
             slug="actions",
