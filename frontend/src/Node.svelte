@@ -29,6 +29,9 @@
   import Diff from "./Diff.svelte";
   import CodeEditor from "./CodeEditor.svelte";
 
+  import { copyText } from "./clipboard.js";
+  import { showToast } from "./stores.js";
+
   let { node } = $props();
   let props = $derived($nodeProps.get(node.id) || {});
 
@@ -37,18 +40,23 @@
   let secretEl = $state();
   let copied = $state(false);
   async function copySecret() {
-    try {
-      await navigator.clipboard.writeText(props.value);
-    } catch {
-      const range = document.createRange();
-      range.selectNodeContents(secretEl);
-      const sel = getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-      try { document.execCommand("copy"); } catch {}
-    }
+    await copyText(props.value, secretEl);
     copied = true;
     setTimeout(() => (copied = false), 2000);
+  }
+
+  // Code (IND-158): Copy puts the plain text on the clipboard and says so in a toast, with
+  // no server round trip. If the clipboard is blocked the text is left selected instead.
+  let codeEl = $state();
+  let codeCopied = $state(false);
+  async function copyCode() {
+    if (await copyText(props.text ?? "", codeEl)) {
+      codeCopied = true;
+      setTimeout(() => (codeCopied = false), 2000);
+      showToast("Copied", "success", 2);
+    } else {
+      showToast("Press Ctrl+C to copy the selected text", "info", 4);
+    }
   }
 
   // Value-bearing inputs (text box, slider) are two-way bound: a keystroke/drag is
@@ -487,6 +495,34 @@
       </div>
     </div>
   {/if}
+{:else if node.type === "code"}
+  <div class="code-block" role="group" aria-label={props.label || "Code"}>
+    {#if props.language || props.copy !== false}
+      <div class="code-head">
+        <span class="code-lang">{props.language ?? ""}</span>
+        {#if props.copy !== false}
+          <button
+            type="button"
+            class="tonal code-copy"
+            aria-label={codeCopied ? "Copied" : `Copy ${props.label || "code"}`}
+            onclick={copyCode}>{codeCopied ? "Copied" : "Copy"}</button
+          >
+        {/if}
+      </div>
+    {/if}
+    <pre class="code-pre" tabindex="0"><code bind:this={codeEl}>{props.text ?? ""}</code></pre>
+  </div>
+{:else if node.type === "empty"}
+  <div class="empty-state">
+    {#if props.title}<div class="text t-title">{props.title}</div>{/if}
+    {#if props.body}<div class="text t-body empty-body">{props.body}</div>{/if}
+    {#each props.hasAction ? node.children.slice(1) : node.children as child (child.id)}
+      <Self node={child} />
+    {/each}
+    {#if props.hasAction && node.children.length}
+      <div class="empty-action"><Self node={node.children[0]} /></div>
+    {/if}
+  </div>
 {:else if node.type === "badge"}
   <span class="badge tone-{props.tone ?? 'neutral'}">{props.text ?? ""}</span>
 {:else if node.type === "checkbox"}

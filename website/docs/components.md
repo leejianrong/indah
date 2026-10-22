@@ -92,6 +92,8 @@ set shipped so far.
 | `Spinner` | an indeterminate busy indicator |
 | `Skeleton` | grey placeholder bars for content that has not arrived (`lines=`, `height=`); an `async` session factory that is still running shows one |
 | `Badge` | a small status pill |
+| `Empty` | what to show where there is nothing yet: `Empty(title, body, action=, children=)` |
+| `Code` | a read-only block of code or a command with a Copy button: `Code(text, language=, copy=True)` |
 | `SecretReveal` | shows a secret (a new API token) once, with Copy and dismiss; never replayed on reconnect (see [Host an app](hosting.md#showing-a-secret-once)) |
 
 Every component also takes `tooltip="..."`, and `ctx.toast(message)` shows a transient message in the
@@ -132,6 +134,31 @@ Plain `Text` is body text: normal size and weight, with line breaks kept. Pick a
 Plain text never interprets markup, so backticks stay literal; use `Text(..., markdown=True)`
 for code, emphasis, links and headings (a Markdown text takes no `variant`). `size="body"` and
 `size="readout"` from 0.4.0 still work and mean `variant="body"` and `variant="readout"`.
+
+### Empty states and code blocks
+
+`Empty` is for the place a list, log or table would be when there is nothing in it yet. Say what is
+missing and what to do about it; `children` (between the text and the action) is a good home for the one
+command that fills it, and `action` is usually a `Button`:
+
+```python
+from indah import Button, Code, Empty
+
+Empty(
+    "No requests yet",
+    "Start the proxy and every request appears here.",
+    children=[Code("semula log --follow", language="bash")],
+    action=Button("Send a test request", send),
+)
+```
+
+`Code(text, language=, copy=True)` shows a block of text in a monospace face with its newlines and
+indentation kept. `text` can be a string, a `Signal` or a callable. `language` is only a label in the
+header (there is no colouring; use `CodeEditor(read_only=True)` for that). The Copy button puts the plain
+text on the clipboard and shows a "Copied" toast in that tab, with no round trip to the server. A page that
+is not a secure context (plain `http` away from `localhost`) cannot use the clipboard API; then the text
+is selected and the toast asks for Ctrl+C. The Copy button and a long block that scrolls are both reachable
+with the keyboard. `copy=False` hides the button.
 
 `DataFrame` duck-types its input: a pandas frame
 (via `to_dict(orient="split")`), a `{columns, rows}` dict, or a list of record

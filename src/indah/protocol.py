@@ -70,6 +70,8 @@ BUILTIN_TYPES = frozenset(
         "masterdetail",
         "shortcuts",
         "badge",
+        "code",
+        "empty",
         "number",
         "radio",
         "multiselect",

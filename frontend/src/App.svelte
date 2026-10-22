@@ -9,12 +9,19 @@
     postEvent,
     PROTOCOL_VERSION,
   } from "./api.js";
-  import { structure, nodeProps, status, toasts, shortcutRegistry, helpOpen } from "./stores.js";
+  import {
+    structure,
+    nodeProps,
+    status,
+    toasts,
+    shortcutRegistry,
+    helpOpen,
+    showToast,
+    dismissToast,
+  } from "./stores.js";
   import Node from "./Node.svelte";
   import Overlay from "./Overlay.svelte";
 
-  let toastSeq = 0;
-  const MAX_TOASTS = 4;
 
   // Optional page chrome injected by the server into the served shell (create_app
   // args; the demo gallery sets them per demo): a clickable logo back to the
@@ -29,19 +36,6 @@
       type: node.type,
       children: (node.children || []).map((child) => splitTree(child, map)),
     };
-  }
-
-  function dismissToast(id) {
-    toasts.update((list) => list.filter((t) => t.id !== id));
-  }
-
-  // ttl is seconds; 0 keeps the toast until it is clicked.
-  // `action` is {id, label} when ctx.toast was given one (IND-160): its button posts the
-  // reserved event to the server, once, and dismisses the toast.
-  function showToast(message, kind = "info", ttl = 4, action = null) {
-    const id = ++toastSeq;
-    toasts.update((list) => [...list, { id, message, kind, ttl, action }].slice(-MAX_TOASTS));
-    if (ttl > 0) setTimeout(() => dismissToast(id), ttl * 1000);
   }
 
   function runToastAction(t) {

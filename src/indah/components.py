@@ -575,6 +575,80 @@ class Badge(Component):
         return {"text": lambda: str(_read(self._text))}
 
 
+class Code(Component):
+    """A read-only block of code or a command, with a Copy button (IND-158).
+
+    ``text`` is a string, ``Signal``, ``Computed`` or callable; newlines and indentation are
+    kept exactly. ``language`` is a short label shown in the header (``"sql"``, ``"bash"``);
+    it does not colour the text. ``copy=False`` hides the button. Copy puts the plain text
+    on the clipboard and shows a "Copied" toast in this tab, with no server round trip; where
+    the browser blocks the clipboard (a page that is not a secure context) the text is selected
+    so Ctrl+C works. ``label`` names the block for a screen reader (default "Code").
+    """
+
+    type = "code"
+
+    def __init__(
+        self, text: Source, *, language: str = "", copy: bool = True, label: str = ""
+    ) -> None:
+        if not isinstance(language, str):
+            raise TypeError(f"Code language must be a string, got {type(language).__name__}")
+        super().__init__()
+        self._text = text
+        self._language = language
+        self._copy = copy
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if self._language:
+            props["language"] = self._language
+        if self._label:
+            props["label"] = self._label
+        if not self._copy:
+            props["copy"] = False
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"text": lambda: str(_read(self._text))}
+
+
+class Empty(Component):
+    """An empty state: what to show where there is nothing yet (IND-158).
+
+    ``title`` and ``body`` are strings, signals or callables. ``action`` is one component,
+    usually a ``Button``, shown last; ``children`` go between the text and the action (a
+    ``Code`` with the one command that fills the log, say). Nothing here changes how the
+    surrounding page looks: it is a centred block of ordinary text roles.
+    """
+
+    type = "empty"
+
+    def __init__(
+        self,
+        title: Source,
+        body: Source = "",
+        *,
+        action: Component | None = None,
+        children: list[Component] | None = None,
+    ) -> None:
+        if action is not None and not isinstance(action, Component):
+            raise TypeError("Empty action must be a component, such as a Button")
+        super().__init__(([action] if action is not None else []) + list(children or []))
+        self._title = title
+        self._body = body
+        self._has_action = action is not None
+
+    def static_props(self) -> dict[str, Any]:
+        return {"hasAction": True} if self._has_action else {}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {
+            "title": lambda: str(_read(self._title)),
+            "body": lambda: str(_read(self._body)),
+        }
+
+
 class SecretReveal(Component):
     """Show a secret once (a new API token), with Copy and "I have saved it" buttons.
 

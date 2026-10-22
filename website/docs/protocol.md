@@ -240,6 +240,8 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `shortcuts` | invisible | `keys:[{keys,label}]` (canonical key specs, see `indah.keys`) | `press` `{keys}` |
 | `secretreveal` | display, event | `label`; `value` (**ephemeral**, see below) | `dismiss` |
 | `badge` | display | `text`, `tone` (`neutral`/`ok`/`warn`/`err`/`info`) | — |
+| `code` | display | `text`; optional `language` (a header label), `label` (accessible name, default "Code"), `copy` (`false` hides the Copy button; sent only when false). Copy is handled in the shell: the plain text goes to the clipboard and a local "Copied" toast shows, with no event to the server | - |
+| `empty` | display | `title`, `body`; `hasAction` when the first child is the action. Children render between the text and the action | - |
 | `number` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `radio` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
 | `multiselect` | input | `value:[...]`, `options:[{value,label}]`, `label` | `change` `{value:[...]}` |
