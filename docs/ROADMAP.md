@@ -14,9 +14,9 @@
 | 0.4.1 (patch, about 1 week) | Public demos work; hosted path verified | 8 | IND-167, IND-33, 2 new verification cards | 1 |
 | 0.5.0 | Build your own, and the app skeleton | 24 | IND-149, 150, 146, 147, 151, 156, 144, 145 | 1 |
 | 0.6.0 | Tables, text and small controls | 25 + 5 | IND-148, 166, 153, 154, 152, 160, 164, 158, 161, 168, plus the demo cleanup card (IND-172) | 1 |
-| 0.7.0 (provisional) | Command palette, promoted visuals, live docs | 25 | IND-165, 159, 157, 162, 163, 169, 83a, 61 | 1 |
+| 0.7.0 (provisional) | Hosted Studio, command palette, promoted visuals, live docs | 28 | IND-173, 174, 175, 169, 176 (83a), 165, 157, 162, 163 | 1 |
 | 0.8.0 (provisional) | Live media and annotation | 22 | IND-74 (split 3 ways), 64, 65, 71, 56, 62 | 1, decided in the ADR |
-| Later | Needs a decision or has no demand yet | 16 | IND-57, 81, 66, 83b | - |
+| Later | Needs a decision or has no demand yet | 24 | IND-57, 81, 66, 83b (IND-83), 61, 159 | - |
 | Closed as folded | | 1 | IND-155 (into IND-166) | - |
 
 All 38 cards are placed: 2 + 8 + 10 + 8 + 6 + 3 + 1 = 38 (0.4.1 also gets two new cards, not counted).
@@ -159,9 +159,9 @@ Owner decides or does by hand:
   whether plain text gets inline code and emphasis.
 - Approve the `pypi` environment run.
 
-## 0.7.0 (provisional): command palette, promoted visuals, live docs, 25 points
+## 0.7.0 (provisional): hosted Studio, command palette, promoted visuals, live docs, 28 points
 
-Theme: finish semula's list, and make the docs interactive.
+Theme: host the Studio (ADR-0040), make the docs interactive, finish semula's list.
 
 | Card | Pts |
 |------|-----|
@@ -170,24 +170,29 @@ Theme: finish semula's list, and make the docs interactive.
 | IND-157 Marked | 3 |
 | IND-162 BarStrip | 3 |
 | IND-163 Steps | 3 |
-| IND-83a Pyodide spike (new, split from IND-83: boot time, size, postMessage transport shim) | 3 |
-| IND-61 Demo: DataFrame explorer | 3 |
-| IND-159 InfoTip | 2 |
+| IND-173 Studio hosted mode and /embed/ route (new, ADR-0040) | 3 |
+| IND-174 Deploy the hosted Studio and post-deploy check (new, ADR-0040) | 3 |
+| IND-176 Pyodide spike, IND-83a (new, split from IND-83) | 3 |
+| IND-175 Release checklist: redeploy Studio and gallery (new) | 1 |
 
-Splitting: IND-83 is 8 points. 83a is the timeboxed feasibility spike (3). 83b, the real playground (5),
-goes to "later" and is filed only if the spike passes.
+Splitting: IND-83 is 8 points. IND-176 (83a) is the timeboxed feasibility spike (3). IND-83 itself is now
+the 5 point build (83b) and stays in "later" until the spike passes.
 
-ADRs first: none new; IND-169 follows the IND-168 decision.
+IND-61 (DataFrame explorer, 3) and IND-159 (InfoTip, 2) move to "later" to make room for the hosted Studio.
+
+ADRs first: ADR-0040 (Studio home, Proposed) must be accepted before IND-173 starts. Order: IND-173, then
+IND-174, then IND-169 and IND-175; IND-176 runs alongside and does not block IND-169.
 
 Risks:
-- IND-169 depends on IND-168. If the decision is "hosted Studio", the embeds need a deployed origin and a
-  CSP `frame-src` for the docs site.
+- IND-169 needs a deployed hosted Studio (IND-173, IND-174). Framing is allowed only on `/embed/` and only
+  for the docs origin (`frame-ancestors`, no `X-Frame-Options`); every other route stays as strict as now.
+  Deploying needs the owner's Fly access, and the image must stay free of Fly-specific code (PAN-130).
 - Pyodide may not run indah's server dependencies; the spike must say so early.
 - 157, 162, 163 may be dropped if semula's own bridge components make them redundant.
 
 Owner decides:
 - Built-in or semula-owned for 157, 162, 163.
-- Whether to run a hosted Studio (cost, and what happens to the gallery on Fly).
+- Accept ADR-0040: a hosted Studio as its own container beside the gallery, no playground, iframes in the docs.
 - Approve the `pypi` environment run.
 
 ## 0.8.0 (provisional): live media and annotation, 22 points
