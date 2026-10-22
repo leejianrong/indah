@@ -85,3 +85,7 @@ extend-exclude = ["examples/colab"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+# Studio pages carry prose summaries as long string literals.
+[tool.ruff.lint.per-file-ignores]
+"examples/studio/**" = ["E501"]
