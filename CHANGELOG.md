@@ -11,6 +11,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-22
+
+The building blocks of an app screen. This release adds a frame (`AppShell`), the controls and layout
+pieces a dashboard header needs, and a way to ship your own element: a module component that the
+shell loads as a web component (ADR-0039). Everything is new API; no existing app looks or behaves
+differently, and `protocol_version` is still 1.
+
 ### Added
 
 - Module components (ADR-0039): `register_component(type, module=, events=, two_way=, fallback=)` ships an
@@ -48,6 +55,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   `"tonal"`. A title on the left and actions on the right is now `Row(justify="between")`. Every new
   prop is optional and left off the wire at its default, so an app that does not use them sends and
   looks as before; `spacer` and `divider` are new component types (additive, `protocol_version` stays 1).
+
+### Known limitations
+
+- `trusted_proxies` has still not been checked against the real Cloudflare and Fly path (IND-170), and
+  sticky sessions are unverified (IND-171).
+- A module component cannot yet sit inside a `List` row or a table cell; that needs the table cell
+  spec (IND-148). A module is code that runs in the page with the app's privileges, so register only
+  files you wrote or vendored, and never one a user supplies (see ADR-0039).
+- A logo pair (`logo=(light, dark)`) takes two images; an SVG that uses `currentColor` does not follow
+  the page colour because the logo is shown in an `<img>`.
 
 ## [0.4.0] - 2026-10-22
 

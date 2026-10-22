@@ -1,19 +1,10 @@
 # Releasing
 
-## Status (2026-09)
+## Status (2026-10)
 
-The name `indah` is **already reserved** on PyPI - a `0.0.1` placeholder was
-uploaded with a token (the "reserve the name" step below, now done). The first
-real release is `0.1.0`, cut as a release candidate (`0.1.0rc1`) first so the
-Colab/RunPod smoke test (R2) runs against an installable artifact before the final
-tag.
-
-Trusted Publishing is **not wired up yet**. Before any CI publish (the
-`publish.yml` workflow) can succeed, the owner must do two one-time things once,
-described under [Later releases](#later-releases-trusted-publishing-no-token):
-add the GitHub publisher on PyPI and create the `pypi` GitHub Environment. Until
-then, an RC can be pushed with a token upload (`uv publish --token ...`, same as
-the reserve step) from the owner's terminal.
+Trusted Publishing is wired up: `publish.yml` runs on a published GitHub Release and its `publish` job
+waits for the owner to approve the `pypi` environment. Releases 0.1.0 to 0.4.0 went out this way. The
+sections below on reserving the name and the token upload are kept as history.
 
 ## Pre-flight: the clean-room check (every release)
 
