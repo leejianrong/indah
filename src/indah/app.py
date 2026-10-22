@@ -534,7 +534,7 @@ def create_app(
     csp: str | None = None,
     csp_media_hosts: Sequence[str] = (),
     security_headers: bool | Mapping[str, str] = False,
-    logo: str | os.PathLike[str] | bytes | None = None,
+    logo: str | os.PathLike[str] | bytes | tuple[Any, Any] | None = None,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -615,7 +615,11 @@ def create_app(
     such as ``"1400px"`` or ``"90rem"``, or ``"none"`` to fill the window); the default is
     ``"1080px"``. ``logo`` (an SVG/PNG/JPEG/WebP file path or bytes, up to
     512 KB) replaces the Bunga mark in the header and, with ``title``, the "indah"
-    wordmark -- a rebranded app; ``title`` alone only renames the tab, as before. The tab
+    wordmark -- a rebranded app; ``title`` alone only renames the tab, as before. Pass
+    ``(light, dark)`` for a mark per colour scheme: the header shows the one that matches
+    indah's own light/dark toggle, so a dark mark does not vanish on the dark page. (An SVG
+    that relies on ``currentColor`` does not work: the logo is shown in an ``<img>``, which
+    cannot inherit the page's colour. Pass a pair instead.) The tab
     reads ``"<title> - indah"``; ``title_suffix`` replaces that suffix (``""`` gives the exact
     ``title``).
     """
@@ -730,7 +734,14 @@ def create_app(
     if max_width != DEFAULT_MAX_WIDTH:
         theme_css += f"\n:root {{ --page-max: {max_width}; }}"
     app.state.theme_css = theme_css.strip()
-    app.state.logo = _load_logo(logo) if logo is not None else None
+    if isinstance(logo, tuple):
+        if len(logo) != 2:
+            raise ValueError("logo as a pair is (light, dark)")
+        app.state.logo = _load_logo(logo[0])
+        app.state.logo_dark = _load_logo(logo[1])
+    else:
+        app.state.logo = _load_logo(logo) if logo is not None else None
+        app.state.logo_dark = None
     # Back-compat: a single-shared app still exposes .session/.hub for callers and
     # tests that introspect the one graph. A per-session app has neither -- there is
     # no single session to name; go through the store (keyed by sid) instead.
@@ -779,6 +790,7 @@ def _chrome_html(state: Any, base_href: str | None = None) -> str:
         "sourceUrl": getattr(state, "source_url", None),
         "title": title,
         "logoUrl": "api/brand/logo" if getattr(state, "logo", None) else None,
+        "logoDarkUrl": "api/brand/logo?scheme=dark" if getattr(state, "logo_dark", None) else None,
         "brandName": title if getattr(state, "logo", None) else None,
         "secure": True if getattr(state, "secure", False) else None,
     }
@@ -892,7 +904,9 @@ def _load_logo(logo: str | os.PathLike[str] | bytes) -> tuple[bytes, str]:
 async def _logo(request: Request) -> Response:
     """The custom logo. ``sandbox`` makes the browser refuse any script in an SVG that
     is opened directly; inside the shell's <img> it cannot run script anyway."""
-    data, media_type = request.app.state.logo
+    state = request.app.state
+    dark = request.query_params.get("scheme") == "dark" and state.logo_dark is not None
+    data, media_type = state.logo_dark if dark else state.logo
     return Response(
         data,
         media_type=media_type,

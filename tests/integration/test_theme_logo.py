@@ -97,3 +97,38 @@ async def test_density_is_set_on_the_html_element_and_validated():
         assert '<html lang="en">' in (await client.get("/")).text  # comfortable: untouched
     with pytest.raises(ValueError):
         _app(density="tiny")
+
+
+DARK_SVG = (
+    b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'><circle cx='4' cy='4' r='4'/></svg>"
+)
+
+
+@pytest.mark.integration
+async def test_logo_pair_serves_a_mark_per_colour_scheme():
+    app = _app(logo=(SVG, DARK_SVG), title="semula")
+    async with _client(app) as c:
+        chrome = _chrome((await c.get("/")).text)
+        light = await c.get("/api/brand/logo")
+        dark = await c.get("/api/brand/logo", params={"scheme": "dark"})
+        other = await c.get("/api/brand/logo", params={"scheme": "neon"})
+    assert chrome["logoUrl"] == "api/brand/logo"
+    assert chrome["logoDarkUrl"] == "api/brand/logo?scheme=dark"
+    assert light.content == SVG and dark.content == DARK_SVG
+    assert dark.headers["content-security-policy"] == "sandbox"
+    assert other.content == SVG  # an unknown scheme falls back to the light mark
+
+
+@pytest.mark.integration
+async def test_a_single_logo_sends_no_dark_url_and_a_bad_pair_is_refused():
+    async with _client(_app(logo=SVG, title="semula")) as c:
+        chrome = _chrome((await c.get("/")).text)
+    assert "logoDarkUrl" not in chrome or chrome["logoDarkUrl"] is None
+    with pytest.raises(ValueError):
+        _app(logo=(SVG,))  # a pair is (light, dark)
+    with pytest.raises(ValueError):
+        _app(logo=(SVG, b"not an image"))
+    async with _client(_app(logo=(SVG, PNG))) as c:  # the two marks may differ in type
+        assert (await c.get("/api/brand/logo", params={"scheme": "dark"})).headers[
+            "content-type"
+        ] == "image/png"

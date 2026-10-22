@@ -109,6 +109,12 @@ user-selectable *theme switcher*: `create_app(theme=Theme(...), logo=...)` (IND-
   `title` alone still only renames the tab. Bundled fonts are unchanged: `font=` picks a
   stack, it does not load a file (ADR-0004).
 - No `protocol_version` change: this is presentation served in the HTML, not a message.
+- Amendment (2026-10-22, IND-156): `logo=(light, dark)` gives a mark per scheme, served at
+  `api/brand/logo` and `api/brand/logo?scheme=dark` with the same headers and checks. The header
+  holds both `<img>` elements and CSS shows one by the `data-theme` the shell's toggle sets, so it
+  follows indah's own light/dark choice and not only the operating system. An SVG using
+  `currentColor` is not supported, because an `<img>` cannot inherit the page's colour; a pair is the
+  way. A single `logo=` behaves as before.
 
 ## Amendment (IND-103): density tokens
 

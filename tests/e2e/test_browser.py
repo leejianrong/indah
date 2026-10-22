@@ -1226,6 +1226,47 @@ def test_themed_app_shows_its_tokens_logo_and_wordmark_in_light_and_dark():
 
 
 @pytest.mark.e2e
+def test_logo_pair_follows_the_shells_own_theme_toggle():
+    """IND-156: a (light, dark) logo shows one mark, chosen by indah's toggle and not only
+    by the operating system's setting."""
+    from indah.app import create_app
+    from indah.components import Column, Text
+    from indah.session import Session
+
+    def mark(colour: str) -> bytes:
+        return (
+            f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'>"
+            f"<rect width='8' height='8' fill='{colour}'/></svg>"
+        ).encode()
+
+    app = create_app(
+        session_factory=lambda: Session(Column(children=[Text("hello")])),
+        title="semula",
+        logo=(mark("#111111"), mark("#eeeeee")),
+    )
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(color_scheme="light")
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                visible = page.locator("header.brand img.mark:visible")
+                expect(visible).to_have_count(1)
+                assert "scheme=dark" not in visible.get_attribute("src")
+                page.get_by_role("button", name="Dark theme").click()
+                expect(visible).to_have_count(1)
+                assert "scheme=dark" in visible.get_attribute("src")
+                assert visible.evaluate("el => el.naturalWidth") > 0
+                page.get_by_role("button", name="Light theme").click()
+                assert "scheme=dark" not in visible.get_attribute("src")
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
 def test_stream_bound_list_appends_live_and_trims_to_its_limit():
     """IND-90: rows appended to a Stream reach the browser as coalesced append patches,
     and the `trim` keeps only the newest `limit` in the DOM."""
