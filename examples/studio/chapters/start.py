@@ -81,6 +81,70 @@ def inputs_check(pw) -> None:
     expect(page.get_by_text("with no toppings, spicy")).to_be_visible()
 
 
+def choices(ctx: indah.Context) -> indah.Component:
+    level = indah.Signal("all")
+    mode = indah.Signal("replay")
+    kinds = indah.Signal(["tool"])
+    return indah.Column(
+        gap="1rem",
+        children=[
+            indah.Chips(
+                level,
+                label="Level",
+                options=[
+                    "all",
+                    {"value": "warn", "label": "Warnings", "count": 4, "tone": "warn"},
+                    {"value": "err", "label": "Errors", "count": 2, "tone": "err"},
+                ],
+            ),
+            indah.Chips(
+                kinds,
+                multi=True,
+                label="Kinds",
+                options=[("tool", "Tool calls"), ("chat", "Chat"), ("embed", "Embeddings")],
+            ),
+            indah.Segmented(
+                mode,
+                label="Mode",
+                options=[("replay", "Replay"), ("record", "Record")],
+                tones={"record": "err"},
+            ),
+            indah.Text(
+                lambda: (
+                    f"Level {level.value}, kinds {', '.join(kinds.value) or 'none'}, {mode.value}."
+                ),
+                size="body",
+            ),
+        ],
+    )
+
+
+def choices_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.get_by_text("Level all, kinds tool, replay.")).to_be_visible()
+    level = page.get_by_role("radiogroup", name="Level")
+    expect(level.get_by_role("radio", name="Errors 2")).to_be_visible()  # the count is shown
+    level.get_by_role("radio", name="Errors 2").click()
+    expect(page.get_by_text("Level err,")).to_be_visible()
+    kinds = page.get_by_role("group", name="Kinds")
+    kinds.get_by_role("button", name="Chat").click()  # multi chips toggle
+    expect(page.get_by_text("kinds tool, chat,")).to_be_visible()
+    kinds.get_by_role("button", name="Tool calls").click()
+    expect(page.get_by_text("kinds chat,")).to_be_visible()
+    mode = page.get_by_role("radiogroup", name="Mode")
+    mode.get_by_role("radio", name="Replay").focus()
+    page.keyboard.press("ArrowRight")  # arrows move and select, as a radio group does
+    expect(page.get_by_text(", record.")).to_be_visible()
+    expect(mode.get_by_role("radio", name="Record")).to_have_attribute("aria-checked", "true")
+    assert mode.get_by_role("radio", name="Replay").get_attribute("tabindex") == "-1"
+    page.keyboard.press("ArrowLeft")
+    expect(page.get_by_text(", replay.")).to_be_visible()
+    page.keyboard.press("End")
+    expect(page.get_by_text(", record.")).to_be_visible()
+
+
 def actions(ctx: indah.Context) -> indah.Component:
     clicks = indah.Signal(0)
     log = indah.Signal("Nothing yet.")
@@ -193,6 +257,15 @@ CHAPTER = Chapter(
             covers=("TextInput", "Radio", "MultiSelect", "Checkbox", "Number", "Date"),
             docs="components.md",
             check=inputs_check,
+        ),
+        Page(
+            slug="choices",
+            title="Chips and segmented controls",
+            summary="Filter chips (single or multi, with counts and tones) and a segmented control; arrow keys work.",
+            build=choices,
+            covers=("Chips", "Segmented"),
+            docs="components.md",
+            check=choices_check,
         ),
         Page(
             slug="actions",

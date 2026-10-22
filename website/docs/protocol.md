@@ -236,6 +236,8 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `number` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `radio` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
 | `multiselect` | input | `value:[...]`, `options:[{value,label}]`, `label` | `change` `{value:[...]}` |
+| `chips` | input | `value` (or `[...]` with `multi:true`), `options:[{value,label,count?,tone?}]`, `multi?`, `label` | `change` `{value}` or `{value:[...]}` |
+| `segmented` | input | `value`, `options:[{value,label,count?,tone?}]`, `label` | `change` `{value}` |
 | `date` | input | `value` (ISO `YYYY-MM-DD`), `label` | `change` `{value}` |
 | `upload` | input | `label`, `accept`, `multiple` | file(s) via `POST /api/upload` (not the event path) |
 | `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |

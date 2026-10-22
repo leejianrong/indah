@@ -407,6 +407,70 @@
       .checkbox-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
       .checkbox-fieldset legend { padding: 0; margin-bottom: 0.35rem; }
       .radio-group { display: flex; flex-direction: column; gap: 0.45rem; }
+      .choice { --tone: var(--primary); display: flex; flex-wrap: wrap; gap: 0.4rem; }
+      .choice-opt.tone-ok { --tone: var(--ok); }
+      .choice-opt.tone-warn { --tone: var(--warn); }
+      .choice-opt.tone-err { --tone: var(--err); }
+      .choice-opt.tone-info { --tone: var(--primary); }
+      button.choice-opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        align-self: auto;
+        padding: 0.3rem 0.85rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text);
+        background: var(--surface);
+        border: 1px solid var(--outline);
+        border-radius: var(--radius-control);
+        filter: none;
+      }
+      button.choice-opt:hover { background: var(--surface-2); filter: none; }
+      button.choice-opt.tone-ok, button.choice-opt.tone-warn,
+      button.choice-opt.tone-err, button.choice-opt.tone-info { color: var(--tone); }
+      button.choice-opt.on {
+        color: var(--on-primary-container);
+        background: color-mix(in srgb, var(--tone) 16%, var(--surface));
+        border-color: var(--tone);
+      }
+      button.choice-opt.on.tone-ok, button.choice-opt.on.tone-warn,
+      button.choice-opt.on.tone-err, button.choice-opt.on.tone-info { color: var(--tone); }
+      .choice-count {
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 0 0.4rem;
+        border-radius: var(--radius-control);
+        background: color-mix(in srgb, var(--tone) 14%, var(--surface-2));
+        color: var(--muted);
+      }
+      .choice.segmented {
+        display: inline-flex;
+        flex-wrap: nowrap;
+        gap: 0;
+        align-self: flex-start;
+        border: 1px solid var(--outline);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .choice.segmented button.choice-opt {
+        border: 0;
+        border-radius: 0;
+        padding: 0.4rem 1rem;
+        background: transparent;
+      }
+      .choice.segmented button.choice-opt + button.choice-opt { border-left: 1px solid var(--outline); }
+      .choice.segmented button.choice-opt.on {
+        background: var(--tone);
+        color: var(--on-primary);
+      }
+      .choice.segmented button.choice-opt.on .choice-count {
+        background: color-mix(in srgb, var(--on-primary) 24%, transparent);
+        color: var(--on-primary);
+      }
+      button.choice-opt:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+      .choice.segmented button.choice-opt:focus-visible { outline-offset: -3px; }
       input[type="color"] {
         width: 3rem;
         height: 2rem;

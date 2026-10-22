@@ -18,6 +18,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   drawer behind a menu button (Escape, the backdrop or choosing a link closes it). It works inside a
   `Router` page and with `spa=True`. A new component type with optional props, so `protocol_version`
   stays 1 and no existing app changes (ADR-0014 amendment).
+- `Chips(value, options=, multi=)` and `Segmented(value, options=, tones=)`: filter chips and a segmented
+  control, two-way bound to a signal (a `Signal[str]`, or a `Signal[list]` for `multi=True`). An option may
+  be `"a"`, `(value, label)` or `{value, label, count, tone}`; a count shows beside the label and a tone
+  (`ok`, `warn`, `err`, `info`) tints it. A single choice is a radio group (arrow keys move and select, with a
+  roving tab stop); multi chips are toggle buttons. New component types, nothing existing changes
+  (additive, `protocol_version` stays 1).
 - Layout primitives: `Row(justify=)` (`start`, `center`, `end`, `between`, `around`), `Column(gap=)`,
   `Spacer` (grows to fill a row, or `size=` for a fixed gap), `Divider` (`vertical=` for a column rule)
   and `Card(variant=, padding=)` with `"outlined"` (the default and the current look), `"flat"` and
