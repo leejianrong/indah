@@ -66,17 +66,17 @@ uv sync --extra dev
 make demo            # prints a URL; binds the first free port from 8000
 ```
 
-The demo streams a mock LLM token by token into a `StreamText`; below it, a `Select`
-switches a live `DataFrame` and a colour picker (a registered custom component)
-two-way binds a signal - all updating over SSE, with no WebSocket and no Node. Only
-the components that depend on a changed value are patched; there is no full-script
-rerun.
+`make demo` starts the **indah Studio**: every component and feature running live, one small
+page each, with its source underneath. It also has full example dashboards (a live log, a 20,000-row
+table, routing, an editor, a multi-user hosted app with roles and API tokens) and a playground where
+you type a few lines of indah and run them. Everything updates over SSE, with no WebSocket and no
+Node, and only the components that depend on a changed value are patched.
 
 Other ways to run it:
 
 ```bash
 make demo-notebook   # inline in a local JupyterLab cell
-make demo-docker     # in Docker on an auto-picked free port
+make demo-docker     # the small built-in demo, in Docker on an auto-picked free port
 ```
 
 Prefer Docker with a stable `http://indah.localhost/` hostname (via a machine-wide

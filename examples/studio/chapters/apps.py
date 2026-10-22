@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from starlette.applications import Starlette
-from starlette.routing import Mount
-
 from ..core import AppEntry, Chapter
 
 
@@ -52,12 +49,9 @@ def _hosted() -> Any:
 
 
 def _showcase() -> Any:
-    import semula_review
+    import semula_showcase
 
-    ui = semula_review.build_showcase_app()
-    app = Starlette(routes=[Mount("/ui", app=ui)])
-    app.state.ui = ui
-    return app
+    return semula_showcase.build_app()
 
 
 def _check_log(pw: Any) -> None:

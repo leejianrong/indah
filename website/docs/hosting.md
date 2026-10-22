@@ -10,9 +10,9 @@ tools to decide who may see and do what. It does not own passwords, tokens or an
 provider. Checks run inside the process, because a call to an outside service on every click
 would be paid on top of a round trip through the edge, which already costs 100 to 200 ms.
 
-The demo to read alongside this page is `examples/semula_hosted.py` (`make demo-hosted`): two
-users in two browser profiles, three roles, an admin token screen, and every setting below turned
-on.
+The demo to read alongside this page is the **Hosted** app in the Studio (`make demo`, then Full
+apps; the code is `examples/semula_hosted.py`): two users in two browser profiles, three roles, an
+admin token screen, and every setting below turned on.
 
 ## A secure app in one screen
 

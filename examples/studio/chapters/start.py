@@ -111,6 +111,40 @@ def actions_check(pw) -> None:
     expect(page.get_by_text("Done after an async handler")).to_be_visible()
 
 
+def first_app(ctx: indah.Context) -> indah.Component:
+    n = indah.Signal(0)
+    return indah.Column(
+        children=[
+            indah.Button("Add one", lambda: n.set(n.value + 1)),
+            indah.Text(lambda: f"n = {n.value}"),
+        ]
+    )
+
+
+FIRST_APP_SOURCE = """
+import indah
+
+def build(ctx):                       # called once per browser tab: state is per tab
+    n = indah.Signal(0)
+    return indah.Session(indah.Column(children=[
+        indah.Button("Add one", lambda: n.set(n.value + 1)),
+        indah.Text(lambda: f"n = {n.value}"),
+    ]))
+
+app = indah.create_app(session_factory=build)   # an ASGI app: mount it anywhere
+indah.launch(app)                               # or run it, in a script or a notebook cell
+"""
+
+
+def first_app_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    page.get_by_role("button", name="Add one").click()
+    page.get_by_role("button", name="Add one").click()
+    expect(page.get_by_text("n = 2")).to_be_visible()
+
+
 CHAPTER = Chapter(
     slug="start",
     title="Start here",
@@ -120,6 +154,17 @@ CHAPTER = Chapter(
         "and only the parts of the page that read it update, with no rerun of your script."
     ),
     pages=[
+        Page(
+            slug="first-app",
+            title="Your first app",
+            summary="The whole program: a session factory, `create_app`, `launch`. Each tab gets its own session; the code below is the complete file.",
+            build=first_app,
+            source=FIRST_APP_SOURCE,
+            covers=("Session", "create_app", "launch"),
+            docs="quickstart.md",
+            adr=(2, 10),
+            check=first_app_check,
+        ),
         Page(
             slug="reactive",
             title="Signals and computed values",
