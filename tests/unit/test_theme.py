@@ -103,3 +103,10 @@ def test_extra_token_values_get_the_same_checks_and_core_roles_stay_closed():
         Theme(extra_light={"x-bad": "red; } body { display: none"})
     with pytest.raises(ValueError, match="unknown light theme token"):
         Theme(light={"x-brand": "#fff"})  # an extra goes in extra_light, not light
+
+
+@pytest.mark.unit
+def test_radius_also_sets_the_control_radius_used_by_buttons_and_badges():
+    css = Theme(radius="2px").css()
+    assert "--radius-control: 2px;" in css
+    assert "--radius-control" not in Theme(light={"primary": "#d6336c"}).css()

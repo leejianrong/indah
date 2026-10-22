@@ -13,7 +13,7 @@ SHELL = (ROOT / "frontend" / "index.html").read_text()
 PAGE = (ROOT / "website" / "docs" / "design-system.md").read_text()
 
 # Identity and typography/shape tokens are documented but are not colour roles.
-NOT_COLOUR = {"brand-a", "brand-b", "radius", "radius-sm", "radius-pill"}
+NOT_COLOUR = {"brand-a", "brand-b", "radius", "radius-sm", "radius-pill", "radius-control"}
 
 
 def _block(selector: str) -> dict[str, str]:
@@ -47,5 +47,5 @@ def test_every_filled_role_has_an_on_partner():
 
 @pytest.mark.unit
 def test_the_published_page_names_every_token():
-    for name in sorted(COLOUR_TOKENS) + ["radius", "radius-sm", "radius-pill"]:
+    for name in sorted(COLOUR_TOKENS) + ["radius", "radius-sm", "radius-pill", "radius-control"]:
         assert f"`{name}`" in PAGE, f"design-system.md does not document `{name}`"

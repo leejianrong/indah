@@ -250,7 +250,8 @@ def _themed_ui() -> Any:
                     indah.Text("## A themed app", markdown=True),
                     indah.Text(
                         "Pink primary, 2px radius, Georgia, compact table, 720px frame. "
-                        "Toggle dark mode at the top right: the dark palette is overridden too."
+                        "Toggle dark mode at the top right: the dark palette is overridden too.",
+                        size="body",
                     ),
                     indah.Row(
                         align="center",
@@ -312,6 +313,13 @@ def _themed_check(pw) -> None:
     )
     assert root[0] == "2px" and root[1] == "#d6336c" and root[2] == "#d6336c", root
     assert root[3] == "compact", root
+    # Theme(radius=) reaches buttons and badges, and Row(align="center") keeps them content-sized.
+    filled = page.get_by_role("button", name="Filled")
+    expect(filled).to_have_css("border-radius", "2px")
+    expect(page.locator(".badge", has_text="tokens")).to_have_css("border-radius", "2px")
+    row_width = page.locator(".row").bounding_box()["width"]
+    assert filled.bounding_box()["width"] < row_width / 3, "buttons must not stretch in the row"
+    assert page.locator(".badge", has_text="tokens").bounding_box()["width"] < row_width / 3
     page.get_by_role("button", name="Dark theme").click()
     page.wait_for_timeout(100)
     dark = page.evaluate(
