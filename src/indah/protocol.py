@@ -91,6 +91,7 @@ BUILTIN_TYPES = frozenset(
         "expander",
         "modal",
         "drawer",
+        "menu",
         "upload",
         "download",
     }

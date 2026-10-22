@@ -47,6 +47,8 @@ from .components import (
     List,
     Map,
     MasterDetail,
+    Menu,
+    MenuItem,
     Modal,
     MultiSelect,
     NavItem,
@@ -196,6 +198,8 @@ __all__ = [
     "Sidebar",
     "AppShell",
     "Drawer",
+    "Menu",
+    "MenuItem",
     "Expander",
     # custom components (R7)
     "register_component",

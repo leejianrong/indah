@@ -3251,6 +3251,134 @@ class Drawer(_Overlay):
         return {"title": self._title, "side": self._side}
 
 
+@dataclass
+class MenuItem:
+    """One entry of a :class:`Menu`.
+
+    ``on_click()`` runs (sync or async) when the item is chosen. ``confirm`` makes the shell ask
+    first, like ``Button(confirm=)``: a UX guard, not authorization, so a destructive handler
+    must still check permission itself (``guard``). ``shortcut`` is display text only (``"F2"``,
+    ``"Ctrl+D"``): wiring the key is ``Shortcuts``' job. A ``disabled`` item is shown but cannot
+    be chosen. The item's id on the wire is ``key`` when given, else its ``label``, so two items
+    of one menu need different labels or keys.
+    """
+
+    label: str
+    on_click: Callable[[], Any] | None = None
+    danger: bool = False
+    shortcut: str | None = None
+    confirm: str | None = None
+    disabled: bool = False
+    key: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.label, str) or not self.label:
+            raise ValueError("a MenuItem needs a non-empty label")
+
+    @property
+    def id(self) -> str:
+        return self.key if self.key else self.label
+
+    def wire(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"id": self.id, "label": self.label}
+        if self.danger:
+            out["danger"] = True
+        if self.shortcut:
+            out["shortcut"] = str(self.shortcut)
+        if self.confirm:
+            out["confirm"] = self.confirm
+        if self.disabled:
+            out["disabled"] = True
+        return out
+
+
+def _menu_items(source: Any) -> list[MenuItem]:
+    """Read a menu's items (a list, or a Signal, Computed or callable returning one) and check
+    that every id is unique, so a click can only mean one item."""
+    items = list(_read(source))
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, MenuItem):
+            raise TypeError(f"Menu items must be MenuItem, got {type(item).__name__}")
+        if item.id in seen:
+            raise ValueError(f"Menu item {item.id!r} appears twice; give one a different key=")
+        seen.add(item.id)
+    return items
+
+
+class Menu(Component):
+    """A menu button: a trigger that opens a list of actions (ARIA menu button pattern).
+
+    ``trigger`` is the button's text (use ``label=`` for an icon-only trigger such as ``"..."``,
+    which becomes its accessible name). ``items`` is a list of :class:`MenuItem`, or a ``Signal``,
+    ``Computed`` or callable returning one, so the items follow the data. Arrow keys, Home and End
+    move, a letter jumps to the next item starting with it, Escape closes and gives focus back to
+    the trigger, and Tab closes. Choosing an item closes the menu and runs its handler.
+
+    To leave an item out for someone who may not use it, build the list with ``ctx.only(perm, ...)``
+    and wrap the handler in ``guard(perm)``: a hidden item is still sent, an omitted one is not.
+    Selection is resolved against the *current* items by id, so a click that lands just as an item
+    disappears does nothing.
+    """
+
+    type = "menu"
+
+    def __init__(
+        self,
+        trigger: str,
+        items: Any,
+        *,
+        label: str = "",
+        variant: str = "ghost",
+        align: str = "start",
+    ) -> None:
+        super().__init__()
+        if not isinstance(trigger, str) or not trigger:
+            raise ValueError("a Menu needs trigger text")
+        if align not in ("start", "end"):
+            raise ValueError(f"Menu align must be start or end, got {align!r}")
+        self._trigger = trigger
+        self._label = label
+        self._variant = variant
+        self._align = align
+        self._items_src = items
+        self._items_live = _options_are_live(items)
+        _menu_items(items)  # a bad list fails now, as it does for options
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"trigger": self._trigger}
+        if not self._items_live:
+            props["items"] = [i.wire() for i in _menu_items(self._items_src)]
+        if self._label:
+            props["label"] = self._label
+        if self._variant != "ghost":
+            props["variant"] = self._variant
+        if self._align != "start":
+            props["align"] = self._align
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        if not self._items_live:
+            return {}
+        return {"items": lambda: [i.wire() for i in _menu_items(self._items_src)]}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event != "select":
+            return False
+        chosen = payload.get("item")
+        if not isinstance(chosen, str):
+            return True
+        for item in _menu_items(self._items_src):
+            if item.id == chosen:
+                if item.disabled or item.on_click is None:
+                    return True
+                result = item.on_click()
+                if inspect.iscoroutine(result):
+                    return result  # async handler: the session awaits it in the background
+                return True
+        return True  # stale or unknown id: the item is gone, so there is nothing to run
+
+
 # -- Data-driven list (ADR-0016) ---------------------------------------------
 #
 # Growing/variable content (logs, search results, chat, galleries) is modelled as

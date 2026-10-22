@@ -165,6 +165,68 @@ def confirm_check(pw) -> None:
     expect(page.get_by_text("Entries: none")).to_be_visible()
 
 
+def menu(ctx: indah.Context) -> indah.Component:
+    status = indah.Signal("Nothing chosen yet.")
+    locked = indah.Signal(False)
+
+    def say(text: str):
+        return lambda: status.set(text)
+
+    # The items are a function of `locked`, so the menu follows the switch with no reload.
+    items = indah.Computed(
+        lambda: [
+            indah.MenuItem("Rename", say("Renamed."), shortcut="F2"),
+            indah.MenuItem("Duplicate", say("Duplicated.")),
+            indah.MenuItem("Archive", say("Archived."), disabled=True),
+            indah.MenuItem(
+                "Delete",
+                say("Deleted."),
+                danger=True,
+                confirm="Delete this project?",
+                disabled=locked.value,
+            ),
+        ]
+    )
+    return indah.Column(
+        children=[
+            indah.Row(
+                children=[
+                    indah.Menu("Actions", items),
+                    indah.Switch(locked, label="Locked"),
+                ]
+            ),
+            indah.Text(lambda: status.value),
+        ]
+    )
+
+
+def menu_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    trigger = page.get_by_role("button", name="Actions")
+    trigger.click()
+    expect(page.get_by_role("menu")).to_be_visible()
+    expect(page.get_by_role("menuitem", name="Rename")).to_be_focused()  # a click focuses item 1
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("Enter")  # Duplicate
+    expect(page.get_by_text("Duplicated.")).to_be_visible()
+    expect(page.get_by_role("menu")).to_have_count(0)
+    expect(trigger).to_be_focused()  # focus returns to the trigger
+    trigger.press("ArrowUp")  # opens on the last item
+    expect(page.get_by_role("menuitem", name="Delete")).to_be_focused()
+    page.keyboard.press("Escape")
+    expect(page.get_by_role("menu")).to_have_count(0)
+    trigger.click()
+    page.get_by_role("menuitem", name="Delete").click()  # asks first
+    dialog = page.get_by_role("dialog")
+    dialog.get_by_role("button", name="Cancel").click()
+    expect(page.get_by_text("Duplicated.")).to_be_visible()  # Delete did not run
+    page.get_by_role("switch", name="Locked").click()
+    trigger.click()
+    expect(page.get_by_role("menuitem", name="Delete")).to_have_attribute("aria-disabled", "true")
+
+
 def badges(ctx: indah.Context) -> indah.Component:
     pinned = indah.Signal(False)
     waiting = indah.Signal(3)
@@ -387,6 +449,20 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(30,),
             check=confirm_check,
+        ),
+        Page(
+            slug="menu",
+            title="Menu",
+            summary=(
+                "`Menu(trigger, items)` is a menu button: arrow keys, Home/End, a letter to jump, Escape back "
+                "to the trigger. An item can be a `danger`, ask to `confirm`, be `disabled` or show a "
+                "`shortcut` (text only). The items may follow a signal."
+            ),
+            build=menu,
+            covers=("Menu", "MenuItem", "Switch"),
+            docs="dashboards.md",
+            adr=(30,),
+            check=menu_check,
         ),
         Page(
             slug="badges",

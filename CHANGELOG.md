@@ -13,6 +13,18 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- `Menu(trigger, items)` and `MenuItem(label, on_click, danger=, shortcut=, confirm=, disabled=, key=)`: a menu
+  button that follows the ARIA menu pattern. It opens on click, Enter, Space or the arrow keys; Up and Down
+  move and wrap, Home and End jump, a letter jumps to the next item that starts with it, Escape closes and
+  returns focus to the trigger, and Tab closes and moves on (no keyboard trap). `confirm=` asks first like
+  `Button`, `danger` uses the theme's error tone, a `disabled` item is shown but cannot be chosen, and
+  `shortcut=` is display text only. `items` may be a `Signal`, `Computed` or function, so the menu follows
+  the data; a click is matched to the current items by id, so a stale one does nothing. To omit an item for
+  someone who may not use it, build the list with `ctx.only` and wrap the handler in `guard`. A new component
+  type (`menu`, event `select`), so `protocol_version` stays 1 and nothing existing changes.
+- In an `AppShell` on a narrow screen, a button that only opens something (it has `aria-haspopup`, like a
+  `Menu` trigger) no longer closes the drawer; choosing a link or an ordinary button still does.
+
 - Table keyboard navigation: `Table(on_open=fn)` (or `keyboard=True`) makes a rich or remote table one
   tab stop (`role=grid`) that `j`/`k` and the arrows, `Home`/`End`, `PageUp`/`PageDown`, Space (ticks a
   `checked=` row) and Enter drive; Enter calls `fn(key)` (sync or `async`), or selects like a click

@@ -274,6 +274,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |
 | `modal` | overlay | `open`, `title`, `size` (`sm`/`md`/`lg`) | `close` |
 | `drawer` | overlay | `open`, `title`, `side` (`left`/`right`) | `close` |
+| `menu` | input | `trigger`, `items` (`[{id, label, danger?, shortcut?, confirm?, disabled?}]`; a live source patches it), optional `label`, `variant`, `align` (`end`) | `select` `{item}` (the item's `id`) |
 
 `Plot` serialises to an `image` node whose `src` is a PNG `data:` URI rendered on
 the Python side, so the shell needs nothing extra to show it.

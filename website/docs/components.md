@@ -57,6 +57,7 @@ set shipped so far.
 | `Router` / `Link` | pages chosen by the URL, and links between them |
 | `NavItem` | a `Link` for a rail with an `icon=` and a live count `badge=` that hides at zero |
 | `Modal` / `Drawer` | a dialog and a side panel, opened from a signal |
+| `Menu` / `MenuItem` | a menu button of actions with arrow keys, `confirm=`, `danger=` and `disabled=` items |
 
 ### Charts and data
 
