@@ -34,3 +34,17 @@ Two layers:
 A separate Colab/RunPod smoke check (`examples/smoke_test_rc.ipynb`, a real
 notebook run) is still the final proxy sign-off, but the buffering class of failure
 is now reproduced and guarded locally by `test_proxy_buffering.py`.
+
+## Manual Colab check: open the notebooks from GitHub
+
+No clone and no upload are needed. Open a notebook straight from GitHub in Colab:
+
+```
+https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/smoke_test_rc.ipynb
+https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/<name>.ipynb
+```
+
+Use `blob/<branch>` or `blob/<tag>` to test a branch or a release candidate. Run it on the
+`--pre` build when checking an RC (`pip install --pre indah==X.Y.ZrcN`), tick the checklist in
+`smoke_test_rc.ipynb`, and record the result in the R2 note in `docs/SLICES.md`.
+

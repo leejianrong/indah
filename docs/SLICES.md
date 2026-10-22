@@ -89,6 +89,10 @@ checklist row passes (results table above).
 Any proxy fixes discovered here update ADR-0002/0011 and the R2 note in
 `docs/PLAN.md`.
 
+**How to run it by hand (every release):** open the notebook directly from GitHub, no clone:
+`https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/smoke_test_rc.ipynb`
+(swap `main` for a branch or tag to test it). See `tests/e2e/README.md`.
+
 ---
 
 ## V2: Reactive core with granular patches — DONE
