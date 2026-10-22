@@ -91,6 +91,21 @@ def page(browser):
     pg.close()
 
 
+def _ran(page, want):
+    """The handlers that ran. A choice is a POST, so wait for the server rather than race it."""
+    for _ in range(60):
+        if len(RAN) >= len(want):
+            break
+        page.wait_for_timeout(50)
+    page.wait_for_timeout(150)  # and long enough for a stray extra one to show up
+    return RAN
+
+
+def _nothing_ran(page):
+    page.wait_for_timeout(300)
+    return RAN
+
+
 def _open(page, servers):
     page.goto(servers[0].url)
     trigger = page.get_by_role("button", name="Actions")
@@ -122,7 +137,7 @@ def test_open_move_choose_and_focus_returns(servers, page):
     expect(page.get_by_role("menu")).to_have_count(0)
     expect(trigger).to_be_focused()
     expect(trigger).to_have_attribute("aria-expanded", "false")
-    assert RAN == ["beta"]
+    assert _ran(page, ["beta"]) == ["beta"]
 
 
 @pytest.mark.e2e
@@ -136,7 +151,7 @@ def test_arrow_keys_open_the_menu_from_the_trigger(servers, page):
     expect(trigger).to_be_focused()
     page.keyboard.press("ArrowDown")
     expect(_item(page, "Alpha")).to_be_focused()
-    assert RAN == []
+    assert _nothing_ran(page) == []
 
 
 @pytest.mark.e2e
@@ -145,7 +160,7 @@ def test_escape_closes_without_running_anything(servers, page):
     page.keyboard.press("Escape")
     expect(page.get_by_role("menu")).to_have_count(0)
     expect(trigger).to_be_focused()
-    assert RAN == []
+    assert _nothing_ran(page) == []
 
 
 @pytest.mark.e2e
@@ -154,7 +169,7 @@ def test_tab_leaves_the_menu_and_moves_on(servers, page):
     page.keyboard.press("Tab")
     expect(page.get_by_role("menu")).to_have_count(0)
     expect(page.get_by_role("button", name="after")).to_be_focused()  # no keyboard trap
-    assert RAN == []
+    assert _nothing_ran(page) == []
 
 
 @pytest.mark.e2e
@@ -162,7 +177,7 @@ def test_an_outside_click_closes_it(servers, page):
     _open(page, servers)
     page.mouse.click(900, 600)
     expect(page.get_by_role("menu")).to_have_count(0)
-    assert RAN == []
+    assert _nothing_ran(page) == []
 
 
 @pytest.mark.e2e
@@ -189,7 +204,7 @@ def test_a_disabled_item_cannot_be_chosen(servers, page):
     expect(off).to_have_attribute("aria-disabled", "true")
     off.click(force=True)  # Playwright will not click an aria-disabled item unforced
     expect(page.get_by_role("menu")).to_be_visible()  # still open, nothing ran
-    assert RAN == []
+    assert _nothing_ran(page) == []
 
 
 @pytest.mark.e2e
@@ -200,13 +215,12 @@ def test_confirm_asks_first_like_a_button(servers, page):
     expect(dialog).to_be_visible()
     dialog.get_by_role("button", name="Cancel").click()
     expect(trigger).to_be_focused()
-    assert RAN == []
+    assert _nothing_ran(page) == []
     trigger.click()
     _item(page, "Delete").click()
     page.get_by_role("dialog").get_by_role("button", name="Delete").click()
     expect(page.get_by_role("dialog")).to_have_count(0)
-    page.wait_for_timeout(300)
-    assert RAN == ["delete"]
+    assert _ran(page, ["delete"]) == ["delete"]
 
 
 @pytest.mark.e2e
@@ -219,7 +233,7 @@ def test_items_follow_a_signal(servers, page):
     expect(_item(page, "Delete")).to_have_attribute("aria-disabled", "true")
     _item(page, "Delete").click(force=True)
     expect(page.get_by_role("dialog")).to_have_count(0)  # a disabled item does not even ask
-    assert RAN == []
+    assert _nothing_ran(page) == []
 
 
 @pytest.mark.e2e
