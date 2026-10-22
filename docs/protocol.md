@@ -447,7 +447,7 @@ Render spec fields:
 | `text` | A node prop name whose value becomes the element's text content |
 | `bind` | `{attribute: prop}` — the element attribute follows the node prop (patched reactively) |
 | `on` | `{domEvent: {event, prop}}` — a DOM event posts the indah `event` with `{value}`; `prop` names the bound signal that value is written into, giving the round-trip |
-| `children` | Nested render specs (recursive), for a small composite |
+| `children` | Nested render specs (recursive), for a small composite. A nested spec's `on` round-trips like the top-level one |
 
 The spec is validated on registration; a disallowed tag, a type that collides with
 a built-in, or a malformed spec is rejected with a `ValueError`. Because the spec

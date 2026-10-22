@@ -65,12 +65,22 @@ def register_component(component_type: str, *, render: dict[str, Any]) -> Regist
 
     spec = RenderSpec.model_validate(render).validated()
 
-    # Derive the round-trip map: indah event name -> the node prop it writes.
-    events = {ev.event: ev.prop for ev in spec.on.values() if ev.prop is not None}
+    # Derive the round-trip map: indah event name -> the node prop it writes. A nested
+    # element's ``on`` counts too, so a composite can carry its input anywhere in the tree.
+    events: dict[str, str] = {}
+    _collect_events(spec, events)
 
     registration = Registration(type=component_type, render=spec.wire(), events=events)
     _REGISTRY[component_type] = registration
     return registration
+
+
+def _collect_events(spec: RenderSpec, into: dict[str, str]) -> None:
+    for ev in spec.on.values():
+        if ev.prop is not None:
+            into.setdefault(ev.event, ev.prop)
+    for child in spec.children:
+        _collect_events(child, into)
 
 
 def registered(component_type: str) -> Registration | None:

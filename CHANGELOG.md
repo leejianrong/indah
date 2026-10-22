@@ -127,6 +127,11 @@ under "Upgrading". Start with the new guide, "Host an app for real users", on th
 - `authlib`, `itsdangerous` and `cryptography` joined the `dev` extra for the recipe's test.
   They are not dependencies of indah.
 
+### Fixed
+
+- A custom component's nested `on` now round-trips. `register_component` built its event map from
+  the top-level spec only, so an `input` inside a `children` tree changed nothing on the server.
+
 ### Known limitations
 
 - Sessions are in memory. With more than one process, use sticky sessions at the gateway. There
