@@ -89,6 +89,7 @@ set shipped so far.
 | `Download` | a link that hands the user a file back |
 | `Progress` | a progress bar bound to a source |
 | `Spinner` | an indeterminate busy indicator |
+| `Skeleton` | grey placeholder bars for content that has not arrived (`lines=`, `height=`); an `async` session factory that is still running shows one |
 | `Badge` | a small status pill |
 | `SecretReveal` | shows a secret (a new API token) once, with Copy and dismiss; never replayed on reconnect (see [Host an app](hosting.md#showing-a-secret-once)) |
 

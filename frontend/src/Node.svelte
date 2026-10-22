@@ -187,6 +187,17 @@
   {:else}
     <hr class="divider" />
   {/if}
+{:else if node.type === "skeleton"}
+  <div class="skeleton" role="status" aria-busy="true" aria-label="Loading">
+    {#each Array(props.lines ?? 3) as _, i (i)}
+      <span
+        class="skeleton-line"
+        style="height: {props.height ?? '1rem'};{i === (props.lines ?? 3) - 1 && (props.lines ?? 3) > 1
+          ? ' width: 60%;'
+          : ''}"
+      ></span>
+    {/each}
+  </div>
 {:else if node.type === "grid"}
   <div
     class="grid"

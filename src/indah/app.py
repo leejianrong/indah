@@ -21,7 +21,7 @@ import re
 import time
 import urllib.parse
 from collections import deque
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from datetime import datetime
 from html import escape
 from importlib.resources import files
@@ -64,6 +64,7 @@ from .components import (
     Chat,
     Checkbox,
     Column,
+    Component,
     DataFrame,
     Date,
     Expander,
@@ -109,6 +110,7 @@ from .proxy import ProxyHeaders, parse_trusted
 from .reactive import Signal
 from .session import DispatchResult, Session
 from .session_store import (
+    DEFAULT_FACTORY_TIMEOUT,
     InMemorySessionStore,
     SessionHandle,
     SessionStore,
@@ -518,7 +520,11 @@ def build_demo_session() -> Session:
 def create_app(
     *,
     session: Session | None = None,
-    session_factory: Callable[[], Session] | Callable[[Context], Session] | None = None,
+    session_factory: Callable[[], Session]
+    | Callable[[Context], Session]
+    | Callable[[], Awaitable[Session]]
+    | Callable[[Context], Awaitable[Session]]
+    | None = None,
     store: SessionStore | None = None,
     heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
     max_upload_mb: float = DEFAULT_MAX_UPLOAD_MB,
@@ -545,6 +551,8 @@ def create_app(
     csp_media_hosts: Sequence[str] = (),
     security_headers: bool | Mapping[str, str] = False,
     logo: str | os.PathLike[str] | bytes | tuple[Any, Any] | None = None,
+    factory_timeout: float = DEFAULT_FACTORY_TIMEOUT,
+    factory_placeholder: Callable[[], Component] | None = None,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -560,6 +568,13 @@ def create_app(
       pre-Slice-C behaviour; for single-user apps and introspection in tests).
 
     ``session``, ``session_factory``, and ``store`` are mutually exclusive.
+
+    A ``session_factory`` may be ``async def`` (IND-153): it is awaited for up to
+    ``factory_timeout`` seconds (default 1) before the first snapshot, so a fast one puts its
+    data in the first paint. A slower one lets the tab start on ``factory_placeholder()`` (a
+    ``Skeleton`` by default) and the real tree arrives on the same stream when it finishes. A
+    factory that raises shows an error and the next connection tries again. Sync factories are
+    unchanged. These two options apply to the built-in in-memory store, not a ``store=`` you pass.
 
     ``spa=True`` serves the shell for any non-``api/`` GET path, so an in-app URL
     (``/projects/auth/entries/01J``) can be opened directly or reloaded. The shell then
@@ -670,7 +685,11 @@ def create_app(
         if session is not None:
             store = SharedSessionStore(session)
         else:
-            store = InMemorySessionStore(session_factory or build_demo_session)
+            store = InMemorySessionStore(
+                session_factory or build_demo_session,
+                factory_timeout=factory_timeout,
+                placeholder=factory_placeholder,
+            )
 
     limits = limits or Limits()
     if limits.max_event_bytes is not None:
@@ -1128,9 +1147,14 @@ async def _open_session(
         existing = store.get(sid)
         if existing is not None and existing.owner != principal.id:
             return None, _denied(403, "forbidden"), None
-    handle = store.get_or_create(
-        sid or DEFAULT_SESSION_ID, ConnectionInfo.from_request(request, app_path, principal)
-    )
+    info = ConnectionInfo.from_request(request, app_path, principal)
+    aget = getattr(
+        store, "aget_or_create", None
+    )  # an async factory (IND-153); a custom store may lack it
+    if aget is not None:
+        handle = await aget(sid or DEFAULT_SESSION_ID, info)
+    else:
+        handle = store.get_or_create(sid or DEFAULT_SESSION_ID, info)
     return handle, None, principal
 
 

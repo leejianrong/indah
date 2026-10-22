@@ -23,16 +23,27 @@ the backend, not designed now.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
+import logging
 import time
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from .context import ConnectionInfo, Context
+from .protocol import error_message, init_message
 from .session import Session
 from .transport import Hub
+
+if TYPE_CHECKING:
+    from .components import Component
+
+logger = logging.getLogger("indah")
+
+# How long a request waits for an ``async`` session factory before the tab is given a skeleton.
+DEFAULT_FACTORY_TIMEOUT = 1.0
 
 
 def _takes_context(factory: Callable[..., Session]) -> bool:
@@ -48,6 +59,24 @@ def _takes_context(factory: Callable[..., Session]) -> bool:
         p.default is p.empty and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
         for p in params
     )
+
+
+def _is_async_factory(factory: Callable[..., object]) -> bool:
+    """Whether ``factory`` is an ``async def`` (or an object whose ``__call__`` is one)."""
+    return inspect.iscoroutinefunction(factory) or inspect.iscoroutinefunction(
+        getattr(factory, "__call__", None)  # noqa: B004
+    )
+
+
+@dataclass
+class _Build:
+    """One ``async`` factory run that has not finished (IND-153)."""
+
+    task: asyncio.Task[Session]
+    ctx: Context
+    hub: Hub
+    owner: str | None
+    completed: bool = False
 
 
 @dataclass
@@ -109,17 +138,34 @@ class InMemorySessionStore:
     sweep: an idle deployment with no incoming requests will not reap until the next
     one arrives, which is fine since there is no resource pressure without traffic.
     Eviction calls ``discard``, which cancels the session's background tasks too.
+
+    An ``async def`` factory is awaited by :meth:`aget_or_create` for up to ``factory_timeout``
+    seconds, so a fast one has its data in the first snapshot. A slower one lets the tab start
+    on a placeholder (``placeholder()``, default a ``Skeleton``); the real tree follows as a
+    fresh ``init`` on the same stream when the factory finishes (ADR-0025 amendment).
     """
 
     def __init__(
         self,
-        factory: Callable[[], Session] | Callable[[Context], Session],
+        factory: Callable[[], Session]
+        | Callable[[Context], Session]
+        | Callable[[], Awaitable[Session]]
+        | Callable[[Context], Awaitable[Session]],
         *,
         max_sessions: int | None = None,
         idle_timeout_seconds: float | None = None,
+        factory_timeout: float = DEFAULT_FACTORY_TIMEOUT,
+        placeholder: Callable[[], Component] | None = None,
     ) -> None:
+        if not factory_timeout > 0:
+            raise ValueError("factory_timeout must be a positive number of seconds")
         self._factory = factory
         self._wants_ctx = _takes_context(factory)
+        self._is_async = _is_async_factory(factory)
+        self.factory_timeout = factory_timeout
+        self._placeholder = placeholder
+        self._building: dict[str, _Build] = {}
+        self._placeholders: dict[str, SessionHandle] = {}
         self.app: object | None = None  # bound by create_app; handed to each Context
         self.max_sessions = max_sessions
         self.idle_timeout_seconds = idle_timeout_seconds
@@ -145,6 +191,10 @@ class InMemorySessionStore:
     def get_or_create(
         self, session_id: str, ctx_info: ConnectionInfo | None = None
     ) -> SessionHandle:
+        if self._is_async:
+            raise RuntimeError(
+                "this store's session factory is async: call `await store.aget_or_create(...)`"
+            )
         self._reap_idle()
         handle = self._handles.get(session_id)
         if handle is None:
@@ -153,16 +203,109 @@ class InMemorySessionStore:
             hub = Hub()
             ctx._bind_hub(hub)
             session = self._factory(ctx) if self._wants_ctx else self._factory()
-            session.ctx = ctx
-            session.session_id = session_id  # so served file URLs route back here
-            session.bind_hub(hub)
-            handle = SessionHandle(session=session, hub=hub, owner=owner)
-            self._handles[session_id] = handle
-            if self.max_sessions is not None:
-                while len(self._handles) > self.max_sessions:
-                    self.discard(next(iter(self._handles)))  # least-recently-used
+            handle = self._register(session_id, ctx, hub, session, owner)
         self._touch(session_id)
         return handle
+
+    def _register(
+        self, session_id: str, ctx: Context, hub: Hub, session: Session, owner: str | None
+    ) -> SessionHandle:
+        session.ctx = ctx
+        session.session_id = session_id  # so served file URLs route back here
+        session.bind_hub(hub)
+        handle = SessionHandle(session=session, hub=hub, owner=owner)
+        self._handles[session_id] = handle
+        if self.max_sessions is not None:
+            while len(self._handles) > self.max_sessions:
+                self.discard(next(iter(self._handles)))  # least-recently-used
+        return handle
+
+    # -- async factories (IND-153) --------------------------------------------
+
+    async def aget_or_create(
+        self, session_id: str, ctx_info: ConnectionInfo | None = None
+    ) -> SessionHandle:
+        """:meth:`get_or_create` for an ``async def`` factory (a sync factory runs as before).
+
+        Waits up to ``factory_timeout`` for the factory. If it finishes, the handle holds the
+        real session. If not, the handle holds a placeholder session and the real one replaces
+        it, through the same hub, when the factory completes. Concurrent callers for one id
+        share one factory run. A factory that raises before the timeout raises here."""
+        if not self._is_async:
+            return self.get_or_create(session_id, ctx_info)
+        self._reap_idle()
+        handle = self._handles.get(session_id)
+        if handle is None:
+            build = self._building.get(session_id)
+            if build is None:
+                build = self._start_build(session_id, ctx_info)
+            await asyncio.wait({build.task}, timeout=self.factory_timeout)
+            handle = self._handles.get(session_id)
+            if handle is None:
+                if build.task.done():
+                    self._complete(session_id, build)
+                    if build.task.cancelled():
+                        raise RuntimeError("the session was closed while it was starting")
+                    build.task.result()  # a factory error is the caller's error
+                    handle = self._handles.get(session_id)
+                else:
+                    handle = self._show_placeholder(session_id, build)
+            if handle is None:
+                raise RuntimeError("the session was closed while it was starting")
+        self._touch(session_id)
+        return handle
+
+    def _start_build(self, session_id: str, ctx_info: ConnectionInfo | None) -> _Build:
+        ctx = Context(session_id, ctx_info, app=self.app)
+        owner = ctx.user.id if ctx.user is not None else None
+        hub = Hub()
+        ctx._bind_hub(hub)
+        coro = self._factory(ctx) if self._wants_ctx else self._factory()
+        task = asyncio.ensure_future(coro)
+        build = _Build(task=task, ctx=ctx, hub=hub, owner=owner)
+        self._building[session_id] = build
+        task.add_done_callback(lambda _t: self._complete(session_id, build))
+        return build
+
+    def _show_placeholder(self, session_id: str, build: _Build) -> SessionHandle:
+        from .components import Column, Skeleton
+
+        root = self._placeholder() if self._placeholder is not None else Skeleton(lines=4)
+        handle = self._register(
+            session_id, build.ctx, build.hub, Session(Column(children=[root])), build.owner
+        )
+        self._placeholders[session_id] = handle
+        return handle
+
+    def _complete(self, session_id: str, build: _Build) -> None:
+        """The factory run ended: install the real session, swap it in for the placeholder, or
+        report the failure. Idempotent (a waiting request and the done-callback both call it)."""
+        if build.completed:
+            return
+        build.completed = True
+        if self._building.get(session_id) is build:
+            del self._building[session_id]
+        task = build.task
+        if task.cancelled():
+            return
+        error = task.exception()  # also marks it retrieved
+        placeholder = self._placeholders.pop(session_id, None)
+        if error is not None:
+            if placeholder is not None:
+                logger.error("indah session factory failed", exc_info=error)
+                build.hub.publish(error_message(f"{type(error).__name__}: {error}"))
+                self.discard(session_id)
+            return  # no handle yet: the waiting request raises it
+        session = task.result()
+        if placeholder is None:
+            self._register(session_id, build.ctx, build.hub, session, build.owner)
+            return
+        session.ctx = build.ctx
+        session.session_id = session_id
+        session.bind_hub(build.hub)
+        placeholder.session = session
+        session.forget_ephemeral()
+        build.hub.publish(init_message(session.snapshot()))
 
     def get(self, session_id: str) -> SessionHandle | None:
         handle = self._handles.get(session_id)
@@ -173,6 +316,17 @@ class InMemorySessionStore:
     def discard(self, session_id: str) -> None:
         handle = self._handles.pop(session_id, None)
         self._last_seen.pop(session_id, None)
+        self._placeholders.pop(session_id, None)
+        build = self._building.pop(session_id, None)
+        if build is not None:
+            build.completed = True
+            if build.task.done():
+                if not build.task.cancelled() and build.task.exception() is None:
+                    build.task.result().close()  # finished, but nobody will ever use it
+            else:
+                build.task.cancel()  # the factory stops where it is
+            if handle is None:
+                build.ctx.close()  # no session yet to run its on_close callbacks
         if handle is not None:
             handle.session.close()
 
@@ -182,8 +336,9 @@ class InMemorySessionStore:
         message). Not part of the ``SessionStore`` protocol: a store that lacks it just cannot
         be signed out this way."""
         mine = [sid for sid, h in self._handles.items() if h.owner == owner]
+        mine += [sid for sid, b in self._building.items() if b.owner == owner and sid not in mine]
         for sid in mine:
-            if farewell is not None:
+            if farewell is not None and sid in self._handles:
                 self._handles[sid].hub.publish(farewell)
             self.discard(sid)
         return len(mine)

@@ -84,6 +84,7 @@ BUILTIN_TYPES = frozenset(
         "grid",
         "spacer",
         "divider",
+        "skeleton",
         "tabs",
         "sidebar",
         "appshell",
