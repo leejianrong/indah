@@ -242,7 +242,8 @@ def build() -> indah.Session:
 
     scrubber = indah.Slider(progress, min=0, max=100, step=0.5, label="Progress along the trail")
 
-    stats = indah.Row(
+    stats = indah.Grid(
+        columns=3,
         children=[
             indah.Stat(value=f"{total_distance_m / 1000:.2f} km", label="Distance"),
             indah.Stat(value=f"{gain_m:.0f} m", label="Elevation gain"),
@@ -252,7 +253,7 @@ def build() -> indah.Session:
                 help="A Naismith's-rule estimate from distance + elevation gain - "
                 "this trail has no recorded timestamps, so it's not a real time.",
             ),
-        ]
+        ],
     )
 
     intro = indah.Text(

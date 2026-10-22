@@ -256,6 +256,7 @@ def build() -> indah.Session:
                     indah.Button("Next", on_click=lambda: step(1)),
                 ],
                 gap="0.5rem",
+                align="start",  # buttons size to content and wrap in a narrow panel
             ),
         ],
     )

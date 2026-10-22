@@ -324,6 +324,7 @@ def build_session() -> Session:
             for slug, (label, _b64) in _SAMPLES.items()
         ],
         gap="0.5rem",
+        align="start",  # size to content, so the pills wrap on a phone instead of overlapping
     )
 
     session = Session(
