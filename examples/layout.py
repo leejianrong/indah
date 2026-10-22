@@ -44,9 +44,24 @@ sections = indah.Tabs(
     children=[
         indah.Row(
             children=[
-                indah.Column(children=[indah.Text("Fast"), indah.Text("42ms")]),
-                indah.Column(children=[indah.Text("Requests"), indah.Text("1.2k")]),
-                indah.Column(children=[indah.Text("Errors"), indah.Text("0")]),
+                indah.Column(
+                    children=[
+                        indah.Text("Fast", variant="label"),
+                        indah.Text("42ms", variant="readout"),
+                    ]
+                ),
+                indah.Column(
+                    children=[
+                        indah.Text("Requests", variant="label"),
+                        indah.Text("1.2k", variant="readout"),
+                    ]
+                ),
+                indah.Column(
+                    children=[
+                        indah.Text("Errors", variant="label"),
+                        indah.Text("0", variant="readout"),
+                    ]
+                ),
             ]
         ),
         indah.DataFrame(sales, label="Monthly sales"),
@@ -72,7 +87,7 @@ sections = indah.Tabs(
 
 app = indah.Column(
     children=[
-        indah.Text("indah: layout containers"),
+        indah.Text("indah: layout containers", variant="title"),
         inputs_and_output,
         sections,
         indah.Grid(

@@ -100,6 +100,17 @@ Body text is 15px. Small text steps down through 0.95, 0.85, 0.8 and 0.75rem, an
 component should invent a size outside that ladder. Spacing is in `rem`, on a quarter-rem
 grid (0.25, 0.5, 0.75, 1, 1.5).
 
+Plain `Text` has six roles (ADR-0040), all on that ladder:
+
+| `variant` | Size, weight | Colour |
+|-----------|--------------|--------|
+| `body` (default) | 0.95rem, 400, line height 1.55 | `--text` |
+| `title` | 1.3rem, 600 | `--text` |
+| `label` | 0.85rem, 500 | `--muted` |
+| `caption` | 0.78rem, 400 | `--muted` |
+| `mono` | 0.88rem, 400, `--font-mono` | `--text` |
+| `readout` | 1.4rem, 600, tabular numbers | `--text` |
+
 ### Density
 
 Tables read four tokens: `--row-h`, `--cell-pad-y`, `--cell-pad-x` and `--table-font`.

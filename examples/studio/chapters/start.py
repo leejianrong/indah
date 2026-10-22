@@ -51,7 +51,7 @@ def inputs(ctx: indah.Context) -> indah.Component:
             indah.Checkbox(spicy, label="Make it spicy"),
             indah.Number(count, min=1, max=9, label="How many"),
             indah.Date(day, label="Day"),
-            indah.Text(lambda: summary.value, size="body"),
+            indah.Text(lambda: summary.value),
         ]
     )
 
@@ -64,7 +64,7 @@ def inputs_check(pw) -> None:
         page.get_by_text("Ada orders 2 medium pizza(s) with olives, for 2026-10-22.")
     ).to_be_visible()
     sentence = page.get_by_text("Ada orders 2 medium pizza(s)")
-    expect(sentence).to_have_css("font-size", "15.2px")  # size="body", not the large readout
+    expect(sentence).to_have_css("font-size", "15.2px")  # body text, not the large readout
     expect(sentence).to_have_css("font-weight", "400")
     page.get_by_label("Name").fill("Grace")
     page.get_by_label("Large").check()
@@ -113,7 +113,6 @@ def choices(ctx: indah.Context) -> indah.Component:
                 lambda: (
                     f"Level {level.value}, kinds {', '.join(kinds.value) or 'none'}, {mode.value}."
                 ),
-                size="body",
             ),
         ],
     )
@@ -171,7 +170,6 @@ def live_options(ctx: indah.Context) -> indah.Component:
             ),
             indah.Text(
                 lambda: f"Project {current.value}; tags {', '.join(tags.value) or 'none'}.",
-                size="body",
             ),
         ],
     )
@@ -219,8 +217,8 @@ def actions(ctx: indah.Context) -> indah.Component:
                     indah.Button("Reset", lambda: clicks.set(0), variant="ghost"),
                 ]
             ),
-            indah.Text(lambda: f"Clicked {clicks.value} time(s).", size="body"),
-            indah.Text(lambda: log.value, size="body"),
+            indah.Text(lambda: f"Clicked {clicks.value} time(s)."),
+            indah.Text(lambda: log.value),
         ]
     )
 
@@ -264,6 +262,31 @@ indah.launch(app)                               # or run it, in a script or a no
 """
 
 
+def text_roles(ctx: indah.Context) -> indah.Component:
+    return indah.Column(
+        gap="0.5rem",
+        children=[
+            indah.Text("Body: the default, for paragraphs, status lines and notes."),
+            indah.Text("Title: a heading for a block", variant="title"),
+            indah.Text("Label: the name of a field", variant="label"),
+            indah.Text("Caption: help text and fine print", variant="caption"),
+            indah.Text("mono: ids, paths, aligned numbers", variant="mono"),
+            indah.Text("1,284", variant="readout"),
+            indah.Text("Two lines,\nkept as written."),
+        ],
+    )
+
+
+def text_roles_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    body = page.get_by_text("Body: the default")
+    expect(body).to_have_css("font-size", "15.2px")
+    expect(page.get_by_text("1,284")).to_have_css("font-size", "22.4px")  # the readout, 1.4rem
+    expect(page.get_by_text("Title: a heading")).to_have_css("font-weight", "600")
+
+
 def first_app_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -282,6 +305,15 @@ CHAPTER = Chapter(
         "and only the parts of the page that read it update, with no rerun of your script."
     ),
     pages=[
+        Page(
+            slug="text-roles",
+            title="Text roles",
+            summary="Plain `Text` is body text. `variant=` picks a role: title, label, caption, mono, or the large readout for a figure.",
+            build=text_roles,
+            covers=("Text",),
+            docs="components.md",
+            check=text_roles_check,
+        ),
         Page(
             slug="first-app",
             title="Your first app",

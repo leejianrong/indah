@@ -32,6 +32,21 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   that does not use them is unchanged, and virtual scroll is as fast as before (additive,
   `protocol_version` stays 1).
 
+### Changed
+
+- **Plain `Text` is now body text** (ADR-0040, IND-166). It was a 1.4rem semi-bold readout, so every
+  label and status line looked like a title. The default is now 0.95rem regular text with line breaks
+  kept. `Text(source, variant=)` picks a role: `body` (default), `title`, `label`, `caption`, `mono`
+  and `readout`, the old large look. `size="body"` and `size="readout"` from 0.4.0 still work. A text
+  that is `markdown=True` is unchanged and takes no `variant`. The wire format only gains an optional
+  `variant` prop (absent means body), so `protocol_version` stays 1.
+
+### Upgrading
+
+- **Plain `Text` looks smaller.** If a `Text` shows a number or a figure (a counter, a metric, a KPI),
+  add `variant="readout"` to get the old look back. Search your code for `Text(` whose source is a
+  count or a short value. A `Text` used as a heading can use `variant="title"`.
+
 ## [0.5.0] - 2026-10-22
 
 The building blocks of an app screen. This release adds a frame (`AppShell`), the controls and layout

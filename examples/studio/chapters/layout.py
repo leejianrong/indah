@@ -13,13 +13,16 @@ from ..core import AppEntry, Chapter, Page
 
 
 def containers(ctx: indah.Context) -> indah.Component:
-    def stat(title: str, value: str) -> indah.Component:
-        return indah.Card(title=title, children=[indah.Text(value)])
+    def stat(title: str, value: str, *, figure: bool = False) -> indah.Component:
+        text = indah.Text(value, variant="readout") if figure else indah.Text(value)
+        return indah.Card(title=title, children=[text])
 
     return indah.Column(
         children=[
             indah.Text("A Row puts cards side by side:"),
-            indah.Row(children=[stat("Requests", "1.2k"), stat("Errors", "0")]),
+            indah.Row(
+                children=[stat("Requests", "1.2k", figure=True), stat("Errors", "0", figure=True)]
+            ),
             indah.Text("A Grid wraps them into columns:"),
             indah.Grid(
                 columns=3,
@@ -49,16 +52,18 @@ def spacing(ctx: indah.Context) -> indah.Component:
     return indah.Column(
         gap="1.25rem",
         children=[
-            indah.Text('Title on the left, actions on the right, with `justify="between"`:'),
+            indah.Text(
+                'Title on the left, actions on the right, with `justify="between"`:', markdown=True
+            ),
             indah.Row(
                 align="center",
                 justify="between",
-                children=[indah.Text("Requests", size="body"), export()],
+                children=[indah.Text("Requests"), export()],
             ),
-            indah.Text("The same with a Spacer that takes the free width:", size="body"),
+            indah.Text("The same with a Spacer that takes the free width:"),
             indah.Row(
                 align="center",
-                children=[indah.Text("Errors", size="body"), indah.Spacer(), export()],
+                children=[indah.Text("Errors"), indah.Spacer(), export()],
             ),
             indah.Divider(),
             indah.Row(
@@ -66,9 +71,9 @@ def spacing(ctx: indah.Context) -> indah.Component:
                 justify="start",
                 gap="0.75rem",
                 children=[
-                    indah.Text("Left", size="body"),
+                    indah.Text("Left"),
                     indah.Divider(vertical=True),
-                    indah.Text("Right", size="body"),
+                    indah.Text("Right"),
                 ],
             ),
             indah.Row(
@@ -127,20 +132,17 @@ def appshell(ctx: indah.Context) -> indah.Component:
 
     rail = indah.Column(
         gap="0.5rem",
-        children=[indah.Text("indah app", size="body"), *[nav(n) for n in sections]],
+        children=[indah.Text("indah app", variant="title"), *[nav(n) for n in sections]],
     )
     top = indah.Row(
         align="center",
         justify="between",
         children=[
-            indah.Text(lambda: f"Section: {section.value}", size="body"),
+            indah.Text(lambda: f"Section: {section.value}"),
             indah.Button("Refresh", lambda: None, variant="ghost"),
         ],
     )
-    filler = [
-        indah.Text(f"Row {i}: the rail stays while this column scrolls.", size="body")
-        for i in range(40)
-    ]
+    filler = [indah.Text(f"Row {i}: the rail stays while this column scrolls.") for i in range(40)]
     return indah.AppShell(
         rail=rail,
         top=top,
@@ -386,7 +388,6 @@ def _themed_ui() -> Any:
                     indah.Text(
                         "Pink primary, 2px radius, Georgia, compact table, 720px frame. "
                         "Toggle dark mode at the top right: the dark palette is overridden too.",
-                        size="body",
                     ),
                     indah.Row(
                         align="center",

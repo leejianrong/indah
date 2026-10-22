@@ -826,11 +826,42 @@ def test_table_density_may_be_a_signal():
 
 
 @pytest.mark.unit
-def test_text_size_body_is_a_static_prop_and_readout_is_the_default():
+def test_plain_text_is_body_text_and_sends_no_variant():
+    """The default is body text (ADR-0040): nothing extra on the wire."""
+    assert Text("x").to_json()["props"].get("variant") is None
     assert "size" not in Text("x").to_json()["props"]
-    assert Text("x", size="body").to_json()["props"]["size"] == "body"
+    assert Text("x", variant="body").to_json()["props"].get("variant") is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("variant", ["title", "label", "caption", "mono", "readout"])
+def test_text_variant_is_a_static_prop(variant):
+    assert Text("x", variant=variant).to_json()["props"]["variant"] == variant
+
+
+@pytest.mark.unit
+def test_text_size_is_an_alias_for_variant():
+    assert Text("x", size="body").to_json()["props"].get("variant") is None
+    assert Text("x", size="readout").to_json()["props"]["variant"] == "readout"
+    assert Text("x", size="readout", variant="readout").to_json()["props"]["variant"] == "readout"
+    assert "size" not in Text("x", size="body").to_json()["props"]
+    with pytest.raises(ValueError):
+        Text("x", size="body", variant="title")
+
+
+@pytest.mark.unit
+def test_text_rejects_an_unknown_variant_or_size():
+    with pytest.raises(ValueError):
+        Text("x", variant="huge")
     with pytest.raises(ValueError):
         Text("x", size="huge")
+
+
+@pytest.mark.unit
+def test_markdown_text_takes_no_variant():
+    with pytest.raises(ValueError):
+        Text("# hi", markdown=True, variant="title")
+    assert "variant" not in Text("# hi", markdown=True).to_json()["props"]
 
 
 @pytest.mark.unit

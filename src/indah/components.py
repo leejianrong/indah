@@ -190,26 +190,48 @@ class Text(Component):
     builder, so raw HTML stays literal and nothing can inject script (see
     ``markdown.py``). The node then carries ``blocks`` instead of ``text``.
 
-    Plain text is a *readout*: large and semi-bold, made for a counter or a figure.
-    ``size="body"`` renders it as ordinary body text instead (normal size and weight,
-    newlines kept), for a status line or a short note. Plain text never interprets
-    markup; use ``markdown=True`` for backticks, emphasis or links.
+    Plain text is body text (ADR-0040). ``variant`` picks a role from a small scale:
+    ``"body"`` (the default), ``"title"``, ``"label"``, ``"caption"``, ``"mono"`` and
+    ``"readout"``, the large semi-bold look for a counter or a figure. Newlines are kept.
+    Plain text never interprets markup; use ``markdown=True`` for backticks, emphasis or
+    links (a Markdown text takes no ``variant``).
+
+    ``size="body"`` and ``size="readout"`` are the 0.4.0 spelling and still work: they mean
+    ``variant="body"`` and ``variant="readout"``.
     """
 
     type = "text"
 
-    def __init__(self, source: Source, *, markdown: bool = False, size: str = "readout") -> None:
+    VARIANTS = ("body", "title", "label", "caption", "mono", "readout")
+
+    def __init__(
+        self,
+        source: Source,
+        *,
+        markdown: bool = False,
+        variant: str | None = None,
+        size: str | None = None,
+    ) -> None:
         super().__init__()
-        if size not in ("readout", "body"):
-            raise ValueError(f"size must be 'readout' or 'body', not {size!r}")
+        if size is not None:
+            if size not in ("readout", "body"):
+                raise ValueError(f"size must be 'readout' or 'body', not {size!r}")
+            if variant is not None and variant != size:
+                raise ValueError(f"size={size!r} and variant={variant!r} disagree; use variant")
+            variant = size
+        variant = "body" if variant is None else variant
+        if variant not in self.VARIANTS:
+            raise ValueError(f"variant must be one of {', '.join(self.VARIANTS)}, not {variant!r}")
+        if markdown and variant != "body":
+            raise ValueError("markdown text takes no variant; it has its own headings")
         self._source = source
         self._markdown = markdown
-        self._size = size
+        self._variant = variant
 
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {"markdown": True} if self._markdown else {}
-        if self._size == "body":
-            props["size"] = "body"
+        if self._variant != "body":
+            props["variant"] = self._variant
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
