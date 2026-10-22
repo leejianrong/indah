@@ -124,14 +124,37 @@ def error_message(message: str) -> dict[str, Any]:
 TOAST_KINDS = ("info", "success", "warn", "error")
 
 
-def toast_message(message: str, kind: str = "info", ttl: float = 4.0) -> dict[str, Any]:
+# The reserved event target for a toast's action button (IND-160). Component ids are ``n<index>``,
+# so it cannot collide with one; the event is ``action`` with the payload ``{"id": <action id>}``.
+TOAST_TARGET = "__toast__"
+_MAX_ACTION_LABEL = 40
+
+
+def toast_message(
+    message: str, kind: str = "info", ttl: float = 4.0, action: dict[str, str] | None = None
+) -> dict[str, Any]:
     """Transient feedback for one session's UI. ``ttl`` is seconds; 0 keeps it until
-    dismissed."""
+    dismissed. ``action`` (``{"id", "label"}``) adds a button that posts the event
+    ``action`` to ``TOAST_TARGET``; it is left off the wire when not given."""
     if kind not in TOAST_KINDS:
         raise ValueError(f"toast kind must be one of {TOAST_KINDS}, got {kind!r}")
     if ttl < 0:
         raise ValueError("toast ttl must be >= 0")
-    return {"v": PROTOCOL_VERSION, "type": "toast", "message": message, "kind": kind, "ttl": ttl}
+    message_: dict[str, Any] = {
+        "v": PROTOCOL_VERSION,
+        "type": "toast",
+        "message": message,
+        "kind": kind,
+        "ttl": ttl,
+    }
+    if action is not None:
+        aid, label = action.get("id"), action.get("label")
+        if not isinstance(aid, str) or not aid:
+            raise ValueError("a toast action needs an id")
+        if not isinstance(label, str) or not label or len(label) > _MAX_ACTION_LABEL:
+            raise ValueError(f"a toast action label must be 1 to {_MAX_ACTION_LABEL} characters")
+        message_["action"] = {"id": aid, "label": label}
+    return message_
 
 
 def navigate_message(path: str, replace: bool = False) -> dict[str, Any]:

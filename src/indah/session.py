@@ -37,7 +37,7 @@ from typing import Any
 from .authz import Forbidden
 from .components import Chart, Component, Download, Heatmap, StreamText, walk
 from .context import Context
-from .protocol import error_message, patch_message, toast_message
+from .protocol import TOAST_TARGET, error_message, patch_message, toast_message
 from .reactive import Computation, batch, effect
 from .transport import Hub
 
@@ -234,6 +234,8 @@ class Session:
         returns an empty result so the UI stays live.
         """
         component = self._by_id.get(component_id)
+        if component is None and component_id == TOAST_TARGET and self.ctx is not None:
+            component = self.ctx._toast_actions  # a toast's action button (IND-160)  # noqa: SLF001
         if component is None:
             return None
 

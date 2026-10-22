@@ -50,6 +50,38 @@ T = TypeVar("T")
 _MISSING: Any = object()
 
 
+class _ToastActions:
+    """The handlers behind toast action buttons (IND-160), one table per session.
+
+    The shell posts ``action`` with an id to ``TOAST_TARGET``; the handler is removed as it runs,
+    so it runs once. The table is bounded: a toast that expires unclicked leaves its handler here
+    until newer ones push it out."""
+
+    MAX_PENDING = 32
+
+    def __init__(self) -> None:
+        self._fns: dict[str, Callable[[], Any]] = {}
+        self._seq = 0
+
+    def add(self, fn: Callable[[], Any]) -> str:
+        self._seq += 1
+        aid = f"t{self._seq}"
+        self._fns[aid] = fn
+        while len(self._fns) > self.MAX_PENDING:
+            del self._fns[next(iter(self._fns))]
+        return aid
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event != "action":
+            return False
+        aid = payload.get("id")
+        fn = self._fns.pop(aid, None) if isinstance(aid, str) else None
+        if fn is None:
+            return True  # already run, expired or never ours: nothing to do, nothing wrong
+        result = fn()
+        return result if asyncio.iscoroutine(result) else True
+
+
 @dataclass(frozen=True)
 class ConnectionInfo:
     """What the request that created a session looked like (a frozen copy)."""
@@ -97,6 +129,7 @@ class Context:
         self._closed = False
         self._spawned: set[asyncio.Task[Any]] = set()  # ctx.spawn / ctx.every, cancelled on close
         self._hub: Hub | None = None
+        self._toast_actions = _ToastActions()
         try:
             start = normalize_path(self.conn.app_path)
         except ValueError:
@@ -113,15 +146,40 @@ class Context:
     def _bind_hub(self, hub: Hub) -> None:
         self._hub = hub
 
-    def toast(self, message: str, *, kind: str = "info", ttl: float = 4.0) -> None:
+    def toast(
+        self,
+        message: str,
+        *,
+        kind: str = "info",
+        ttl: float = 4.0,
+        action: tuple[str, Callable[[], Any]] | None = None,
+    ) -> None:
         """Show a transient message in *this session's* tab(s) only: ``kind`` is
         ``info``/``success``/``warn``/``error``, ``ttl`` seconds (0 = until dismissed).
 
+        ``action=("Undo", fn)`` adds a button. Clicking it runs ``fn`` once (a plain function
+        or ``async def``, as a handler: ``guard()`` is checked when it is clicked) and dismisses
+        the toast. Give an undo a longer ``ttl`` than the default. After a dropped stream the
+        toast may be shown again; its button then does nothing if it already ran.
+
         Call it from the event loop (a handler), like a signal write. Never put a
         secret in one. A no-op before the session has a connection hub."""
-        message_ = toast_message(message, kind, ttl)  # validate even when unbound
-        if self._hub is not None:
-            self._hub.publish(message_)
+        wire_action: dict[str, str] | None = None
+        if action is not None:
+            if not isinstance(action, tuple) or len(action) != 2:
+                raise TypeError("toast action must be a (label, callable) pair")
+            label, fn = action
+            if not callable(fn):
+                raise TypeError("toast action must be a (label, callable) pair")
+            toast_message(message, kind, ttl, {"id": "x", "label": label})  # validate first
+            wire_action = {"id": "", "label": label}
+        else:
+            toast_message(message, kind, ttl)  # validate even when unbound
+        if self._hub is None:
+            return
+        if wire_action is not None:
+            wire_action["id"] = self._toast_actions.add(fn)
+        self._hub.publish(toast_message(message, kind, ttl, wire_action))
 
     @property
     def workspace(self) -> str | None:

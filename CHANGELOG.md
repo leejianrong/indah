@@ -13,6 +13,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- `ctx.toast(message, action=("Undo", fn), ttl=)`: a toast with a button. Clicking it runs `fn` once
+  (a plain function or `async def`, checked by `guard()` at the click) and dismisses the toast. It goes to
+  this tab only; a second click or a stale toast does nothing. The pending handlers are held per session
+  and bounded. The toast message gains an optional `action` and the click posts the reserved target
+  `__toast__` (additive, `protocol_version` stays 1; a toast without `action` is unchanged).
+
 - `ctx.every(seconds, fn, immediately=False)` and `ctx.spawn(coro)`: background work for the life of a
   session. `every` calls a plain or `async` function on a timer; both are cancelled when the session
   ends (discard, eviction, idle reaping), and an exception is logged once and does not stop the loop.

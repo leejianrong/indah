@@ -91,7 +91,7 @@ The UI is a tree of nodes. A node is:
 | `patch` | `{"v","type":"patch","changes":[<change>,...]}` | Granular updates to existing nodes |
 | `error` | `{"v","type":"error","message":"..."}` | A handler failed; the shell shows a toast |
 | `navigate` | `{"v","type":"navigate","path","replace"}` | `ctx.navigate(...)`: the shell pushes (or, with `replace`, rewrites) its history entry to the in-app `path`. An older shell ignores it |
-| `toast` | `{"v","type":"toast","message","kind","ttl"}` | Feedback from `ctx.toast(...)`: `kind` is `info`/`success`/`warn`/`error`, `ttl` seconds (`0` = until dismissed). Sent to the calling session only; an older shell ignores it |
+| `toast` | `{"v","type":"toast","message","kind","ttl"}`, plus `"action":{"id","label"}` when given | Feedback from `ctx.toast(...)`: `kind` is `info`/`success`/`warn`/`error`, `ttl` seconds (`0` = until dismissed). Sent to the calling session only; an older shell ignores it. With `action`, the shell shows a button that posts `{"component":"__toast__","event":"action","payload":{"id":<action id>}}` to `POST /api/event` and dismisses the toast. The server runs the handler once (as a normal event: `guard()`, audit and async handlers apply) and answers `200` for an id it no longer holds. An older shell shows the message without the button (additive; `protocol_version` stays 1) |
 | `ping` | `{"v","type":"ping"}` | Heartbeat, so idle-timeout proxies keep the stream open |
 | `signed_out` | `{"v","type":"signed_out"}` | The caller's login ended (`ctx.sign_out()` or `Principal.expires_at`); the server closes the stream after it, and the shell stops reconnecting and shows a signed-out page (secure apps, ADR-0033) |
 
