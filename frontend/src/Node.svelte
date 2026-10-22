@@ -3,6 +3,7 @@
   import { apiUrl, postEvent, postUpload, appPath, hrefFor, pushPath } from "./api.js";
   import Self from "./Node.svelte";
   import Custom from "./Custom.svelte";
+  import Bridge from "./Bridge.svelte";
   import Markdown from "./Markdown.svelte";
   import Chart from "./Chart.svelte";
   import Heatmap from "./Heatmap.svelte";
@@ -662,6 +663,8 @@
       </table>
     </div>
   </div>
+{:else if props._module}
+  <Bridge module={props._module} {props} nodeId={node.id} />
 {:else if props._spec}
   <Custom spec={props._spec} {props} nodeId={node.id} />
 {:else}

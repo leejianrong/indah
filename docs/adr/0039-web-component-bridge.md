@@ -83,11 +83,11 @@ The node's `type` is the registered type, as with a spec component. A new reserv
 ```json
 {"id": "n7", "type": "tier-rail", "props": {
   "_module": {"url": "api/components/tier-rail.js?v=3f9a1c", "tag": "indah-x-tier-rail",
-              "events": ["pick", "change"], "fallback": "steps"},
+              "events": ["pick", "change"], "twoWay": ["value"], "fallback": "steps"},
   "steps": [...], "value": 2}}
 ```
 
-`url` is relative (works under any base path) and carries a content hash, so it can be cached
+`twoWay` lists the props the viewer edits, so the shell can apply the focus rule below. `url` is relative (works under any base path) and carries a content hash, so it can be cached
 forever and a new version is fetched at once. The shell routes a node to the bridge renderer when
 `_module` is present, to the spec renderer when `_spec` is, and otherwise to a built-in.
 
@@ -189,3 +189,13 @@ Then, tests first:
   CHANGELOG entry; `docs/protocol.md` gains `_module` and the route.
 - Out of scope for IND-150: a bridge component inside a `List` row or table cell, hot reload of a
   module, and iframe isolation.
+
+## Spike outcome (IND-150, 2026-10-22)
+
+Both open questions passed in `tests/e2e/test_bridge.py`, under `csp="strict"` with the violation
+listener on: a constructable stylesheet and a `<style nonce=el.cspNonce>` both style a shadow root with no
+violation (a bare `<style>` is refused, which the same file proves), and the module URL resolves under a
+`/ui` mount, loads through the window-buffering proxy and is not fetched a second time on a second page
+load. One detail the spike found: `cspNonce` is set after the element is constructed, so a module reads it
+in `connectedCallback`, not in the constructor.
+

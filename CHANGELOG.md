@@ -13,6 +13,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- Module components (ADR-0039): `register_component(type, module=, events=, two_way=, fallback=)` ships an
+  ES module (a file or bytes, read once; never a URL; up to 1 MB) whose default export is an `HTMLElement`.
+  The shell loads it from the app itself (`GET api/components/<type>.js`, content-hashed and cached for good),
+  defines it as `indah-x-<type>`, sets the props as properties, forwards the declared CustomEvents to
+  `custom(..., on_<event>=handler)` and writes a two-way prop from `detail.value`. A module that fails
+  shows its `fallback` text and the page keeps working. It works under `csp="strict"`, `secure=True`,
+  `guard()` and the audit hook. A new reserved prop and route, so `protocol_version` stays 1; spec
+  components and every default are unchanged.
 - Reactive options: `Select`, `Radio`, `MultiSelect`, `Chips` and `Segmented` take `options=` as a
   list, or a `Signal`, `Computed` or callable returning one, and follow it with no reload (a project
   created after the page loads appears in the switcher). A selection whose value is still offered is kept;

@@ -95,7 +95,7 @@ from .csp import (
     new_nonce,
     render_custom,
 )
-from .custom import custom, register_component
+from .custom import custom, register_component, registered
 from .guard import OriginGuard, normalize_origins
 from .hardening import (
     Limits,
@@ -699,6 +699,7 @@ def create_app(
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
             Route("/api/editor.js", _editor_js, methods=["GET"]),
+            Route("/api/components/{name}.js", _component_js, methods=["GET"]),
             *([Route("/api/csp-report", _csp_report, methods=["POST"])] if csp == "strict" else []),
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
             *([Route("/api/brand/logo", _logo, methods=["GET"])] if logo is not None else []),
@@ -877,6 +878,27 @@ async def _editor_js(request: Request) -> Response:
     if request.headers.get("if-none-match") == _EDITOR_ETAG:
         return Response(status_code=304, headers=headers)
     return Response(data, media_type="text/javascript", headers=headers)
+
+
+_COMPONENT_NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
+
+
+async def _component_js(request: Request) -> Response:
+    """The ES module of a registered module component (ADR-0039), from memory. The name must
+    match a strict pattern and be in the registry, so nothing the client sends becomes a path.
+    A request that carries the module's content hash (``?v=``, as the snapshot's URL does) is
+    cached for good; any other is revalidated."""
+    name = request.path_params["name"]
+    reg = registered(name) if _COMPONENT_NAME.match(name) else None
+    if reg is None or reg.module is None:
+        return Response(status_code=404)
+    etag = f'"{reg.module_hash}"'
+    pinned = request.query_params.get("v") == reg.module_hash
+    cache = "public, max-age=31536000, immutable" if pinned else "no-cache"
+    headers = {"ETag": etag, "Cache-Control": cache}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(reg.module, media_type="text/javascript", headers=headers)
 
 
 _MAX_LOGO_BYTES = 512 * 1024
