@@ -302,6 +302,10 @@ and the cursor in a row being typed in. `ROW_SPEC` is a render spec (see
 [Custom components](custom-components.md)); each `on={...}` event reaches `on_item` with the
 row's key. A keyed list takes a signal or a callable, not a `Stream`.
 
+In a row spec, `"text": "title"` shows the item's `title` field. For fixed text, such as a
+button label, use `"literal"`: `{"tag": "button", "literal": "Remove", "on": {"click":
+{"event": "remove"}}}` needs no field on the items.
+
 ## Theme and density
 
 `indah.Theme(light={...}, dark={...}, radius=, font=)` overrides the design tokens, and

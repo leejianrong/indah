@@ -138,3 +138,16 @@ def test_a_nested_on_round_trips_to_its_signal():
     comp = custom("ranged", value=level)
     assert comp.handle("input", {"value": 7}) is True
     assert level.value == 7
+
+
+@pytest.mark.unit
+def test_literal_text_travels_on_the_wire_and_excludes_text():
+    reg = register_component("btn", render={"tag": "button", "literal": "Remove"})
+    assert reg.render == {"tag": "button", "literal": "Remove"}
+    with pytest.raises(ValueError, match="literal"):
+        register_component("both", render={"tag": "button", "text": "x", "literal": "y"})
+    with pytest.raises(ValueError, match="literal"):  # also when nested
+        register_component(
+            "deep",
+            render={"tag": "div", "children": [{"tag": "strong", "text": "x", "literal": "y"}]},
+        )

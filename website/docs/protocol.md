@@ -444,7 +444,8 @@ Render spec fields:
 | `tag` | The HTML element to create (from a safe allowlist; no `script`/`iframe`/`style`/…) |
 | `attrs` | Static attributes `{name: value}` |
 | `class` | A static class string |
-| `text` | A node prop name whose value becomes the element's text content |
+| `text` | A node prop name (in a `list`, an item field name) whose value becomes the element's text content |
+| `literal` | Fixed text content, shown as written (use it for a button label such as `"Remove"`; not together with `text`) |
 | `bind` | `{attribute: prop}` — the element attribute follows the node prop (patched reactively) |
 | `on` | `{domEvent: {event, prop}}` — a DOM event posts the indah `event` with `{value}`; `prop` names the bound signal that value is written into, giving the round-trip |
 | `children` | Nested render specs (recursive), for a small composite. A nested spec's `on` round-trips like the top-level one |
