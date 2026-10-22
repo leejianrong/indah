@@ -86,6 +86,46 @@ def navigate_check(pw) -> None:
     expect(page.get_by_text("ctx.path is '/links'")).to_be_visible()
 
 
+def navitem(ctx: indah.Context) -> indah.Component:
+    pending = indah.Signal(2)
+    return indah.Column(
+        children=[
+            indah.Column(
+                children=[
+                    indah.NavItem(ctx, "Overview", to="/navitem", icon="\u2302"),
+                    indah.NavItem(ctx, "Pending", to="/links", badge=pending, icon="\u2691"),
+                    indah.NavItem(ctx, "Review", to="/navigate", badge=lambda: 0, match="prefix"),
+                ]
+            ),
+            indah.Row(
+                children=[
+                    indah.Button("Add one", lambda: pending.set((pending.value or 0) + 1)),
+                    indah.Button("Clear", lambda: pending.set(0), variant="tonal"),
+                ]
+            ),
+            indah.Text(
+                "The badge follows a signal and disappears at zero or empty. The active item "
+                "carries `aria-current=page`, like a `Link`.",
+                markdown=True,
+            ),
+        ]
+    )
+
+
+def navitem_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    pending = page.locator("a.navitem", has_text="Pending")
+    expect(pending).to_contain_text("2")
+    page.get_by_role("button", name="Add one").click()
+    expect(pending).to_contain_text("3")
+    page.get_by_role("button", name="Clear").click()
+    expect(pending).not_to_contain_text("3")
+    expect(page.locator(".navitem-badge")).to_have_count(0)  # hidden at zero
+    expect(page.locator("a.navitem", has_text="Overview")).to_have_attribute("aria-current", "page")
+
+
 def _users_ui() -> Any:
     def build(ctx: indah.Context) -> indah.Session:
         name = indah.computed(lambda: ctx.params.value.get("name", ""))
@@ -184,6 +224,15 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(29,),
             check=links_check,
+        ),
+        Page(
+            slug="navitem",
+            title="NavItem with a count",
+            summary="A `Link` for a rail: an icon, and a live count that hides at zero.",
+            build=navitem,
+            covers=("NavItem",),
+            docs="dashboards.md",
+            check=navitem_check,
         ),
         Page(
             slug="navigate",

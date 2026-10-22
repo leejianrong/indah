@@ -205,3 +205,45 @@ def test_hidden_pages_still_run_their_reactive_code_with_empty_params():
         ctx.params.value["entry"]  # the trap the rule exists for
     ctx.navigate("/e/7")
     assert page.reactive_props()["text"]() == "entry 7"
+
+
+@pytest.mark.unit
+def test_navitem_is_a_link_with_a_live_count_badge_hidden_at_zero():
+    from indah import Signal
+    from indah.components import NavItem
+
+    ctx = Context("s")
+    count = Signal(0)
+    item = NavItem(ctx, "Pending", to="/pending", badge=count, icon="!", match="prefix")
+    assert item.type == "navitem"
+    assert item.static_props() == {"label": "Pending", "to": "/pending", "icon": "!"}
+    props = item.reactive_props()
+    assert props["badge"]() == ""  # zero hides the badge
+    count.set(3)
+    assert props["badge"]() == "3"
+    count.set(None)
+    assert props["badge"]() == ""
+    count.set("12")
+    assert props["badge"]() == "12"
+    count.set("0")
+    assert props["badge"]() == ""  # a zero shown as text is still empty
+    # Active state and navigation are the Link's.
+    assert props["active"]() is False
+    ctx.navigate("/pending/7")
+    assert props["active"]() is True
+    assert item.handle("navigate", {"path": "/pending"}) is True
+
+
+@pytest.mark.unit
+def test_navitem_without_a_badge_or_icon_sends_neither_and_accepts_a_callable():
+    from indah.components import NavItem
+
+    ctx = Context("s")
+    plain = NavItem(ctx, "Home", to="/")
+    assert plain.static_props() == {"label": "Home", "to": "/"}
+    assert "badge" not in plain.reactive_props()
+    n = [2]
+    item = NavItem(ctx, "Review", to="/review", badge=lambda: n[0])
+    assert item.reactive_props()["badge"]() == "2"
+    with pytest.raises(ValueError):
+        NavItem(ctx, "x", to="https://evil.example")
