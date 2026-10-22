@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import indah
 
@@ -36,6 +37,45 @@ indah.register_component(
         ],
     },
 )
+
+# A component backed by an ES module (ADR-0039), read once, at import.
+indah.register_component(
+    "tier-rail",
+    module=Path(__file__).resolve().parent.parent / "modules" / "tier-rail.js",
+    events=["pick"],
+    two_way={"value": "change"},
+    fallback="steps",
+)
+
+BRIDGE_SOURCE = """
+indah.register_component(
+    "tier-rail",
+    module="modules/tier-rail.js",  # a file or bytes, read once; never a URL
+    events=["pick"],  # CustomEvents forwarded to Python
+    two_way={"value": "change"},  # detail.value of "change" writes the `value` signal
+    fallback="steps",  # shown as text if the module cannot run
+)
+
+
+def build(ctx):
+    steps = indah.Signal(["Seed", "Sprout", "Bloom"])
+    tier = indah.Signal(0)
+    picked = indah.Signal("nothing yet")
+    return indah.Column(
+        children=[
+            indah.custom(
+                "tier-rail",
+                label="Tier",
+                steps=steps,
+                value=tier,
+                on_pick=lambda d: picked.set(d["label"]),
+            ),
+            indah.Text(lambda: f"Tier {tier.value}, last pick: {picked.value}"),
+            indah.Button("Next tier", lambda: tier.set((tier.value + 1) % len(steps.value))),
+            indah.Button("Add a tier", lambda: steps.set([*steps.value, f"Tier {len(steps.value)}"])),
+        ]
+    )
+"""
 
 COLOUR_SOURCE = """
 indah.register_component(
@@ -140,6 +180,45 @@ def card_check(pw) -> None:
     expect(card.locator("meter")).to_have_attribute("value", "25")
 
 
+def bridge_page(ctx: indah.Context) -> indah.Component:
+    steps = indah.Signal(["Seed", "Sprout", "Bloom"])
+    tier = indah.Signal(0)
+    picked = indah.Signal("nothing yet")
+    return indah.Column(
+        children=[
+            indah.custom(
+                "tier-rail",
+                label="Tier",
+                steps=steps,
+                value=tier,
+                on_pick=lambda d: picked.set(d["label"]),
+            ),
+            indah.Text(lambda: f"Tier {tier.value}, last pick: {picked.value}"),
+            indah.Button("Next tier", lambda: tier.set((tier.value + 1) % len(steps.value))),
+            indah.Button(
+                "Add a tier", lambda: steps.set([*steps.value, f"Tier {len(steps.value)}"])
+            ),
+        ]
+    )
+
+
+def bridge_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    rail = page.locator("indah-x-tier-rail")
+    expect(rail).to_be_visible()
+    seed = rail.get_by_role("button", name="Seed")  # the shadow root pierces by role
+    expect(seed).to_have_attribute("aria-pressed", "true")
+    expect(page.get_by_text("Tier 0, last pick: nothing yet")).to_be_visible()
+    rail.get_by_role("button", name="Bloom").click()  # CustomEvent -> signal and handler
+    expect(page.get_by_text("Tier 2, last pick: Bloom")).to_be_visible()
+    page.get_by_role("button", name="Next tier").click()  # signal -> property
+    expect(rail.get_by_role("button", name="Seed")).to_have_attribute("aria-pressed", "true")
+    page.get_by_role("button", name="Add a tier").click()
+    expect(rail.get_by_role("button", name="Tier 3")).to_be_visible()
+
+
 CLOSED: list[str] = []  # session ids closed since the Studio started (process-wide)
 
 
@@ -199,6 +278,21 @@ CHAPTER = Chapter(
             adr=(12,),
             check=card_check,
             source=CARD_SOURCE,
+        ),
+        Page(
+            slug="bridge",
+            title="A module component",
+            summary=(
+                "A component that ships its own ES module: props arrive as properties, "
+                "CustomEvents come back as handlers and two-way values. The module is served by "
+                "the app itself (`modules/tier-rail.js`), themed with the shell's variables."
+            ),
+            build=bridge_page,
+            covers=("register_component", "custom"),
+            docs="custom-components.md",
+            adr=(39,),
+            check=bridge_check,
+            source=BRIDGE_SOURCE,
         ),
         Page(
             slug="context",

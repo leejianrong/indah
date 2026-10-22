@@ -24,6 +24,8 @@ HTTP POSTs. Both ride one port so Colab's and Runpod's proxies pass them
   client); see [File upload and download](#file-upload-and-download).
 - `GET /api/editor.js` — the code editor module (ADR-0032), an ES module the shell
   `import()`s on the first `codeeditor` render; an asset route, not a protocol message.
+- `GET /api/components/{type}.js` — the ES module of a module component (ADR-0039), served from
+  memory under a strict name pattern; see [Module components](#module-components-_module).
 
 Every message on the SSE stream is a JSON object with a `v` field (the protocol
 version) and a `type`. The upload and file routes carry bytes, not JSON messages,
@@ -465,6 +467,36 @@ The spec cannot express loops or conditionals by design; a component that needs
 those is the signal to reach for the deferred hand-written-frontend escape hatch
 (ADR-0005/0008), not a larger spec language.
 
+## Module components (`_module`)
+
+A component registered with `module=` instead of `render=` (ADR-0039) carries a reserved static
+prop, `_module`, in the `init` snapshot (like `_spec`, once, never in a patch). It tells the shell
+which ES module to load and how to wire the element it defines:
+
+```json
+{"id": "n7", "type": "tier-rail", "props": {
+  "_module": {"url": "api/components/tier-rail.js?v=3f9a1c2b4d5e6f70", "tag": "indah-x-tier-rail",
+              "events": ["pick", "change"], "twoWay": ["value"], "fallback": "steps"},
+  "steps": ["Seed", "Sprout", "Bloom"], "value": 2}}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `url` | The module, relative to the app root (so it works under any mount prefix), with a content hash in `?v=` so it is cached for good and a new version is fetched at once |
+| `tag` | The custom-element name the shell defines, `indah-x-<type>`; the module never names itself |
+| `events` | CustomEvent names the shell forwards, each as `POST api/event` with `{"detail": <JSON>}`; others stay in the browser |
+| `twoWay` | Props whose value the viewer edits: the shell does not set them while focus is inside the element and applies the latest value on blur (ADR-0013) |
+| `fallback` | A prop shown as plain text if the module cannot load or run |
+
+The module's default export is an `HTMLElement` class. The shell sets every other prop as a
+property before the element is attached and again on each patch (coalesced to one pass per
+frame), and sets `el.cspNonce` to the page's nonce. The route, `GET /api/components/{type}.js`,
+answers only for a registered module and a name matching `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`
+(anything else is `404`), with an `ETag`, `Cache-Control: public, max-age=31536000, immutable`
+when `?v=` matches the module's hash and `no-cache` otherwise. Nothing a client sends becomes a
+file path. A module is code that runs with the app's origin: register only your own files. An
+older shell ignores `_module`, so this is additive and `protocol_version` stays 1.
+
 ## Versioning
 
 `protocol_version` is bumped whenever the wire format changes in a way an older
@@ -472,4 +504,5 @@ shell could not parse. The shell rejects a message whose `v` does not match the
 version it was built against, showing "protocol mismatch, reload" rather than
 silently misrendering. History: `0 → 1` added the `append` op and the `error`
 message (Slice V3, ADR-0011); the `_spec` custom-component field was added within
-version 1 (Slice V4, ADR-0012) as an additive, backward-compatible extension.
+version 1 (Slice V4, ADR-0012) as an additive, backward-compatible extension, and so was the
+`_module` field (ADR-0039).
