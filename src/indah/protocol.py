@@ -64,6 +64,7 @@ BUILTIN_TYPES = frozenset(
         "jsontree",
         "diff",
         "link",
+        "navitem",
         "splitpane",
         "masterdetail",
         "shortcuts",

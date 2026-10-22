@@ -894,6 +894,20 @@
         padding: 0.1rem 0.5rem;
         border-radius: var(--radius-pill);
       }
+      a.navitem {
+        display: flex; align-items: center; gap: 0.6rem;
+        padding: 0.45rem 0.7rem; border-radius: var(--radius-control, var(--radius));
+        color: var(--text); text-decoration: none; font-weight: 500;
+      }
+      a.navitem:hover { background: var(--surface-2); }
+      a.navitem.active { background: var(--primary-container); color: var(--on-primary-container); }
+      a.navitem:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+      .navitem-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .navitem-badge {
+        min-width: 1.4rem; padding: 0.05rem 0.45rem; text-align: center; font-size: 0.75rem;
+        font-weight: 600; border-radius: var(--radius-pill);
+        background: var(--primary); color: var(--on-primary);
+      }
       .confirm-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
 
       .signed-out {

@@ -49,6 +49,7 @@ from .components import (
     MasterDetail,
     Modal,
     MultiSelect,
+    NavItem,
     Number,
     Plot,
     Progress,
@@ -174,6 +175,7 @@ __all__ = [
     # data-driven list (ADR-0016)
     "JsonTree",
     "Link",
+    "NavItem",
     "List",
     "Modal",
     "Chat",

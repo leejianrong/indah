@@ -2699,6 +2699,50 @@ class Link(Component):
         return False
 
 
+class NavItem(Link):
+    """A ``Link`` for a sidebar or rail, with an optional ``icon`` and a live count ``badge``.
+
+    ``badge`` may be a value, a signal or a callable. It shows as a small count at the end of
+    the item and disappears when it is ``None``, empty or zero, so "Pending 3" becomes
+    "Pending" the moment the queue is empty. ``icon`` is a short glyph (an emoji or a symbol),
+    not an image. Active state, ``match`` and navigation are the Link's."""
+
+    type = "navitem"
+
+    def __init__(
+        self,
+        ctx: Context,
+        label: str,
+        *,
+        to: str | Callable[[], str],
+        badge: Source | None = None,
+        icon: str | None = None,
+        match: str = "exact",
+    ) -> None:
+        super().__init__(ctx, label, to=to, match=match)
+        self._badge = badge
+        self._icon = icon
+
+    def static_props(self) -> dict[str, Any]:
+        props = super().static_props()
+        if self._icon:
+            props["icon"] = self._icon
+        return props
+
+    def _badge_text(self) -> str:
+        value = _read(self._badge)
+        if value is None or value is False:
+            return ""
+        text = str(value).strip()
+        return "" if text in ("", "0") else text
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props = super().reactive_props()
+        if self._badge is not None:
+            props["badge"] = self._badge_text
+        return props
+
+
 MAX_JSON_BYTES = 8 * 1024 * 1024
 _MAX_JSON_DEPTH = 64
 

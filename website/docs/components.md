@@ -55,6 +55,7 @@ set shipped so far.
 | `SplitPane` | two panels with a draggable divider |
 | `MasterDetail` | a list beside its detail, a drawer on a narrow screen |
 | `Router` / `Link` | pages chosen by the URL, and links between them |
+| `NavItem` | a `Link` for a rail with an `icon=` and a live count `badge=` that hides at zero |
 | `Modal` / `Drawer` | a dialog and a side panel, opened from a signal |
 
 ### Charts and data

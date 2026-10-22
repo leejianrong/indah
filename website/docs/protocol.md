@@ -265,6 +265,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `diff` | display | `diff:{rows,stats,same,truncated,approximate}`, `mode` (`split`/`unified`), `labels` | — (the layout toggle is client-side) |
 | `router` | container | `routes:[pattern]`, `notFound`, `active` (index of the shown child, -1 for none) | `navigate` `{path}` (Back/Forward) |
 | `link` | input | `label`, `to` (an in-app path), `active` (the page is showing) | `navigate` `{path}` |
+| `navitem` | input | `label`, `to` (an in-app path), `active`, optional `icon` (a short glyph) and `badge` (a count as text; absent or empty means hidden) | `navigate` `{path}` |
 | `splitpane` | container | `direction`, `initial`, `min`, `key`, `height` (exactly two children) | — (resize is client-side) |
 | `masterdetail` | container | `initial`, `min`, `key`, `title`, `open` (two children: master, detail) | `close` |
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |

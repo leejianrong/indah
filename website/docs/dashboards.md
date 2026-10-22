@@ -213,6 +213,9 @@ def build(ctx):
 `ctx.path` is the current page, `ctx.params` holds the route's values, and `ctx.navigate("/x")`
 goes there from code. A `Link` is a real `<a href>`, so open-in-new-tab works.
 
+In a rail, use `NavItem(ctx, "Pending", to="/pending", badge=count, icon="...")`: a `Link` with a live
+count at its end that disappears when the count is zero or empty.
+
 !!! warning "Hidden pages still run"
     Every page is built up front, so a page's reactive code runs even when its route is not
     showing, with no params. Read params with `ctx.params.value.get("project")`, never

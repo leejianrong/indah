@@ -229,6 +229,18 @@
     aria-current={props.active ? "page" : null}
     onclick={onLink}>{props.label}</a
   >
+{:else if node.type === "navitem"}
+  <a
+    class="navitem"
+    class:active={props.active}
+    href={hrefFor(props.to)}
+    aria-current={props.active ? "page" : null}
+    onclick={onLink}
+  >
+    {#if props.icon}<span class="navitem-icon" aria-hidden="true">{props.icon}</span>{/if}
+    <span class="navitem-label">{props.label}</span>
+    {#if props.badge}<span class="navitem-badge">{props.badge}</span>{/if}
+  </a>
 {:else if node.type === "splitpane"}
   <SplitPane
     id={node.id}
