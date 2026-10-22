@@ -484,23 +484,28 @@
     </div>
   </div>
 {:else if node.type === "multiselect"}
-  <div class="field">
-    {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
-    <select
-      id={`${node.id}-input`}
-      multiple
-      onchange={(e) =>
-        postEvent(node.id, "change", {
-          value: Array.from(e.currentTarget.selectedOptions).map((o) => o.value),
-        })}
-    >
+  <fieldset class="field checkbox-fieldset">
+    {#if props.label}<legend class="stream-label">{props.label}</legend>{/if}
+    <div class="radio-group checkbox-group">
       {#each props.options ?? [] as option (option.value)}
-        <option value={option.value} selected={(props.value ?? []).includes(option.value)}
-          >{option.label}</option
-        >
+        <label class="check">
+          <input
+            type="checkbox"
+            value={option.value}
+            checked={(props.value ?? []).includes(option.value)}
+            onchange={(e) =>
+              postEvent(node.id, "change", {
+                // the checked values, in option order (the wire format of the old <select multiple>)
+                value: Array.from(
+                  e.currentTarget.closest(".checkbox-group").querySelectorAll("input:checked"),
+                ).map((i) => i.value),
+              })}
+          />
+          <span>{option.label}</span>
+        </label>
       {/each}
-    </select>
-  </div>
+    </div>
+  </fieldset>
 {:else if node.type === "streamtext"}
   <div class="field">
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}

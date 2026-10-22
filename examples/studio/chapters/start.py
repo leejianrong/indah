@@ -69,9 +69,16 @@ def inputs_check(pw) -> None:
     page.get_by_label("Name").fill("Grace")
     page.get_by_label("Large").check()
     page.get_by_label("Make it spicy").check()
-    expect(
-        page.get_by_text("Grace orders 2 large pizza(s) with olives, spicy, for 2026-10-22.")
-    ).to_be_visible()
+    expect(page.get_by_text("Grace orders 2 large pizza(s) with olives, spicy,")).to_be_visible()
+    toppings = page.get_by_role("group", name="Toppings")  # a checkbox list, not a <select>
+    expect(toppings.get_by_label("olives")).to_be_checked()
+    toppings.get_by_label("basil").check()
+    expect(page.get_by_text("with olives, basil, spicy")).to_be_visible()
+    toppings.get_by_label("olives").focus()
+    page.keyboard.press("Space")  # keyboard operable
+    expect(page.get_by_text("with basil, spicy")).to_be_visible()
+    toppings.get_by_label("basil").uncheck()
+    expect(page.get_by_text("with no toppings, spicy")).to_be_visible()
 
 
 def actions(ctx: indah.Context) -> indah.Component:

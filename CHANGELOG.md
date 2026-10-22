@@ -129,6 +129,9 @@ under "Upgrading". Start with the new guide, "Host an app for real users", on th
 
 ### Fixed
 
+- `MultiSelect` is now a list of checkboxes (a labelled group, operable with the keyboard)
+  instead of a native `<select multiple>`. The wire format and events are unchanged, so
+  `protocol_version` stays 1.
 - `Text(size="body")`: plain `Text` is a large readout by design, which made status lines and
   notes look like headings. `size="body"` renders normal body text with newlines kept; the
   default is unchanged. It is an additive optional prop (`protocol_version` stays 1). Plain text

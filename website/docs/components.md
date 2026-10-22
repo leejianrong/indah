@@ -24,7 +24,7 @@ set shipped so far.
 | `CodeEditor` | a JSON / YAML / text editor: highlighting, auto-indent, auto-closing brackets and quotes, folding, search, JSON lint |
 | `Switch` | an on/off toggle bound to a `Signal[bool]` |
 | `Select` | a single-choice dropdown |
-| `MultiSelect` | a multi-choice select |
+| `MultiSelect` | a list of checkboxes; the value is the list of checked options |
 | `Radio` | a radio group |
 | `Checkbox` | a boolean checkbox |
 | `Date` | a date picker (ISO `YYYY-MM-DD`) |
