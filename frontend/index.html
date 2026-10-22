@@ -101,6 +101,8 @@
       }
       /* The app frame: content floats on the warm page ground, no chrome itself. */
       .shell { max-width: var(--page-max, 1080px); margin: 0 auto; }
+      /* An AppShell (IND-147) sizes itself: rail plus main, main keeping max_width. */
+      .shell:has(.appshell) { max-width: none; }
 
       /* Card: a surface panel that floats on the ground (the Studio "panels on
          porcelain" look). The building block layout components sit inside. */

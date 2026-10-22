@@ -3887,3 +3887,49 @@ def test_semula_hosted_demo_roles_and_the_token_screen():
     finally:
         handle.stop()
     assert [r["status"] for r in app.state.tokens.snapshot()] == ["revoked"]
+
+
+@pytest.mark.e2e
+def test_appshell_with_router_and_spa_keeps_its_rail_and_closes_the_drawer_on_a_link():
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    from indah import AppShell, Column, Link, Router, Session, Text, create_app
+
+    def build(ctx):
+        rail = Column(children=[Link(ctx, "Home", to="/"), Link(ctx, "Auth", to="/projects/auth")])
+        pages = Router(
+            ctx,
+            routes={"/": Text("HOME PAGE"), "/projects/{project}": Text("PROJECT PAGE")},
+            not_found=Text("NOT FOUND"),
+        )
+        return Session(AppShell(rail=rail, main=[pages]))
+
+    ui = create_app(session_factory=build, spa=True, proxy_flush=False)
+    handle = launch(Starlette(routes=[Mount("/ui", app=ui)]), block=False, open_inline=False)
+    root = handle.url.rstrip("/")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": 1200, "height": 700})
+            try:
+                page.goto(f"{root}/ui/projects/auth", wait_until="domcontentloaded")  # a deep link
+                expect(page.get_by_text("PROJECT PAGE")).to_be_visible()
+                rail = page.locator("aside.rail")
+                expect(rail).to_be_visible()
+                rail.get_by_role("link", name="Home").click()
+                expect(page.get_by_text("HOME PAGE")).to_be_visible()
+                assert page.url == f"{root}/ui/"
+                expect(rail).to_be_visible()  # the rail stays; only main changed
+
+                page.set_viewport_size({"width": 480, "height": 700})
+                expect(rail).to_be_hidden()
+                page.get_by_role("button", name="Open the menu").click()
+                expect(rail).to_be_visible()
+                rail.get_by_role("link", name="Auth").click()
+                expect(page.get_by_text("PROJECT PAGE")).to_be_visible()
+                expect(rail).to_be_hidden()  # choosing a link closed the drawer
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

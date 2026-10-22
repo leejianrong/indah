@@ -48,6 +48,7 @@ set shipped so far.
 | `Card` | a titled surface panel; `variant="flat"` drops the frame, `"tonal"` tints it, `padding=` sets the inner space |
 | `Tabs` | a tabbed container, one panel at a time |
 | `Sidebar` | a persistent side region plus a main region |
+| `AppShell` | the app frame: a rail that stays put while the page scrolls, an optional top bar and the main region (`rail=`, `main=`, `top=`, `rail_width=`); a drawer behind a menu button on a narrow screen |
 | `Expander` | a collapsible labelled section |
 | `SplitPane` | two panels with a draggable divider |
 | `MasterDetail` | a list beside its detail, a drawer on a narrow screen |

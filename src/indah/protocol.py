@@ -83,6 +83,7 @@ BUILTIN_TYPES = frozenset(
         "divider",
         "tabs",
         "sidebar",
+        "appshell",
         "expander",
         "modal",
         "drawer",

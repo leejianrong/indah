@@ -13,6 +13,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- `AppShell(rail=, main=, top=, rail_width=)`: the frame of an app, with a rail that stays put while
+  main scrolls, an optional top bar, main keeping `create_app(max_width=)`, and on a narrow screen a
+  drawer behind a menu button (Escape, the backdrop or choosing a link closes it). It works inside a
+  `Router` page and with `spa=True`. A new component type with optional props, so `protocol_version`
+  stays 1 and no existing app changes (ADR-0014 amendment).
 - Layout primitives: `Row(justify=)` (`start`, `center`, `end`, `between`, `around`), `Column(gap=)`,
   `Spacer` (grows to fill a row, or `size=` for a fixed gap), `Divider` (`vertical=` for a column rule)
   and `Card(variant=, padding=)` with `"outlined"` (the default and the current look), `"flat"` and
