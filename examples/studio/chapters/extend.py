@@ -27,6 +27,12 @@ indah.register_component(
             {"tag": "strong", "text": "title"},
             {"tag": "meter", "attrs": {"min": "0", "max": "100"}, "bind": {"value": "value"}},
             {"tag": "span", "text": "value"},
+            {  # a nested input round-trips too: its `on` writes the "value" signal
+                "tag": "input",
+                "attrs": {"type": "range", "min": "0", "max": "100"},
+                "bind": {"value": "value"},
+                "on": {"input": {"event": "input", "prop": "value"}},
+            },
         ],
     },
 )
@@ -62,6 +68,12 @@ indah.register_component(
             {"tag": "strong", "text": "title"},  # text content <- node prop
             {"tag": "meter", "attrs": {"min": "0", "max": "100"}, "bind": {"value": "value"}},
             {"tag": "span", "text": "value"},
+            {  # a nested input round-trips too: its `on` writes the "value" signal
+                "tag": "input",
+                "attrs": {"type": "range", "min": "0", "max": "100"},
+                "bind": {"value": "value"},
+                "on": {"input": {"event": "input", "prop": "value"}},
+            },
         ],
     },
 )
@@ -118,11 +130,14 @@ def card_check(pw) -> None:
     card = page.locator(".levelcard")
     expect(card.locator("strong")).to_have_text("Battery")
     expect(card.locator("span")).to_have_text("40")
-    slider = page.get_by_role("slider")
+    slider = page.get_by_role("slider").last  # the Slider; the card holds a range too
     slider.focus()
     slider.press("End")
     expect(card.locator("span")).to_have_text("100")
     expect(card.locator("meter")).to_have_attribute("value", "100")
+    card.locator("input[type=range]").fill("25")  # the nested input writes the signal
+    expect(card.locator("span")).to_have_text("25")
+    expect(card.locator("meter")).to_have_attribute("value", "25")
 
 
 CLOSED: list[str] = []  # session ids closed since the Studio started (process-wide)
@@ -177,7 +192,7 @@ CHAPTER = Chapter(
         Page(
             slug="composite",
             title="A composite component",
-            summary="A spec may nest children: a title, a meter and a readout, all fed by node props.",
+            summary="A spec may nest children: a title, a meter, a readout and a range input, all fed by node props. A nested input round-trips.",
             build=level_card,
             covers=("custom", "Slider"),
             docs="custom-components.md",

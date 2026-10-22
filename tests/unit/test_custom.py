@@ -110,3 +110,31 @@ def test_register_rejects_a_malformed_spec():
     # An unknown field in the render spec violates the protocol schema.
     with pytest.raises(ValueError):
         register_component("x", render={"tag": "div", "bogus": 1})
+
+
+@pytest.mark.unit
+def test_a_nested_on_round_trips_to_its_signal():
+    register_component(
+        "ranged",
+        render={
+            "tag": "div",
+            "children": [
+                {"tag": "span", "text": "value"},
+                {
+                    "tag": "div",
+                    "children": [
+                        {
+                            "tag": "input",
+                            "attrs": {"type": "range"},
+                            "bind": {"value": "value"},
+                            "on": {"input": {"event": "input", "prop": "value"}},
+                        }
+                    ],
+                },
+            ],
+        },
+    )
+    level = Signal(1)
+    comp = custom("ranged", value=level)
+    assert comp.handle("input", {"value": 7}) is True
+    assert level.value == 7
