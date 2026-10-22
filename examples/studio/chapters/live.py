@@ -138,6 +138,61 @@ def every_check(pw) -> None:
     assert page.get_by_text("Refreshed ").inner_text() != first
 
 
+# -- Tab title and favicon -----------------------------------------------------------------------
+
+# A red dot, registered below with create_app(favicons=) in the chapter's app_kwargs.
+_ALERT_ICON = (
+    b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>"
+    b"<circle cx='16' cy='16' r='11' fill='#d63a3a'/></svg>"
+)
+_TAB_TITLE = "Live and streaming - indah Studio"
+
+
+def tab_title(ctx: indah.Context) -> indah.Component:
+    pending = indah.Signal(0)
+
+    def sync() -> None:
+        n = pending.value
+        ctx.title.set(f"({n}) {_TAB_TITLE}" if n else None)  # None puts the app's title back
+        ctx.favicon.set("alert" if n else None)  # a name from create_app(favicons=)
+
+    def add() -> None:
+        pending.set(pending.value + 1)
+        sync()
+
+    def clear() -> None:
+        pending.set(0)
+        sync()
+
+    return indah.Column(
+        children=[
+            indah.Text(lambda: f"{pending.value} pending: look at this browser tab"),
+            indah.Row(
+                children=[
+                    indah.Button("Add a pending call", on_click=add),
+                    indah.Button("Clear", on_click=clear, variant="ghost"),
+                ]
+            ),
+        ]
+    )
+
+
+def tab_title_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    icon = page.locator('link[rel~="icon"]')
+    own_icon = icon.get_attribute("href")
+    add = page.get_by_role("button", name="Add a pending call")
+    add.click()
+    add.click()
+    expect(page).to_have_title(f"(2) {_TAB_TITLE}")
+    expect(icon).to_have_attribute("href", "api/brand/favicon/alert")
+    page.get_by_role("button", name="Clear").click()
+    expect(page).to_have_title(_TAB_TITLE)
+    expect(icon).to_have_attribute("href", own_icon)
+
+
 # -- Skeleton ------------------------------------------------------------------------------------
 
 
@@ -378,6 +433,7 @@ CHAPTER = Chapter(
         "Handlers may be `async`, so the page stays live while they work."
     ),
     lifespan=lifespan,
+    app_kwargs={"favicons": {"alert": _ALERT_ICON}},
     pages=[
         Page(
             slug="topic",
@@ -418,6 +474,20 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(25,),
             check=every_check,
+        ),
+        Page(
+            slug="tab-title",
+            title="Tab title and favicon",
+            summary=(
+                "`ctx.title` and `ctx.favicon` change this tab's title and icon without a reload, "
+                'for an attention cue like "(2) app" with a red dot. Icons are registered with '
+                "`create_app(favicons=)`; `None` puts the app's own back. Other tabs are untouched."
+            ),
+            build=tab_title,
+            covers=("Context",),
+            docs="dashboards.md",
+            adr=(25,),
+            check=tab_title_check,
         ),
         Page(
             slug="skeleton",

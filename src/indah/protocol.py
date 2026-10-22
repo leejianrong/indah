@@ -11,6 +11,7 @@ Server -> client (over SSE):
   error {"v","type":"error","message":"..."}                a handler failed (toast)
   toast {"v","type":"toast","message","kind","ttl"}         handler feedback (ADR-0030)
   navigate {"v","type":"navigate","path","replace"}         move the browser's URL (ADR-0029)
+  chrome {"v","type":"chrome","title","favicon"}            the tab title and icon (IND-152)
   ping  {"v","type":"ping"}                                 heartbeat
 
 A patch ``change`` is one of:
@@ -110,8 +111,20 @@ ALLOWED_TAGS = frozenset(
 )  # fmt: skip
 
 
-def init_message(root: dict[str, Any]) -> dict[str, Any]:
-    return {"v": PROTOCOL_VERSION, "type": "init", "root": root}
+def init_message(root: dict[str, Any], chrome: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The full tree. ``chrome`` (``{"title", "favicon"}``) rides along when the session has
+    changed the tab's title or icon (IND-152), so a fresh init restores them; it is left off
+    otherwise, and a shell that ignores it just keeps the app's own."""
+    message: dict[str, Any] = {"v": PROTOCOL_VERSION, "type": "init", "root": root}
+    if chrome:
+        message["chrome"] = chrome
+    return message
+
+
+def chrome_message(title: str | None, favicon: str | None) -> dict[str, Any]:
+    """Set the tab's title and icon (``ctx.title``, ``ctx.favicon``). ``None`` means the app's
+    own; ``favicon`` is a same-origin URL relative to the document."""
+    return {"v": PROTOCOL_VERSION, "type": "chrome", "title": title, "favicon": favicon}
 
 
 def patch_message(changes: list[dict[str, Any]]) -> dict[str, Any]:

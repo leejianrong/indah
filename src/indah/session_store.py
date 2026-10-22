@@ -305,7 +305,7 @@ class InMemorySessionStore:
         session.bind_hub(build.hub)
         placeholder.session = session
         session.forget_ephemeral()
-        build.hub.publish(init_message(session.snapshot()))
+        build.hub.publish(init_message(session.snapshot(), chrome=build.ctx._chrome()))
 
     def get(self, session_id: str) -> SessionHandle | None:
         handle = self._handles.get(session_id)

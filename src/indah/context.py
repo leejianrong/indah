@@ -32,9 +32,9 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from .auth import Principal
 from .authz import Forbidden, Policy, current_principal
 from .authz import can as _can
-from .protocol import navigate_message, signed_out_message, toast_message
+from .protocol import chrome_message, navigate_message, signed_out_message, toast_message
 from .proxy import forwarded_prefix
-from .reactive import Computed, Signal
+from .reactive import Computation, Computed, Signal, effect
 from .routes import Route, match_routes, normalize_path
 from .stream import Stream
 
@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("indah")
 
 T = TypeVar("T")
+_MAX_TITLE = 200
 _MISSING: Any = object()
 
 
@@ -142,9 +143,47 @@ class Context:
         # when nothing matches or there is no router. A computed, so a page that derives its
         # data from one param is not recomputed when an unrelated param or page changes.
         self.params: Computed[dict[str, Any]] = Computed(self._current_params)
+        # The tab's title and icon (IND-152). ``None`` is the app's own. ``favicon`` names one
+        # registered with ``create_app(favicons=)``. A change is sent to this session's tab(s)
+        # only, and a fresh init carries the current values.
+        self.title: Signal[str | None] = Signal(None)
+        self.favicon: Signal[str | None] = Signal(None)
+        self._chrome_sent: tuple[str | None, str | None] = (None, None)
+        self._bad_favicons: set[str] = set()
+        self._chrome_effect: Computation = effect(self._sync_chrome)
 
     def _bind_hub(self, hub: Hub) -> None:
         self._hub = hub
+
+    def _chrome_state(self) -> tuple[str | None, str | None]:
+        """The title and favicon URL to show now, validated. Reads the signals (tracked)."""
+        title = self.title.value
+        if title is not None:
+            title = str(title)[:_MAX_TITLE]
+        name = self.favicon.value
+        url: str | None = None
+        if name is not None:
+            favicons = getattr(getattr(self.app, "state", None), "favicons", None) or {}
+            if name in favicons:
+                url = f"api/brand/favicon/{name}"
+            elif name not in self._bad_favicons:
+                self._bad_favicons.add(name)
+                logger.warning("ctx.favicon %r is not registered with create_app(favicons=)", name)
+        return title, url
+
+    def _chrome(self) -> dict[str, Any] | None:
+        """What a fresh ``init`` should carry: the title and icon, or ``None`` when both are the
+        app's own."""
+        title, url = self._chrome_state()
+        return {"title": title, "favicon": url} if title is not None or url is not None else None
+
+    def _sync_chrome(self) -> None:
+        state = self._chrome_state()
+        if state == self._chrome_sent:
+            return
+        self._chrome_sent = state
+        if self._hub is not None and not self._closed:
+            self._hub.publish(chrome_message(*state))
 
     def toast(
         self,
@@ -349,6 +388,7 @@ class Context:
         if self._closed:
             return
         self._closed = True
+        self._chrome_effect.dispose()
         for task in list(self._spawned):
             task.cancel()
         self._spawned.clear()

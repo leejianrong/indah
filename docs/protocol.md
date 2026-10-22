@@ -24,6 +24,9 @@ HTTP POSTs. Both ride one port so Colab's and Runpod's proxies pass them
   client); see [File upload and download](#file-upload-and-download).
 - `GET /api/editor.js` — the code editor module (ADR-0032), an ES module the shell
   `import()`s on the first `codeeditor` render; an asset route, not a protocol message.
+- `GET /api/brand/favicon/{name}` — a favicon registered with `create_app(favicons=)` (IND-152), served
+  with `Content-Security-Policy: sandbox`; `404` for a name that is not registered. Only mounted when
+  at least one is registered.
 - `GET /api/components/{type}.js` — the ES module of a module component (ADR-0039), served from
   memory under a strict name pattern; see [Module components](#module-components-_module).
 
@@ -87,12 +90,13 @@ The UI is a tree of nodes. A node is:
 
 | Type | Shape | When |
 |------|-------|------|
-| `init` | `{"v","type":"init","root":<node>}` | On connect, or a resume that fell back to a full snapshot. It can also arrive mid-stream (with an SSE id): an `async def` session factory that outlived `factory_timeout` showed a `skeleton` first, and this `init` replaces the whole tree with the real one (IND-153). The shell already handles a second `init` |
+| `init` | `{"v","type":"init","root":<node>}`, plus `"chrome":{"title","favicon"}` when the session has changed them (see `chrome`) | On connect, or a resume that fell back to a full snapshot. It can also arrive mid-stream (with an SSE id): an `async def` session factory that outlived `factory_timeout` showed a `skeleton` first, and this `init` replaces the whole tree with the real one (IND-153). The shell already handles a second `init` |
 | `patch` | `{"v","type":"patch","changes":[<change>,...]}` | Granular updates to existing nodes |
 | `error` | `{"v","type":"error","message":"..."}` | A handler failed; the shell shows a toast |
 | `navigate` | `{"v","type":"navigate","path","replace"}` | `ctx.navigate(...)`: the shell pushes (or, with `replace`, rewrites) its history entry to the in-app `path`. An older shell ignores it |
 | `toast` | `{"v","type":"toast","message","kind","ttl"}`, plus `"action":{"id","label"}` when given | Feedback from `ctx.toast(...)`: `kind` is `info`/`success`/`warn`/`error`, `ttl` seconds (`0` = until dismissed). Sent to the calling session only; an older shell ignores it. With `action`, the shell shows a button that posts `{"component":"__toast__","event":"action","payload":{"id":<action id>}}` to `POST /api/event` and dismisses the toast. The server runs the handler once (as a normal event: `guard()`, audit and async handlers apply) and answers `200` for an id it no longer holds. An older shell shows the message without the button (additive; `protocol_version` stays 1) |
 | `ping` | `{"v","type":"ping"}` | Heartbeat, so idle-timeout proxies keep the stream open |
+| `chrome` | `{"v","type":"chrome","title","favicon"}` | `ctx.title` / `ctx.favicon` changed (IND-152): the shell sets the tab's title and icon. `title` is the whole title, or `null` for the app's own; `favicon` is a same-origin URL `api/brand/favicon/<name>` (relative to the document) or `null` for the app's own icon. It is sent to the session that changed them only, and a fresh `init` carries the current values in its `chrome` key (and resets them to the app's own when the key is absent), so a reconnect or a new session never shows a stale title. The shell applies only a favicon under `api/brand/favicon/`. An older shell ignores the message and the key (additive; `protocol_version` stays 1) |
 | `signed_out` | `{"v","type":"signed_out"}` | The caller's login ended (`ctx.sign_out()` or `Principal.expires_at`); the server closes the stream after it, and the shell stops reconnecting and shows a signed-out page (secure apps, ADR-0033) |
 
 A patch `change` is one of:
