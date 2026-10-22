@@ -11,6 +11,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-23
+
+Tables, text and small controls. This release makes plain `Text` look like normal body text, adds
+rich table cells and keyboard navigation, an async session factory with a `Skeleton`, a `Menu`, an
+empty state, a copyable code block, toast actions, `ctx.every` and `ctx.spawn`, and a title and
+favicon the server can change. **Read "Upgrading" first: plain `Text` now looks smaller in every app.**
+`protocol_version` is still 1; every wire change is additive.
+
 ### Added
 
 - `Menu(trigger, items)` and `MenuItem(label, on_click, danger=, shortcut=, confirm=, disabled=, key=)`: a menu
@@ -91,6 +99,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 - **Plain `Text` looks smaller.** If a `Text` shows a number or a figure (a counter, a metric, a KPI),
   add `variant="readout"` to get the old look back. Search your code for `Text(` whose source is a
   count or a short value. A `Text` used as a heading can use `variant="title"`.
+
+### Known limitations
+
+- `trusted_proxies` has still not been checked against the real Cloudflare and Fly path (IND-170), and
+  sticky sessions are unverified (IND-171).
+- A `Menu` and a module component cannot sit in a table cell: a cell spec is display only.
+- `factory_timeout` and `factory_placeholder` apply to the built-in session store, not to a `store=` you
+  pass.
 
 ## [0.5.0] - 2026-10-22
 
