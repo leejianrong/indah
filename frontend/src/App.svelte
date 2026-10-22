@@ -36,10 +36,17 @@
   }
 
   // ttl is seconds; 0 keeps the toast until it is clicked.
-  function showToast(message, kind = "info", ttl = 4) {
+  // `action` is {id, label} when ctx.toast was given one (IND-160): its button posts the
+  // reserved event to the server, once, and dismisses the toast.
+  function showToast(message, kind = "info", ttl = 4, action = null) {
     const id = ++toastSeq;
-    toasts.update((list) => [...list, { id, message, kind, ttl }].slice(-MAX_TOASTS));
+    toasts.update((list) => [...list, { id, message, kind, ttl, action }].slice(-MAX_TOASTS));
     if (ttl > 0) setTimeout(() => dismissToast(id), ttl * 1000);
+  }
+
+  function runToastAction(t) {
+    dismissToast(t.id);
+    postEvent("__toast__", "action", { id: t.action.id });
   }
 
   function findRouter(node) {
@@ -112,7 +119,8 @@
     } else if (msg.type === "signed_out") {
       endSession("signed out");
     } else if (msg.type === "toast") {
-      showToast(msg.message || "", msg.kind || "info", msg.ttl ?? 4);
+      const a = msg.action && msg.action.id && msg.action.label ? msg.action : null;
+      showToast(msg.message || "", msg.kind || "info", msg.ttl ?? 4, a);
     }
   }
 
@@ -324,7 +332,15 @@
 {#if $toasts.length}
   <div class="toasts" role="status" aria-live="polite">
     {#each $toasts as t (t.id)}
-      <button type="button" class="toast {t.kind}" onclick={() => dismissToast(t.id)}>{t.message}</button>
+      {#if t.action}
+        <div class="toast has-action {t.kind}">
+          <span class="toast-text">{t.message}</span>
+          <button type="button" class="toast-action" onclick={() => runToastAction(t)}>{t.action.label}</button>
+          <button type="button" class="toast-close" aria-label="Dismiss" onclick={() => dismissToast(t.id)}>&times;</button>
+        </div>
+      {:else}
+        <button type="button" class="toast {t.kind}" onclick={() => dismissToast(t.id)}>{t.message}</button>
+      {/if}
     {/each}
   </div>
 {/if}

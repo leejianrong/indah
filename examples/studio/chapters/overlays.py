@@ -92,6 +92,50 @@ def toasts_check(pw) -> None:
     expect(sticky).to_have_count(0)
 
 
+def toast_action(ctx: indah.Context) -> indah.Component:
+    pending = indah.Signal(["alpha", "beta", "gamma"])
+    done = indah.Signal([])
+
+    def approve() -> None:
+        if not pending.value:
+            return
+        name = pending.value[0]
+        pending.set(pending.value[1:])
+        done.set([*done.value, name])
+
+        def undo() -> None:  # runs once, when the button is clicked
+            done.set([d for d in done.value if d != name])
+            pending.set([name, *pending.value])
+
+        ctx.toast(f"Approved {name}", kind="success", ttl=8, action=("Undo", undo))
+
+    return indah.Column(
+        children=[
+            indah.Text(lambda: f"Pending: {', '.join(pending.value) or 'none'}"),
+            indah.Text(lambda: f"Approved: {', '.join(done.value) or 'none'}"),
+            indah.Button("Approve next", approve, variant="tonal"),
+        ]
+    )
+
+
+def toast_action_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    page.get_by_role("button", name="Approve next").click()
+    expect(page.get_by_text("Approved: alpha")).to_be_visible()
+    expect(page.get_by_text("Approved alpha")).to_be_visible()  # the toast
+    page.get_by_role("button", name="Undo").click()
+    expect(page.get_by_text("Pending: alpha, beta, gamma")).to_be_visible()
+    expect(page.get_by_text("Approved: none")).to_be_visible()
+    expect(page.get_by_text("Approved alpha")).to_have_count(0)  # clicking the action dismissed it
+    page.get_by_role("button", name="Approve next").click()
+    expect(page.get_by_role("button", name="Undo")).to_be_visible()  # a fresh toast, a fresh button
+    page.get_by_role("button", name="Dismiss").click()
+    expect(page.get_by_role("button", name="Undo")).to_have_count(0)
+    expect(page.get_by_text("Approved: alpha")).to_be_visible()  # dismissing does not undo
+
+
 def confirm(ctx: indah.Context) -> indah.Component:
     items = indah.Signal(["alpha", "beta", "gamma"])
     return indah.Column(
@@ -319,6 +363,20 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(30,),
             check=toasts_check,
+        ),
+        Page(
+            slug="toast-action",
+            title="Toast with an action",
+            summary=(
+                '`ctx.toast(msg, action=("Undo", fn), ttl=8)` adds a button. Clicking it runs `fn` '
+                "once and dismisses the toast; it goes to this tab only. `guard()` is checked when "
+                "the button is clicked."
+            ),
+            build=toast_action,
+            covers=("Context", "Button", "Text"),
+            docs="dashboards.md",
+            adr=(30,),
+            check=toast_action_check,
         ),
         Page(
             slug="confirm",

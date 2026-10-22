@@ -190,6 +190,7 @@ indah.Modal(title="Conflict", open=open_, size="lg", children=[...])
 indah.Drawer(title="Review", open=open_, side="right", children=[...])
 
 ctx.toast("Saved", kind="success")  # info, success, warn or error; ttl=0 sticks
+ctx.toast("Approved", ttl=8, action=("Undo", undo))  # a button; runs undo once, then dismisses
 indah.Badge(lambda: f"{n.value} waiting", tone="warn")
 indah.Switch(pinned, label="Pinned")
 indah.Text("hover me", tooltip="Shown on hover and on keyboard focus")
@@ -205,7 +206,9 @@ indah.Shortcuts(
 
 `confirm=` is a UX guard only: the server still runs any click it receives, so check
 authorization in your handler. A toast goes to the current tab only, never put a secret in
-one. `Shortcuts` bare keys are ignored while the viewer types or a dialog is open, and a map
+one. A toast's `action=` button runs its function once as that tab's user, so a `guard()` on it is
+checked at the click, and a second click or a stale toast does nothing. Give an undo a longer `ttl`
+than the default 4 seconds. `Shortcuts` bare keys are ignored while the viewer types or a dialog is open, and a map
 is active only while it is in the rendered tree.
 
 ## Several pages with `Router`

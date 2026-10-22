@@ -968,6 +968,27 @@
       .toast.success { border-left-color: var(--ok); }
       .toast.warn { border-left-color: var(--warn); }
       .toast.error { border-left-color: var(--err); }
+      .toast.has-action {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        cursor: default;
+      }
+      .toast-text { flex: 1; min-width: 0; }
+      .toast-action,
+      .toast-close {
+        font: inherit;
+        color: var(--primary);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        padding: 0.15rem 0.4rem;
+      }
+      .toast-action { font-weight: 600; }
+      .toast-close { color: var(--muted); font-size: 1.1rem; line-height: 1; }
+      .toast-action:hover,
+      .toast-close:hover { background: var(--surface-2); }
     </style>
     <script>
       // Resolve the saved theme choice (light / dark / system) into data-theme
