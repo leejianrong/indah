@@ -222,6 +222,12 @@ goes there from code. A `Link` is a real `<a href>`, so open-in-new-tab works.
 `{id:int}` converts a segment to an integer. After a server restart an open tab reopens on the
 page it is on now.
 
+!!! note "One `Router` per session"
+    The address bar holds one path per tab, so a session can have only one `Router`; a second
+    raises `ValueError`. To show routing inside part of a page (a docs chapter, a card), use
+    `Tabs`, or a `Signal` with a `computed`, for that switcher; or run the routed app on its own
+    and link to it. Nested routers are not supported.
+
 ## Split panes and master-detail
 
 ```python

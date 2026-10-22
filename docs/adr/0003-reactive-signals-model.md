@@ -30,6 +30,10 @@ by node ID. No user code is re-executed top to bottom.
 
 ## Consequences
 
+- `batch` coalesces reruns into one flush. `Session.dispatch` already wraps every synchronous
+  handler in it, so two writes in a click handler run an effect once either way; `batch` matters
+  after an `await` (the wrapper has ended) and in background tasks and threads.
+
 - Buys granular updates (R1), a clean mental model, and long-lived in-memory state
   that survives interactions — the whole point versus Streamlit.
 - Costs real implementation effort: the dependency graph and patch-diffing are the
