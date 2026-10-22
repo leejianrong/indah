@@ -123,6 +123,8 @@ def live_chart(ctx: indah.Context) -> indah.Component:
         chart.clear()
         ticks.set(0)
 
+    add(30)  # start with a curve already on screen
+
     return indah.Column(
         children=[
             chart,
@@ -142,13 +144,16 @@ def live_chart_check(pw) -> None:
 
     page = pw.page
     expect(page.locator(".chart canvas").first).to_be_visible()
+    expect(page.get_by_text("30 points pushed")).to_be_visible()
     page.get_by_role("button", name="Add 10 points").click()
-    page.get_by_role("button", name="Add 10 points").click()
-    expect(page.get_by_text("20 points pushed")).to_be_visible()
-    page.wait_for_function("() => document.querySelector('.chart').__uplot.data[0].length === 20")
+    expect(page.get_by_text("40 points pushed")).to_be_visible()
+    page.wait_for_function("() => document.querySelector('.chart').__uplot.data[0].length === 40")
     page.get_by_role("button", name="Clear").click()
     expect(page.get_by_text("0 points pushed")).to_be_visible()
     page.wait_for_function("() => document.querySelector('.chart').__uplot.data[0].length === 0")
+    page.get_by_role("button", name="Add 10 points").click()
+    page.get_by_role("button", name="Add 10 points").click()
+    page.wait_for_function("() => document.querySelector('.chart').__uplot.data[0].length === 20")
 
 
 # ---- heatmap ----------------------------------------------------------------------------------
@@ -265,17 +270,24 @@ def image_check(pw) -> None:
 def overlay_page(ctx: indah.Context) -> indah.Component:
     boxes = [{"x": 0.22, "y": 0.5, "w": 0.3, "h": 0.32, "label": "house", "score": 0.93}]
     points = [{"x": 0.81, "y": 0.25, "label": "sun", "color": "#ffb300"}]
-    show = indah.Signal(["boxes", "points"])
+    mask = [{"src": mask_png(), "opacity": 0.5}]
+    show_boxes, show_points, show_mask = (indah.Signal(v) for v in (True, True, False))
     return indah.Column(
         children=[
             indah.ImageOverlay(
                 scene_png(),
-                boxes=lambda: boxes if "boxes" in show.value else [],
-                points=lambda: points if "points" in show.value else [],
-                masks=lambda: [{"src": mask_png(), "opacity": 0.5}] if "mask" in show.value else [],
+                boxes=lambda: boxes if show_boxes.value else [],
+                points=lambda: points if show_points.value else [],
+                masks=lambda: mask if show_mask.value else [],
                 alt="a landscape",
             ),
-            indah.MultiSelect(show, options=["boxes", "points", "mask"], label="Show"),
+            indah.Row(
+                children=[
+                    indah.Checkbox(show_boxes, label="Boxes"),
+                    indah.Checkbox(show_points, label="Keypoints"),
+                    indah.Checkbox(show_mask, label="Mask"),
+                ]
+            ),
         ]
     )
 
@@ -286,10 +298,12 @@ def overlay_check(pw) -> None:
     page = pw.page
     expect(page.locator(".overlay-wrap .ov-box")).to_have_count(1)
     expect(page.get_by_text("house")).to_be_visible()
-    page.get_by_label("boxes").uncheck()
+    page.get_by_label("Boxes").uncheck()
     expect(page.locator(".overlay-wrap .ov-box")).to_have_count(0)
-    page.get_by_label("boxes").check()
+    page.get_by_label("Boxes").check()
     expect(page.locator(".overlay-wrap .ov-box")).to_have_count(1)
+    page.get_by_label("Mask").check()
+    expect(page.locator(".overlay-wrap img")).to_have_count(2)  # the picture and the mask
 
 
 # ---- audio ------------------------------------------------------------------------------------
@@ -354,7 +368,7 @@ def upload_page(ctx: indah.Context) -> indah.Component:
     report = indah.Signal("No file yet.")
 
     def on_upload(file: indah.UploadedFile) -> None:
-        lines = len(file.text(errors="replace").splitlines()) if hasattr(file, "text") else 0
+        lines = len(file.text().splitlines())
         report.set(
             f"Got {file.filename} ({file.content_type}), {file.size} bytes, {lines} line(s)."
         )
@@ -381,8 +395,7 @@ def download_page(ctx: indah.Context) -> indah.Component:
     rows = indah.Signal(3.0)
     report = indah.computed(
         lambda: indah.DownloadFile(
-            "n,square\n".encode()
-            + "".join(f"{n},{n * n}\n" for n in range(int(rows.value))).encode(),
+            b"n,square\n" + "".join(f"{n},{n * n}\n" for n in range(int(rows.value))).encode(),
             filename="squares.csv",
             media_type="text/csv",
         )
@@ -474,7 +487,7 @@ CHAPTER = Chapter(
             title="Image overlay",
             summary="Boxes, keypoints and a mask drawn over an image, in fractions so they scale.",
             build=overlay_page,
-            covers=("ImageOverlay", "MultiSelect"),
+            covers=("ImageOverlay", "Checkbox"),
             docs="components.md",
             adr=(20,),
             check=overlay_check,

@@ -19,18 +19,14 @@ indah.register_component(
     },
 )
 indah.register_component(
-    "rangereadout",
+    "levelcard",
     render={
         "tag": "div",
-        "class": "rangereadout",
+        "class": "levelcard",
         "children": [
-            {
-                "tag": "input",
-                "attrs": {"type": "range", "min": "0", "max": "100", "aria-label": "range"},
-                "bind": {"value": "value"},
-                "on": {"input": {"event": "input", "prop": "value"}},
-            },
-            {"tag": "strong", "text": "value"},
+            {"tag": "strong", "text": "title"},
+            {"tag": "meter", "attrs": {"min": "0", "max": "100"}, "bind": {"value": "value"}},
+            {"tag": "span", "text": "value"},
         ],
     },
 )
@@ -57,19 +53,15 @@ def build(ctx):
     )
 """
 
-RANGE_SOURCE = """
+CARD_SOURCE = """
 indah.register_component(
-    "rangereadout",
+    "levelcard",
     render={
         "tag": "div",
-        "children": [  # a small composite: a slider and a readout
-            {
-                "tag": "input",
-                "attrs": {"type": "range", "min": "0", "max": "100"},
-                "bind": {"value": "value"},
-                "on": {"input": {"event": "input", "prop": "value"}},
-            },
-            {"tag": "strong", "text": "value"},  # text content <- node prop
+        "children": [  # a small composite: a title, a meter and a readout
+            {"tag": "strong", "text": "title"},  # text content <- node prop
+            {"tag": "meter", "attrs": {"min": "0", "max": "100"}, "bind": {"value": "value"}},
+            {"tag": "span", "text": "value"},
         ],
     },
 )
@@ -79,8 +71,8 @@ def build(ctx):
     level = indah.Signal(40)
     return indah.Column(
         children=[
-            indah.custom("rangereadout", value=level),
-            indah.Button("Max", lambda: level.set(100)),
+            indah.custom("levelcard", title="Battery", value=level),
+            indah.Slider(level, min=0, max=100, label="Level"),
         ]
     )
 """
@@ -109,27 +101,28 @@ def colour_check(pw) -> None:
     expect(picker).to_have_value("#ff8800")
 
 
-def range_readout(ctx: indah.Context) -> indah.Component:
+def level_card(ctx: indah.Context) -> indah.Component:
     level = indah.Signal(40)
     return indah.Column(
         children=[
-            indah.custom("rangereadout", value=level),
-            indah.Button("Max", lambda: level.set(100)),
-            indah.Text(lambda: f"Python sees {level.value}."),
+            indah.custom("levelcard", title="Battery", value=level),
+            indah.Slider(level, min=0, max=100, label="Level"),
         ]
     )
 
 
-def range_check(pw) -> None:
+def card_check(pw) -> None:
     from playwright.sync_api import expect
 
     page = pw.page
-    expect(page.get_by_text("Python sees 40.")).to_be_visible()
-    page.get_by_label("range").fill("75")
-    expect(page.get_by_text("Python sees 75.")).to_be_visible()
-    page.get_by_role("button", name="Max").click()
-    expect(page.get_by_text("Python sees 100.")).to_be_visible()
-    expect(page.locator(".rangereadout strong")).to_have_text("100")
+    card = page.locator(".levelcard")
+    expect(card.locator("strong")).to_have_text("Battery")
+    expect(card.locator("span")).to_have_text("40")
+    slider = page.get_by_role("slider")
+    slider.focus()
+    slider.press("End")
+    expect(card.locator("span")).to_have_text("100")
+    expect(card.locator("meter")).to_have_attribute("value", "100")
 
 
 CLOSED: list[str] = []  # session ids closed since the Studio started (process-wide)
@@ -141,8 +134,10 @@ def context_page(ctx: indah.Context) -> indah.Component:
     return indah.Column(
         children=[
             indah.Text(f"Session id: `{ctx.sid[:6]}...` (never show a full one)", markdown=True),
-            indah.Text(f"Request path: `{ctx.conn.path}`, headers seen: {', '.join(seen)}"),
-            indah.Text(lambda: f"Sessions closed so far: {len(CLOSED)}"),
+            indah.Text(
+                f"Request path `{ctx.conn.path}`, headers seen: {', '.join(seen)}", markdown=True
+            ),
+            indah.Text(lambda: f"Sessions closed so far: {len(CLOSED)}", markdown=True),
         ]
     )
 
@@ -182,13 +177,13 @@ CHAPTER = Chapter(
         Page(
             slug="composite",
             title="A composite component",
-            summary="A spec may nest children: a range input and a readout that shows the same prop.",
-            build=range_readout,
-            covers=("custom",),
+            summary="A spec may nest children: a title, a meter and a readout, all fed by node props.",
+            build=level_card,
+            covers=("custom", "Slider"),
             docs="custom-components.md",
             adr=(12,),
-            check=range_check,
-            source=RANGE_SOURCE,
+            check=card_check,
+            source=CARD_SOURCE,
         ),
         Page(
             slug="context",

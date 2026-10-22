@@ -122,9 +122,7 @@ def split(ctx: indah.Context) -> indah.Component:
         indah.Card(
             title="Left", children=[indah.Text("Drag the divider, or focus it and use the arrows.")]
         ),
-        indah.Card(
-            title="Right", children=[indah.Text("The ratio is remembered under key='demo'.")]
-        ),
+        indah.Card(title="Right", children=[indah.Text("The ratio is remembered under its key.")]),
         key="demo-split",
         initial=0.4,
         height="12rem",
@@ -170,8 +168,8 @@ def master_detail(ctx: indah.Context) -> indah.Component:
     master = indah.Column(children=[indah.Button(n, pick(n), variant="ghost") for n in _ROWS])
     detail = indah.Column(
         children=[
-            indah.Text(lambda: f"### {chosen.value}", markdown=True),
-            indah.Text(lambda: _ROWS.get(chosen.value, "")),
+            indah.Text(lambda: f"### {chosen.value or 'Detail'}", markdown=True),
+            indah.Text(lambda: _ROWS.get(chosen.value, "Pick a person on the left.")),
         ]
     )
     return indah.MasterDetail(master, detail, open=is_open, title="Person", key="people")
@@ -181,13 +179,17 @@ def master_detail_check(pw) -> None:
     from playwright.sync_api import expect
 
     page = pw.page
-    expect(page.get_by_text("Wrote the first program.")).to_have_count(0)
-    page.get_by_role("button", name="Grace").click()
+    page.get_by_role("button", name="Grace").click()  # wide: side by side
     expect(page.get_by_text("Coined the term debugging.")).to_be_visible()
     page.get_by_role("button", name="Linus").click()
     expect(page.get_by_text("Started a kernel as a hobby.")).to_be_visible()
-    page.get_by_role("button", name="Close").first.click()
-    expect(page.get_by_text("Started a kernel as a hobby.")).to_have_count(0)
+    page.set_viewport_size({"width": 480, "height": 800})  # narrow: `open` is true, so a drawer
+    drawer = page.get_by_role("dialog", name="Person")
+    expect(drawer).to_be_visible()
+    expect(drawer.get_by_text("Started a kernel as a hobby.")).to_be_visible()
+    drawer.get_by_role("button", name="Close").click()
+    expect(drawer).to_have_count(0)
+    page.set_viewport_size({"width": 1280, "height": 900})
 
 
 _THEME_SOURCE = """
@@ -251,11 +253,12 @@ def _themed_ui() -> Any:
                         "Toggle dark mode at the top right: the dark palette is overridden too."
                     ),
                     indah.Row(
+                        align="center",
                         children=[
                             indah.Button("Filled"),
                             indah.Button("Tonal", variant="tonal"),
                             indah.Badge("tokens", tone="info"),
-                        ]
+                        ],
                     ),
                     indah.Table(
                         rows=rows,
@@ -369,7 +372,7 @@ CHAPTER = Chapter(
         Page(
             slug="master-detail",
             title="MasterDetail",
-            summary="Pick a row and the detail pane opens beside it; the `open` signal closes it.",
+            summary="Wide: list and detail side by side. Narrow (resize the window): the detail opens as a drawer, and the `open` signal closes it.",
             build=master_detail,
             covers=("MasterDetail",),
             docs="dashboards.md",

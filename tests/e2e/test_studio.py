@@ -116,3 +116,33 @@ def test_studio_page(server, browser, item):
     finally:
         ctx.close()
     assert not problems, f"{chapter.slug}/{entry.slug}: {problems}"
+
+
+@pytest.mark.e2e
+def test_studio_home_lists_every_chapter_and_navigation_works(server, browser):
+    base = server.url.rstrip("/") + "/"
+    ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+    page = ctx.new_page()
+    problems: list[str] = []
+    _watch(page, problems, ())
+    try:
+        page.goto(base, wait_until="domcontentloaded")
+        expect(page.get_by_role("heading", name="indah Studio")).to_be_visible()
+        chapters = discover()
+        for chapter in chapters:
+            expect(page.get_by_text(chapter.title, exact=True).first).to_be_visible()
+        SHOTS.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(SHOTS / "home.png"), full_page=True)
+        # home -> chapter -> page -> another chapter, by clicking
+        first = chapters[0]
+        page.get_by_role("link", name="Open chapter").first.click()
+        expect(page.get_by_role("heading", name=first.title).first).to_be_visible()
+        page.get_by_role("link", name=first.pages[0].title).first.click()
+        expect(page.get_by_role("heading", name=first.pages[0].title).first).to_be_visible()
+        page.get_by_role("link", name=chapters[1].title, exact=True).first.click()
+        expect(page.get_by_role("heading", name=chapters[1].title).first).to_be_visible()
+        page.get_by_role("link", name="indah Studio").first.click()
+        expect(page.get_by_role("heading", name="indah Studio")).to_be_visible()
+    finally:
+        ctx.close()
+    assert not problems, problems

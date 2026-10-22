@@ -100,9 +100,6 @@ EXEMPT: dict[str, str] = {
     "LaunchHandle": "returned by launch()",
     "Component": "the base class, shown on the Custom component page",
     "CustomComponent": "the base for custom(), shown on the Custom component page",
-    "UploadedFile": "shown on the Upload page through its handler argument",
-    "DownloadFile": "shown on the Download page through its handler",
-    "TableQuery": "shown on the Remote table page through the loader",
     "Computed": "the class behind computed(), covered there",
 }
 

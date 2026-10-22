@@ -64,6 +64,9 @@ the background, but anything that must run for the life of the Studio (a produce
 
 For a whole app (not a snippet), add an `AppEntry` to the `apps` chapter.
 
+To vet every page at a glance, turn the screenshots into one sheet per chapter:
+`uv run --extra e2e python scripts/studio_contact_sheet.py /tmp/studio-shots`.
+
 ## The playground
 
 `/c/playground/` runs code the viewer types: `def build(): return <component>`. It **executes in

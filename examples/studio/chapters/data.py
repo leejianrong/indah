@@ -81,11 +81,6 @@ TASK_SPEC = {
 }
 
 
-def table_rows(page) -> list[str]:
-    """The visible body rows (not virtual spacers), as text."""
-    return page.locator("tbody tr:not(.vspacer)").all_inner_texts()
-
-
 # -- Classic table ------------------------------------------------------------------------------
 
 
@@ -95,9 +90,11 @@ def table_classic(ctx: indah.Context) -> indah.Component:
         children=[
             indah.Table(PEOPLE, selected=picked, page_size=4, label="People"),
             indah.Text(
-                lambda: "Click a row."
-                if picked.value is None
-                else f"Selected row {picked.value}: {PEOPLE[picked.value]['name']}"
+                lambda: (
+                    "Click a row."
+                    if picked.value is None
+                    else f"Selected row {picked.value}: {PEOPLE[picked.value]['name']}"
+                )
             ),
         ]
     )
@@ -156,9 +153,10 @@ def table_rich_check(pw) -> None:
     expect(page.locator("tbody tr").first).to_contain_text("/health")
     assert 0 < page.locator("tbody tr").count() < 40
     page.get_by_label("Filter rows").fill("")
-    page.get_by_text("Columns").click()
+    page.get_by_text("Columns", exact=True).click()
     page.get_by_label("Latency (ms)").uncheck()
     expect(page.get_by_role("columnheader", name="Latency (ms)")).to_have_count(0)
+    page.get_by_text("Columns", exact=True).click()  # close the menu again
     page.get_by_label("compact").check()
     page.locator("tbody tr").nth(2).click()
     expect(page.get_by_text("Selected key: call-0003")).to_be_visible()
@@ -250,7 +248,9 @@ def table_remote(ctx: indah.Context) -> indah.Component:
                     indah.Col("id", kind="mono"),
                     indah.Col("zone"),
                     indah.Col("cpu", "CPU %", kind="number"),
-                    indah.Col("state", kind="badge", tones={"up": "ok", "drain": "warn", "down": "err"}),
+                    indah.Col(
+                        "state", kind="badge", tones={"up": "ok", "drain": "warn", "down": "err"}
+                    ),
                 ],
             ),
             indah.Text(lambda: f"{len(checked.value)} node(s) checked"),
@@ -287,7 +287,12 @@ def table_follow(ctx: indah.Context) -> indah.Component:
     def add(n: int) -> None:
         batch = calls[cursor["i"] : cursor["i"] + n]
         cursor["i"] += n
-        stream.append(*[{**r, "id": f"live-{cursor['i'] - len(batch) + k + 1:03d}"} for k, r in enumerate(batch)])
+        stream.append(
+            *[
+                {**r, "id": f"live-{cursor['i'] - len(batch) + k + 1:03d}"}
+                for k, r in enumerate(batch)
+            ]
+        )
 
     return indah.Column(
         children=[
@@ -330,9 +335,14 @@ def table_follow_check(pw) -> None:
 
 
 def dataframe(ctx: indah.Context) -> indah.Component:
-    count = indah.Slider(rows := indah.Signal(3.0), min=1, max=6, step=1, label="Rows")
+    rows = indah.Signal(3.0)
     table = indah.computed(lambda: PEOPLE[: int(rows.value)])  # a list of dicts, or a pandas frame
-    return indah.Column(children=[count, indah.DataFrame(lambda: table.value, label="People")])
+    return indah.Column(
+        children=[
+            indah.Slider(rows, min=1, max=6, step=1, label="Rows"),
+            indah.DataFrame(lambda: table.value, label="People"),
+        ]
+    )
 
 
 def dataframe_check(pw) -> None:
@@ -361,8 +371,17 @@ def stat(ctx: indah.Context) -> indah.Component:
         children=[
             indah.Row(
                 children=[
-                    indah.Stat(lambda: f"{pick(requests):,}", label="Requests", delta=lambda: delta(requests)),
-                    indah.Stat(lambda: pick(errors), label="Errors", delta=lambda: delta(errors), help="Per hour"),
+                    indah.Stat(
+                        lambda: f"{pick(requests):,}",
+                        label="Requests",
+                        delta=lambda: delta(requests),
+                    ),
+                    indah.Stat(
+                        lambda: pick(errors),
+                        label="Errors",
+                        delta=lambda: delta(errors),
+                        help="Per hour",
+                    ),
                 ]
             ),
             indah.Button("Next hour", lambda: hour.set(hour.value + 1)),
@@ -384,7 +403,12 @@ def stat_check(pw) -> None:
 
 
 def keyed_list(ctx: indah.Context) -> indah.Component:
-    tasks = indah.Signal([{"id": "t1", "title": "Write docs"}, {"id": "t2", "title": "Ship it"}])
+    tasks = indah.Signal(
+        [
+            {"id": "t1", "title": "Write docs", "remove_label": "Remove"},
+            {"id": "t2", "title": "Ship it", "remove_label": "Remove"},
+        ]
+    )
     nxt = {"n": 2}
 
     def on_item(key, event, value) -> None:  # sync or async; `key` is the row's id
@@ -395,7 +419,12 @@ def keyed_list(ctx: indah.Context) -> indah.Component:
 
     def add() -> None:
         nxt["n"] += 1
-        tasks.set([*tasks.value, {"id": f"t{nxt['n']}", "title": f"Task {nxt['n']}"}])
+        tasks.set(
+            [
+                *tasks.value,
+                {"id": f"t{nxt['n']}", "title": f"Task {nxt['n']}", "remove_label": "Remove"},
+            ]
+        )
 
     return indah.Column(
         children=[
@@ -415,7 +444,7 @@ def keyed_list_check(pw) -> None:
     expect(page.get_by_text("Write the docs | Ship it")).to_be_visible()
     page.get_by_role("button", name="Add task").click()
     expect(page.get_by_text("Write the docs | Ship it | Task 3")).to_be_visible()
-    page.get_by_role("button", name="remove_label").first.click()
+    page.get_by_role("button", name="Remove").first.click()
     expect(page.get_by_text("Ship it | Task 3")).to_be_visible()
     expect(page.get_by_role("textbox")).to_have_count(2)
 
@@ -432,7 +461,7 @@ def json_tree_check(pw) -> None:
 
     page = pw.page
     expect(page.get_by_text("gpt-4o")).to_be_visible()
-    page.get_by_label("Filter", exact=False).first.fill("refund")
+    page.get_by_label("Search JSON").fill("refund")
     expect(page.get_by_text("What is the refund window?")).to_be_visible()  # opened to the match
 
 

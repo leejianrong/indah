@@ -71,6 +71,18 @@ under "Upgrading". Start with the new guide, "Host an app for real users", on th
   image and audio hosts; a `Map` registers its tile host. Off by default and in `launch()`. The
   whole browser test suite now runs under it and fails on any violation.
 
+**The Studio** (`make demo`)
+
+- `make demo` is now the **indah Studio**: one app with a chapter per area (start, layout, overlays,
+  routing, data, live, media, extend, hosting), 53 feature pages that each show a live demo, its
+  source and its docs links, 9 full example apps (live log, pending queue, 20,000-row table, routed
+  dashboard, editor, hosted roles and tokens, component showcase, themed app, params and deep
+  links), and a playground that runs a few lines of indah you type. The per-feature `make demo-*`
+  targets and the review server are gone; the full apps are still files in `examples/`.
+- A test fails when a public name in `indah.__all__` has no Studio page, and the browser suite opens
+  every page (under `csp="strict"`) and fails on console errors, failed requests and CSP violations.
+  See `docs/STUDIO.md` to add a page.
+
 **Editor and recipes**
 
 - `CodeEditor`: a JSON, YAML and plain-text editor (CodeMirror 6) with highlighting,
@@ -102,6 +114,8 @@ under "Upgrading". Start with the new guide, "Host an app for real users", on th
 
 ### Changed
 
+- A link in `Text(markdown=True)` that points within the site (`/path`, `#anchor`, `./x`, `../x`)
+  now opens in the same tab; links to other sites (`http(s)`, `mailto`) still open in a new tab.
 - `POST /api/event` requires `Content-Type: application/json` (`415` otherwise, before the body
   is read), so a cross-site "simple" request cannot reach the handler.
 - An event with no session id is `400`, unless the app is one explicit shared `Session`
