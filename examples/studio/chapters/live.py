@@ -107,6 +107,37 @@ def bounded_check(pw) -> None:
     expect(page.get_by_text("5 kept (limit 5)")).to_be_visible()  # the tail still moved on, bounded
 
 
+# -- ctx.every and ctx.spawn ---------------------------------------------------------------------
+
+
+def every(ctx: indah.Context) -> indah.Component:
+    ticks = indah.Signal(0)
+    ctx.every(0.5, lambda: ticks.set(ticks.value + 1), immediately=True)  # stops with the tab
+    ran = indah.Signal("not yet")
+
+    async def background() -> None:
+        await asyncio.sleep(0.5)
+        ran.set("done")
+
+    ctx.spawn(background())  # any coroutine, cancelled if the tab closes first
+    return indah.Column(
+        children=[
+            indah.Text(lambda: f"Refreshed {ticks.value} time(s)"),
+            indah.Text(lambda: f"Background task: {ran.value}"),
+        ]
+    )
+
+
+def every_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.get_by_text("Background task: done")).to_be_visible()
+    first = page.get_by_text("Refreshed ").inner_text()
+    page.wait_for_timeout(1300)
+    assert page.get_by_text("Refreshed ").inner_text() != first
+
+
 # -- StreamText ----------------------------------------------------------------------------------
 
 
@@ -339,6 +370,20 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(26,),
             check=bounded_check,
+        ),
+        Page(
+            slug="every",
+            title="ctx.every and ctx.spawn",
+            summary=(
+                "A refresh loop and a background task that belong to this tab: `ctx.every` calls "
+                "a function on a timer and `ctx.spawn` runs a coroutine. Both stop when the tab "
+                "closes, and a failing call is logged once without stopping the loop."
+            ),
+            build=every,
+            covers=("Context", "Signal"),
+            docs="dashboards.md",
+            adr=(25,),
+            check=every_check,
         ),
         Page(
             slug="stream-text",

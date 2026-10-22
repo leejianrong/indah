@@ -58,6 +58,26 @@ def build(ctx):
 A `Stream` sends only new rows to the browser, so a growing log costs O(new rows), not
 O(all rows). Both calls are released when the tab closes.
 
+### A refresh loop per tab: `ctx.every` and `ctx.spawn`
+
+Work that should run while a tab is open, and stop when it closes, belongs on the context.
+
+```python
+def build(ctx):
+    count = indah.Signal(0)
+
+    async def refresh():  # a plain function works too
+        count.set(await fetch_pending_count())
+
+    ctx.every(5, refresh, immediately=True)  # now, then every 5 seconds
+    ctx.spawn(watch_something(ctx))  # any coroutine, for the life of the session
+```
+
+Both are cancelled when the session ends: a closed tab, an eviction or an idle reaping. An
+exception is logged once and the loop carries on (it logs again only after a successful call), so
+one bad fetch does not stop the refresh. Call them from the session factory or a handler, where an
+event loop is running; a plain function you pass to `every` runs on that loop, so keep it short.
+
 ## Show and act on rows with `Table`
 
 The rich `Table` takes dict rows with a stable key and typed columns.

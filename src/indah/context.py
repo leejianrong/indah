@@ -15,12 +15,17 @@ not the live ``Request``, which is dead once its response is sent.
 Keep the context in the UI-building layer: domain logic stays plain functions
 that take plain values (ADR-0009). ``conn`` can hold credentials (cookies, an
 ``Authorization`` header) for the session's lifetime, so do not log it.
+
+``ctx.every(seconds, fn)`` and ``ctx.spawn(coro)`` run background work that ends with the
+session (IND-154).
 """
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Coroutine, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -90,6 +95,7 @@ class Context:
         self.user: Principal | None = user if user is not None else self.conn.user
         self._on_close: list[Callable[[], None]] = []
         self._closed = False
+        self._spawned: set[asyncio.Task[Any]] = set()  # ctx.spawn / ctx.every, cancelled on close
         self._hub: Hub | None = None
         try:
             start = normalize_path(self.conn.app_path)
@@ -197,6 +203,70 @@ class Context:
         else:
             self._on_close.append(fn)
 
+    def spawn(self, coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any] | None:
+        """Run ``coro`` in the background for the life of this session.
+
+        The task is cancelled when the session ends (discard, eviction, idle reaping), and an
+        exception it raises is logged once rather than lost. Call it from the event loop (the
+        session factory or a handler). On a session that has already closed the coroutine is
+        dropped and ``None`` is returned."""
+        if self._closed:
+            coro.close()
+            return None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            coro.close()
+            raise RuntimeError(
+                "ctx.spawn needs a running event loop: call it from the session factory or a "
+                "handler"
+            ) from None
+        task = loop.create_task(coro)
+        self._spawned.add(task)
+        task.add_done_callback(self._spawn_done)
+        return task
+
+    def _spawn_done(self, task: asyncio.Task[Any]) -> None:
+        self._spawned.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            logger.error("indah ctx.spawn task failed", exc_info=task.exception())
+
+    def every(
+        self,
+        seconds: float,
+        fn: Callable[[], Any],
+        *,
+        immediately: bool = False,
+    ) -> asyncio.Task[Any] | None:
+        """Call ``fn`` every ``seconds`` for the life of this session (a refresh loop).
+
+        ``fn`` may be a plain function or ``async def``; it runs on the event loop, so keep it
+        short or await. The first call is after ``seconds``, or now with ``immediately=True``.
+        An exception is logged once and the loop carries on; it logs again only if the call
+        succeeds in between. The loop is cancelled when the session ends."""
+        if not seconds > 0:
+            raise ValueError("every(): seconds must be greater than 0")
+        return self.spawn(self._every_loop(float(seconds), fn, immediately))
+
+    @staticmethod
+    async def _every_loop(seconds: float, fn: Callable[[], Any], immediately: bool) -> None:
+        failing = False
+        skip_wait = immediately
+        while True:
+            if not skip_wait:
+                await asyncio.sleep(seconds)
+            skip_wait = False
+            try:
+                result = fn()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                if not failing:
+                    logger.exception("indah ctx.every callback raised")
+                failing = True
+            else:
+                failing = False
+
     def latest(self, topic: Topic[T], *, initial: Any = _MISSING) -> Signal[T | None]:
         """A signal holding the newest item published to ``topic`` (for a badge count, a
         status line). Starts at ``initial``, else the topic's latest retained item, else
@@ -221,6 +291,9 @@ class Context:
         if self._closed:
             return
         self._closed = True
+        for task in list(self._spawned):
+            task.cancel()
+        self._spawned.clear()
         callbacks, self._on_close = self._on_close, []
         for fn in callbacks:
             self._run(fn)

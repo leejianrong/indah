@@ -11,6 +11,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+
+- `ctx.every(seconds, fn, immediately=False)` and `ctx.spawn(coro)`: background work for the life of a
+  session. `every` calls a plain or `async` function on a timer; both are cancelled when the session
+  ends (discard, eviction, idle reaping), and an exception is logged once and does not stop the loop.
+  It replaces a hand-rolled task cancelled from `on_close`. No wire change.
+
 ## [0.5.0] - 2026-10-22
 
 The building blocks of an app screen. This release adds a frame (`AppShell`), the controls and layout
