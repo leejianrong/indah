@@ -1,6 +1,6 @@
 # Roadmap: 0.4.1 to 1.0
 
-- Status: **Proposed 2026-10-22, not approved.** Nothing on board IND has been changed.
+- Status: **Proposed 2026-10-22.** Owner decisions of 2026-10-22 are recorded under "Decisions" below.
 - Basis: `main` at 0.4.0 (on PyPI), the 38 open cards on board IND (id 30), `docs/SEMULA-REQUESTS-PLAN.md`,
   `docs/STUDIO.md`, `docs/RELEASING.md`, ADR-0005 (additive changes).
 - Sizing: about 25 points is one release of about two weeks for one agent. The semula plan delivered
@@ -13,7 +13,7 @@
 |---------|-------|--------|-------|----------|
 | 0.4.1 (patch, about 1 week) | Public demos work; hosted path verified | 8 | IND-167, IND-33, 2 new verification cards | 1 |
 | 0.5.0 | Build your own, and the app skeleton | 24 | IND-149, 150, 146, 147, 151, 156, 144, 145 | 1 |
-| 0.6.0 | Tables, text and small controls | 25 | IND-148, 166, 153, 154, 152, 160, 164, 158, 161, 168 | 1 |
+| 0.6.0 | Tables, text and small controls | 25 + 5 | IND-148, 166, 153, 154, 152, 160, 164, 158, 161, 168, plus the demo cleanup card (IND-172) | 1 |
 | 0.7.0 (provisional) | Command palette, promoted visuals, live docs | 25 | IND-165, 159, 157, 162, 163, 169, 83a, 61 | 1 |
 | 0.8.0 (provisional) | Live media and annotation | 22 | IND-74 (split 3 ways), 64, 65, 71, 56, 62 | 1, decided in the ADR |
 | Later | Needs a decision or has no demand yet | 16 | IND-57, 81, 66, 83b | - |
@@ -26,6 +26,14 @@ All 38 cards are placed: 2 + 8 + 10 + 8 + 6 + 3 + 1 = 38 (0.4.1 also gets two ne
 IND-74 (WebSocket for live media): its ADR must show that the frames are the same JSON and that the
 transport is a negotiated upgrade. If it needs a mandatory handshake or a change to an existing field,
 that is a v2 and the release becomes 0.8.0 with a bump, decided by the owner.
+
+## Decisions (owner, 2026-10-22)
+
+1. Redeploy the Fly gallery when ready (IND-167). Needs `fly auth login` on the machine that deploys.
+2. ADR-0039 (the web-component bridge) may be committed; it stays Proposed until the owner accepts it.
+3. IND-166: **plain `Text` looks like normal body text**, not a title or header. The old readout look
+   becomes opt-in. A new card, "Clean up and rework all demos and galleries after the Text redesign"
+   (IND-172, 5 points), follows IND-166 in 0.6.0.
 
 ## Overlaps and ordering found
 
@@ -124,6 +132,7 @@ Theme: the rest of semula's screens, and the one default-look change.
 | IND-161 Menu with keyboard navigation | 3 |
 | IND-152 Reactive page title and favicon | 2 |
 | IND-158 Empty state and Code with copy | 2 |
+| IND-172 Clean up and rework all demos and galleries (after IND-166) | 5 |
 | IND-168 Plan a home for the Studio pages (ADR) | 2 |
 | IND-154 ctx.every and ctx.spawn | 1 |
 | IND-160 Toast actions | 1 |
@@ -133,6 +142,8 @@ ADR-0025 for the async factory, and the Studio-home ADR (IND-168). Do IND-166 fi
 new scale and a single screenshot review covers it.
 
 Risks:
+- With IND-172 this release is 30 points, over the 25 target. If it slips, move IND-168 and IND-158 to
+  0.7.0 (IND-169 follows IND-168 there anyway) before cutting anything else.
 - IND-166 changes every app that uses plain `Text`. It needs an "Upgrading" note and a review of every
   Studio page and example in screenshots.
 - IND-153 runs an `await` inside session creation. With `secure=True` that happens in the signed-session
@@ -142,10 +153,10 @@ Risks:
   policy allows it. A new message type is additive.
 - IND-160 needs a per-session handler table for toast actions; it must not be sent to other tabs.
 
-Owner decides or does by hand (**ask first**):
-- **IND-166 changes how apps look by default.** Decide the scale (the card proposes body, title, label,
-  caption, mono), whether plain text gets inline code and emphasis, and whether the old readout look stays
-  as `variant="readout"`. No work on the default starts until this is answered.
+Owner decides or does by hand:
+- **IND-166 changes how apps look by default.** Decided: plain text is normal body text and the readout is
+  opt-in. Still open for the ADR: the exact scale (the card proposes body, title, label, caption, mono) and
+  whether plain text gets inline code and emphasis.
 - Approve the `pypi` environment run.
 
 ## 0.7.0 (provisional): command palette, promoted visuals, live docs, 25 points
@@ -235,6 +246,6 @@ Earliest sensible date: after 0.7.0.
 | Now | Close IND-155 as folded; check IND-66 for a duplicate |
 | Before 0.4.1 | Decide whether to cut 0.4.1; give access for V1 and V2 |
 | Before 0.5.0 build | Accept the bridge ADR |
-| Before 0.6.0 | Answer the IND-166 text questions (default look) |
+| Before 0.6.0 | Settle the Text scale and inline code and emphasis in the IND-166 ADR (the default look is decided) |
 | Before 0.7.0 | Built-in or semula-owned for Marked, BarStrip, Steps; hosted Studio or not |
 | Each release | Approve the `pypi` environment run |
