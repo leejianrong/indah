@@ -17,9 +17,11 @@ region="${FLY_REGION:-sin}"
 examples=(chatbot training_dashboard diffusion poster upload_classify object_detection charts stocks prettymap map_poster grc_map audio_analysis gpx_viewer)
 
 # Install the published wheel from PyPI (the python:3.12-slim base has no git, and a
-# PyPI install is what a user would run). Bump this when the gallery should track a new
-# release; the demos themselves are copied into the image, not pulled from the package.
-INDAH_REQ='indah>=0.2.1'
+# PyPI install is what a user would run). It is pinned to this checkout's version, not a
+# range: with ">=" Docker reuses the cached pip layer, so the image kept an old release
+# while the demos copied in beside it used newer API (gpx-viewer broke on a pre-0.3.0
+# indah, IND-167). Deploy after the release is on PyPI.
+INDAH_REQ="indah==$(sed -n 's/^version = "\(.*\)"/\1/p' "$repo/pyproject.toml" | head -1)"
 
 rm -rf "$out"
 mkdir -p "$out"
@@ -46,6 +48,9 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Fetch both ONNX models now, so the first visitor does not wait on (or fail on) a download
+# while the page says "connecting". The same default cache is read at run time.
+RUN python -c "from huggingface_hub import hf_hub_download as d; d('onnxmodelzoo/mobilenetv2-12', 'mobilenetv2-12.onnx'); d('onnxmodelzoo/ssd_mobilenet_v1_12', 'ssd_mobilenet_v1_12.onnx')"
 COPY . .
 EXPOSE 7860
 # One app mounts every demo under /<slug>; --factory builds it (imports the examples).

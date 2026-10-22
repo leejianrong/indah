@@ -60,8 +60,15 @@ Mode, and an edge rate-limiting rule.
 
 - `auto_stop_machines = "stop"` + `min_machines_running = 0` scale the machine to
   zero when idle; the first hit after idle pays a short cold start (fine for demos).
-- The image installs indah from `git+https://github.com/leejianrong/indah@main`; pin
-  to a release once indah is on PyPI (edit `INDAH_REQ` in `build_gallery.sh`).
+- The image installs `indah==<version in pyproject.toml>` from PyPI, so deploy after the
+  release is published. It is an exact pin on purpose: a `>=` range let Docker reuse an
+  old cached layer, and demos that need newer API (gpx-viewer) returned 500.
+- The two ONNX models are downloaded when the image is built, not on the first visit.
+- After every deploy, run the smoke test against the live site (it opens each demo,
+  uses its main control and fails on console errors, failed requests or "connecting"):
+  `GALLERY_URL=https://indah-demos.fly.dev uv run pytest tests/e2e/test_gallery.py`.
+  Without `GALLERY_URL` it builds the gallery from this checkout (needs numpy, pillow,
+  onnxruntime, huggingface_hub and matplotlib, else it skips).
 - The per-demo Hugging Face path (`deploy/spaces/`) is kept for anyone with HF PRO.
 - `[http_service.concurrency]` in the generated `fly.toml` bounds simultaneous
   connections on the one machine; `deploy_fly.sh` deploys with `--ha=false` so Fly
