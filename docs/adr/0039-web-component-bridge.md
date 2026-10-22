@@ -1,6 +1,6 @@
 # ADR-0039: Web-component bridge for custom components
 
-- Status: **Proposed** (IND-149; the owner accepts it before IND-150 is built)
+- Status: **Accepted** 2026-10-22 (IND-149). Two open questions are settled by the IND-150 spike; if either fails this ADR is amended.
 - Date: 2026-10-22
 - Deciders: Jian (owner)
 - Amends: ADR-0012 (a registered component may ship a module, not only a render spec)
