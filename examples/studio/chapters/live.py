@@ -138,6 +138,40 @@ def every_check(pw) -> None:
     assert page.get_by_text("Refreshed ").inner_text() != first
 
 
+# -- Skeleton ------------------------------------------------------------------------------------
+
+
+def skeleton(ctx: indah.Context) -> indah.Component:
+    loaded = indah.Signal(False)
+    ctx.spawn(_finish_loading(loaded))  # data "arrives" after a moment
+    return indah.Column(
+        children=[
+            indah.Skeleton(lines=1, height="1.6rem"),  # a title
+            indah.Skeleton(),  # three lines, the last one shorter
+            indah.Text(
+                lambda: (
+                    "Loaded: the real content replaces the placeholder."
+                    if loaded.value
+                    else "Loading..."
+                )
+            ),
+        ]
+    )
+
+
+async def _finish_loading(loaded: indah.Signal) -> None:
+    await asyncio.sleep(1.0)
+    loaded.set(True)
+
+
+def skeleton_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".skeleton").first).to_be_visible()
+    expect(page.get_by_text("Loaded: the real content")).to_be_visible()
+
+
 # -- StreamText ----------------------------------------------------------------------------------
 
 
@@ -384,6 +418,19 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(25,),
             check=every_check,
+        ),
+        Page(
+            slug="skeleton",
+            title="Skeleton: a placeholder while data loads",
+            summary=(
+                "Grey pulsing bars for content that has not arrived. An `async def` session factory "
+                "that takes too long starts the tab on one too (see the Async start app)."
+            ),
+            build=skeleton,
+            covers=("Skeleton",),
+            docs="components.md",
+            adr=(25,),
+            check=skeleton_check,
         ),
         Page(
             slug="stream-text",

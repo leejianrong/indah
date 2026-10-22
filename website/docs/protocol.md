@@ -87,7 +87,7 @@ The UI is a tree of nodes. A node is:
 
 | Type | Shape | When |
 |------|-------|------|
-| `init` | `{"v","type":"init","root":<node>}` | On connect, or a resume that fell back to a full snapshot |
+| `init` | `{"v","type":"init","root":<node>}` | On connect, or a resume that fell back to a full snapshot. It can also arrive mid-stream (with an SSE id): an `async def` session factory that outlived `factory_timeout` showed a `skeleton` first, and this `init` replaces the whole tree with the real one (IND-153). The shell already handles a second `init` |
 | `patch` | `{"v","type":"patch","changes":[<change>,...]}` | Granular updates to existing nodes |
 | `error` | `{"v","type":"error","message":"..."}` | A handler failed; the shell shows a toast |
 | `navigate` | `{"v","type":"navigate","path","replace"}` | `ctx.navigate(...)`: the shell pushes (or, with `replace`, rewrites) its history entry to the in-app `path`. An older shell ignores it |
@@ -126,7 +126,7 @@ the client's offset has been evicted from the buffer, **or the epoch is not this
 hub's** (the server restarted, so the offset means nothing), the server falls back to a
 fresh `init` (always correct, because a `StreamText` snapshot carries its full
 accumulated text). A bare integer id (no epoch) is still accepted and skips the epoch
-check. `init` and `ping` carry no id. See ADR-0011.
+check. `ping` and the `init` sent on connect carry no id (a mid-stream `init`, above, does). See ADR-0011.
 
 ## Client → server events (HTTP POST)
 
@@ -223,6 +223,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `card` | container | `title` (a surface panel); optional `variant` (`flat` / `tonal`; absent = outlined) and `padding` (a CSS length) | — |
 | `spacer` | layout | optional `size` (a CSS length; absent = grows to fill the free space) | — |
 | `divider` | layout | optional `vertical` | — |
+| `skeleton` | display | optional `lines` (default 3), `height` (a CSS length, default 1rem): grey placeholder bars, the last one shorter; announced as busy | — |
 | `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree); optional `variant` (plain text only: `title` / `label` / `caption` / `mono` / `readout`; absent = body text, ADR-0040) | — |
 | `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`), `confirm` (text: the shell asks first and posts `click` only once accepted) | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |

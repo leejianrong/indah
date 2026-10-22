@@ -38,6 +38,29 @@ def build(ctx: indah.Context) -> indah.Session:
     return indah.Session(root)
 ```
 
+### Load data before the first paint
+
+The factory may be `async def`. It is awaited, so its data is in the very first snapshot and the
+page never shows a dash and then the number:
+
+```python
+async def build(ctx: indah.Context) -> indah.Session:
+    stats = await fetch_overview()  # a database or HTTP call
+    return indah.Session(indah.Column(children=[indah.Stat(stats["entries"], label="Entries")]))
+
+
+app = indah.create_app(session_factory=build, factory_timeout=1.0)
+```
+
+If the factory takes longer than `factory_timeout` (1 second by default), the tab starts on a
+`Skeleton` and the real page replaces it, on the same stream, when the factory finishes.
+`factory_placeholder=` sets a different placeholder. A factory that raises shows the error and the
+next connection tries again; a tab that closes while it runs cancels it, and its `ctx.on_close`
+callbacks still run. A normal (sync) factory is unchanged. Two things to know: a click on a
+control that is not on the skeleton does nothing until the real page arrives, and
+`factory_timeout` and `factory_placeholder` apply to the built-in store, not to a `store=` you
+pass. See `examples/async_start.py` and the "Async start" app in the Studio.
+
 ## Push live data to every tab
 
 A `Topic` lives at app level. Any task publishes to it, and each tab follows it, so every tab

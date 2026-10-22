@@ -29,6 +29,35 @@ tasks, with no hook for anything else to clean up.
 - The store seam is amended (ADR-0010): `get_or_create(session_id, ctx_info=None)`;
   `SessionHandle` gains `owner` (unused until identity lands).
 
+## Amendment (2026-10-22): an `async def` factory (IND-153)
+
+A first paint with a dash and then the number is a flicker semula hand-rolls around. The factory may
+now be `async def` (a coroutine function, or an object whose `__call__` is one).
+
+- `InMemorySessionStore.aget_or_create` is the async twin of `get_or_create`; `app.py` awaits it
+  when the store has it, and a custom store without it is untouched. `get_or_create` on a store with
+  an async factory raises a `RuntimeError` that names `aget_or_create`. A sync factory takes the old
+  path byte for byte.
+- The request waits up to `create_app(factory_timeout=1.0)`. If the factory has finished, its
+  session is registered and its tree is the first snapshot, with no extra message.
+- If not, a **placeholder** session is registered (`factory_placeholder()`, default a `Skeleton`),
+  so the stream and `POST api/event` work at once. When the factory finishes, the real session is
+  swapped into the same `SessionHandle` and a fresh `init` is published on the same hub. The shell
+  already replaces its tree on a second `init`, and a `Router` is told the current path again
+  (its re-init rule). Nothing new on the wire except the `skeleton` component type, so
+  `protocol_version` stays 1.
+- Concurrent requests for one id share one factory run, so two tabs of one sid or a stream and an
+  event never build twice. Discarding the id (idle reaping, LRU eviction, `ctx.sign_out`, a closed
+  tab) cancels a running factory and runs the `ctx.on_close` callbacks registered so far, and a
+  factory that finishes after that is dropped.
+- A factory error before the timeout propagates to the request (as a sync factory's does). After the
+  placeholder is shown it is logged, sent as an `error` message and the session is discarded, so the
+  next connection retries instead of showing a skeleton for ever.
+- A secure app is unchanged: the owner and `ctx.user` are fixed before the factory runs, and
+  the signed-token checks run before `aget_or_create`.
+- The limit is per request and the factory runs on the event loop, so a factory must `await` its I/O.
+  A blocking call in it stalls every tab, as it would in a handler.
+
 ## Alternatives considered
 
 | Option | Why not |

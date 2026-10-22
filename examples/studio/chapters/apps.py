@@ -36,6 +36,12 @@ def _routes() -> Any:
     return semula_routes.build_app()
 
 
+def _async_start() -> Any:
+    import async_start
+
+    return async_start.build_app()
+
+
 def _editor() -> Any:
     import semula_editor
 
@@ -84,6 +90,15 @@ def _check_routes(pw: Any) -> None:
     page = pw.page
     page.get_by_role("link", name="support-bot").first.click()
     expect(page.get_by_text("cached entries").first).to_be_visible()
+
+
+def _check_async_start(pw: Any) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".skeleton").first).to_be_visible()  # the slow load starts on a skeleton
+    expect(page.get_by_text("Errors today")).to_be_visible(timeout=10000)  # then the real page
+    expect(page.locator(".skeleton")).to_have_count(0)
 
 
 def _check_editor(pw: Any) -> None:
@@ -152,6 +167,15 @@ CHAPTER = Chapter(
             build=_routes,
             covers=("Router", "Link"),
             check=_check_routes,
+        ),
+        AppEntry(
+            slug="async-start",
+            title="Async start (slow first load)",
+            summary="The session factory is `async def` and takes 2.5 s: the tab starts on a skeleton, then the real page arrives.",
+            build=_async_start,
+            covers=("create_app",),
+            adr=(25,),
+            check=_check_async_start,
         ),
         AppEntry(
             slug="editor",

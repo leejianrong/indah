@@ -22,6 +22,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   and `Shortcuts` yields; modifier combos and typing in an input are never the table's; Tab and Escape
   leave. Off by default, so no existing table changes. New optional props `keyboard` and `openable`
   and an `open` event (additive, `protocol_version` stays 1). The key-routing rule is in ADR-0030.
+- Async session factory (IND-153, ADR-0025 amendment): `session_factory` may be `async def`. It is awaited
+  for up to `create_app(factory_timeout=1.0)` seconds, so its data is in the first snapshot (no dash,
+  then the number). A slower factory lets the tab start on `factory_placeholder()` (a `Skeleton` by
+  default) and the real page replaces it on the same stream when the factory finishes; a factory that
+  raises shows the error and the next connection retries, and closing the tab cancels it. Sync factories are
+  unchanged. A custom `SessionStore` may add `aget_or_create`; one without it is untouched.
+- `Skeleton(lines=3, height=)`: grey placeholder bars that pulse (not for a viewer who prefers reduced
+  motion). A new component type (additive; a second `init` mid-stream is documented in
+  `docs/protocol.md`, `protocol_version` stays 1).
+
 
 - `ctx.toast(message, action=("Undo", fn), ttl=)`: a toast with a button. Clicking it runs `fn` once
   (a plain function or `async def`, checked by `guard()` at the click) and dismisses the toast. It goes to

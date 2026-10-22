@@ -2602,6 +2602,30 @@ class Divider(Component):
         return {"vertical": True} if self._vertical else {}
 
 
+class Skeleton(Component):
+    """A grey placeholder for content that has not arrived: ``lines`` pulsing bars, each
+    ``height`` tall (a CSS length, default 1rem). It is what a tab shows while an ``async``
+    session factory is still running (IND-153), and works anywhere you load data yourself.
+    The pulse stops for a viewer who asked for reduced motion."""
+
+    type = "skeleton"
+
+    def __init__(self, *, lines: int = 3, height: str = "") -> None:
+        super().__init__()
+        if not isinstance(lines, int) or isinstance(lines, bool) or lines < 1:
+            raise ValueError("Skeleton(lines=) must be a positive integer")
+        self._lines = lines
+        self._height = height
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if self._lines != 3:
+            props["lines"] = self._lines
+        if self._height:
+            props["height"] = self._height
+        return props
+
+
 class Grid(Component):
     """An N-column grid of children that collapses to one column at phone width."""
 
