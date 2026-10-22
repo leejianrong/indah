@@ -23,6 +23,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   session. `every` calls a plain or `async` function on a timer; both are cancelled when the session
   ends (discard, eviction, idle reaping), and an exception is logged once and does not stop the loop.
   It replaces a hand-rolled task cancelled from `on_close`. No wire change.
+- Rich table cells and truncation (IND-148): `Col(kind="cell", render=<spec>, sort_key=)` draws a
+  composite cell (a meter, a two-line caller, a tier rail) from the row's fields, using the same spec
+  vocabulary and tag allowlist as a `List` item; it is display only. The spec travels once in the
+  column, so a `Stream`-fed table sends nothing extra per row. A cell column sorts and is searched by
+  `sort_key`. `Col(truncate=True, max_width=)` clips a long text value with an ellipsis and a tooltip,
+  and `wrap=True` wraps it (refused with `virtual=True`). All optional and off by default, so a table
+  that does not use them is unchanged, and virtual scroll is as fast as before (additive,
+  `protocol_version` stays 1).
 
 ## [0.5.0] - 2026-10-22
 

@@ -6,6 +6,7 @@
   import { postEvent } from "./api.js";
   import { now } from "./stores.js";
   import Overlay from "./Overlay.svelte";
+  import Custom from "./Custom.svelte";
 
   let { props, nodeId } = $props();
 
@@ -179,7 +180,7 @@
     const q = query.trim().toLowerCase();
     if (!q || isRemote) return indexed; // remote: the server already filtered
     return indexed.filter((row) =>
-      allCols.some((c) => String(row.r[c.field] ?? "").toLowerCase().includes(q)),
+      allCols.some((c) => String(row.r[keyOf(c)] ?? "").toLowerCase().includes(q)),
     );
   });
   let sorted = $derived.by(() => {
@@ -224,11 +225,15 @@
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }
 
+  // What a column sorts and is searched by: a cell column has no single value, so it
+  // names a row field (`sortKey`); every other column uses its own field.
+  const keyOf = (col) => col.sortKey ?? col.field;
+
   function sortBy(col) {
     if (!col.sortable) return;
-    if (sortField === col.field) sortDir = -sortDir;
+    if (sortField === keyOf(col)) sortDir = -sortDir;
     else {
-      sortField = col.field;
+      sortField = keyOf(col);
       sortDir = 1;
     }
     page = 0;
@@ -346,8 +351,22 @@
             <td title={absTime(v)}>{fmtTime(v, col.timeFormat, $now)}</td>
           {:else if col.kind === "number"}
             <td class="num">{fmtNumber(v)}</td>
+          {:else if col.kind === "cell"}
+            <td
+              class="cell-rich"
+              class:trunc={col.truncate}
+              class:wrap={col.wrap}
+              style:max-width={col.truncate ? (col.maxWidth ?? "32ch") : null}
+            >
+              <Custom spec={col.render} props={row.r} {nodeId} />
+            </td>
           {:else}
-            <td>{v ?? ""}</td>
+            <td
+              class:trunc={col.truncate}
+              class:wrap={col.wrap}
+              style:max-width={col.truncate ? (col.maxWidth ?? "32ch") : null}
+              title={col.truncate ? (v ?? null) : null}>{v ?? ""}</td
+            >
           {/if}
         {/each}
         {#if props.actions?.length}
@@ -448,7 +467,7 @@
             <th
               style:width={col.width ?? null}
               class:num={col.kind === "number"}
-              aria-sort={sortField === col.field
+              aria-sort={sortField === keyOf(col)
                 ? sortDir === 1
                   ? "ascending"
                   : "descending"
@@ -463,7 +482,7 @@
                 <span>{col.title}</span>
                 {#if col.sortable}
                   <span class="sort-caret" aria-hidden="true"
-                    >{sortField === col.field ? (sortDir === 1 ? "▲" : "▼") : "↕"}</span
+                    >{sortField === keyOf(col) ? (sortDir === 1 ? "▲" : "▼") : "↕"}</span
                   >
                 {/if}
               </button>

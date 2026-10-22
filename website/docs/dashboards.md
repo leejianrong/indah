@@ -107,6 +107,12 @@ table = Table(
 
 - `RowAction(label, on_click, confirm=)` calls `on_click(key)`. A row can be stale by the time
   the click lands, so the handler must tolerate a key that no longer exists.
+- `Col(kind="cell", render=spec, sort_key="field")` draws a composite cell from the row's fields,
+  with the same spec vocabulary as a `List` item (`text` and `bind` name row fields). It is
+  display only, and it sorts and is searched by `sort_key`. Keep a cell to one line in a
+  `virtual` table. `Col("prompt", truncate=True, max_width="30ch")` clips a long value with an
+  ellipsis and shows the full text on hover; `wrap=True` lets it wrap instead (not with
+  `virtual=True`). Both are off by default. The Studio page "Table: composite cells" shows them.
 - `density="compact"` shrinks one table. Pass a `Signal[str]` to let the viewer toggle it.
 
 ### Tens of thousands of rows: `remote=` and `virtual=`

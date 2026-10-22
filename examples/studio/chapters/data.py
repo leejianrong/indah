@@ -162,6 +162,74 @@ def table_rich_check(pw) -> None:
     expect(page.get_by_text("Selected key: call-0003")).to_be_visible()
 
 
+# -- Composite cells and truncation (IND-148) ----------------------------------------------------
+
+PROMPTS = [
+    ("Summarise the incident report and list the three follow-up actions for the on-call team", 5),
+    ("Translate the onboarding guide into French, keeping every code block untouched", 3),
+    ("Why does the nightly export fail only on the first day of the month?", 4),
+    ("Draft a polite reply declining the meeting and proposing two other times next week", 2),
+    ("Classify these 400 support tickets by product area and urgency, then export a CSV", 5),
+    ("What is the capital of Australia?", 1),
+    ("Rewrite this paragraph for a nine-year-old without losing the numbers in it", 3),
+    ("Explain the difference between a mutex and a semaphore, with a short C example", 4),
+]
+
+
+def table_cells(ctx: indah.Context) -> indah.Component:
+    rows = [
+        {
+            "id": f"req-{i:02d}",
+            "who": ["ana", "bo", "cy", "dee"][i % 4],
+            "route": ["/chat", "/summarise", "/classify"][i % 3],
+            "prompt": text,
+            "note": "Matched on the first try. " * (1 + i % 3),
+            "tier": tier,
+        }
+        for i, (text, tier) in enumerate(PROMPTS)
+    ]
+    match = {
+        "tag": "meter",
+        "attrs": {"min": "0", "max": "5", "aria-label": "Match tier"},
+        "bind": {"value": "tier"},
+    }
+    who = {
+        "tag": "div",
+        "children": [
+            {"tag": "strong", "text": "who"},
+            {"tag": "small", "text": "route", "class": "muted"},
+        ],
+    }
+    return indah.Table(
+        rows=rows,
+        key="id",
+        search=True,
+        height="20rem",
+        columns=[
+            indah.Col("id", kind="mono"),
+            indah.Col("who", "Caller", kind="cell", render=who),
+            indah.Col("tier", "Match", kind="cell", render=match, sort_key="tier", width="9rem"),
+            indah.Col("prompt", "Prompt", truncate=True, max_width="26ch"),
+            indah.Col("note", "Notes", wrap=True, width="14rem"),
+        ],
+    )
+
+
+def table_cells_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator("tbody tr")).to_have_count(len(PROMPTS))
+    expect(page.locator("tbody tr").first.locator("meter")).to_be_visible()
+    prompt = page.locator("tbody tr").first.locator("td.trunc")
+    assert prompt.get_attribute("title") == PROMPTS[0][0]  # the full text is on hover
+    assert prompt.evaluate("el => el.scrollWidth > el.clientWidth")  # and clipped on screen
+    page.get_by_role("button", name="Match").click()  # a cell column sorts by its sort_key
+    expect(page.locator("tbody tr").first).to_contain_text("What is the capital")
+    page.get_by_label("Filter rows").fill("mutex")
+    expect(page.locator("tbody tr")).to_have_count(1)
+
+
 # -- Row actions and multi-select ---------------------------------------------------------------
 
 
@@ -518,6 +586,20 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(27,),
             check=table_rich_check,
+        ),
+        Page(
+            slug="table-cells",
+            title="Table: composite cells",
+            summary=(
+                'A `Col(kind="cell", render=...)` draws a cell from the row\'s fields (a meter, a '
+                "two-line caller); `truncate=` clips a long prompt with a tooltip, `wrap=` lets a "
+                "note wrap. Sort the Match column and search."
+            ),
+            build=table_cells,
+            covers=("Col",),
+            docs="dashboards.md",
+            adr=(27,),
+            check=table_cells_check,
         ),
         Page(
             slug="table-actions",

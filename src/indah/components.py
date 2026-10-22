@@ -1597,7 +1597,7 @@ class DataFrame(Component):
         return {"data": lambda: _to_table(_read(self._source))}
 
 
-_COL_KINDS = frozenset({"text", "mono", "badge", "time", "number"})
+_COL_KINDS = frozenset({"text", "mono", "badge", "time", "number", "cell"})
 _TONES = frozenset({"ok", "warn", "err", "info", "neutral"})
 _CSS_LENGTH = re.compile(r"^\d+(\.\d+)?(ch|px|rem|em|%|vw|vh)$")
 
@@ -1613,6 +1613,18 @@ class Col:
     ``time_format`` (for ``kind="time"`` only) picks how a time reads: ``"relative"`` (the
     default), ``"clock"`` (``09:14:22.318``) or ``"datetime"`` (``2026-10-21 09:14:22``), both in
     the viewer's local time. The tooltip always carries the full ISO (UTC) value.
+
+    ``kind="cell"`` draws a composite cell from the row's fields (IND-148): ``render`` is a
+    render spec in the same vocabulary as a ``List`` item (``text`` and ``bind`` name row
+    fields, ``literal`` is fixed text), validated against the same tag allowlist. It is
+    display only, so an ``on`` in it is refused. The spec travels once, in the column, not per
+    row, so a ``Stream``-fed table pays nothing extra. A cell column sorts and is searched by
+    ``sort_key`` (a row field; default ``field``), because there is no single value to compare.
+    In a ``virtual`` table every row has one fixed height, so keep a cell to one line.
+
+    ``truncate=True`` clips a long value with an ellipsis at ``max_width`` (default ``32ch``)
+    and shows the full text in a tooltip; ``wrap=True`` lets it wrap instead. Both are off by
+    default, so a column looks as before. ``wrap`` is refused in a ``virtual`` table.
     """
 
     field: str
@@ -1622,6 +1634,11 @@ class Col:
     sortable: bool = True
     tones: dict[str, str] | None = None
     time_format: str = "relative"
+    render: dict[str, Any] | RenderSpec | None = None
+    sort_key: str | None = None
+    truncate: bool = False
+    max_width: str | None = None
+    wrap: bool = False
 
     def __post_init__(self) -> None:
         if self.kind not in _COL_KINDS:
@@ -1635,6 +1652,31 @@ class Col:
                 raise ValueError(f"Col tone {tone!r} for {value!r} not in {sorted(_TONES)}")
         if self.width is not None and not _CSS_LENGTH.match(self.width):
             raise ValueError(f"Col width {self.width!r} must be a length like '12ch' or '8rem'")
+        if self.kind == "cell" and self.render is None:
+            raise ValueError("Col kind='cell' needs render= (a render spec for the cell)")
+        if self.render is not None and self.kind != "cell":
+            raise ValueError("Col render= only applies to kind='cell'")
+        if self.render is not None:
+            spec = (
+                self.render
+                if isinstance(self.render, RenderSpec)
+                else RenderSpec.model_validate(self.render)
+            ).validated()
+            if _spec_has_events(spec):
+                raise ValueError("a table cell is display only: remove 'on' from the render spec")
+            object.__setattr__(self, "render", spec.wire())  # frozen: store the validated wire form
+        if self.truncate and self.wrap:
+            raise ValueError("Col truncate and wrap are alternatives; set one")
+        if self.max_width is not None:
+            if not self.truncate:
+                raise ValueError("Col max_width= needs truncate=True")
+            if not _CSS_LENGTH.match(self.max_width):
+                raise ValueError(f"Col max_width {self.max_width!r} must be a length like '30ch'")
+
+    @property
+    def query_key(self) -> str:
+        """The row field a viewer's sort (and a remote loader) refers to for this column."""
+        return self.sort_key or self.field
 
     def wire(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -1649,7 +1691,21 @@ class Col:
             out["tones"] = dict(self.tones)
         if self.time_format != "relative":
             out["timeFormat"] = self.time_format
+        if self.render is not None:
+            out["render"] = self.render
+        if self.sort_key is not None:
+            out["sortKey"] = self.sort_key
+        if self.truncate:
+            out["truncate"] = True
+            if self.max_width is not None:
+                out["maxWidth"] = self.max_width
+        if self.wrap:
+            out["wrap"] = True
         return out
+
+
+def _spec_has_events(spec: RenderSpec) -> bool:
+    return bool(spec.on) or any(_spec_has_events(child) for child in spec.children)
 
 
 DENSITIES = ("comfortable", "compact")
@@ -1806,6 +1862,8 @@ class Table(Component):
             raise ValueError(f"Table density must be one of {DENSITIES}, got {density!r}")
         if virtual and (height is None or (rows is None and remote is None)):
             raise ValueError("Table virtual=True needs the rich form and height=")
+        if virtual and any(c.wrap for c in columns or []):
+            raise ValueError("Col wrap=True needs rows of varying height; virtual=True fixes it")
         if remote is not None:
             if rows is not None or source is not None:
                 raise ValueError("Table remote= replaces rows=/source: pass one or the other")
@@ -1957,7 +2015,7 @@ class Table(Component):
                 self._selected.set(int(payload["index"]))
                 return True
         if event == "query" and self._loader is not None:
-            sortable = {c.field for c in self._columns or [] if c.sortable}
+            sortable = {c.query_key for c in self._columns or [] if c.sortable}
             try:
                 query = TableQuery.parse(payload, sortable)
             except ValueError:
