@@ -69,6 +69,16 @@ these, in this order:
 4. A widget's keys are opt-in (`Table(keyboard=True)` or `on_open=`), so an existing page's key
    behaviour does not change when the shell is upgraded.
 
+**Menu (IND-161, note).** `Menu(trigger, items)` is the ARIA menu button: `role="menu"` and `menuitem`,
+`aria-haspopup`/`aria-expanded`, arrows (wrapping), Home/End, a typeahead letter, Escape to the trigger, Tab
+closes and moves on. It follows the key-routing rule above (acts only on keys from the trigger or an item,
+defaults every key it handles, never traps). The popup is moved to `<body>` and placed in viewport
+coordinates, because an ancestor with a transform (the AppShell drawer) or an overflow would move or clip a
+`position: fixed` child; it closes on an outside click, a scroll or a resize rather than drift from its
+trigger. An item is chosen by id (`key=`, else the label) against the *current* items, so a stale click does
+nothing; `confirm=` reuses the Button confirm dialog. The wire adds the `menu` type and a `select {item}`
+event (additive). Omitting an item for a principal is the app's job with `ctx.only`, as for any component.
+
 ## Alternatives considered
 
 | Option | Why not |

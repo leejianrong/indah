@@ -41,8 +41,10 @@
   }
   // Choosing something that navigates or acts closes the drawer; a select or text field inside
   // the rail (a project switcher) does not.
+  // A button that only opens something (a menu) is not choosing: the drawer stays.
   function onRailClick(e) {
-    if (narrow && e.target.closest("a[href], button")) hide(false);
+    const hit = e.target.closest("a[href], button");
+    if (narrow && hit && !hit.hasAttribute("aria-haspopup")) hide(false);
   }
   // A closed drawer is off screen and must not be reachable by keyboard.
   let inert = $derived(narrow && !open);

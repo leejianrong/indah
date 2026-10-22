@@ -225,6 +225,14 @@ indah.Button("Delete", delete, confirm="Delete this entry?")  # asks first
 indah.Modal(title="Conflict", open=open_, size="lg", children=[...])
 indah.Drawer(title="Review", open=open_, side="right", children=[...])
 
+indah.Menu(
+    "Actions",
+    [
+        indah.MenuItem("Rename", rename, shortcut="F2"),  # shortcut is display text only
+        indah.MenuItem("Delete", delete, danger=True, confirm="Delete this entry?"),
+    ],
+)  # a menu button; items may also be a Signal, Computed or function returning the list
+
 ctx.toast("Saved", kind="success")  # info, success, warn or error; ttl=0 sticks
 ctx.toast("Approved", ttl=8, action=("Undo", undo))  # a button; runs undo once, then dismisses
 indah.Badge(lambda: f"{n.value} waiting", tone="warn")
@@ -239,6 +247,16 @@ indah.Shortcuts(
     }
 )
 ```
+
+A `Menu` opens on click, Enter, Space or the arrow keys and follows the usual menu keys: Up and Down move
+(and wrap), Home and End jump, a letter moves to the next item that starts with it, Escape closes and
+returns focus to the trigger, and Tab closes and moves on, so the keyboard is never trapped. Choosing
+an item closes the menu and runs its handler. A `MenuItem(shortcut="F2")` only *shows* the key; bind it
+with `Shortcuts`. Items are matched by `key=` (default: the label) against the current list, so a click
+that lands as an item disappears does nothing. To leave an item out for someone who may not use it, build
+the list with `ctx.only(perm, lambda: MenuItem(...))` and wrap the handler in `guard(perm)`: an omitted
+item is never sent, and `guard` checks again at the click. A `Menu` goes in a row, a card or a rail;
+a table cell is display only, so keep `RowAction` for per-row buttons.
 
 `confirm=` is a UX guard only: the server still runs any click it receives, so check
 authorization in your handler. A toast goes to the current tab only, never put a secret in
