@@ -635,6 +635,14 @@
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       }
       .table.rich td.wrap { white-space: normal; overflow-wrap: anywhere; }
+      /* Keyboard navigation (IND-164): the ring shows only while the table has keyboard focus. */
+      .table.rich[role=grid]:focus { outline: none; }
+      .table.rich[role=grid]:focus-visible tr.kb-active > td {
+        background: var(--surface-3);
+        box-shadow: inset 0 2px 0 var(--primary), inset 0 -2px 0 var(--primary);
+      }
+      .table.rich[role=grid]:focus-visible tr.kb-active > td:first-child { box-shadow: inset 2px 2px 0 var(--primary), inset 0 -2px 0 var(--primary); }
+      .table.rich[role=grid]:focus-visible tr.kb-active > td:last-child { box-shadow: inset -2px 2px 0 var(--primary), inset 0 -2px 0 var(--primary); }
       .table.rich td.cell-rich { white-space: nowrap; }
       .table.rich td.cell-rich.wrap { white-space: normal; }
       .cell-badge {

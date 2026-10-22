@@ -2,7 +2,7 @@
   // Rich table (ADR-0027): keyed rows, typed cells, sticky header, client sort/page and
   // key-based select. Rows are objects; a Stream-bound table grows through `append`
   // patches and the shell keeps the newest N (`trim`), so the DOM stays bounded.
-  import { onMount, untrack } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { postEvent } from "./api.js";
   import { now } from "./stores.js";
   import Overlay from "./Overlay.svelte";
@@ -285,6 +285,145 @@
     postEvent(nodeId, "select", rowKey ? { key: row.k } : { index: row.i });
   }
 
+  // Keyboard navigation (IND-164, ADR-0030 note). Opt-in (`keyboard` / `openable`): the table
+  // is then one tab stop (role=grid, aria-activedescendant) with an active row held *by key*,
+  // so streamed rows, sorting and paging never move it. Moving posts nothing; Enter opens
+  // (or selects), Space ticks. The focused table takes its keys first and calls
+  // preventDefault, which Shortcuts honours; modifier combos and anything typed in an input
+  // inside the table are never ours; Escape and Tab leave (no keyboard trap).
+  let kb = $derived(!!props.keyboard);
+  let activeIdx = $state(null);
+  let activeKey = null;
+  let pendingEdge = null; // "first" | "last": where to land when the next page arrives
+  let tableEl = $state(null);
+  let headEl = $state(null);
+  let navCount = $derived(isVirtual ? vTotal : view.length);
+  const rowAt = (i) => (isVirtual ? (isRemote ? cachedRow(i) : sorted[i]) : view[i]);
+  const rowDomId = (i) => `${nodeId}-row-${i}`;
+  let activeDescendant = $derived(
+    kb && activeIdx !== null && (!isVirtual || (activeIdx >= vStart && activeIdx < vEnd))
+      ? rowDomId(activeIdx)
+      : null,
+  );
+  // Rows came, went or reordered: follow the active row by key; else clamp. A page change
+  // asked for from the keyboard lands on its first or last row.
+  $effect(() => {
+    if (!kb) return;
+    const list = isVirtual ? (isRemote ? null : sorted) : view;
+    const count = isVirtual ? vTotal : view.length;
+    untrack(() => {
+      if (pendingEdge && count > 0) {
+        activeIdx = pendingEdge === "last" ? count - 1 : 0;
+        pendingEdge = null;
+        activeKey = list ? (list[activeIdx]?.k ?? null) : null;
+        tick().then(() => ensureVisible(activeIdx));
+        return;
+      }
+      if (activeIdx === null) return;
+      if (list && activeKey !== null) {
+        const n = list.findIndex((r) => r.k === activeKey);
+        if (n >= 0) {
+          if (n !== activeIdx) activeIdx = n;
+          return;
+        }
+      }
+      activeIdx = count ? Math.min(activeIdx, count - 1) : null;
+      activeKey = list && activeIdx !== null ? (list[activeIdx]?.k ?? null) : null;
+    });
+  });
+  function ensureVisible(i) {
+    if (!scroller || i === null) return;
+    const headH = headEl?.offsetHeight ?? 0;
+    if (isVirtual) {
+      // Row i sits at headH + i*rowH in the table; the sticky header covers the first headH.
+      const above = i * rowH;
+      const below = headH + (i + 1) * rowH - scroller.clientHeight;
+      if (above < scroller.scrollTop) scroller.scrollTop = above;
+      else if (below > scroller.scrollTop) scroller.scrollTop = below;
+      return;
+    }
+    const el = document.getElementById(rowDomId(i));
+    if (!el) return;
+    if (scroller.scrollHeight <= scroller.clientHeight) {
+      el.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const sr = scroller.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    if (er.top < sr.top + headH) scroller.scrollTop -= sr.top + headH - er.top;
+    else if (er.bottom > sr.bottom) scroller.scrollTop += er.bottom - sr.bottom;
+  }
+  function setActive(i, scroll = true) {
+    const n = navCount;
+    if (!n) return;
+    activeIdx = Math.max(0, Math.min(n - 1, i));
+    const r = rowAt(activeIdx);
+    activeKey = r && !r.ph ? r.k : null;
+    if (scroll) tick().then(() => ensureVisible(activeIdx));
+  }
+  const pagedNav = $derived(!isVirtual && (isRemote || pageSize > 0));
+  function turnPage(delta, edge) {
+    const to = page + delta;
+    if (!pagedNav || to < 0 || to >= pageCount) return;
+    pendingEdge = edge;
+    goToPage(to);
+  }
+  function onFocus() {
+    if (!kb || activeIdx !== null || !navCount) return;
+    const i = props.value == null ? -1 : (isVirtual ? sorted : view).findIndex((r) => r.k === props.value);
+    setActive(i >= 0 ? i : 0, false);
+  }
+  function onKeyDown(e) {
+    if (!kb || e.target !== e.currentTarget || e.ctrlKey || e.metaKey || e.altKey) return;
+    const n = navCount;
+    const cur = activeIdx ?? 0;
+    const screenful = Math.max(1, Math.floor((viewH - (headEl?.offsetHeight ?? 0)) / (rowH || 36)) - 1);
+    const row = activeIdx === null ? null : rowAt(activeIdx);
+    switch (e.key) {
+      case "ArrowDown":
+      case "j":
+        if (activeIdx === null) setActive(0);
+        else if (cur + 1 < n) setActive(cur + 1);
+        else turnPage(1, "first");
+        break;
+      case "ArrowUp":
+      case "k":
+        if (activeIdx === null) setActive(0);
+        else if (cur > 0) setActive(cur - 1);
+        else turnPage(-1, "last");
+        break;
+      case "PageDown":
+        setActive(cur + screenful);
+        break;
+      case "PageUp":
+        setActive(cur - screenful);
+        break;
+      case "Home":
+        setActive(0);
+        break;
+      case "End":
+        setActive(n - 1);
+        if (props.follow && sortField === null) resumeFollowing();
+        break;
+      case "Enter":
+        if (row && !row.ph) {
+          if (props.openable) postEvent(nodeId, "open", { key: row.k });
+          else selectRow(row);
+        }
+        break;
+      case " ":
+        if (!props.checkable) return;
+        if (row && !row.ph) toggleCheck(row);
+        break;
+      case "Escape":
+        tableEl?.blur();
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+  }
+
   // "3s ago" for an ISO string or epoch (ms, or seconds when small). `now` ticks once a
   // second for the whole page, so every time cell stays live from one timer.
   function toMs(v) {
@@ -327,8 +466,17 @@
   }
 </script>
 
-{#snippet rowTpl(row)}
-      <tr class:selected={props.value === row.k} onclick={() => selectRow(row)}>
+{#snippet rowTpl(row, pos)}
+      <tr
+        id={kb ? rowDomId(pos) : null}
+        aria-rowindex={kb ? pos + 2 : null}
+        class:selected={props.value === row.k}
+        class:kb-active={kb && activeIdx === pos}
+        onclick={() => {
+          if (kb) setActive(pos, false);
+          selectRow(row);
+        }}
+      >
         {#if props.checkable}
           <td class="check-col" onclick={(e) => e.stopPropagation()}>
             <input
@@ -449,8 +597,20 @@
     bind:clientHeight={viewH}
     onscroll={onScroll}
   >
-    <table class="dataframe table rich" class:selectable={props.selectable}>
-      <thead>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <table
+      class="dataframe table rich"
+      class:selectable={props.selectable}
+      role={kb ? "grid" : null}
+      tabindex={kb ? 0 : null}
+      aria-label={kb ? props.label || null : null}
+      aria-rowcount={kb ? navCount + 1 : null}
+      aria-activedescendant={activeDescendant}
+      bind:this={tableEl}
+      onkeydown={onKeyDown}
+      onfocus={onFocus}
+    >
+      <thead bind:this={headEl}>
         <tr>
           {#if props.checkable}
             <th class="check-col">
@@ -496,19 +656,19 @@
           <tr class="vspacer" aria-hidden="true" style:height="{vStart * rowH}px"
             ><td colspan={colSpan}></td></tr
           >
-          {#each vRows as row (row.k)}
+          {#each vRows as row, n (row.k)}
             {#if row.ph}
               <tr class="ph" aria-hidden="true"><td colspan={colSpan}>…</td></tr>
             {:else}
-              {@render rowTpl(row)}
+              {@render rowTpl(row, vStart + n)}
             {/if}
           {/each}
           <tr class="vspacer" aria-hidden="true" style:height="{Math.max(0, vTotal - vEnd) * rowH}px"
             ><td colspan={colSpan}></td></tr
           >
         {:else}
-          {#each view as row (row.k)}
-            {@render rowTpl(row)}
+          {#each view as row, n (row.k)}
+            {@render rowTpl(row, n)}
           {/each}
         {/if}
       </tbody>

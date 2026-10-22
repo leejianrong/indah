@@ -13,6 +13,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- Table keyboard navigation: `Table(on_open=fn)` (or `keyboard=True`) makes a rich or remote table one
+  tab stop (`role=grid`) that `j`/`k` and the arrows, `Home`/`End`, `PageUp`/`PageDown`, Space (ticks a
+  `checked=` row) and Enter drive; Enter calls `fn(key)` (sync or `async`), or selects like a click
+  when there is no `on_open`. The active row is held by key, so streamed rows, sorting and `follow=` do
+  not move it, it scrolls into view under the sticky header (also in a 20,000-row `virtual` table), and
+  an arrow past the end of a paged or remote table turns the page. A focused table takes its keys first
+  and `Shortcuts` yields; modifier combos and typing in an input are never the table's; Tab and Escape
+  leave. Off by default, so no existing table changes. New optional props `keyboard` and `openable`
+  and an `open` event (additive, `protocol_version` stays 1). The key-routing rule is in ADR-0030.
+
 - `ctx.toast(message, action=("Undo", fn), ttl=)`: a toast with a button. Clicking it runs `fn` once
   (a plain function or `async def`, checked by `guard()` at the click) and dismisses the toast. It goes to
   this tab only; a second click or a stale toast does nothing. The pending handlers are held per session

@@ -55,6 +55,20 @@ after a handler runs, and keyboard shortcuts. indah has only an error toast.
 
 Table row actions and multi-select (IND-99) are recorded in ADR-0027.
 
+**Key routing for focused widgets (IND-164, note).** A widget that owns keys while it has focus
+(the keyboard-navigable `Table`; the `CommandPalette` of IND-165 follows the same rule) obeys
+these, in this order:
+
+1. It acts only on key events whose target is the widget itself, never on keys typed in an input,
+   textarea or button inside it, and never on a key with `ctrl`, `meta` or `alt` held. `mod+`
+   combos always belong to `Shortcuts`.
+2. When it handles a key it calls `preventDefault()`. `Shortcuts` already skips a defaulted event,
+   so a bare `j` moves the table's row when the table has focus and fires the `Shortcuts` `j`
+   binding anywhere else. The focused widget is the more specific context, so it wins.
+3. It never traps: Tab moves on and Escape blurs it (WCAG 2.1.2).
+4. A widget's keys are opt-in (`Table(keyboard=True)` or `on_open=`), so an existing page's key
+   behaviour does not change when the shell is upgraded.
+
 ## Alternatives considered
 
 | Option | Why not |

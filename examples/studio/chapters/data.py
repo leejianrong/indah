@@ -386,6 +386,56 @@ def table_follow(ctx: indah.Context) -> indah.Component:
     )
 
 
+def table_keyboard(ctx: indah.Context) -> indah.Component:
+    calls = make_calls(40, seed=3)
+    opened = indah.Signal("nothing opened yet")
+    bells = indah.Signal(0)
+    checked = indah.Signal([])
+
+    def open_call(key: str) -> None:
+        opened.set(f"opened {key}")
+
+    return indah.Column(
+        children=[
+            indah.Shortcuts({"j": (lambda: bells.set(bells.value + 1), "Ring the bell")}),
+            indah.Text(
+                lambda: f"{opened.value}. The page-wide j shortcut fired {bells.value} times."
+            ),
+            indah.Table(
+                rows=calls,
+                key="id",
+                height="16rem",
+                checked=checked,
+                on_open=open_call,
+                columns=[
+                    indah.Col("id", kind="mono"),
+                    indah.Col("route"),
+                    indah.Col("status", kind="badge", tones=STATUS_TONES),
+                ],
+            ),
+        ]
+    )
+
+
+def table_keyboard_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    grid = page.get_by_role("grid")
+    grid.focus()
+    page.keyboard.press("j")
+    page.keyboard.press("j")
+    expect(page.locator("tr.kb-active")).to_have_count(1)
+    expect(page.get_by_text("fired 0 times")).to_be_visible()  # the focused table took the j
+    page.keyboard.press("Enter")
+    expect(page.get_by_text("nothing opened yet")).to_have_count(0)  # Enter called on_open
+    page.keyboard.press("Escape")
+    page.keyboard.press("j")  # focus left the table: the shortcut gets the key
+    expect(page.get_by_text("fired 1 times")).to_be_visible()
+    grid.focus()
+    page.keyboard.press("End")  # leave the active row at the bottom for the screenshot
+
+
 def table_follow_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -623,6 +673,20 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(27,),
             check=table_remote_check,
+        ),
+        Page(
+            slug="table-keyboard",
+            title="Table: keyboard navigation",
+            summary=(
+                "Tab into the table, then j/k or the arrows move the active row, Home/End jump, "
+                "Space ticks, Enter opens (`on_open=`). The `j` below is also a `Shortcuts` key: "
+                "it moves the row while the table has focus and rings the bell anywhere else."
+            ),
+            build=table_keyboard,
+            covers=("Table", "Shortcuts"),
+            docs="dashboards.md",
+            adr=(27, 30),
+            check=table_keyboard_check,
         ),
         Page(
             slug="table-follow",
