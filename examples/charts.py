@@ -34,45 +34,64 @@ def _matplotlib():
         return None
 
 
+# A Plot is a PNG, and a PNG does not know whether the page is light or dark. So the figures are
+# drawn on a transparent background with mid-grey ink that reads on both (IND-177).
+_INK = "#8d8691"
+
+
+def _transparent(fig, *axes):
+    """Transparent figure and axes, mid-grey text, spines and ticks."""
+    fig.patch.set_alpha(0)
+    for ax in axes:
+        ax.set_facecolor("none")
+        ax.title.set_color(_INK)
+        ax.tick_params(colors=_INK)
+        for spine in ax.spines.values():
+            spine.set_color(_INK)
+    return fig
+
+
+def _sine_figure():
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=(4, 2.4))
+    ax = fig.add_subplot(111)
+    xs = [i * 0.2 for i in range(40)]
+    ax.plot(xs, [math.sin(x) for x in xs], color="#b5296b")
+    ax.plot(xs, [math.cos(x) for x in xs], color="#2e6d62")
+    ax.set_title("Static Matplotlib plot")
+    return _transparent(fig, ax)
+
+
+def _heatmap_figure():
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=(4, 2.4))
+    ax = fig.add_subplot(111)
+    grid = [[math.sin(x / 3) * math.cos(y / 3) for x in range(30)] for y in range(20)]
+    ax.imshow(grid, aspect="auto", cmap="magma")
+    ax.set_title("Heatmap (server PNG)")
+    ax.set_axis_off()
+    return _transparent(fig, ax)
+
+
 def _sine_plot():
-    Figure = _matplotlib()
-    if Figure is None:
+    if _matplotlib() is None:
         return _svg_note("matplotlib not installed")
-
-    def figure():
-        fig = Figure(figsize=(4, 2.4))
-        ax = fig.add_subplot(111)
-        xs = [i * 0.2 for i in range(40)]
-        ax.plot(xs, [math.sin(x) for x in xs], color="#b5296b")
-        ax.plot(xs, [math.cos(x) for x in xs], color="#2e6d62")
-        ax.set_title("Static Matplotlib plot")
-        return fig
-
-    return indah.Plot(figure, alt="sine and cosine")
+    return indah.Plot(_sine_figure, alt="sine and cosine")
 
 
 def _heatmap():
-    Figure = _matplotlib()
-    if Figure is None:
+    if _matplotlib() is None:
         return _svg_note("matplotlib not installed")
-
-    def figure():
-        fig = Figure(figsize=(4, 2.4))
-        ax = fig.add_subplot(111)
-        grid = [[math.sin(x / 3) * math.cos(y / 3) for x in range(30)] for y in range(20)]
-        ax.imshow(grid, aspect="auto", cmap="magma")
-        ax.set_title("Heatmap (server PNG)")
-        ax.set_axis_off()
-        return fig
-
-    return indah.Plot(figure, alt="heatmap")
+    return indah.Plot(_heatmap_figure, alt="heatmap")
 
 
 def _svg_note(text: str):
     svg = (
         "<svg xmlns='http://www.w3.org/2000/svg' width='320' height='120'>"
-        f"<rect width='320' height='120' rx='12' fill='#f3ebe0'/>"
-        f"<text x='160' y='64' font-size='14' fill='#6e6169' text-anchor='middle' "
+        f"<rect width='320' height='120' rx='12' fill='#8d8691' fill-opacity='0.14'/>"
+        f"<text x='160' y='64' font-size='14' fill='#8d8691' text-anchor='middle' "
         f"font-family='sans-serif'>{text}</text></svg>"
     )
     return indah.Image("data:image/svg+xml," + urllib.parse.quote(svg, safe=""), alt=text)
