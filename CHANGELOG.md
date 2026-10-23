@@ -11,6 +11,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-24
+
+More building blocks, and the start of live docs. This release adds the last of the dashboard pieces as
+built-ins (`CommandPalette`, `Marked`, `BarStrip`, `Steps`), and the machinery that lets the docs site run
+Studio pages in the reader's browser with Pyodide. Everything is new API: nothing existing changes, and
+`protocol_version` is still 1.
+
 ### Added
 
 - The docs can run Studio pages in the reader's browser (ADR-0041): `<indah-live page="...">` shows a page's
@@ -56,6 +63,15 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   help. To omit a command for someone who may not use it, build the list with `ctx.only` and wrap the handler
   in `guard`. A new component type (`commandpalette`, event `run`), so `protocol_version` stays 1 and nothing
   existing changes.
+
+### Known limitations
+
+- `trusted_proxies` has still not been checked against the real Cloudflare and Fly path (IND-170), and
+  sticky sessions are unverified (IND-171).
+- `Marked` does not draw inside a `Diff` pane (the `Diff` draws its own changes); show it beside one.
+- A `Menu` and a module component cannot sit in a table cell: a cell spec is display only.
+- The live docs examples load Pyodide on demand (about 9 MB compressed) and have been tried in Chromium
+  only, with a self-hosted runtime; the jsDelivr path, Safari, Firefox and phones are not yet checked.
 
 ## [0.6.0] - 2026-10-23
 
