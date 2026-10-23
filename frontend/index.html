@@ -603,6 +603,12 @@
         color: var(--muted);
       }
       .dataframe td { font-variant-numeric: tabular-nums; }
+      /* A phone is narrower than a plain table with long text: let its cells wrap so every column is
+         on screen, instead of one column taking the width and the rest hiding behind a scroll
+         nobody sees (IND-178). Rich tables keep their own truncate and wrap controls. */
+      @media (max-width: 560px) {
+        .dataframe:not(.rich) th, .dataframe:not(.rich) td { white-space: normal; overflow-wrap: break-word; }
+      }
       /* Interactive Table (ADR-0021): sortable headers, selectable rows, pager. */
       .table th { padding: 0; }
       .table .th-sort {
