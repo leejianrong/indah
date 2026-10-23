@@ -122,5 +122,6 @@ that wrapper has ended, and in background tasks and threads you start yourself.
 
 ## Next
 
+- [Playground](playground.md) - edit this app and run it in your browser.
 - [Components](components.md) - the full starter set.
 - [Custom components](custom-components.md) - add your own.

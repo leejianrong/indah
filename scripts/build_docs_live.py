@@ -10,7 +10,8 @@ files for the shell's ``api/*`` GET routes, and ``runtime.json`` (the pinned Pyo
 it is loaded from, and the size budgets). It downloads nothing unless ``--self-host`` is given.
 
 ``finalize`` runs after ``zensical build``: it fills each ``<indah-live page="...">`` in the built
-HTML with its title, summary and source, so the example reads without JavaScript.
+HTML with its title, summary and source, so the example reads without JavaScript, and each
+``<indah-playground>`` with its editor and starting points (IND-83).
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ sys.path.insert(0, str(ROOT))
 
 LIVE_SRC = ROOT / "website" / "live"
 ELEMENT_JS = ROOT / "website" / "docs" / "javascripts" / "indah-live.js"
+PLAYGROUND_JS = ROOT / "website" / "docs" / "javascripts" / "indah-playground.js"
 DEFAULT_OUT = ROOT / "website" / "docs" / "assets" / "live"
 PYODIDE_CACHE = ROOT / ".cache" / "live-pyodide"
 
@@ -50,6 +52,7 @@ CORE_FILES = [
 BUDGETS = {
     "wheelBytes": 1_000_000,  # the indah wheel in the bundle (ADR-0041, ADR-0042)
     "elementScriptBytes": 10_000,  # the <indah-live> element script
+    "playgroundScriptBytes": 12_000,  # the <indah-playground> element script (IND-83)
     "firstFrameWarmSeconds": 8,  # Run it to the first frame, warm cache (checked by the CI job)
 }
 STUDIO_URL = "https://github.com/leejianrong/indah/blob/main/docs/STUDIO.md"
@@ -164,6 +167,11 @@ def budget_problems(sizes: dict[str, int]) -> list[str]:
             f"indah-live.js is {sizes['elementScriptBytes']:,} bytes; "
             f"the budget is {BUDGETS['elementScriptBytes']:,}"
         )
+    if sizes.get("playgroundScriptBytes", 0) > BUDGETS["playgroundScriptBytes"]:
+        out.append(
+            f"indah-playground.js is {sizes['playgroundScriptBytes']:,} bytes; "
+            f"the budget is {BUDGETS['playgroundScriptBytes']:,}"
+        )
     return out
 
 
@@ -194,6 +202,7 @@ def build_bundle(out: Path, wheel: Path | None = None, self_host: bool = False) 
         "frameHtmlBytes": (out / "frame.html").stat().st_size,
         "pagesJsonBytes": (out / "pages.json").stat().st_size,
         "elementScriptBytes": ELEMENT_JS.stat().st_size if ELEMENT_JS.is_file() else 0,
+        "playgroundScriptBytes": PLAYGROUND_JS.stat().st_size if PLAYGROUND_JS.is_file() else 0,
         "pyodideSelfHostedBytes": pyodide_bytes,
     }
     runtime = {
@@ -272,17 +281,103 @@ def finalize_html(text: str, pages: dict[str, dict]) -> tuple[str, int]:
 
 
 def finalize(site: Path, bundle: Path) -> int:
-    pages = {p["id"]: p for p in json.loads((bundle / "pages.json").read_text(encoding="utf-8"))}
+    page_list = json.loads((bundle / "pages.json").read_text(encoding="utf-8"))
+    pages = {p["id"]: p for p in page_list}
+    playground = None
     total = 0
     for path in sorted(site.rglob("*.html")):
         text = path.read_text(encoding="utf-8")
-        if "<indah-live" not in text:
+        if "<indah-live" not in text and "<indah-playground" not in text:
             continue
         new, n = finalize_html(text, pages)
+        if "<indah-playground" in new:
+            playground = playground or render_playground(playground_starters(page_list))
+            new, k = _PLAYGROUND.subn(lambda _m, html_=playground: html_, new)
+            n += k
         if n:
             path.write_text(new, encoding="utf-8")
             total += n
     return total
+
+
+# -- the docs Playground (IND-83) ---------------------------------------------------------------
+
+# Studio pages whose source also works as a snippet: self-contained (only ``indah``), and the
+# build function takes a ``ctx`` it never reads. The Studio playground's starters are used as is.
+PLAYGROUND_PAGES = ("start/quickstart", "layout/containers")
+_DEF = re.compile(r"^def \w+\(ctx[^)]*\)\s*(?:->[^:]+)?:", re.MULTILINE)
+
+
+def playground_starters(pages: list[dict]) -> list[dict]:
+    """``[{id, title, code}]``: the snippets the Playground offers, all as ``def build()``."""
+    from examples.studio.chapters.playground import STARTERS
+
+    out = []
+    by_id = {p["id"]: p for p in pages}
+    for pid in PLAYGROUND_PAGES:
+        page = by_id[pid]
+        code, n = _DEF.subn("def build():", page["source"] or "", count=1)
+        if not n or "ctx" in code:
+            raise SystemExit(f"{pid} cannot be a Playground starter: its build function uses ctx")
+        out.append({"id": pid.replace("/", "-"), "title": page["title"], "code": code})
+    for title, code in STARTERS.items():
+        out.append(
+            {
+                "id": re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-"),
+                "title": title,
+                "code": code,
+            }
+        )
+    for starter in out:
+        if "import indah" not in starter["code"]:
+            starter["code"] = "import indah\n\n\n" + starter["code"]
+    return out
+
+
+def render_playground(starters: list[dict]) -> str:
+    """The Playground's static markup: readable and copyable with no JavaScript. The element script
+    adds the buttons (the ``indah-play-js`` ones are hidden until then)."""
+    e = html.escape
+    options = "".join(
+        f'<option value="{e(s["id"], quote=True)}">{e(s["title"])}</option>' for s in starters
+    )
+    listing = "".join(
+        f"<details><summary>{e(s['title'])}</summary>"
+        f'<pre><code class="language-python" data-starter="{e(s["id"], quote=True)}">'
+        f"{e(s['code'])}</code></pre>"
+        f"</details>"
+        for s in starters
+    )
+    return (
+        "<indah-playground data-prerendered>"
+        '<div class="indah-play">'
+        '<label for="indah-play-code"><strong>Your code</strong> '
+        "(<code>def build()</code> returns an indah component)</label>"
+        '<textarea id="indah-play-code" class="indah-play-code" rows="16" spellcheck="false" '
+        'autocomplete="off" autocapitalize="off" aria-describedby="indah-play-help">'
+        f"{e(starters[0]['code'])}</textarea>"
+        '<p id="indah-play-help" class="indah-play-note">'
+        "Tab indents; press Escape, then Tab, to leave the editor. "
+        "Ctrl+Enter (or Cmd+Enter) runs.</p>"
+        '<p class="indah-live-actions">'
+        '<button type="button" class="indah-live-run indah-play-run indah-play-js" '
+        "hidden>Run</button> "
+        '<button type="button" class="indah-play-stop indah-play-js" hidden disabled>Stop</button> '
+        '<button type="button" class="indah-play-reset indah-play-js" hidden>Reset</button> '
+        '<label class="indah-play-js" hidden>Start from '
+        f'<select class="indah-play-pick">{options}</select></label> '
+        f'<span class="indah-live-note">{RUN_NOTE} Nothing is sent anywhere.</span></p>'
+        '<div class="indah-play-status indah-live-status" role="status" aria-live="polite"></div>'
+        '<pre class="indah-play-error" role="alert" hidden></pre>'
+        '<div class="indah-play-stage"></div></div>'
+        '<section class="indah-play-starters"><h3>Starting points</h3>'
+        f"{listing}</section></indah-playground>"
+    )
+
+
+_PLAYGROUND = re.compile(
+    r"(?:<p>\s*)?<indah-playground\b[^>]*>\s*</indah-playground>(?:\s*</p>)?", re.IGNORECASE
+)
 
 
 # -- command line -------------------------------------------------------------------------------
@@ -308,7 +403,7 @@ def main(argv: list[str]) -> int:
         print(json.dumps(runtime["sizes"], indent=2), file=sys.stderr)
         return 1 if budget_problems(runtime["sizes"]) else 0
     n = finalize(args.site, args.bundle)
-    print(f"filled {n} <indah-live> embed(s) in {args.site}", file=sys.stderr)
+    print(f"filled {n} <indah-live> / <indah-playground> embed(s) in {args.site}", file=sys.stderr)
     return 0
 
 

@@ -49,6 +49,50 @@ def init(page_id, emit):
     _store = InMemorySessionStore(build)
 
 
+def init_code(code, emit):
+    """The docs Playground (IND-83): run the reader's own snippet, in their browser's worker.
+
+    The contract is the Studio playground's: define ``build()`` returning an indah component
+    (``indah`` is already imported). Returns ``""`` when the page is ready to connect, otherwise a
+    short error text (a traceback from the snippet's own lines) for the page to show. A snippet
+    that never returns blocks this worker; the page notices the missing heartbeat and terminates it.
+    """
+    global _store, _emit
+    _emit = emit
+    namespace = {"indah": indah, "__name__": "playground"}
+    try:
+        exec(compile(code, "<playground>", "exec"), namespace)  # noqa: S102 - in the browser
+    except BaseException as exc:  # the reader's code: report everything
+        return _explain(exc)
+    build = namespace.get("build")
+    if not callable(build):
+        return "Define a function `build()` that returns an indah component."
+    try:
+        probe = build()
+    except BaseException as exc:
+        return _explain(exc)
+    if not isinstance(probe, indah.Component):
+        return f"build() returned {type(probe).__name__}, not an indah component."
+
+    def make(ctx):
+        return indah.Session(build())
+
+    _store = InMemorySessionStore(make)
+    return ""
+
+
+def _explain(exc):
+    """A traceback that starts at the snippet, not at this module's ``exec`` call."""
+    import traceback
+
+    if isinstance(exc, SyntaxError):
+        return "".join(traceback.format_exception_only(type(exc), exc)).rstrip()
+    tb = exc.__traceback__
+    while tb is not None and tb.tb_frame.f_code.co_filename != "<playground>":
+        tb = tb.tb_next
+    return "".join(traceback.format_exception(type(exc), exc, tb, limit=6)).rstrip()
+
+
 def connect(sid):
     handle = _store.get_or_create(sid)
     hub, session = handle.hub, handle.session
