@@ -510,6 +510,56 @@ def empty_and_code_check(pw) -> None:
     expect(page.get_by_text("GET /v1/models 200 12ms")).to_be_visible()
 
 
+def barstrip(ctx: indah.Context) -> indah.Component:
+    rng = random.Random(7)  # the same minutes every time
+    minutes = indah.Signal([(rng.randint(2, 9), rng.randint(0, 3)) for _ in range(24)])
+    clock = indah.Signal(24)  # minutes shown so far, for the labels
+
+    def tick() -> None:
+        clock.set(clock.value + 1)
+        minutes.set([*minutes.value[-29:], (rng.randint(2, 9), rng.randint(0, 3))])
+
+    ctx.every(1.0, tick)  # a new "minute" each second; stops with the tab
+    return indah.Column(
+        children=[
+            indah.Text(
+                lambda: "Latest minute: hits {}, misses {}".format(*minutes.value[-1]),
+                variant="label",
+            ),
+            indah.BarStrip(
+                minutes,
+                tones=["ok", "err"],
+                names=["hit", "miss"],
+                labels=lambda: [
+                    f"min {clock.value - len(minutes.value) + i + 1}"
+                    for i in range(len(minutes.value))
+                ],
+                label="Calls per minute",
+                height=48,
+            ),
+            indah.Text("One series, a single tone:", variant="caption"),
+            indah.BarStrip([3, 5, 2, 8, 6, 0, 4], tones=["info"], label="Queue depth", height=24),
+        ]
+    )
+
+
+def barstrip_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    strip = page.get_by_role("group", name="Calls per minute")
+    expect(strip).to_be_visible()
+    bars = strip.locator(".barstrip-bar")
+    expect(bars).to_have_count(24)
+    page.wait_for_timeout(1300)  # a new minute arrives and the strip grows in place
+    assert bars.count() >= 25
+    bars.last.hover()
+    expect(page.get_by_role("tooltip")).to_contain_text("hit")
+    strip.focus()
+    page.keyboard.press("Home")
+    expect(page.get_by_role("tooltip")).to_contain_text("min ")
+
+
 def stat(ctx: indah.Context) -> indah.Component:
     hour = indah.Signal(0)
     requests = [1200, 1340, 1105, 1580]
@@ -753,6 +803,19 @@ CHAPTER = Chapter(
             covers=("Empty", "Code", "Button"),
             docs="components.md",
             check=empty_and_code_check,
+        ),
+        Page(
+            slug="barstrip",
+            title="Activity strip",
+            summary=(
+                "`BarStrip(series, tones=, names=, labels=)`: one bar per interval, stacked when a "
+                "bar is a tuple. It updates in place as minutes arrive. Hover a bar, or focus the "
+                "strip and use the arrow keys, to read it."
+            ),
+            build=barstrip,
+            covers=("BarStrip", "Text"),
+            docs="components.md",
+            check=barstrip_check,
         ),
         Page(
             slug="stat",

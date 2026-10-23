@@ -13,6 +13,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- `BarStrip(series, height=, tones=, names=, labels=, max=, label=)`: a small activity strip with one
+  bar per interval (calls per minute, hits and misses stacked), for a dashboard header rather than a
+  chart. `series` is a list, `Signal`, `Computed` or function; a bar is a number or a tuple of segment
+  values. It updates in place (the bars are not remounted) and takes its tones from the theme. A tooltip
+  names each bar and its segments ("12:03: 4 (hit 3, miss 1)"), the strip is one tab stop whose arrow keys,
+  Home and End read each bar, and a live region says the same, so colour is not the only cue. It
+  respects reduced motion and works under `csp="strict"`. A new component type (`barstrip`), so
+  `protocol_version` stays 1 and nothing existing changes.
 - `CommandPalette(commands, shortcut="mod+k")` and `Command(label, on_run | to=, group=, shortcut=, keywords=,
   confirm=, key=)`: the dashboard driven like a terminal. Ctrl or Cmd+K opens a dialog; type to filter, arrows
   move, Enter runs, Escape closes and gives focus back. A command runs a function (sync or `async`) or jumps

@@ -260,6 +260,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `table` | display/input | classic: `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index). Rich: `columns:[{field,title,kind,width?,sortable,tones?,timeFormat?,render?,sortKey?,truncate?,maxWidth?,wrap?}]`, `rows:[{...}]`, `rowKey`, `height`, `search`, `columnToggle`, `follow`, `pageSize`, `selectable`, `value` (selected row key) | `select` `{index}` or, in rich mode, `{key}` |
 | `stat` | display | `value`, `label`, `delta`, `help` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
+| `barstrip` | display | `series` (a list of bars, each a list of segment values), optional `height` (px, default 32), `tones` (a tone per segment; default `info`, then `neutral`), `names` (a name per segment), `labels` (a label per bar), `max` (a fixed scale), `label` | — |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
 | `spinner` | display | `active`, `label` | — |
 | `list` | display / input | `items:[...]` (a `Signal[list]`), `template` (item render spec), `empty`, `keyField` (when keyed) | each template event, as named in the spec's `on`, with `{value, key, index}` (keyed lists only) |

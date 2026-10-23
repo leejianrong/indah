@@ -13,6 +13,7 @@
   import Overlay from "./Overlay.svelte";
   import Tip from "./Tip.svelte";
   import Choice from "./Choice.svelte";
+  import BarStrip from "./BarStrip.svelte";
   import Menu from "./Menu.svelte";
   import CommandPalette from "./CommandPalette.svelte";
 
@@ -413,6 +414,8 @@
       <progress class="progress" value={props.value} max={props.max ?? 1}></progress>
     {/if}
   </div>
+{:else if node.type === "barstrip"}
+  <BarStrip {node} {props} />
 {:else if node.type === "spinner"}
   {#if props.active ?? true}
     <div class="spinner-box" role="status">
