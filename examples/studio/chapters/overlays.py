@@ -227,6 +227,45 @@ def menu_check(pw) -> None:
     expect(page.get_by_role("menuitem", name="Delete")).to_have_attribute("aria-disabled", "true")
 
 
+def info_tip(ctx: indah.Context) -> indah.Component:
+    unit = indah.Signal("per minute")
+
+    # The tip follows a signal, so it can change with what the number means.
+    tip = indah.Computed(
+        lambda: f"Requests {unit.value}, UTC. Counted at the edge, so a retry counts twice."
+    )
+    return indah.Column(
+        children=[
+            indah.Row(
+                justify="between",
+                children=[
+                    indah.Text("Requests", variant="label"),
+                    indah.InfoTip(tip, label="About requests"),
+                ],
+            ),
+            indah.Text(lambda: f"Showing requests {unit.value}.", variant="caption"),
+            indah.Button("Use seconds", lambda: unit.set("per second")),
+        ]
+    )
+
+
+def info_tip_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    icon = page.get_by_role("button", name="About requests")
+    tip = page.get_by_role("tooltip").filter(visible=True)
+    icon.click()  # a click (or a tap) pins it open
+    expect(tip).to_contain_text("Requests per minute")
+    page.keyboard.press("Escape")
+    expect(tip).to_have_count(0)
+    page.get_by_role("button", name="Use seconds").click()
+    icon.click()
+    expect(tip).to_contain_text("Requests per second")
+    page.mouse.click(5, 5)  # a press outside closes it
+    expect(tip).to_have_count(0)
+
+
 def command_palette(ctx: indah.Context) -> indah.Component:
     status = indah.Signal("Press Ctrl+K (or Cmd+K), type, and press Enter.")
     on_log_page = indah.Signal(False)
@@ -519,6 +558,20 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(30,),
             check=menu_check,
+        ),
+        Page(
+            slug="info-tip",
+            title="InfoTip",
+            summary=(
+                "`InfoTip(text)` is a small info icon that holds a short note. It opens on hover and on "
+                "keyboard focus, a tap or click pins it, Escape or a press outside closes it, and it stays "
+                "on screen on a phone. The text may follow a signal."
+            ),
+            build=info_tip,
+            covers=("InfoTip", "Row", "Text", "Button"),
+            docs="components.md",
+            adr=(30,),
+            check=info_tip_check,
         ),
         Page(
             slug="command-palette",

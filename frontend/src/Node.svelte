@@ -16,6 +16,7 @@
   import Tip from "./Tip.svelte";
   import Choice from "./Choice.svelte";
   import BarStrip from "./BarStrip.svelte";
+  import InfoTip from "./InfoTip.svelte";
   import Menu from "./Menu.svelte";
   import CommandPalette from "./CommandPalette.svelte";
 
@@ -418,6 +419,8 @@
   </div>
 {:else if node.type === "barstrip"}
   <BarStrip {node} {props} />
+{:else if node.type === "infotip"}
+  <InfoTip text={props.text ?? ""} label={props.label} />
 {:else if node.type === "spinner"}
   {#if props.active ?? true}
     <div class="spinner-box" role="status">

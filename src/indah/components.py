@@ -2683,6 +2683,46 @@ class BarStrip(Component):
         return props
 
 
+class InfoTip(Component):
+    """A small focusable info icon that shows a short tip (supplementary facts, the design's "i").
+
+    ``text`` is the tip, or a ``Signal``, ``Computed`` or function returning it. It opens on
+    hover, on keyboard focus and on a tap (a tap toggles it, and a click pins it open), and
+    closes on Escape, when focus leaves or on a tap outside. The icon is one tab stop, a button
+    named by ``label`` (default "More information") that the tip describes
+    (``aria-describedby``), so a screen reader reads both. It uses the theme's tip styling and
+    stays inside the viewport. In a ``List`` item or table cell, name it from a render spec:
+    ``{"component": "infotip", "bind": {"text": "why"}}``.
+    """
+
+    type = "infotip"
+
+    def __init__(self, text: Source = "", *, label: str = "More information") -> None:
+        super().__init__()
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(f"InfoTip label must be a non-empty string, got {label!r}")
+        self._text = text
+        self._text_live = _options_are_live(text)
+        self._label = label
+
+    @staticmethod
+    def _as_text(value: Any) -> str:
+        return "" if value is None else str(value)
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if not self._text_live:
+            props["text"] = self._as_text(self._text)
+        if self._label != "More information":
+            props["label"] = self._label
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        if not self._text_live:
+            return {}
+        return {"text": lambda: self._as_text(_read(self._text))}
+
+
 def _finite(value: Any) -> bool:
     return (
         isinstance(value, (int, float))
