@@ -132,3 +132,36 @@ with no server. Pressing **Run it** on another example stops the first.
   1 MB, the element script at most 10 KB, Run it to the first frame at most 8 s with a warm cache.
 - Try it locally: `uv run --extra e2e pytest tests/e2e/test_docs_live.py`.
 
+## Every page also runs in the docs (Pyodide)
+
+The docs show Studio pages live in the reader's browser (ADR-0041), so a page is written once and
+runs in two places: on your machine under `make demo`, and in a Pyodide worker with no indah server.
+Keep a page `Session`-shaped (a build function returning a component) and it runs in both. A page
+that needs a server (an upload, a `Topic` fed by the chapter's lifespan, request headers, a URL
+path) is marked `local_only="<why>"` on its `Page`; the docs then show its source and the reason,
+with no Run it button.
+
+`tests/e2e/test_studio_pyodide.py` keeps this honest:
+
+- every page that is not `local_only` is opened as a top-level `frame.html?page=<id>` in headless
+  Chromium, waits for the shell to say "live", runs the page's own `check(pw)` and fails on a
+  console error, a page error or a failed request to our own files; a page whose worker cannot start
+  fails at once with the Python error;
+- a `local_only` page is not run but must have a reason (a page cannot be silently skipped);
+- the bundle stays within its budgets and the warm first frame within `firstFrameWarmSeconds`
+  (both from `runtime.json`).
+
+Run it locally (the pinned Pyodide is downloaded once into `.cache/live-pyodide`; it skips with a
+message when it cannot be fetched):
+
+```
+make test-pyodide                      # four workers, about 3 minutes
+uv run --extra e2e --extra docs pytest -m pyodide -k start/choices   # one page
+STUDIO_PYODIDE_PROBE=1 make test-pyodide   # also tries local_only pages and notes any that now pass
+```
+
+In CI it is its own workflow, `.github/workflows/studio-pyodide.yml`: on every push to `main`, and
+on pull requests that touch the Studio, `src/indah`, the shell, the live runtime or the scripts that
+build the bundle. It is not part of the fast gate or the `browser-e2e` job. If a page fails only in
+Pyodide, fix the page so it stays `Session`-shaped; mark it `local_only` only with a real reason.
+

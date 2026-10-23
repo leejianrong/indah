@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -127,7 +128,11 @@ def fetch_pyodide(dest: Path) -> int:
         f = PYODIDE_CACHE / name
         if not f.exists():
             with urllib.request.urlopen(PYODIDE_CDN + name, timeout=120) as resp:  # noqa: S310
-                f.write_bytes(resp.read())
+                data = resp.read()
+            # Atomic: another process (a parallel test worker) must never see half a file.
+            part = f.with_name(f"{f.name}.{os.getpid()}.part")
+            part.write_bytes(data)
+            part.replace(f)
         return f
 
     dest.mkdir(parents=True, exist_ok=True)

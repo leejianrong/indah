@@ -1,0 +1,58 @@
+name: Studio in Pyodide
+
+# ADR-0041: the docs run Studio pages live in the browser with Pyodide. This keeps that honest:
+# every page that is not marked local_only must run, and pass its own check, in Pyodide; a marked
+# page must say why. Own workflow (not the fast gate, not browser-e2e) because it downloads the
+# pinned Pyodide (cached below) and boots a runtime per page. Path filters keep it off PRs that
+# cannot affect it; it always runs on main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "examples/studio/**"
+      - "src/indah/**"
+      - "frontend/**"
+      - "website/live/**"
+      - "website/docs/javascripts/indah-live.js"
+      - "scripts/build_docs_live.py"
+      - "scripts/export_studio_pages.py"
+      - "tests/e2e/test_studio_pyodide.py"
+      - "tests/e2e/conftest.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/studio-pyodide.yml"
+
+concurrency:
+  group: studio-pyodide-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pyodide-pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --extra dev --extra e2e --extra docs
+      - name: Install Chromium for Playwright
+        run: uv run playwright install --with-deps chromium
+      - name: Pinned Pyodide version
+        id: pyodide
+        run: echo "version=$(sed -n 's/^PYODIDE_VERSION = "\(.*\)".*/\1/p' scripts/build_docs_live.py)" >> "$GITHUB_OUTPUT"
+      - name: Cache the Pyodide runtime
+        uses: actions/cache@v4
+        with:
+          path: .cache/live-pyodide
+          key: pyodide-${{ steps.pyodide.outputs.version }}
+      - name: Every runnable Studio page runs in Pyodide
+        run: uv run pytest -m pyodide -k "not first_frame" -n 4 -q --durations=8
+      # Alone on the machine, so other pages' boots do not slow it: the warm first frame stays
+      # within the budget in runtime.json.
+      - name: Warm first frame within its budget
+        run: uv run pytest -m pyodide -k first_frame -q -s

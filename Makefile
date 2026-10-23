@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e build cleanroom docs docs-serve release-check post-release check clean
+.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e test-pyodide build cleanroom docs docs-serve release-check post-release check clean
 
 # Print a free host port (stdlib only; no lsof/nc needed).
 FREE_PORT := python3 -c 'import socket;s=socket.socket();s.bind(("",0));p=s.getsockname()[1];s.close();print(p)'
@@ -69,6 +69,10 @@ docs: ## Build the documentation site into website/site/ (with the live-example 
 	uv run --extra docs python scripts/build_docs_live.py bundle
 	cd website && uv run --extra docs zensical build --clean
 	uv run --extra docs python scripts/build_docs_live.py finalize
+
+test-pyodide: ## Every runnable Studio page runs in the browser with Pyodide (downloads Pyodide once)
+	uv run --extra e2e --extra docs pytest -m pyodide -k "not first_frame" -n 4 -q --durations=8
+	uv run --extra e2e --extra docs pytest -m pyodide -k first_frame -q -s
 
 docs-serve: ## Live-preview the documentation site (live examples included)
 	uv run --extra docs python scripts/build_docs_live.py bundle
