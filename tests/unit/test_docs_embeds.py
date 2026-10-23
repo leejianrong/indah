@@ -5,6 +5,7 @@ that cannot run in a browser but does not say why, fails here (the fast gate) an
 """
 
 import json
+import warnings
 from pathlib import Path
 
 import pytest
@@ -112,6 +113,37 @@ def test_an_embed_with_no_page_is_reported(tmp_path):
     (tmp_path / "x.md").write_text("<indah-live></indah-live>\n")
     (problem,) = registry.embed_problems(tmp_path)
     assert "x.md" in problem and "page" in problem
+
+
+@pytest.mark.unit
+def test_unembedded_pages_lists_runnable_pages_with_no_embed(tmp_path, exported):
+    """The "Try it" convention: a runnable page with a docs target should be shown live there."""
+    (tmp_path / "x.md").write_text('<indah-live page="layout/spacing"></indah-live>\n')
+    missing = registry.unembedded_pages(tmp_path)
+    ids = {p["id"] for p in exported}
+    assert "layout/spacing" not in missing  # embedded
+    assert "routing/links" not in missing  # local only: not a runnable page, so not asked for
+    assert "playground/run" not in missing
+    assert "start/choices" in missing  # runnable, has a docs target, not embedded here
+    assert set(missing) <= ids
+    assert missing == sorted(missing, key=[p["id"] for p in exported].index)  # registry order
+
+
+@pytest.mark.unit
+def test_documented_pages_have_a_live_embed():
+    """A warning, not a failure: list runnable pages the docs do not show live yet.
+
+    A new component needs a Studio page and a docs embed (docs/STUDIO.md, "Try it"). The warning
+    names the pages that are missing one so the author sees it in the test summary.
+    """
+    missing = registry.unembedded_pages(ROOT / "website" / "docs")
+    if missing:
+        warnings.warn(
+            "runnable Studio pages with a docs target but no <indah-live> embed: "
+            + ", ".join(missing),
+            UserWarning,
+            stacklevel=1,
+        )
 
 
 @pytest.mark.unit

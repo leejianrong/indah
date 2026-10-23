@@ -21,6 +21,15 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   name it (`{"component": "infotip", "bind": {"text": ...}}`) for a `List` item or a table cell. A new
   component type and spec component, so `protocol_version` stays 1 and nothing existing changes.
 
+### Changed
+
+- The docs show a live example next to each documented component: 72 `<indah-live>` embeds across the
+  components, dashboard, quickstart, chatbot, custom components, design system and hosting pages. Nothing
+  downloads until a reader presses **Run it**, and one example runs at a time; the 10 pages that need a
+  server show their source and say why they cannot run. A new `unembedded_pages()` check (a warning in
+  `tests/unit/test_docs_embeds.py`, or `scripts/export_studio_pages.py --unembedded`) names any runnable
+  Studio page with a docs target that no docs page embeds. No library change.
+
 ## [0.7.0] - 2026-10-24
 
 More building blocks, and the start of live docs. This release adds the last of the dashboard pieces as

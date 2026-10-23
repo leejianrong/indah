@@ -38,6 +38,12 @@ def build(ctx: indah.Context) -> indah.Session:
     return indah.Session(root)
 ```
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="overlays/context"></indah-live>
+
+<indah-live page="extend/context"></indah-live>
+
 ### Load data before the first paint
 
 The factory may be `async def`. It is awaited, so its data is in the very first snapshot and the
@@ -81,6 +87,12 @@ def build(ctx):
 A `Stream` sends only new rows to the browser, so a growing log costs O(new rows), not
 O(all rows). Both calls are released when the tab closes.
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="live/topic"></indah-live>
+
+<indah-live page="live/bounded"></indah-live>
+
 ### A refresh loop per tab: `ctx.every` and `ctx.spawn`
 
 Work that should run while a tab is open, and stop when it closes, belongs on the context.
@@ -100,6 +112,10 @@ Both are cancelled when the session ends: a closed tab, an eviction or an idle r
 exception is logged once and the loop carries on (it logs again only after a successful call), so
 one bad fetch does not stop the refresh. Call them from the session factory or a handler, where an
 event loop is running; a plain function you pass to `every` runs on that loop, so keep it short.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="live/every"></indah-live>
 
 ### The tab's title and icon: `ctx.title` and `ctx.favicon`
 
@@ -129,6 +145,10 @@ The change reaches this session's tab only, with no reload, and a reload or a re
 new session starts with the app's own title and icon. Titles are cut at 200 characters. A favicon
 name that is not registered is ignored with a warning. The icons are served by the app itself, so
 this works under `csp="strict"`.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="live/tab-title"></indah-live>
 
 ## Show and act on rows with `Table`
 
@@ -174,6 +194,21 @@ table = Table(
   following), and at the edge of a paged or remote table the arrow turns the page. Escape or Tab
   leaves the table. Off by default, so an existing table is unchanged. See "Keys and focus" below.
 
+<details>
+<summary>Try these live (5 examples)</summary>
+
+<indah-live page="data/table-rich"></indah-live>
+
+<indah-live page="data/table-cells"></indah-live>
+
+<indah-live page="data/table-actions"></indah-live>
+
+<indah-live page="data/table-keyboard"></indah-live>
+
+<indah-live page="data/table-follow"></indah-live>
+
+</details>
+
 ### Tens of thousands of rows: `remote=` and `virtual=`
 
 For more rows than one prop should carry, give the table a loader. It is asked for one window
@@ -204,6 +239,10 @@ Things to know about a remote table:
   "N of M selected" and a **Select all M** button that gathers every match for the current
   search, up to 10,000 rows. Over that, the table asks the viewer to narrow the search.
 - `query=` mirrors the latest `TableQuery` into a signal, and `page_size` sets the window.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="data/table-remote"></indah-live>
 
 ## Slow handlers: keep the loop free
 
@@ -287,6 +326,23 @@ the list with `ctx.only(perm, lambda: MenuItem(...))` and wrap the handler in `g
 item is never sent, and `guard` checks again at the click. A `Menu` goes in a row, a card or a rail;
 a table cell is display only, so keep `RowAction` for per-row buttons.
 
+<details>
+<summary>Try these live (6 examples)</summary>
+
+<indah-live page="overlays/modal-drawer"></indah-live>
+
+<indah-live page="overlays/toasts"></indah-live>
+
+<indah-live page="overlays/toast-action"></indah-live>
+
+<indah-live page="overlays/confirm"></indah-live>
+
+<indah-live page="overlays/menu"></indah-live>
+
+<indah-live page="overlays/badges"></indah-live>
+
+</details>
+
 ### A command palette
 
 `CommandPalette(commands)` is the dashboard driven like a terminal: press `Ctrl+K` (`Cmd+K` on a Mac),
@@ -339,6 +395,10 @@ checked at the click, and a second click or a stale toast does nothing. Give an 
 than the default 4 seconds. `Shortcuts` bare keys are ignored while the viewer types or a dialog is open, and a map
 is active only while it is in the rendered tree.
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="overlays/command-palette"></indah-live>
+
 ### Keys and focus
 
 A widget that owns keys while it has focus (the keyboard `Table`, and the command
@@ -348,6 +408,10 @@ inside it or one with `ctrl`, `cmd` or `alt` held, and it marks the key as handl
 same `j` runs your `Shortcuts` binding. `mod+k` is the command palette's default key; give it another
 `shortcut=` if you want `mod+k` for something else. Tab and Escape always
 leave. Use `mod+` or `alt+` combos for page-wide actions and bare keys for the focused widget.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="overlays/shortcuts"></indah-live>
 
 ## Several pages with `Router`
 
@@ -392,12 +456,29 @@ page it is on now.
     `Tabs`, or a `Signal` with a `computed`, for that switcher; or run the routed app on its own
     and link to it. Nested routers are not supported.
 
+<details>
+<summary>Try these live (3 examples)</summary>
+
+<indah-live page="routing/links"></indah-live>
+
+<indah-live page="routing/navitem"></indah-live>
+
+<indah-live page="routing/navigate"></indah-live>
+
+</details>
+
 ## Split panes and master-detail
 
 ```python
 indah.SplitPane(left, right, direction="horizontal", initial=0.4, height="30rem")
 indah.MasterDetail(table, detail, open=drawer_open)  # a drawer on a narrow screen
 ```
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="layout/split"></indah-live>
+
+<indah-live page="layout/master-detail"></indah-live>
 
 ## Viewers: `JsonTree` and `Diff`
 
@@ -415,10 +496,20 @@ indah.Diff(
 compared as it is), so the browser only draws rows. A very large input is truncated and
 marked as such.
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="data/json-tree"></indah-live>
+
+<indah-live page="data/diff"></indah-live>
+
 ## Forms that edit data
 
 `TextArea(signal, label=, rows=)` is a multi-line input. Like every input, the browser owns
 the text while the viewer is typing in it, so a late echo from the server never overwrites it.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="data/list"></indah-live>
 
 ### `CodeEditor` for JSON and YAML
 
@@ -469,6 +560,10 @@ row's key. A keyed list takes a signal or a callable, not a `Stream`.
 In a row spec, `"text": "title"` shows the item's `title` field. For fixed text, such as a
 button label, use `"literal"`: `{"tag": "button", "literal": "Remove", "on": {"click":
 {"event": "remove"}}}` needs no field on the items.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="overlays/code-editor"></indah-live>
 
 ## Theme and density
 

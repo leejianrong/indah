@@ -31,6 +31,10 @@ it. To use your own mark, pass `logo=`. A mark that vanishes on one background n
 `logo=(light_mark, dark_mark)` shows the one that matches indah's light/dark toggle (an SVG that
 relies on `currentColor` does not work, since the logo is shown in an `<img>`).
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="layout/theming"></indah-live>
+
 ### Your own tokens
 
 An app can add roles the core set does not have, such as a row-hover fill or a status colour.

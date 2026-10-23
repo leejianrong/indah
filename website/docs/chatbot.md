@@ -180,6 +180,12 @@ two, the page stays fully responsive while the model works.
     per frame keeps the wire light without any visible loss of the streaming feel.
     A framework-level version of this is a tracked follow-up.
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="live/stream-text"></indah-live>
+
+<indah-live page="live/chat"></indah-live>
+
 ## Run it without a model
 
 [`examples/chatbot.py`](https://github.com/leejianrong/indah/blob/main/examples/chatbot.py)

@@ -28,6 +28,12 @@ picker = indah.custom("colorpicker", value=colour)  # two-way bound, like a buil
 value-bearing instances that round-trip exactly like a built-in component. Read the
 current value with `colour.value` - it follows what the user picked.
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="extend/register"></indah-live>
+
+<indah-live page="extend/composite"></indah-live>
+
 ## The render spec
 
 | Field | Meaning |
@@ -116,4 +122,8 @@ Things to know:
   error and shows the `fallback` prop as plain text; the rest of the page keeps working.
 - **Limits.** 1 MB per module and 64 module types per process. The type is lowercase words joined by
   hyphens. A module component cannot yet sit inside a `List` row or a table cell.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="extend/bridge"></indah-live>
 
