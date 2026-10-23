@@ -76,6 +76,18 @@ class TrainingMonitor:
             + [{"epoch": epoch, "train_loss": round(train_loss, 4), "val_loss": round(val_loss, 4)}]
         )
 
+    def seed_sample(self, *, epochs: int = 5, steps_per_epoch: int = 40) -> None:
+        """Open on a finished sample run (the same one every time), so the chart is not blank
+        until Start is pressed (IND-179). A real run clears it."""
+        rng = random.Random(7)
+        train_loss, val_loss = 2.2, 2.4
+        rows = []
+        for step in range(epochs * steps_per_epoch):
+            train_loss, val_loss = _next_losses(rng, step, train_loss, val_loss)
+            rows.append([step, round(train_loss, 4), round(val_loss, 4)])
+        self.curves.extend(rows)
+        self.status.set("Showing a sample run - press Start to train a new one.")
+
     async def train(self, *, epochs: int = 5, steps_per_epoch: int = 40) -> None:
         if self.running.value:
             return
@@ -90,14 +102,7 @@ class TrainingMonitor:
                 for s in range(steps_per_epoch):
                     step = (epoch - 1) * steps_per_epoch + s
                     lr = 1e-3 * (0.5 ** (epoch - 1))
-                    # A plausible decaying loss with noise; val trails a touch behind.
-                    train_loss = max(0.05, train_loss * 0.985 + random.uniform(-0.01, 0.01))
-                    val_loss = max(
-                        0.06,
-                        val_loss * 0.988
-                        + 0.03 * math.sin(step / 7)
-                        + random.uniform(-0.008, 0.012),
-                    )
+                    train_loss, val_loss = _next_losses(random, step, train_loss, val_loss)
                     self.step(step, train_loss, val_loss, total, lr)
                     await asyncio.sleep(0.03)  # a real step would take much longer
                 self.epoch_end(epoch, train_loss, val_loss)
@@ -106,8 +111,20 @@ class TrainingMonitor:
             self.running.set(False)
 
 
+def _next_losses(rng, step: int, train_loss: float, val_loss: float) -> tuple[float, float]:
+    """One step of the mock loss: a plausible decay with noise; val trails a touch behind.
+    ``rng`` is the ``random`` module or a seeded ``random.Random``."""
+    train_loss = max(0.05, train_loss * 0.985 + rng.uniform(-0.01, 0.01))
+    val_loss = max(
+        0.06,
+        val_loss * 0.988 + 0.03 * math.sin(step / 7) + rng.uniform(-0.008, 0.012),
+    )
+    return train_loss, val_loss
+
+
 def build() -> indah.Session:
     m = TrainingMonitor()
+    m.seed_sample()
 
     controls = indah.Card(
         title="Run",

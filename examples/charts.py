@@ -97,20 +97,31 @@ def _svg_note(text: str):
     return indah.Image("data:image/svg+xml," + urllib.parse.quote(svg, safe=""), alt=text)
 
 
+_STEPS = 80
+
+
+def _loss_curve():
+    """The mock training loss, one ``(step, loss)`` per step (the same curve every time)."""
+    loss = 1.6
+    for step in range(_STEPS):
+        loss = max(0.05, loss * 0.96 + (0.02 * math.sin(step / 3)))
+        yield step, round(loss, 4)
+
+
 def build() -> indah.Session:
     # 1) A live line chart fed by streaming points (client-side uPlot).
     live = indah.Chart(series=["loss"], title="Live training loss", x_label="step", points=True)
     running = indah.Signal(False)
+    # Open on a finished sample run, so the visitor sees a curve at once (IND-179); a run clears it.
+    live.extend([[step, loss] for step, loss in _loss_curve()])
 
     async def train() -> None:
         if running.value:
             return
         running.set(True)
         live.clear()
-        loss = 1.6
-        for step in range(80):
-            loss = max(0.05, loss * 0.96 + (0.02 * math.sin(step / 3)))
-            live.push(step, round(loss, 4))
+        for step, loss in _loss_curve():
+            live.push(step, loss)
             await asyncio.sleep(0.05)  # a real training step would take longer
         running.set(False)
 
@@ -128,6 +139,9 @@ def build() -> indah.Session:
         children=[
             indah.Button("Run training", on_click=train),
             indah.Spinner(active=running, label="training..."),
+            indah.Text(
+                "Showing a sample run. Press Run training to watch a new one.", variant="caption"
+            ),
             indah.Slider(k, min=1, max=8, step=0.5, label="Amplitude k"),
         ],
     )

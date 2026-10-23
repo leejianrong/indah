@@ -52,3 +52,16 @@ async def test_run_training_streams_points_over_the_append_op():
     ]
     assert len(rows) == 80  # one append per step
     assert all(len(r) == 2 for r in rows)  # [step, loss]
+
+
+@pytest.mark.integration
+def test_the_live_chart_opens_with_a_sample_run_not_blank():
+    """A visitor sees a curve on open, not an empty chart until Run is pressed (IND-179)."""
+    example = _load_example()
+    session = example.build()
+    live = next(
+        c for c in session._by_id.values() if c.type == "chart" and "data" in c.static_props()
+    )
+    rows = live.static_props()["data"]
+    assert len(rows) >= 20, "the streaming chart opens empty"
+    assert all(len(row) == 2 for row in rows)

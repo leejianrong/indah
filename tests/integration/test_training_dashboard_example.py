@@ -60,3 +60,20 @@ def test_start_button_wires_an_async_training_handler():
     result = session.dispatch(button.id, "click", {})
     assert result is not None and result.coro is not None  # async handler, run in background
     result.coro.close()  # don't actually run the full default loop in the test
+
+
+@pytest.mark.integration
+def test_the_loss_chart_opens_with_a_sample_run_not_blank():
+    """A visitor sees loss curves on open, not an empty chart until Start (IND-179)."""
+    example = _load_example()
+    session = example.build()
+    chart = next(c for c in session._by_id.values() if c.type == "chart")
+    rows = chart.static_props()["data"]
+    assert len(rows) >= 20, "the loss chart opens empty"
+    assert all(len(row) == 3 for row in rows)  # step, train loss, val loss
+    texts = [
+        c.reactive_props()["text"]()
+        for c in session._by_id.values()
+        if c.type == "text" and "text" in c.reactive_props()
+    ]
+    assert any("sample" in str(t).lower() for t in texts), "nothing says this is a sample run"
