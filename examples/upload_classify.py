@@ -291,7 +291,14 @@ def _predictions_chart(predictions: list[tuple[str, float]]):
     from matplotlib.figure import Figure
 
     fig = Figure(figsize=(4, 2.6))
+    # A PNG does not know whether the page is light or dark: draw on a transparent background
+    # with mid-grey ink that reads on both (IND-177).
+    ink = "#8d8691"
+    fig.patch.set_alpha(0)
     ax = fig.add_subplot(111)
+    ax.set_facecolor("none")
+    ax.tick_params(colors=ink)
+    ax.xaxis.label.set_color(ink)
     if predictions:
         labels = [label for label, _confidence in reversed(predictions)]
         values = [confidence * 100 for _label, confidence in reversed(predictions)]
@@ -299,7 +306,7 @@ def _predictions_chart(predictions: list[tuple[str, float]]):
         ax.set_xlim(0, 100)
         ax.set_xlabel("Confidence (%)")
         for i, value in enumerate(values):
-            ax.text(value + 1.5, i, f"{value:.0f}%", va="center", fontsize=8)
+            ax.text(value + 1.5, i, f"{value:.0f}%", va="center", fontsize=8, color=ink)
     ax.set_frame_on(False)
     fig.tight_layout()
     return fig

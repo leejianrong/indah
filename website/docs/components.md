@@ -415,6 +415,12 @@ you pass it.
 `Plot` takes anything with a `savefig` method (a Matplotlib figure) and serialises
 to an image, so the browser needs nothing extra to show it.
 
+A PNG does not know whether the page is light or dark, so a figure with the default white
+background shows as a light box on a dark page. Draw it on a transparent background with
+mid-grey text, spines and ticks, which read on both: `fig.patch.set_alpha(0)`,
+`ax.set_facecolor("none")` and a grey such as `#8d8691` for the ink (the gallery's charts and
+classifier do exactly this).
+
 ## Inputs
 
 Inputs are two-way bound: the UI reflects the signal, and a user change writes back

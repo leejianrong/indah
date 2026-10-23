@@ -273,9 +273,9 @@ def _waveform_svg(samples: np.ndarray, *, width: int = 640, height: int = 160) -
     points = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs_px, ys_px, strict=True))
     svg = (
         f"<svg xmlns='http://www.w3.org/2000/svg' width='{width}' height='{height}'>"
-        f"<rect width='{width}' height='{height}' rx='12' fill='#f3ebe0'/>"
+        f"<rect width='{width}' height='{height}' rx='12' fill='#8d8691' fill-opacity='0.14'/>"
         f"<line x1='0' y1='{height / 2:.1f}' x2='{width}' y2='{height / 2:.1f}' "
-        f"stroke='#d8cabb' stroke-width='1'/>"
+        f"stroke='#8d8691' stroke-opacity='0.5' stroke-width='1'/>"
         f"<polyline points='{points}' fill='none' stroke='#b5296b' stroke-width='1.5'/>"
         f"</svg>"
     )
