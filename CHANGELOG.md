@@ -11,6 +11,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Fixed
+
+- A plain table (`Table` from a frame or records, and `DataFrame`) now wraps its cells on a screen
+  narrower than 560px, so every column is on screen. Before, each cell stayed on one line, a long first
+  column took the whole width and the others sat behind a sideways scroll nobody could see. Wider screens
+  and rich tables (`virtual`, `Col(truncate=)`, `Col(wrap=)`) are unchanged.
+
 ### Added
 
 - The docs have a **Playground** (`playground.md`): edit an indah app and run it in your own browser with
