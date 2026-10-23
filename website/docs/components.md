@@ -10,6 +10,7 @@ set shipped so far.
 |-----------|-----|
 | `Text` | a label bound to a signal, computed, or string |
 | `Marked` | text with shaded spans (the part that is ignored or flagged): `Marked(text, marks=[(start, end, tone)])` |
+| `Steps` | a timeline of steps, vertical or horizontal: `Steps(items, orientation=)`; each step is `done`, `current`, `skipped`, `off` or `pending` |
 | `Image` | a URL, `data:` URI, or raw PNG bytes |
 | `ImageOverlay` | an image with read-only vector overlays (boxes, masks, keypoints) |
 | `Audio` | a URL, `data:` URI, or raw audio bytes, played with native browser controls |
@@ -183,6 +184,54 @@ Table(
 A `Diff` draws its own changed characters; to show shaded text beside one, put a `Marked` in the other pane
 of a `Row` or `SplitPane`. `marked_runs` returns a list that a List item or a table row carries as it is
 (other lists and dicts in an item field are shown as text).
+
+### Steps
+
+`Steps(items)` draws a timeline: a pipeline, a checklist, the tiers a request went through.
+
+```python
+from indah import Steps
+
+Steps(
+    [
+        {"label": "Plan", "state": "done", "detail": "2 min"},
+        ("Build", "current"),
+        ("Test", "pending"),
+        "Ship",
+    ],
+    orientation="vertical",
+)
+```
+
+An item is a dict (`label`, `state`, `detail`), a tuple `(label, state)` or `(label, state, detail)`, or a bare
+label. The `state` is `done`, `current`, `skipped`, `off` or `pending` (the default), and anything else raises
+an error. `items` can be a list, a `Signal`, a `Computed` or a function, so the timeline follows the data and
+updates in place. At most 100 steps are drawn.
+
+A state is never colour alone. Each has its own drawing (a check, a ring with a dot, a barred ring, a dashed
+ring, an empty ring), a skipped label is struck through, and a screen reader hears "Build, step 2 of 4,
+current" followed by the `detail`. The current step has `aria-current="step"`. The steps are display only, so
+they are not a tab stop. `label=` names the timeline for assistive technology.
+
+`orientation` is `"vertical"` (the default) or `"horizontal"`. `size="compact"` is for tight places: one line,
+smaller, and the `detail` moves into the hover text (a screen reader still reads it); at the normal size the
+`detail` is shown under its label.
+
+To show it in a `List` item or a table cell, build the field with `steps_items` and name the component in the
+render spec. There it is horizontal and compact, unless you bind `orientation` or `size` to fields as well:
+
+```python
+from indah import Col, Table, steps_items
+
+tiers = steps_items([("exact", "done", "hit"), ("fuzzy", "skipped"), ("llm", "current")])
+cell = {"component": "steps", "bind": {"items": "tiers"}}
+
+Table(
+    columns=[Col("id"), Col("tiers", kind="cell", render=cell)],
+    rows=[{"id": 1, "tiers": tiers}],
+    key="id",
+)
+```
 
 ### Empty states and code blocks
 

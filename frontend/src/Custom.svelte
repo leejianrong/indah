@@ -5,11 +5,12 @@
   import { postEvent } from "./api.js";
   import Self from "./Custom.svelte";
   import MarkedRuns from "./MarkedRuns.svelte";
+  import StepsCell from "./StepsCell.svelte";
 
   // Built-in components a spec may name instead of a tag ({component: "marked", bind: {...}}),
   // a leaf that takes its props from the node or the List item / table row. Keep in step with
   // SPEC_COMPONENTS in protocol.py.
-  const registry = { marked: MarkedRuns };
+  const registry = { marked: MarkedRuns, steps: StepsCell };
 
   // `row` is {key, index} when the spec renders one row of a keyed List; it rides along
   // on every event so the server knows which row the event came from.

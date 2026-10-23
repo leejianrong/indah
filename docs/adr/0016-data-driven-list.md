@@ -80,11 +80,18 @@ built-in leaf component instead:
   in `protocol.py`, today `marked`. The node is a leaf: only `bind` (component prop to node prop,
   item field or row field), no attrs, class, text, literal, `on` or children, and only the props
   that component lists. A node of this kind is still data, so the spec stays inert.
-- The shell keeps a matching `registry` in `Custom.svelte`. Adding a component (IND-163 `Steps`
-  will) is one entry in each place.
+- The shell keeps a matching `registry` in `Custom.svelte`. Adding a component is one entry in each place (`Steps`, IND-163, was the second).
 - The data the component needs comes from the item, not from the spec. For `marked` the server
   computes `runs` with `indah.marked_runs(text, marks)` (the same rules as the `Marked`
   component, in one place), and the item or row carries them. `marked_runs` returns a `list`
   subclass that List and Table pass through; every other non-scalar field is still turned into
   text, so no existing item changes.
 - Additive: older specs have no `component`, and `protocol_version` stays 1.
+
+### Amendment (IND-163): `steps` is the second spec component
+
+`SPEC_COMPONENTS` gained `steps`, which may bind `items` (a list of `[label, state, detail]`, built by
+`indah.steps_items`), `orientation` and `size`. The shell renders it through `StepsCell`, which defaults to
+horizontal and compact, because the places a spec appears (a list item, a table cell) are tight; a field bound
+to `orientation` or `size` overrides that. `steps_items` returns a `list` subclass that a List item or a table
+row carries as nested data, like `marked_runs`. The seam needed no other change.

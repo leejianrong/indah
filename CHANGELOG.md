@@ -25,6 +25,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   Home and End read each bar, and a live region says the same, so colour is not the only cue. It
   respects reduced motion and works under `csp="strict"`. A new component type (`barstrip`), so
   `protocol_version` stays 1 and nothing existing changes.
+- `Steps(items, orientation=, size=)` and `steps_items(items)`: a timeline of steps (a pipeline, a checklist, the
+  tiers a request went through), vertical or horizontal. A step is `done`, `current`, `skipped`, `off` or
+  `pending`, each with its own drawing (a check, a ring with a dot, a barred ring, a dashed ring, an empty
+  ring) as well as its theme colour, a skipped label is struck through, and a screen reader hears "step 2 of 5,
+  done" with the step's `detail`. The current step is `aria-current="step"`. Display only, so not a tab stop.
+  `size="compact"` is one tight line with the detail as hover text. `items` may be a `Signal`, `Computed` or
+  function and updates in place. A render spec may name it, `{"component": "steps", "bind": {"items": "tiers"}}`,
+  so a `List` item or a table cell (a `Stream`-fed table too) can draw it from a `steps_items` field; there it is
+  compact and horizontal unless `orientation` or `size` are bound too (ADR-0016 amendment). A new component type
+  and a new spec component (additive, `protocol_version` stays 1); nothing existing changes.
 - `Marked(text, marks)` and `marked_runs(text, marks)`: text with shaded spans, for the part of a request
   that was ignored when matching or the words a check flagged. A mark is `(start, end, tone)` or
   `(start, end, tone, label)`; offsets are Unicode code points, a range is clamped, an empty one dropped,

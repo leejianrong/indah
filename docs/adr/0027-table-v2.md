@@ -82,3 +82,4 @@ additive (new props `columns`, `rows`, `rowKey`, `height`; a `select` event carr
 - Amendment (IND-157): a cell's render spec may also name a built-in leaf component,
   `{"component": "marked", "bind": {"runs": "<field>"}}`, for text with shaded spans. See the
   amendment to ADR-0016; a cell is still display only.
+- Amendment (IND-163): a cell may also name `{"component": "steps", "bind": {"items": "<field>"}}`, a compact timeline built with `indah.steps_items`; see the ADR-0016 amendment.

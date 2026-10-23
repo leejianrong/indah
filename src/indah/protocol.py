@@ -122,6 +122,7 @@ ALLOWED_TAGS = frozenset(
 # A new entry needs a shell renderer registered under the same name (Custom.svelte).
 SPEC_COMPONENTS: dict[str, frozenset[str]] = {
     "marked": frozenset({"runs"}),
+    "steps": frozenset({"items", "orientation", "size"}),
 }
 
 
