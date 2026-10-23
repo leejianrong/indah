@@ -35,6 +35,7 @@ SLUGS = [
     "object-detection",
     "charts",
     "stocks",
+    "dataframe-explorer",
     "prettymap",
     "map-poster",
     "grc-map",
