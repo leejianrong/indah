@@ -95,14 +95,101 @@ stored anywhere. One-time setup:
    - Environment: `pypi`
 2. In the GitHub repo: create an Environment named `pypi` (Settings -> Environments).
 
-Then every release is:
+## The release checklist (every release)
 
-1. Bump `version` in `pyproject.toml` and `__version__` in `src/indah/__init__.py`
-   (keep them in lockstep - `tests/unit/test_version.py` and the packaging tests
-   guard the invariants).
-2. Add the release's section to `CHANGELOG.md` (Keep a Changelog; hyphens, no em-dashes),
-   and use that section as the GitHub Release notes.
-3. Run `make cleanroom` and `make check` - the R4 proof and the fast gate.
-4. Commit, tag (`git tag vX.Y.Z`), push the tag.
-5. Create a GitHub Release for that tag. The `publish.yml` workflow builds and
-   publishes automatically.
+Do these in order. Nothing here deploys or publishes by itself except step 7 (the GitHub Release), and
+that only starts the `publish.yml` job, which waits for the owner to approve the `pypi` environment.
+Replace `X.Y.Z` with the version. A release candidate is `X.Y.ZrcN` and follows the same steps.
+
+**Before the release PR**
+
+1. Check the board: every card meant for the release is done, and the roadmap (`docs/ROADMAP.md`) matches.
+2. Check the ADR numbers are unique (`ls docs/adr`; two ADRs once both got 0040). `make release-check`
+   repeats this check.
+3. If the Pyodide version changed, it was a reviewed commit of its own: `PYODIDE_VERSION` in
+   `scripts/build_docs_live.py` pins it and the docs build writes it to `runtime.json` (ADR-0041). A bump
+   can change the Python and package versions the live examples run on, so run the live-example check
+   (`make docs`, then open a live example) in that commit, not in the release PR.
+
+**The release PR** (one PR, branch `release/X.Y.Z`)
+
+4. Bump the version in both files, which must agree (`tests/unit/test_version.py` guards it):
+   - `pyproject.toml`: `version = "X.Y.Z"`
+   - `src/indah/__init__.py`: `__version__ = "X.Y.Z"`
+5. In `CHANGELOG.md`, turn the `## [Unreleased]` entries into `## [X.Y.Z] - YYYY-MM-DD` with a short
+   introduction, add "Known limitations" and, if anything looks different, an "Upgrading" section, and
+   leave an empty `## [Unreleased]` above it. Hyphens, no em-dashes.
+6. Run the checks locally, then open the PR:
+
+   ```bash
+   make release-check VERSION=X.Y.Z   # files agree, CHANGELOG heading exists, [Unreleased] is empty,
+                                      # no em-dash, ADR numbers unique, the tag is free (reads only)
+   make cleanroom                     # R4: the wheel needs no Node, at install or run time
+   make check                         # the fast gate
+   ```
+
+   Merge the PR **only when every check is green and none is pending**. `gh pr checks --watch` can return
+   while checks are still queued, so confirm with a loop:
+
+   ```bash
+   until ! gh pr checks | grep -qE "pending|queued|in_progress"; do sleep 20; done; gh pr checks
+   ```
+
+   Read the final list: the checks must exist (an empty list also exits the loop) and all say `pass`.
+
+   The `Docs` workflow is part of that: its build runs the live-example bundle (`build_docs_live.py
+   bundle`, then `finalize`) from this commit, with the wheel built from the same commit, so a red docs
+   build means the live examples would be broken on the site.
+7. After the merge, wait for CI on the release commit on `main`: `gh run list --branch main --limit 4
+   --json name,status,conclusion,headSha` must show `CI` and `Docs` for that commit as `completed` and
+   `success`. Then tag and publish the GitHub Release with the CHANGELOG section as its notes:
+
+   ```bash
+   git checkout main && git pull
+   make release-check VERSION=X.Y.Z                       # once more, on the merged commit
+   python3 scripts/release_check.py notes X.Y.Z > /tmp/notes-X.Y.Z.md
+   git tag vX.Y.Z && git push origin vX.Y.Z
+   gh release create vX.Y.Z --title "vX.Y.Z" --notes-file /tmp/notes-X.Y.Z.md
+   ```
+
+**Publishing (the owner's step)**
+
+8. `publish.yml` builds the wheel and then **waits for the owner to approve the `pypi` environment**
+   (GitHub: Actions, the run, Review deployments). Never bypass it. Confirm the result:
+
+   ```bash
+   gh run list --workflow "Publish to PyPI" --limit 1 --json status,conclusion
+   curl -s https://pypi.org/pypi/indah/json | python3 -c "import json,sys; print(json.load(sys.stdin)['info']['version'])"
+   ```
+
+**After the release is on PyPI** (`make post-release VERSION=X.Y.Z` prints these with the version filled in)
+
+9. **Redeploy the gallery.** `deploy/fly/build_gallery.sh` pins `indah==<version in pyproject.toml>`
+   (an exact pin, because a `>=` range let Docker reuse an old cached layer and demos that need newer
+   API broke). So deploy only **after** step 8, from a clean checkout of the release commit. It needs
+   `fly auth login` on that machine:
+
+   ```bash
+   ./deploy/fly/deploy_fly.sh
+   ```
+
+10. **Smoke-test the live gallery.** It opens every demo, uses its main control and fails on console
+    errors, failed requests, CSP violations or a stuck "connecting":
+
+    ```bash
+    GALLERY_URL=https://indah-demos.fly.dev uv run pytest tests/e2e/test_gallery.py
+    ```
+
+11. **Check the docs site and its live examples.** The `Docs` workflow deploys to GitHub Pages on every
+    merge to `main`, so the site already carries the release commit's bundle. Confirm the deploy is
+    green (`gh run list --workflow Docs --branch main --limit 1`), open
+    <https://indah.abangai.dev/docs/>, press **Run it** on an example and check that it responds. The
+    first run downloads about 9 MB (Pyodide, from the pinned jsDelivr URL) and takes a few seconds.
+    There is no separate Studio deploy: the Studio runs locally (`make demo`) and its pages run in the
+    docs through Pyodide (ADR-0041).
+12. **Housekeeping.** Move the release's cards to done, update `docs/ROADMAP.md` (what shipped, what
+    moved), and note the release on any card that was waiting for it. If the gallery or docs check
+    failed, file a card; do not retag.
+
+If a step fails after the tag exists, fix forward with a patch release (`X.Y.Z+1`); do not move or
+delete a published tag.

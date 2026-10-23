@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e build cleanroom docs docs-serve check clean
+.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e build cleanroom docs docs-serve release-check post-release check clean
 
 # Print a free host port (stdlib only; no lsof/nc needed).
 FREE_PORT := python3 -c 'import socket;s=socket.socket();s.bind(("",0));p=s.getsockname()[1];s.close();print(p)'
@@ -73,6 +73,14 @@ docs: ## Build the documentation site into website/site/ (with the live-example 
 docs-serve: ## Live-preview the documentation site (live examples included)
 	uv run --extra docs python scripts/build_docs_live.py bundle
 	cd website && uv run --extra docs zensical serve
+
+release-check: ## Before tagging: files, CHANGELOG and tag agree (make release-check VERSION=X.Y.Z). Reads only
+	@test -n "$(VERSION)" || { echo "usage: make release-check VERSION=X.Y.Z" >&2; exit 2; }
+	python3 scripts/release_check.py check $(VERSION)
+
+post-release: ## Print the post-release commands (make post-release VERSION=X.Y.Z). Runs nothing
+	@test -n "$(VERSION)" || { echo "usage: make post-release VERSION=X.Y.Z" >&2; exit 2; }
+	@python3 scripts/release_check.py post $(VERSION)
 
 check: lint test-fast ## The pre-push gate: lint + fast tests
 
