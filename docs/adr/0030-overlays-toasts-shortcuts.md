@@ -79,6 +79,18 @@ trigger. An item is chosen by id (`key=`, else the label) against the *current* 
 nothing; `confirm=` reuses the Button confirm dialog. The wire adds the `menu` type and a `select {item}`
 event (additive). Omitting an item for a principal is the app's job with `ctx.only`, as for any component.
 
+**CommandPalette (IND-165, note).** `CommandPalette(commands, shortcut="mod+k")` and `Command(label, on_run | to,
+group=, shortcut=, keywords=, confirm=, key=)`. The palette is its own window listener for its shortcut (so it
+opens with no round trip), not a `Shortcuts` entry; it lists the key in the `?` help overlay. It follows the key
+routing rule: it skips a key someone already handled, never opens over another dialog, ignores a bare key typed
+into a field (a `mod+`/`alt+` combo still opens it), and defaults every key it handles. Once open it is a modal
+dialog (`role="dialog"`, a combobox over a listbox with `aria-activedescendant`); Tab stays inside and Escape or
+the shortcut closes it, which is the way out (WCAG 2.1.2), and focus returns to what had it. Filtering is client
+side over the list the server sent, in a fixed order (label prefix, word prefix, substring, subsequence, then
+keywords and group; ties keep the given order). Only `run {command}` reaches the server, and it is matched to the
+*current* commands by id, so an omitted, stale or forged id does nothing. A jump (`to=`) calls `ctx.navigate`, so
+a palette with one needs `ctx=`. The wire adds the `commandpalette` type and a `run` event (additive).
+
 ## Alternatives considered
 
 | Option | Why not |

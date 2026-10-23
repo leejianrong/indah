@@ -14,6 +14,7 @@
   import Tip from "./Tip.svelte";
   import Choice from "./Choice.svelte";
   import Menu from "./Menu.svelte";
+  import CommandPalette from "./CommandPalette.svelte";
 
   const JUSTIFY = {
     start: "flex-start",
@@ -602,6 +603,8 @@
   </fieldset>
 {:else if node.type === "menu"}
   <Menu {node} {props} />
+{:else if node.type === "commandpalette"}
+  <CommandPalette {node} {props} />
 {:else if node.type === "chips" || node.type === "segmented"}
   <Choice {node} {props} />
 {:else if node.type === "streamtext"}

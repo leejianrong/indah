@@ -11,6 +11,20 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+
+- `CommandPalette(commands, shortcut="mod+k")` and `Command(label, on_run | to=, group=, shortcut=, keywords=,
+  confirm=, key=)`: the dashboard driven like a terminal. Ctrl or Cmd+K opens a dialog; type to filter, arrows
+  move, Enter runs, Escape closes and gives focus back. A command runs a function (sync or `async`) or jumps
+  to an in-app page (`to=`, with `CommandPalette(..., ctx=ctx)`), and may ask to `confirm`. The filter runs in
+  the browser in a fixed order: label prefix, then a word prefix, a substring, a subsequence (`gl` finds
+  "Go to log"), then keywords and group, ties in the order given. `commands` may be a `Signal`, `Computed`
+  or function, so a page adds its own commands while it shows. It follows the key-routing rule of ADR-0030:
+  never opens over another dialog, ignores a bare key typed in a field, and the shortcut is listed in the `?`
+  help. To omit a command for someone who may not use it, build the list with `ctx.only` and wrap the handler
+  in `guard`. A new component type (`commandpalette`, event `run`), so `protocol_version` stays 1 and nothing
+  existing changes.
+
 ## [0.6.0] - 2026-10-23
 
 Tables, text and small controls. This release makes plain `Text` look like normal body text, adds
