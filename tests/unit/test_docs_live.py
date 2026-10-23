@@ -136,6 +136,29 @@ def test_finalize_escapes_source_text(build, pages):
 
 
 @pytest.mark.unit
+def test_finalize_renders_backticks_in_a_summary_as_code_and_escapes_the_rest(build, pages):
+    summary = "Shows `Text` & a<b, `x<y` and a lone ` tick, <i>no markup</i>"
+    page = dict(pages["start/choices"], summary=summary)
+    new, _ = build.finalize_html(
+        '<indah-live page="start/choices"></indah-live>', {"start/choices": page}
+    )
+    caption = new.split("<figcaption>")[1].split("</figcaption>")[0]
+    assert "<code>Text</code> &amp; a&lt;b," in caption
+    assert "<code>x&lt;y</code>" in caption
+    assert "a lone ` tick" in caption  # an unpaired backtick stays as written
+    assert "&lt;i&gt;no markup&lt;/i&gt;" in caption and "<i>" not in caption
+
+
+@pytest.mark.unit
+def test_inline_code_helper_matches_the_element_script(build):
+    """The no-JS markup and the element must agree: the same split on paired backticks."""
+    assert build.inline_code("a `b` c") == "a <code>b</code> c"
+    assert build.inline_code("``") == "``" and build.inline_code("") == ""
+    js = (ROOT / "website" / "docs" / "javascripts" / "indah-live.js").read_text()
+    assert "/`([^`\\n]+)`/g" in js and build.INLINE_CODE.pattern == r"`([^`\n]+)`"
+
+
+@pytest.mark.unit
 def test_finalize_walks_a_built_site(build, bundle, tmp_path):
     out, _ = bundle
     site = tmp_path / "site"
