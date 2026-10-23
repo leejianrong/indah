@@ -315,6 +315,21 @@ def test_the_quickstart_embed_is_readable_without_running_it(site, browser):
 
 
 @pytest.mark.e2e
+def test_backticks_in_a_summary_render_as_code(site, browser):
+    """The element draws `name` spans as code, not as literal backticks (IND-195)."""
+    page = browser.new_page()
+    try:
+        page.goto(site.base + "/")
+        caption = page.locator("indah-live[page='extend/bridge'] figcaption")
+        expect(caption.locator("code")).to_have_text("modules/tier-rail.js")
+        expect(caption).not_to_contain_text("`")
+        context = page.locator("indah-live[page='extend/context'] figcaption")
+        expect(context.locator("code").first).to_have_text("ctx.sid")
+    finally:
+        page.close()
+
+
+@pytest.mark.e2e
 @pytest.mark.parametrize("page_id", ["overlays/code-editor", "extend/bridge"])
 def test_pages_that_fetched_api_files_run_from_static_files(site, browser, page_id):
     """The editor module and a module component load from real files beside frame.html."""

@@ -221,6 +221,20 @@ _EMBED = re.compile(
 _PAGE = re.compile(r"""\bpage\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 
 
+INLINE_CODE = re.compile(r"`([^`\n]+)`")
+
+
+def inline_code(text: str) -> str:
+    """Escape ``text`` and turn paired backticks into <code>. Nothing else becomes markup."""
+    out, last = [], 0
+    for m in INLINE_CODE.finditer(text):
+        out.append(html.escape(text[last : m.start()]))
+        out.append(f"<code>{html.escape(m.group(1))}</code>")
+        last = m.end()
+    out.append(html.escape(text[last:]))
+    return "".join(out)
+
+
 def render_embed(page: dict) -> str:
     """One embed's static markup. The element script adds the Run it behaviour on top."""
     e = html.escape
@@ -239,7 +253,8 @@ def render_embed(page: dict) -> str:
     return (
         f'<indah-live page="{pid}" data-prerendered>'
         f'<figure class="indah-live-card">'
-        f"<figcaption><strong>{e(page['title'])}</strong> - {e(page['summary'])}</figcaption>"
+        f"<figcaption><strong>{e(page['title'])}</strong> - "
+        f"{inline_code(page['summary'])}</figcaption>"
         f'<pre class="indah-live-source"><code class="language-python">'
         f"{e(page['source'] or '')}</code></pre>"
         f'<p class="indah-live-actions">{action} '

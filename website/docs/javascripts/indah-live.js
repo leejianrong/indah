@@ -8,6 +8,7 @@
   let pages = null;
   const getPages = () => (pages ||= fetch(base + "pages.json").then((r) => r.json()));
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const code = (s) => String(s).split(/`([^`\n]+)`/g).map((t, i) => (i % 2 ? "<code>" + esc(t) + "</code>" : esc(t))).join("");
 
   class IndahLive extends HTMLElement {
     connectedCallback() {
@@ -29,7 +30,7 @@
         ? '<button type="button" class="indah-live-run" hidden>Run it</button> <span class="indah-live-note">Loads about 9 MB, then runs in your browser.</span>'
         : '<span class="indah-live-note">This example needs a server: ' + esc(page.local_only || "") + ". Run <code>make demo</code> to try it.</span>";
       this.innerHTML =
-        '<figure class="indah-live-card"><figcaption><strong>' + esc(page.title) + "</strong> - " + esc(page.summary) +
+        '<figure class="indah-live-card"><figcaption><strong>' + esc(page.title) + "</strong> - " + code(page.summary) +
         '</figcaption><pre class="indah-live-source"><code class="language-python">' + esc(page.source || "") +
         '</code></pre><p class="indah-live-actions">' + action +
         ' <a href="https://github.com/leejianrong/indah/blob/main/docs/STUDIO.md">Open in the Studio</a></p>' +

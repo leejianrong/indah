@@ -30,6 +30,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   `tests/unit/test_docs_embeds.py`, or `scripts/export_studio_pages.py --unembedded`) names any runnable
   Studio page with a docs target that no docs page embeds. No library change.
 
+### Fixed
+
+- Docs: the summary line of a live example now shows `code` spans as code instead of with literal
+  backticks (the page's source and the rest of the summary stay escaped).
+
 ## [0.7.0] - 2026-10-24
 
 More building blocks, and the start of live docs. This release adds the last of the dashboard pieces as
