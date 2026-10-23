@@ -39,6 +39,7 @@ DEMOS = [
     ("object-detection", "object_detection", None),
     ("charts", "charts", None),
     ("stocks", "stocks", None),
+    ("dataframe-explorer", "dataframe_explorer", None),
     ("prettymap", "prettymap", None),
     ("map-poster", "map_poster", None),
     ("grc-map", "grc_map", None),
