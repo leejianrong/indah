@@ -13,6 +13,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- The docs have a **Playground** (`playground.md`): edit an indah app and run it in your own browser with
+  Pyodide, with no install and no server (ADR-0041). Write `def build()` returning a component, the same
+  contract as the Studio's local playground, so snippets move between them. Nothing loads until you press
+  Run (about 9 MB compressed the first time), a run starts in about 4 seconds once cached, your code is sent
+  nowhere, an endless loop is stopped after 5 seconds (and Stop works at any time), and a syntax error or
+  an exception is shown under the editor as a traceback from your own lines. It starts from the Studio
+  playground's examples and the quickstart. With JavaScript off the editor and the examples still read. The
+  page lists what cannot work without a server. The Studio's own playground still runs only on your
+  machine. Docs only: `src/indah` does not change.
+
 - `InfoTip(text, label=)`: a small focusable info icon that shows a short note (the design's "i" beside a
   label). It opens on hover and keyboard focus, a click or tap pins it open, and Escape, blur or a press
   outside closes it; Escape closes only the note, so a modal behind it stays open. It is one tab stop, a

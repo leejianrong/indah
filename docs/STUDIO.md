@@ -140,8 +140,22 @@ with no server. Pressing **Run it** on another example stops the first.
   `scripts/build_docs_live.py`; it loads from the jsDelivr CDN at that version, and
   `bundle --self-host` copies it into the bundle for tests and offline copies.
 - Budgets (checked by the build and `tests/e2e/test_docs_live.py`): the wheel in the bundle at most
-  1 MB, the element script at most 10 KB, Run it to the first frame at most 8 s with a warm cache.
+  1 MB, the element script at most 10 KB, the Playground script at most 12 KB (5.5 KB today), Run it to
+  the first frame at most 8 s with a warm cache.
 - Try it locally: `uv run --extra e2e pytest tests/e2e/test_docs_live.py`.
+
+## The docs Playground (IND-83)
+
+`website/docs/playground.md` is a Playground: a textarea, Run, and the result, with the reader's own
+code running in a Pyodide worker in their tab (no server, nothing sent). It reuses the docs bundle:
+`frame.html?playground=1` asks the page that embeds it for the code, boots the worker with
+`{type: "boot", code, runtime}`, and the worker runs it with `bridge.init_code` (the contract is the
+Studio playground's: define `build()` returning a component; `indah` is already imported). The worker
+beats once a second; a worker that goes quiet for 5 seconds is in an endless loop, and the page throws
+the iframe (and with it the worker) away. The starters are the Studio playground's own `STARTERS` plus
+the quickstart and layout pages' source, built by `scripts/build_docs_live.py` (`playground_starters`),
+and a unit test runs every one. Its browser tests are `tests/e2e/test_docs_playground.py`: the ones that
+need no Pyodide run in `browser-e2e`, the real runs in the `Studio in Pyodide` workflow.
 
 ## Every page also runs in the docs (Pyodide)
 

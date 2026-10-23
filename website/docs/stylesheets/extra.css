@@ -38,3 +38,22 @@ indah-live { display: block; margin: 1.2em 0; }
 .indah-live-status { min-height: 1.2em; font-size: 0.85em; }
 .indah-live-frame { width: 100%; height: 320px; border: 1px solid var(--md-default-fg-color--lightest);
   border-radius: 6px; background: transparent; }
+
+/* <indah-playground>: edit and run indah code in the browser (ADR-0041, IND-83). */
+indah-playground { display: block; margin: 1.2em 0; }
+.indah-play { border: 1px solid var(--md-default-fg-color--lightest); border-radius: 8px; padding: 0.8em 1em; }
+.indah-play-code { display: block; width: 100%; box-sizing: border-box; margin: 0.4em 0; padding: 0.6em;
+  font: 0.8rem/1.45 var(--md-code-font-family, monospace); tab-size: 4; white-space: pre; overflow: auto;
+  resize: vertical; color: var(--md-code-fg-color); background: var(--md-code-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest); border-radius: 6px; }
+.indah-play-note { font-size: 0.85em; opacity: 0.8; margin: 0.2em 0; }
+.indah-play-run, .indah-play-stop, .indah-play-reset { cursor: pointer; font: inherit; padding: 0.3em 1em;
+  border-radius: 999px; border: 1px solid var(--md-default-fg-color--lighter); background: transparent;
+  color: var(--md-default-fg-color); }
+.indah-play-run { border: 0; background: var(--md-primary-fg-color); color: var(--md-primary-bg-color); }
+.indah-play-stop:disabled { opacity: 0.45; cursor: default; }
+.indah-play-error { margin: 0.4em 0; padding: 0.6em; white-space: pre-wrap; overflow: auto; max-height: 20em;
+  border-left: 4px solid #c62828; background: var(--md-code-bg-color); font-size: 0.8rem; }
+.indah-play-error[hidden], [hidden].indah-play-js { display: none; }
+.indah-play-starters details { margin: 0.2em 0; }
+.indah-play-starters pre { max-height: 18em; overflow: auto; }

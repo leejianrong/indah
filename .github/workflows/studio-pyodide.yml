@@ -15,9 +15,11 @@ on:
       - "frontend/**"
       - "website/live/**"
       - "website/docs/javascripts/indah-live.js"
+      - "website/docs/javascripts/indah-playground.js"
       - "scripts/build_docs_live.py"
       - "scripts/export_studio_pages.py"
       - "tests/e2e/test_studio_pyodide.py"
+      - "tests/e2e/test_docs_playground.py"
       - "tests/e2e/conftest.py"
       - "pyproject.toml"
       - "uv.lock"
@@ -50,7 +52,7 @@ jobs:
         with:
           path: .cache/live-pyodide
           key: pyodide-${{ steps.pyodide.outputs.version }}
-      - name: Every runnable Studio page runs in Pyodide
+      - name: Every runnable Studio page, and the docs Playground, run in Pyodide
         run: uv run pytest -m pyodide -k "not first_frame" -n 4 -q --durations=8
       # Alone on the machine, so other pages' boots do not slow it: the warm first frame stays
       # within the budget in runtime.json.

@@ -13,10 +13,23 @@
   worker.onerror = (e) => tell({ type: "error", message: e.message || "the worker failed to start" });
   addEventListener("pagehide", () => worker.terminate());
 
-  fetch("runtime.json")
-    .then((r) => r.json())
-    .then((runtime) => worker.postMessage({ type: "boot", page, runtime }))
-    .catch((err) => tell({ type: "error", message: "runtime.json: " + err }));
+  const boot = (extra) =>
+    fetch("runtime.json")
+      .then((r) => r.json())
+      .then((runtime) => worker.postMessage({ type: "boot", runtime, ...extra }))
+      .catch((err) => tell({ type: "error", message: "runtime.json: " + err }));
+  if (new URLSearchParams(location.search).has("playground")) {
+    // The docs Playground: the reader's own code arrives from the docs page that embeds this frame.
+    addEventListener("message", (e) => {
+      const m = e.data;
+      if (e.source === parent && m && m.source === "indah-playground" && m.type === "code") {
+        boot({ code: String(m.code) });
+      }
+    });
+    tell({ type: "need-code" });
+  } else {
+    boot({ page });
+  }
 
   class FakeEventSource {
     constructor(url) {

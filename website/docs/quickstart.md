@@ -136,5 +136,6 @@ Try it live. Nothing downloads until you press **Run it**.
 
 ## Next
 
+- [Playground](playground.md) - edit this app and run it in your browser.
 - [Components](components.md) - the full starter set.
 - [Custom components](custom-components.md) - add your own.
