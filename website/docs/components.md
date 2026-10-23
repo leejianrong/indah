@@ -15,6 +15,23 @@ set shipped so far.
 | `ImageOverlay` | an image with read-only vector overlays (boxes, masks, keypoints) |
 | `Audio` | a URL, `data:` URI, or raw audio bytes, played with native browser controls |
 
+<details>
+<summary>Try these live (6 examples)</summary>
+
+<indah-live page="start/text-roles"></indah-live>
+
+<indah-live page="data/marked"></indah-live>
+
+<indah-live page="data/steps"></indah-live>
+
+<indah-live page="media/image"></indah-live>
+
+<indah-live page="media/overlay"></indah-live>
+
+<indah-live page="media/audio"></indah-live>
+
+</details>
+
 ### Inputs (two-way bound to a signal)
 
 | Component | Use |
@@ -33,12 +50,27 @@ set shipped so far.
 | `Checkbox` | a boolean checkbox |
 | `Date` | a date picker (ISO `YYYY-MM-DD`) |
 
+<details>
+<summary>Try these live (3 examples)</summary>
+
+<indah-live page="start/inputs"></indah-live>
+
+<indah-live page="overlays/text-inputs"></indah-live>
+
+<indah-live page="start/live-options"></indah-live>
+
+</details>
+
 ### Actions
 
 | Component | Use |
 |-----------|-----|
 | `Button` | an `on_click` handler (sync or `async def`); `confirm=` asks first |
 | `Shortcuts` | keyboard shortcuts for the page, with a `?` help overlay |
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="start/actions"></indah-live>
 
 ### Layout
 
@@ -62,6 +94,21 @@ set shipped so far.
 | `CommandPalette` / `Command` | a keyboard palette opened with Ctrl/Cmd+K: fuzzy filter, run a function or jump to a page, `confirm=`, per-page commands |
 | `Menu` / `MenuItem` | a menu button of actions with arrow keys, `confirm=`, `danger=` and `disabled=` items |
 
+<details>
+<summary>Try these live (5 examples)</summary>
+
+<indah-live page="layout/containers"></indah-live>
+
+<indah-live page="layout/spacing"></indah-live>
+
+<indah-live page="layout/tabs"></indah-live>
+
+<indah-live page="layout/sidebar"></indah-live>
+
+<indah-live page="layout/appshell"></indah-live>
+
+</details>
+
 ### Charts and data
 
 | Component | Use |
@@ -78,6 +125,27 @@ set shipped so far.
 | `JsonTree` | a collapsible, searchable JSON viewer |
 | `Diff` | a split or unified diff of two texts or JSON values |
 
+<details>
+<summary>Try these live (8 examples)</summary>
+
+<indah-live page="data/table-classic"></indah-live>
+
+<indah-live page="data/dataframe"></indah-live>
+
+<indah-live page="data/stat"></indah-live>
+
+<indah-live page="data/barstrip"></indah-live>
+
+<indah-live page="media/chart"></indah-live>
+
+<indah-live page="media/heatmap"></indah-live>
+
+<indah-live page="media/map"></indah-live>
+
+<indah-live page="media/plot"></indah-live>
+
+</details>
+
 ### Streaming and data-driven lists
 
 | Component | Use |
@@ -86,6 +154,10 @@ set shipped so far.
 | `List` | a data-driven list bound to a `Signal[list]`; `key=` and `on_item=` make rows editable |
 | `Chat` | a chat transcript of role bubbles bound to a `Signal[list]` |
 | `Gallery` | an image grid bound to a `Signal[list]` |
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="media/gallery"></indah-live>
 
 ### Files and feedback
 
@@ -100,6 +172,21 @@ set shipped so far.
 | `Empty` | what to show where there is nothing yet: `Empty(title, body, action=, children=)` |
 | `Code` | a read-only block of code or a command with a Copy button: `Code(text, language=, copy=True)` |
 | `SecretReveal` | shows a secret (a new API token) once, with Copy and dismiss; never replayed on reconnect (see [Host an app](hosting.md#showing-a-secret-once)) |
+
+<details>
+<summary>Try these live (5 examples)</summary>
+
+<indah-live page="data/empty-code"></indah-live>
+
+<indah-live page="live/skeleton"></indah-live>
+
+<indah-live page="live/progress"></indah-live>
+
+<indah-live page="media/upload"></indah-live>
+
+<indah-live page="media/download"></indah-live>
+
+</details>
 
 Every component also takes `tooltip="..."`, and `ctx.toast(message)` shows a transient message in the
 current tab. For the live-data, table, overlay and routing features, see
@@ -283,6 +370,10 @@ note is attached with `aria-describedby`, so a screen reader reads both. The not
 at 390px. `text` may be a `Signal`, `Computed` or function, so it can follow the data. A table header
 takes plain text only, so put an `InfoTip` beside a table, or in a cell with a render spec:
 `{"component": "infotip", "bind": {"text": "why"}}`.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="overlays/info-tip"></indah-live>
 
 ### Activity strips
 

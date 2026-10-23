@@ -46,6 +46,10 @@ JavaScript off you still see the example's source and summary, without the butto
 
 <indah-live page="start/quickstart"></indah-live>
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="start/reactive"></indah-live>
+
 ## Launching in each environment
 
 === "Colab / Runpod"
@@ -71,6 +75,10 @@ JavaScript off you still see the example's source and summary, without the butto
     if __name__ == "__main__":
         indah.launch(indah.create_app(session=Session(page)))
     ```
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="start/first-app"></indah-live>
 
 ## Streaming and async work
 
@@ -119,6 +127,12 @@ indah.batch(lambda: (first.set("Ada"), last.set("Lovelace")))
 You rarely need it in a click or input handler: indah already runs every synchronous handler
 inside a `batch`, so two writes there cause one update. `batch` matters after an `await`, where
 that wrapper has ended, and in background tasks and threads you start yourself.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="live/effect"></indah-live>
+
+<indah-live page="live/batch"></indah-live>
 
 ## Next
 

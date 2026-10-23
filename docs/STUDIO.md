@@ -56,6 +56,9 @@ Code: `examples/studio/` (`core.py` types and shell, `app.py` the parent app, `p
    `tests/e2e/test_studio.py` opens every page and runs its `check`, and fails on console
    errors, failed requests and CSP violations. Screenshots land in `/tmp/studio-shots`
    (`STUDIO_SHOTS` to change it); read them.
+5. Show it in the docs: put `<indah-live page="<chapter>/<slug>"></indah-live>` in the docs page that
+   `docs=` names (see "Show a page live in the docs" below). The test summary warns when a runnable
+   page with a docs target has no embed.
 
 Rules for demos: keep them small (one idea per page), deterministic (no random data without a
 seed), and free of secrets. User-facing text uses hyphens, not em-dashes. A page may run work in
@@ -124,6 +127,14 @@ with no server. Pressing **Run it** on another example stops the first.
   routes do not exist on a static site; the bundle writes `api/editor.js` and each registered module
   component as real files beside `frame.html`, which is why `overlays/code-editor` and `extend/bridge`
   run. A route that serves per-session data (a download, a favicon) cannot, so those stay `local_only`.
+- **Try it: every documented component is shown live.** A new public name needs a Studio page *and* an
+  embed in the docs page its `docs=` points at (put it next to the text that explains it, or in the
+  "Try these live" block under the component's table in `components.md`). A page the docs cannot run
+  (`local_only`) is embedded too: the reader gets its source and the reason. Nothing starts before
+  **Run it**, and only one example runs at a time, so a page can carry many embeds. The check
+  `tests/unit/test_docs_embeds.py::test_documented_pages_have_a_live_embed` is a warning, not a
+  failure: it names every runnable page with a docs target that no docs page embeds. List them
+  yourself with `uv run python scripts/export_studio_pages.py --unembedded` (empty means all shown).
 - Runtime files: `website/live/` (`shim.js`, `worker.js`, `bridge.py`) and
   `website/docs/javascripts/indah-live.js` (the element). The Pyodide version is pinned in
   `scripts/build_docs_live.py`; it loads from the jsDelivr CDN at that version, and

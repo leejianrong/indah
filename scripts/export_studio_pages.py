@@ -2,6 +2,7 @@
 
     uv run python scripts/export_studio_pages.py [OUT.json]    # default: stdout
     uv run python scripts/export_studio_pages.py --check       # fail on a bad <indah-live> embed
+    uv run python scripts/export_studio_pages.py --unembedded  # pages the docs never show live
 
 ``--check`` is the fast embed gate (also run by tests/unit/test_docs_embeds.py).
 """
@@ -21,6 +22,10 @@ def main(argv: list[str]) -> int:
         for line in problems:
             print(line, file=sys.stderr)
         return 1 if problems else 0
+    if argv[:1] == ["--unembedded"]:
+        for page_id in registry.unembedded_pages(ROOT / "website" / "docs"):
+            print(page_id)
+        return 0
     text = registry.dumps(registry.export_pages())
     if argv:
         out = Path(argv[0])

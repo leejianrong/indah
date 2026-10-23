@@ -81,3 +81,30 @@ def embed_problems(docs_dir: Path, chapters: list[Chapter] | None = None) -> lis
             if page not in known:
                 problems.append(f"{where}: no Studio page {page!r} (ids look like layout/spacing)")
     return problems
+
+
+def embedded_ids(docs_dir: Path) -> set[str]:
+    """The page ids that some ``<indah-live page="...">`` under ``docs_dir`` embeds."""
+    found: set[str] = set()
+    for md in Path(docs_dir).rglob("*.md"):
+        for tag in _EMBED.finditer(md.read_text(encoding="utf-8")):
+            match = _PAGE_ATTR.search(tag.group(1))
+            if match is not None:
+                found.add(
+                    (match.group(1) if match.group(1) is not None else match.group(2)).strip()
+                )
+    return found
+
+
+def unembedded_pages(docs_dir: Path, chapters: list[Chapter] | None = None) -> list[str]:
+    """Ids of runnable pages that name a docs page but are shown live nowhere (registry order).
+
+    The "Try it" convention (docs/STUDIO.md): a page that can run in the browser and has a docs
+    target belongs in the docs as an ``<indah-live>`` embed. A local-only page is not asked for.
+    """
+    shown = embedded_ids(docs_dir)
+    return [
+        p["id"]
+        for p in export_pages(chapters)
+        if p["kind"] == "page" and p["runnable"] and p["docs"] and p["id"] not in shown
+    ]

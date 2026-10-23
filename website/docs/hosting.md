@@ -206,6 +206,10 @@ the value would be in the page.
 workspace A is refused once your authenticator says workspace B. Moving someone between workspaces
 is your navigation: change what the authenticator returns and reload.
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="hosted/policy"></indah-live>
+
 ## Showing a secret once
 
 `SecretReveal` shows a new API token with Copy and "I have saved it" buttons:
@@ -227,6 +231,10 @@ cleared when the user dismisses it, when the tab reconnects, and when the sessio
 connection drops before the user copied it, issue a new one. Store a hash of the token, not the
 token. Never put a secret in an exception message: a failing handler's message is shown to the tab
 as a toast. The component is marked sensitive, so the audit hook never records its payloads.
+
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="hosted/secret-reveal"></indah-live>
 
 ## Limits and headers
 
