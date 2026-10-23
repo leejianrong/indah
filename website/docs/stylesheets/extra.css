@@ -28,9 +28,9 @@
 
 /* <indah-live>: a Studio page running in the docs (ADR-0041). */
 indah-live { display: block; margin: 1.2em 0; }
-.indah-live-card { margin: 0; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 8px; padding: 0.8em 1em; }
+.indah-live-card { text-align: left; margin: 0; border: 1px solid var(--md-default-fg-color--lightest); border-radius: 8px; padding: 0.8em 1em; }
 .indah-live-card figcaption { margin-bottom: 0.4em; }
-.indah-live-source { max-height: 22em; overflow: auto; margin: 0.4em 0; }
+.indah-live-source { max-height: 22em; max-width: 100%; overflow: auto; margin: 0.4em 0; text-align: left; white-space: pre; }
 .indah-live-actions { display: flex; flex-wrap: wrap; gap: 0.5em 1em; align-items: center; margin: 0.4em 0; }
 .indah-live-run { cursor: pointer; font: inherit; padding: 0.3em 1em; border-radius: 999px; border: 0;
   background: var(--md-primary-fg-color); color: var(--md-primary-bg-color); }

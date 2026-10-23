@@ -60,6 +60,9 @@
 
   // Let the docs page size the iframe to the content.
   addEventListener("DOMContentLoaded", () => {
+    // The shell's body is min-height: 100vh, which in an iframe is the iframe's own height: measuring
+    // it would keep growing the frame to its cap. Measure the content instead.
+    document.body.style.minHeight = "0";
     const send = () => tell({ type: "height", height: document.documentElement.scrollHeight });
     new ResizeObserver(send).observe(document.body);
     send();

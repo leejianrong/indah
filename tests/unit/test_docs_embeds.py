@@ -119,3 +119,32 @@ def test_every_docs_target_exists(exported):
     for p in exported:
         if p["docs"]:
             assert (ROOT / "website/docs" / p["docs"].split("#")[0]).exists(), p["id"]
+
+
+def _first_python_block(markdown: str, after: str) -> str:
+    """The first ```python block that follows the heading ``after``."""
+    tail = markdown.split(after, 1)[1]
+    return tail.split("```python", 1)[1].split("```", 1)[0]
+
+
+@pytest.mark.unit
+def test_the_quickstart_embeds_a_page_that_runs_its_code(exported):
+    """The quickstart's first app is also a Studio page, and the page shows the same code.
+
+    The docs must show what runs (ADR-0041): every statement of the quickstart's `page`
+    (signals, the computed, the three components) has to be in the embedded page's source.
+    """
+    quickstart = (ROOT / "website/docs/quickstart.md").read_text()
+    assert '<indah-live page="start/quickstart"></indah-live>' in quickstart
+    page = next(p for p in exported if p["id"] == "start/quickstart")
+    assert page["runnable"] and page["docs"] == "quickstart.md"
+    shown = _first_python_block(quickstart, "## Your first app")
+    wanted = [
+        line.strip()
+        for line in shown.splitlines()
+        if line.strip()
+        and not line.startswith(("import ", "from ", "indah.launch", "page = ", ")", "]"))
+    ]
+    ran = page["source"].replace("indah.", "")
+    missing = [line for line in wanted if line not in ran]
+    assert wanted and not missing, f"the quickstart shows code the page does not run: {missing}"
