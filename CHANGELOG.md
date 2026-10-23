@@ -11,6 +11,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+
+- `InfoTip(text, label=)`: a small focusable info icon that shows a short note (the design's "i" beside a
+  label). It opens on hover and keyboard focus, a click or tap pins it open, and Escape, blur or a press
+  outside closes it; Escape closes only the note, so a modal behind it stays open. It is one tab stop, a
+  real button named by `label` and described by the note (`aria-describedby`, `role="tooltip"`), the note
+  stays inside the screen at 390px, and `text` may be a `Signal`, `Computed` or function. A render spec can
+  name it (`{"component": "infotip", "bind": {"text": ...}}`) for a `List` item or a table cell. A new
+  component type and spec component, so `protocol_version` stays 1 and nothing existing changes.
+
 ## [0.7.0] - 2026-10-24
 
 More building blocks, and the start of live docs. This release adds the last of the dashboard pieces as

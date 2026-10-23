@@ -263,6 +263,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `stat` | display | `value`, `label`, `delta`, `help` | — |
 | `streamtext` | display | `text`, `label` | — (grows via `append` patches) |
 | `barstrip` | display | `series` (a list of bars, each a list of segment values), optional `height` (px, default 32), `tones` (a tone per segment; default `info`, then `neutral`), `names` (a name per segment), `labels` (a label per bar), `max` (a fixed scale), `label` | — |
+| `infotip` | display | `text` (the note, may be reactive), optional `label` (the icon's accessible name, default "More information") | — |
 | `progress` | display | `value` (`null` = indeterminate), `max`, `label` | — |
 | `spinner` | display | `active`, `label` | — |
 | `list` | display / input | `items:[...]` (a `Signal[list]`), `template` (item render spec), `empty`, `keyField` (when keyed) | each template event, as named in the spec's `on`, with `{value, key, index}` (keyed lists only) |

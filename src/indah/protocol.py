@@ -81,6 +81,7 @@ BUILTIN_TYPES = frozenset(
         "date",
         "progress",
         "barstrip",
+        "infotip",
         "spinner",
         "list",
         "chat",
@@ -123,6 +124,7 @@ ALLOWED_TAGS = frozenset(
 SPEC_COMPONENTS: dict[str, frozenset[str]] = {
     "marked": frozenset({"runs"}),
     "steps": frozenset({"items", "orientation", "size"}),
+    "infotip": frozenset({"text"}),
 }
 
 

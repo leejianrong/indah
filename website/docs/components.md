@@ -74,6 +74,7 @@ set shipped so far.
 | `Table` | an interactive table: sort, page, and select |
 | `Stat` | a metric / KPI card: a big value with a label and optional delta |
 | `BarStrip` | a small activity strip: one bar per interval (calls per minute), optionally stacked, with a tooltip per bar |
+| `InfoTip` | a small focusable info icon that shows a short note on hover, focus or tap |
 | `JsonTree` | a collapsible, searchable JSON viewer |
 | `Diff` | a split or unified diff of two texts or JSON values |
 
@@ -257,6 +258,31 @@ text on the clipboard and shows a "Copied" toast in that tab, with no round trip
 is not a secure context (plain `http` away from `localhost`) cannot use the clipboard API; then the text
 is selected and the toast asks for Ctrl+C. The Copy button and a long block that scrolls are both reachable
 with the keyboard. `copy=False` hides the button.
+
+### Info tips
+
+`InfoTip(text)` is a small info icon for the supplementary fact that does not deserve a line of its own, such
+as where a number comes from. It sits next to a label:
+
+```python
+from indah import InfoTip, Row, Text
+
+Row(
+    justify="between",
+    children=[
+        Text("Requests", variant="label"),
+        InfoTip("Counted at the edge, so a retry counts twice.", label="About requests"),
+    ],
+)
+```
+
+The icon opens its note on hover and on keyboard focus. A click or a tap pins it open (a second one closes
+it), and Escape, moving focus away or a press outside closes it. Escape closes only the note, so a modal behind
+it stays open. The icon is one tab stop and a real button named by `label` (default "More information"), and the
+note is attached with `aria-describedby`, so a screen reader reads both. The note stays inside the screen, even
+at 390px. `text` may be a `Signal`, `Computed` or function, so it can follow the data. A table header
+takes plain text only, so put an `InfoTip` beside a table, or in a cell with a render spec:
+`{"component": "infotip", "bind": {"text": "why"}}`.
 
 ### Activity strips
 
