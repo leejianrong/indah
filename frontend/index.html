@@ -834,6 +834,24 @@
         background: var(--surface-2);
         color: var(--muted);
       }
+      /* Marked (IND-157): shaded spans. The tone is never colour alone: each has its own underline. */
+      .marked { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+      .marked-block { margin: 0.25rem 0; }
+      .marked .mk {
+        color: inherit;
+        padding: 0 0.1em;
+        border-radius: 0.2em;
+        background: color-mix(in srgb, var(--tone, var(--muted)) 22%, transparent);
+        text-decoration-line: underline;
+        text-decoration-color: var(--tone, var(--muted));
+        text-decoration-thickness: 1.5px;
+        text-underline-offset: 0.2em;
+      }
+      .marked .mk.tone-neutral { text-decoration-line: none; }
+      .marked .mk.tone-ok { --tone: var(--ok); text-decoration-style: solid; }
+      .marked .mk.tone-warn { --tone: var(--warn); text-decoration-style: dashed; }
+      .marked .mk.tone-err { --tone: var(--err); text-decoration-style: wavy; }
+      .marked .mk.tone-info { --tone: var(--primary); text-decoration-style: dotted; }
       .badge.tone-ok { background: color-mix(in srgb, var(--ok) 16%, var(--surface)); color: var(--ok); }
       .badge.tone-warn { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); color: var(--warn); }
       .badge.tone-err { background: color-mix(in srgb, var(--err) 16%, var(--surface)); color: var(--err); }

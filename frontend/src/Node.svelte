@@ -5,6 +5,7 @@
   import Custom from "./Custom.svelte";
   import Bridge from "./Bridge.svelte";
   import Markdown from "./Markdown.svelte";
+  import MarkedRuns from "./MarkedRuns.svelte";
   import Chart from "./Chart.svelte";
   import Heatmap from "./Heatmap.svelte";
   import MapView from "./Map.svelte";
@@ -516,6 +517,8 @@
     {/if}
     <pre class="code-pre" tabindex="0"><code bind:this={codeEl}>{props.text ?? ""}</code></pre>
   </div>
+{:else if node.type === "marked"}
+  <div class="marked-block"><MarkedRuns runs={props.runs ?? []} label={props.label ?? ""} /></div>
 {:else if node.type === "empty"}
   <div class="empty-state">
     {#if props.title}<div class="text t-title">{props.title}</div>{/if}

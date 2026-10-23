@@ -241,6 +241,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `secretreveal` | display, event | `label`; `value` (**ephemeral**, see below) | `dismiss` |
 | `badge` | display | `text`, `tone` (`neutral`/`ok`/`warn`/`err`/`info`) | — |
 | `code` | display | `text`; optional `language` (a header label), `label` (accessible name, default "Code"), `copy` (`false` hides the Copy button; sent only when false). Copy is handled in the shell: the plain text goes to the clipboard and a local "Copied" toast shows, with no event to the server | - |
+| `marked` | display | `runs:[[text], [text, tone], [text, tone, label], ...]` (the texts joined are the plain text; `tone` is `neutral`, `ok`, `warn`, `err` or `info`; a run is built on the server by `indah.marked_runs`, offsets in code points); optional `label` (accessible name) | - |
 | `empty` | display | `title`, `body`; `hasAction` when the first child is the action. Children render between the text and the action | - |
 | `number` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `radio` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
@@ -470,7 +471,8 @@ Render spec fields:
 
 | Field | Meaning |
 |-------|---------|
-| `tag` | The HTML element to create (from a safe allowlist; no `script`/`iframe`/`style`/…) |
+| `tag` | The HTML element to create (from a safe allowlist; no `script`/`iframe`/`style`/…). Exactly one of `tag` and `component` |
+| `component` | Instead of a tag, a built-in leaf component to draw (today `marked`; ADR-0016 amendment). It takes only `bind`, `{componentProp: prop}` (for `marked`, `{"runs": "<field>"}`), and no attrs, class, text, literal, `on` or children. Additive: a spec without it is unchanged |
 | `attrs` | Static attributes `{name: value}` |
 | `class` | A static class string |
 | `text` | A node prop name (in a `list`, an item field name) whose value becomes the element's text content |
@@ -525,5 +527,5 @@ shell could not parse. The shell rejects a message whose `v` does not match the
 version it was built against, showing "protocol mismatch, reload" rather than
 silently misrendering. History: `0 → 1` added the `append` op and the `error`
 message (Slice V3, ADR-0011); the `_spec` custom-component field was added within
-version 1 (Slice V4, ADR-0012) as an additive, backward-compatible extension, and so was the
-`_module` field (ADR-0039).
+version 1 (Slice V4, ADR-0012) as an additive, backward-compatible extension, and so were the
+`_module` field (ADR-0039) and the spec's `component` field with the `marked` type (IND-157).
