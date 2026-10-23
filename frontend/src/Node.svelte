@@ -6,6 +6,7 @@
   import Bridge from "./Bridge.svelte";
   import Markdown from "./Markdown.svelte";
   import MarkedRuns from "./MarkedRuns.svelte";
+  import Steps from "./Steps.svelte";
   import Chart from "./Chart.svelte";
   import Heatmap from "./Heatmap.svelte";
   import MapView from "./Map.svelte";
@@ -519,6 +520,13 @@
   </div>
 {:else if node.type === "marked"}
   <div class="marked-block"><MarkedRuns runs={props.runs ?? []} label={props.label ?? ""} /></div>
+{:else if node.type === "steps"}
+  <Steps
+    items={props.items ?? []}
+    orientation={props.orientation ?? "vertical"}
+    size={props.size ?? "normal"}
+    label={props.label ?? ""}
+  />
 {:else if node.type === "empty"}
   <div class="empty-state">
     {#if props.title}<div class="text t-title">{props.title}</div>{/if}

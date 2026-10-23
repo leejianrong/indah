@@ -76,6 +76,7 @@ from .components import (
     Spinner,
     SplitPane,
     Stat,
+    Steps,
     StreamText,
     Switch,
     Table,
@@ -87,6 +88,7 @@ from .components import (
     Upload,
     UploadedFile,
     marked_runs,
+    steps_items,
 )
 from .context import ConnectionInfo, Context
 from .custom import CustomComponent, custom, register_component
@@ -171,6 +173,7 @@ __all__ = [
     "Heatmap",
     "Map",
     "Marked",
+    "Steps",
     "DataFrame",
     "Table",
     "TableQuery",
@@ -216,6 +219,7 @@ __all__ = [
     "Expander",
     # custom components (R7)
     "marked_runs",
+    "steps_items",
     "register_component",
     "custom",
     "CustomComponent",

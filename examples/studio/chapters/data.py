@@ -598,6 +598,55 @@ def barstrip_check(pw) -> None:
     expect(page.get_by_role("tooltip")).to_contain_text("min ")
 
 
+def steps(ctx: indah.Context) -> indah.Component:
+    stage = indah.Signal(1)
+    names = ["Plan", "Build", "Test", "Ship"]
+
+    def timeline() -> list:
+        out = []
+        for i, name in enumerate(names):
+            state = "done" if i < stage.value else "current" if i == stage.value else "pending"
+            out.append({"label": name, "state": state, "detail": f"stage {i + 1}"})
+        return out
+
+    # In a list item or a table cell the timeline is compact and horizontal.
+    cell = {"component": "steps", "bind": {"items": "tiers"}}
+    tiers = indah.steps_items(
+        [("exact", "done", "hit"), ("fuzzy", "skipped"), ("llm", "current"), ("manual", "off")]
+    )
+    rows = [{"id": "a", "tiers": tiers}, {"id": "b", "tiers": tiers}]
+    return indah.Column(
+        children=[
+            indah.Steps(timeline, label="Release"),
+            indah.Steps(timeline, orientation="horizontal", label="Release flow"),
+            indah.Button("Next stage", lambda: stage.set(min(stage.value + 1, len(names)))),
+            indah.List(rows, key="id", item=cell),
+            indah.Table(
+                columns=[
+                    indah.Col("id"),
+                    indah.Col("tiers", title="Tiers", kind="cell", render=cell),
+                ],
+                rows=rows,
+                key="id",
+            ),
+        ]
+    )
+
+
+def steps_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    release = page.get_by_role("list", name="Release", exact=True).get_by_role("listitem")
+    expect(release).to_have_count(4)
+    expect(release.nth(1)).to_have_attribute("aria-current", "step")
+    page.get_by_role("button", name="Next stage").click()
+    expect(release.nth(2)).to_have_attribute("aria-current", "step")
+    expect(release.nth(1)).to_have_class("step st-done")
+    expect(page.locator(".list-item .steps")).to_have_count(2)
+    expect(page.locator("td .steps")).to_have_count(2)
+
+
 def marked_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -884,6 +933,22 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(16,),
             check=marked_check,
+        ),
+        Page(
+            slug="steps",
+            title="Steps",
+            summary=(
+                "`Steps(items)` draws a timeline, vertical or horizontal: each step is `done`, "
+                "`current`, `skipped`, `off` or `pending`, with its own shape as well as its "
+                "colour, so it reads without colour. It follows a signal in place. In a list item "
+                "or a table cell, keep `steps_items(...)` in a field and name "
+                '`{"component": "steps"}` in the render spec: it is compact there.'
+            ),
+            build=steps,
+            covers=("Steps", "steps_items", "List", "Table", "Col", "Button"),
+            docs="components.md",
+            adr=(16,),
+            check=steps_check,
         ),
         Page(
             slug="stat",

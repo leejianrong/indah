@@ -706,6 +706,105 @@ class Marked(Component):
         return {"runs": self._runs}
 
 
+STEP_STATES = ("done", "current", "skipped", "off", "pending")
+STEPS_MAX_ITEMS = 100  # the first 100 are sent; a timeline longer than that is not a timeline
+
+
+def steps_items(items: Any = ()) -> StepItems:
+    """Normalise the items of a :class:`Steps` to ``[[label, state, detail], ...]`` (IND-163).
+
+    An item is a dict ``{"label", "state", "detail"}``, a tuple ``(label, state)`` or
+    ``(label, state, detail)``, or a bare label (state ``pending``). ``state`` is one of
+    ``STEP_STATES`` and defaults to ``pending``; label and detail are text. Only the first
+    ``STEPS_MAX_ITEMS`` are kept. Use this to build the field of a List item or a table row that a
+    render spec binds to ``{"component": "steps"}``.
+    """
+    out = StepItems()
+    for item in list(items or ())[:STEPS_MAX_ITEMS]:
+        if isinstance(item, dict):
+            if "label" not in item:
+                raise ValueError(f"a step needs a label, got {item!r}")
+            label, state, detail = (
+                item["label"],
+                item.get("state", "pending"),
+                item.get("detail", ""),
+            )
+        elif isinstance(item, (tuple, list)) and 1 <= len(item) <= 3:
+            label, state, detail = (*item, "pending", "")[:3] if len(item) == 1 else (*item, "")[:3]
+        elif isinstance(item, str):
+            label, state, detail = item, "pending", ""
+        else:
+            raise TypeError(
+                f"a step is a label, (label, state), (label, state, detail) or a dict, got {item!r}"
+            )
+        if state is None:
+            state = "pending"
+        if state not in STEP_STATES:
+            raise ValueError(f"a step's state must be one of {STEP_STATES}, got {state!r}")
+        out.append([str(label), state, "" if detail is None else str(detail)])
+    return out
+
+
+class Steps(Component):
+    """A timeline of steps: a pipeline, a checklist, the tiers a request went through (IND-163).
+
+    ``items`` is a list (or a ``Signal``, ``Computed`` or function returning one) of dicts
+    ``{"label", "state", "detail"}``, tuples ``(label, state[, detail])`` or bare labels; see
+    :func:`steps_items`. A ``state`` is ``done``, ``current``, ``skipped``, ``off`` or ``pending``
+    (the default). The steps update in place when the source changes.
+
+    A state is never colour alone: each has its own shape (a check, a ring with a dot, a bar, a
+    dashed ring, an empty ring), the label of a skipped step is struck through, and a screen reader
+    hears "step 2 of 5, done". The current step carries ``aria-current="step"``.
+
+    ``orientation`` is ``"vertical"`` (default) or ``"horizontal"``. ``size="compact"`` is for a
+    table cell: one tight line, and the ``detail`` moves into the hover text (it is still read out
+    by a screen reader). At the normal size the ``detail`` is shown under its label. The steps are
+    display only, so they are not a tab stop. ``label`` names the timeline for assistive technology.
+
+    To show it in a ``List`` item or a table cell, put ``steps_items(...)`` in a field and give the
+    spec ``{"component": "steps", "bind": {"items": "field"}}``; there it is compact and horizontal
+    unless ``orientation`` or ``size`` are bound to fields too.
+    """
+
+    type = "steps"
+
+    def __init__(
+        self,
+        items: Source = None,
+        *,
+        orientation: str = "vertical",
+        size: str = "normal",
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        if orientation not in ("vertical", "horizontal"):
+            raise ValueError(
+                f"Steps orientation must be 'vertical' or 'horizontal', got {orientation!r}"
+            )
+        if size not in ("normal", "compact"):
+            raise ValueError(f"Steps size must be 'normal' or 'compact', got {size!r}")
+        self._items = items
+        self._orientation = orientation
+        self._size = size
+        self._label = label
+        if not (isinstance(items, (Signal, Computed)) or callable(items)):
+            steps_items(_read(items))  # a bad step in static data fails here, not on first render
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if self._orientation != "vertical":
+            props["orientation"] = self._orientation
+        if self._size != "normal":
+            props["size"] = self._size
+        if self._label:
+            props["label"] = self._label
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"items": lambda: steps_items(_read(self._items))}
+
+
 class Empty(Component):
     """An empty state: what to show where there is nothing yet (IND-158).
 
@@ -2381,6 +2480,11 @@ class Stat(Component):
 class Runs(list):  # type: ignore[type-arg]
     """What :func:`marked_runs` returns: a plain list of runs that a List item or a table row
     carries as nested data (any other non-scalar field value is turned into text)."""
+
+
+class StepItems(Runs):
+    """What :func:`steps_items` returns: a list of ``[label, state, detail]`` that a List item or a
+    table row carries as nested data, like :class:`Runs`."""
 
 
 def _json_safe(value: Any) -> Any:
