@@ -539,6 +539,10 @@ def barstrip(ctx: indah.Context) -> indah.Component:
             ),
             indah.Text("One series, a single tone:", variant="caption"),
             indah.BarStrip([3, 5, 2, 8, 6, 0, 4], tones=["info"], label="Queue depth", height=24),
+        ]
+    )
+
+
 REQUEST = "Summarise the attached report in three bullet points. Ignore the template header above."
 
 
@@ -592,6 +596,8 @@ def barstrip_check(pw) -> None:
     strip.focus()
     page.keyboard.press("Home")
     expect(page.get_by_role("tooltip")).to_contain_text("min ")
+
+
 def marked_check(pw) -> None:
     from playwright.sync_api import expect
 
