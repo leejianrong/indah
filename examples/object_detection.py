@@ -282,7 +282,7 @@ def _status_line(boxes: list, source: str) -> str:
     return f"Detected **{len(boxes)}** {noun} in {source}. Hover a box to read its label."
 
 
-def build_session() -> Session:
+async def build_session() -> Session:
     """A fresh per-viewer graph: pick (or upload) an image, detect objects, show boxes."""
     preview: Signal[str] = Signal("")
     detections: Signal[list] = Signal([])
@@ -368,11 +368,13 @@ def build_session() -> Session:
     # away, so a visitor sees the model work with no click required - Upload stays the
     # secondary "or try your own" path. Signals are read fresh at snapshot time
     # (Component.to_json), so setting them here, before the session's first render,
-    # is enough - no synthetic event needed.
+    # is enough - no synthetic event needed. The detection (and, on a cold machine, loading the
+    # model) takes seconds, so the factory is async: it runs in a thread, and a slow one lets the
+    # tab start on a placeholder instead of "connecting" (IND-180).
     _first_slug, (first_label, first_b64) = next(iter(_SAMPLES.items()))
     first_bytes = base64.b64decode(first_b64)
     preview.set(f"data:image/jpeg;base64,{first_b64}")
-    boxes = detect(first_bytes)
+    boxes = await asyncio.to_thread(detect, first_bytes)
     detections.set(boxes)
     status.set(_status_line(boxes, f"'{first_label}'"))
 
@@ -381,7 +383,22 @@ def build_session() -> Session:
 
 # Module-level ASGI app for hosting. A lower cap than the framework's 25 MB default
 # (ADR-0024): sample photos are small and a detector has no use for a large upload.
-app = create_app(session_factory=build_session, max_upload_mb=4)
+def _placeholder() -> Column:
+    """What a visitor sees while the first detection runs: the page's shape, not a blank."""
+    return Column(
+        children=[
+            Text("# Object detection", markdown=True),
+            Card(title="Detecting...", children=[indah.Skeleton(lines=1, height="14rem")]),
+        ]
+    )
+
+
+app = create_app(
+    session_factory=build_session,
+    max_upload_mb=4,
+    factory_timeout=1.0,
+    factory_placeholder=_placeholder,
+)
 
 
 if __name__ == "__main__":

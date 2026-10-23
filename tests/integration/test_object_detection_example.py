@@ -9,8 +9,10 @@ browser installed. The first test in this file to touch the model pays its
 one-time load cost (a few seconds); every test after that is fast.
 """
 
+import asyncio
 import base64
 import importlib.util
+import time
 from pathlib import Path
 
 import pytest
@@ -92,12 +94,12 @@ def test_sample_photos_detect_multiple_real_objects():
 
 
 @pytest.mark.integration
-def test_session_shows_a_real_detection_on_creation_no_click_required():
+async def test_session_shows_a_real_detection_on_creation_no_click_required():
     """A5 UX (docs/DEMOS-DOCS-ROUND2.md): the result card is populated with the
     first sample's real detections as soon as the session exists -- before any
     client event is dispatched."""
     example = _load_example()
-    session = example.build_session()
+    session = await example.build_session()
 
     overlay = _node(session, "imageoverlay")
     assert overlay.reactive_props()["src"]().startswith("data:image/jpeg;base64,")
@@ -119,7 +121,7 @@ def test_session_shows_a_real_detection_on_creation_no_click_required():
 @pytest.mark.integration
 async def test_uploading_an_image_detects_boxes_and_labels_them_on_hover():
     example = _load_example()
-    session = example.build_session()
+    session = await example.build_session()
     session.session_id = "tab-a"
     hub = Hub()
     session.bind_hub(hub)
@@ -154,7 +156,7 @@ async def test_non_image_upload_is_rejected_without_detecting():
     """ADR-0024: the public demo only ever needs a still image, so a disallowed
     content type is rejected before it reaches the detector."""
     example = _load_example()
-    session = example.build_session()
+    session = await example.build_session()
     session.session_id = "tab-c"
     hub = Hub()
     session.bind_hub(hub)
@@ -194,7 +196,7 @@ def test_public_deploy_caps_uploads_at_4mb():
 @pytest.mark.integration
 async def test_clicking_a_sample_detects_it_too():
     example = _load_example()
-    session = example.build_session()
+    session = await example.build_session()
     session.session_id = "tab-b"
     hub = Hub()
     session.bind_hub(hub)
@@ -213,3 +215,38 @@ async def test_clicking_a_sample_detects_it_too():
 
     assert overlay.reactive_props()["src"]() == f"data:image/jpeg;base64,{b64}"
     assert overlay.reactive_props()["boxes"]() == example.detect(base64.b64decode(b64))
+
+
+def _types(node: dict) -> set[str]:
+    found = {node["type"]}
+    for child in node.get("children", []):
+        found |= _types(child)
+    return found
+
+
+@pytest.mark.integration
+async def test_a_slow_first_detection_starts_on_a_skeleton_not_a_connecting_page(monkeypatch):
+    """The first detection (and a cold model load) can take seconds. The tab must start on a
+    placeholder at once and get the real page when it is ready, not wait on "connecting"
+    (IND-180)."""
+    example = _load_example()
+    example._load_session()  # the model load is not what is under test; the slow detect below is
+    real = example.detect
+
+    def slow(data):
+        time.sleep(0.4)  # runs in a worker thread, like the real model
+        return real(data)
+
+    monkeypatch.setattr(example, "detect", slow)
+    store = example.app.state.store
+    monkeypatch.setattr(store, "factory_timeout", 0.05)
+
+    handle = await store.aget_or_create("slow-visitor")
+    assert "skeleton" in _types(handle.session.snapshot())
+    for _ in range(100):  # the real page replaces it once the detection has run
+        await asyncio.sleep(0.1)
+        if "skeleton" not in _types(handle.session.snapshot()):
+            break
+    tree = handle.session.snapshot()
+    assert "skeleton" not in _types(tree)
+    assert "imageoverlay" in _types(tree)
