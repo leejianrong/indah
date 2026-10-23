@@ -3453,6 +3453,148 @@ class Menu(Component):
         return True  # stale or unknown id: the item is gone, so there is nothing to run
 
 
+@dataclass
+class Command:
+    """One entry of a :class:`CommandPalette`: an action to run, or a page to jump to.
+
+    Give exactly one of ``on_run`` (sync or async) and ``to`` (an in-app path; the palette then
+    needs the session's ``ctx`` to move the tab). ``group`` is a heading ("Go to", "Actions");
+    ``keywords`` (a string of words or a list) are extra words the filter matches but the list
+    does not show; ``shortcut`` is display text only (wiring the key is ``Shortcuts``' job);
+    ``confirm`` makes the shell ask first like ``Button(confirm=)``, a UX guard and not
+    authorization (use ``guard``). The id on the wire is ``key`` when given, else ``label``, so
+    two commands of one palette need different labels or keys.
+    """
+
+    label: str
+    on_run: Callable[[], Any] | None = None
+    to: str | None = None
+    group: str = ""
+    shortcut: str | None = None
+    keywords: str | list[str] | tuple[str, ...] = ()
+    confirm: str | None = None
+    key: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.label, str) or not self.label:
+            raise ValueError("a Command needs a non-empty label")
+        if (self.on_run is None) == (self.to is None):
+            raise ValueError(f"Command {self.label!r} needs exactly one of on_run and to")
+        if self.to is not None:
+            self.to = normalize_path(self.to)
+        words = self.keywords.split() if isinstance(self.keywords, str) else self.keywords
+        self.keywords = [str(w) for w in words]
+
+    @property
+    def id(self) -> str:
+        return self.key if self.key else self.label
+
+    def wire(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"id": self.id, "label": self.label}
+        if self.group:
+            out["group"] = self.group
+        if self.shortcut:
+            out["shortcut"] = str(self.shortcut)
+        if self.keywords:
+            out["keywords"] = list(self.keywords)  # type: ignore[arg-type]
+        if self.confirm:
+            out["confirm"] = self.confirm
+        return out
+
+
+class CommandPalette(Component):
+    """A keyboard palette: press ``shortcut`` (``mod+k`` by default), type to filter, Enter runs.
+
+    ``commands`` is a list of :class:`Command`, or a ``Signal``, ``Computed`` or callable
+    returning one, so the palette follows the data. **To add commands per page**, return the
+    app's commands plus the current page's from one callable that reads ``ctx.path`` (or a
+    signal): the palette re-sends its list when the page changes. The filter runs in the browser
+    over the loaded list: a label that starts with what you typed first, then one with a word
+    that does, then a substring, then a subsequence ("gl" finds "Go to log"), then a match in
+    the keywords or group; ties keep the order given. Arrow keys move, Enter runs, Escape closes
+    and gives focus back to where it was.
+
+    The shortcut opens it anywhere outside another dialog; a bare key such as ``/`` is ignored
+    while typing in a field, a ``mod+`` combo is not. Do not also map the same key in
+    ``Shortcuts``. A jump command (``to=``) needs ``ctx``. To leave a command out for someone
+    who may not use it, build the list with ``ctx.only`` and wrap the handler in ``guard``: a
+    hidden command is still sent, an omitted one is not. A run is resolved against the *current*
+    commands by id, so a stale or forged one does nothing.
+    """
+
+    type = "commandpalette"
+
+    def __init__(
+        self,
+        commands: Any,
+        *,
+        ctx: Context | None = None,
+        shortcut: str = "mod+k",
+        placeholder: str = "",
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        canonical = normalize_keys(shortcut)  # raises ValueError for empty or malformed
+        if " " in canonical:
+            raise ValueError(f"CommandPalette shortcut must be one key or combo, got {shortcut!r}")
+        self._ctx = ctx
+        self._shortcut = canonical
+        self._placeholder = placeholder
+        self._label = label
+        self._commands_src = commands
+        self._commands_live = _options_are_live(commands)
+        self._commands()  # a bad list fails now, as it does for options and menu items
+
+    def _commands(self) -> list[Command]:
+        commands = list(_read(self._commands_src))
+        seen: set[str] = set()
+        for command in commands:
+            if not isinstance(command, Command):
+                raise TypeError(
+                    f"CommandPalette commands must be Command, got {type(command).__name__}"
+                )
+            if command.id in seen:
+                raise ValueError(f"Command {command.id!r} appears twice; give one a different key=")
+            seen.add(command.id)
+            if command.to is not None and self._ctx is None:
+                raise ValueError(
+                    f"Command {command.label!r} jumps to a page, so CommandPalette needs ctx="
+                )
+        return commands
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"shortcut": self._shortcut}
+        if not self._commands_live:
+            props["commands"] = [c.wire() for c in self._commands()]
+        if self._placeholder:
+            props["placeholder"] = self._placeholder
+        if self._label:
+            props["label"] = self._label
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        if not self._commands_live:
+            return {}
+        return {"commands": lambda: [c.wire() for c in self._commands()]}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event != "run":
+            return False
+        chosen = payload.get("command")
+        if not isinstance(chosen, str):
+            return True
+        for command in self._commands():
+            if command.id == chosen:
+                if command.to is not None:
+                    self._ctx.navigate(command.to)  # type: ignore[union-attr]
+                    return True
+                result = command.on_run()  # type: ignore[misc]
+                if inspect.iscoroutine(result):
+                    return result  # async handler: the session awaits it in the background
+                return True
+        return True  # stale or unknown id: the command is gone, so there is nothing to run
+
+
 # -- Data-driven list (ADR-0016) ---------------------------------------------
 #
 # Growing/variable content (logs, search results, chat, galleries) is modelled as

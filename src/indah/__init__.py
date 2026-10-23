@@ -29,6 +29,8 @@ from .components import (
     CodeEditor,
     Col,
     Column,
+    Command,
+    CommandPalette,
     Component,
     DataFrame,
     Date,
@@ -203,6 +205,8 @@ __all__ = [
     "Drawer",
     "Menu",
     "MenuItem",
+    "Command",
+    "CommandPalette",
     "Empty",
     "Expander",
     # custom components (R7)

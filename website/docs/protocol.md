@@ -280,6 +280,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths.
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |
 | `modal` | overlay | `open`, `title`, `size` (`sm`/`md`/`lg`) | `close` |
 | `drawer` | overlay | `open`, `title`, `side` (`left`/`right`) | `close` |
+| `commandpalette` | input | `shortcut` (one key or combo, canonical form; default `mod+k`), `commands` (`[{id, label, group?, shortcut?, keywords?, confirm?}]`; a live source patches it), optional `placeholder`, `label` | `run` `{command}` (the command's `id`); filtering is client side and never leaves the browser |
 | `menu` | input | `trigger`, `items` (`[{id, label, danger?, shortcut?, confirm?, disabled?}]`; a live source patches it), optional `label`, `variant`, `align` (`end`) | `select` `{item}` (the item's `id`) |
 
 `Plot` serialises to an `image` node whose `src` is a PNG `data:` URI rendered on

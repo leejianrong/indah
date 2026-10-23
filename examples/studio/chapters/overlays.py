@@ -227,6 +227,62 @@ def menu_check(pw) -> None:
     expect(page.get_by_role("menuitem", name="Delete")).to_have_attribute("aria-disabled", "true")
 
 
+def command_palette(ctx: indah.Context) -> indah.Component:
+    status = indah.Signal("Press Ctrl+K (or Cmd+K), type, and press Enter.")
+    on_log_page = indah.Signal(False)
+
+    def say(text: str):
+        return lambda: status.set(text)
+
+    # The list is a function of `on_log_page`: a page's own commands join the app's while it shows,
+    # and leave with it. A jump command (`Command("Log", to="/log")`) takes `ctx=` on the palette.
+    commands = indah.Computed(
+        lambda: [
+            indah.Command("Open the log", say("Opened the log."), group="Go to", shortcut="g l"),
+            indah.Command("Open pending", say("Opened pending."), group="Go to"),
+            indah.Command(
+                "Pause intake", say("Paused."), group="Actions", keywords="stop halt freeze"
+            ),
+            indah.Command(
+                "Delete all entries",
+                say("Deleted."),
+                group="Actions",
+                confirm="Delete every entry?",
+            ),
+            *(
+                [indah.Command("Clear the log", say("Cleared."), group="This page")]
+                if on_log_page.value
+                else []
+            ),
+        ]
+    )
+    return indah.Column(
+        children=[
+            indah.CommandPalette(commands, ctx=ctx),
+            indah.Switch(on_log_page, label="On the log page"),
+            indah.Text(lambda: status.value),
+        ]
+    )
+
+
+def command_palette_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    page.get_by_role("switch", name="On the log page").focus()
+    page.keyboard.press("Control+k")
+    box = page.get_by_role("combobox")
+    expect(box).to_be_focused()
+    box.fill("halt")  # a keyword the list does not show
+    page.keyboard.press("Enter")
+    expect(page.get_by_text("Paused.")).to_be_visible()
+    page.get_by_role("switch", name="On the log page").click()
+    page.keyboard.press("Control+k")
+    expect(page.get_by_role("option", name="Clear the log")).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(page.get_by_role("dialog", name="Command palette")).to_have_count(0)
+
+
 def badges(ctx: indah.Context) -> indah.Component:
     pinned = indah.Signal(False)
     waiting = indah.Signal(3)
@@ -463,6 +519,20 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(30,),
             check=menu_check,
+        ),
+        Page(
+            slug="command-palette",
+            title="Command palette",
+            summary=(
+                "`CommandPalette(commands)` opens on Ctrl/Cmd+K: type to filter (a prefix first, then a word, "
+                "a substring, a subsequence, then keywords), arrows move, Enter runs, Escape closes. Commands "
+                "can run a function, jump to a page (`to=`), ask to `confirm`, and a page can add its own."
+            ),
+            build=command_palette,
+            covers=("CommandPalette", "Command", "Switch"),
+            docs="dashboards.md",
+            adr=(30,),
+            check=command_palette_check,
         ),
         Page(
             slug="badges",

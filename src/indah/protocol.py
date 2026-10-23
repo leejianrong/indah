@@ -95,6 +95,7 @@ BUILTIN_TYPES = frozenset(
         "modal",
         "drawer",
         "menu",
+        "commandpalette",
         "upload",
         "download",
     }

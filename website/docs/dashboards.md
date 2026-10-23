@@ -287,6 +287,51 @@ the list with `ctx.only(perm, lambda: MenuItem(...))` and wrap the handler in `g
 item is never sent, and `guard` checks again at the click. A `Menu` goes in a row, a card or a rail;
 a table cell is display only, so keep `RowAction` for per-row buttons.
 
+### A command palette
+
+`CommandPalette(commands)` is the dashboard driven like a terminal: press `Ctrl+K` (`Cmd+K` on a Mac),
+type, and press Enter. Arrows move, Escape closes and puts focus back where it was.
+
+```python
+palette = indah.CommandPalette(
+    [
+        indah.Command("Open the log", to="/log", group="Go to"),
+        indah.Command("Pause intake", pause, group="Actions", keywords="stop halt"),
+        indah.Command("Delete all", wipe, group="Actions", confirm="Delete every entry?"),
+    ],
+    ctx=ctx,  # needed only for a jump (`to=`): it moves this tab, like `ctx.navigate`
+)
+```
+
+A command either runs a function (sync or `async`) or jumps to an in-app page. The filter runs in the
+browser over the list it was sent, so typing costs no round trip. The match order is stable: a label
+that starts with what you typed, then one with a *word* that does, then one that contains it, then one
+that contains it as a subsequence (`gl` finds "Go to log"), then a match in the `keywords` or the
+`group`; ties keep the order you gave. Put commands of one `group` next to each other, since the empty
+palette shows a heading each time the group changes.
+
+**Commands for a page.** `commands` can be a `Signal`, `Computed` or function, and the palette re-sends
+its list when it changes. To add a page's own commands, return the app's list plus the current page's from
+one function that reads `ctx.path` (or a signal): the commands appear when the page shows and leave with it.
+
+```python
+def commands():
+    out = list(app_commands)
+    if ctx.path.value.startswith("/log"):
+        out.append(indah.Command("Clear the log", clear_log, group="This page"))
+    return out
+
+
+indah.CommandPalette(commands, ctx=ctx)
+```
+
+The shortcut opens it from anywhere that is not already in a dialog. A bare key such as `shortcut="/"` is
+ignored while the viewer types in a field; a `mod+` combo is not. Do not map the same key in
+`Shortcuts`. To leave a command out for someone who may not use it, build the list with
+`ctx.only(perm, lambda: Command(...))` and wrap the handler in `guard(perm)`: an omitted command is never
+sent, a forged run of it does nothing, and `guard` checks again when it runs. Like `Menu`, a run is
+matched by `key=` (default: the label) against the current list.
+
 `confirm=` is a UX guard only: the server still runs any click it receives, so check
 authorization in your handler. A toast goes to the current tab only, never put a secret in
 one. A toast's `action=` button runs its function once as that tab's user, so a `guard()` on it is
@@ -296,11 +341,12 @@ is active only while it is in the rendered tree.
 
 ### Keys and focus
 
-A widget that owns keys while it has focus (the keyboard `Table`, and later the command
+A widget that owns keys while it has focus (the keyboard `Table`, and the command
 palette) goes first. It acts only on keys aimed at itself, never on a key typed into an input
 inside it or one with `ctrl`, `cmd` or `alt` held, and it marks the key as handled, which
 `Shortcuts` respects. So with a keyboard `Table` focused, `j` moves its row; anywhere else the
-same `j` runs your `Shortcuts` binding, and `mod+k` is always yours. Tab and Escape always
+same `j` runs your `Shortcuts` binding. `mod+k` is the command palette's default key; give it another
+`shortcut=` if you want `mod+k` for something else. Tab and Escape always
 leave. Use `mod+` or `alt+` combos for page-wide actions and bare keys for the focused widget.
 
 ## Several pages with `Router`
