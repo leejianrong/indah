@@ -23,7 +23,7 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Changed
 
-- The docs show a live example next to each documented component: 72 `<indah-live>` embeds across the
+- The docs show a live example next to each documented component: 73 `<indah-live>` embeds across the
   components, dashboard, quickstart, chatbot, custom components, design system and hosting pages. Nothing
   downloads until a reader presses **Run it**, and one example runs at a time; the 10 pages that need a
   server show their source and say why they cannot run. A new `unembedded_pages()` check (a warning in

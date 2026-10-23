@@ -371,6 +371,10 @@ at 390px. `text` may be a `Signal`, `Computed` or function, so it can follow the
 takes plain text only, so put an `InfoTip` beside a table, or in a cell with a render spec:
 `{"component": "infotip", "bind": {"text": "why"}}`.
 
+Try it live. Nothing downloads until you press **Run it**.
+
+<indah-live page="overlays/info-tip"></indah-live>
+
 ### Activity strips
 
 `BarStrip` is a compact strip with one bar per interval, for "calls per minute" next to a number, not
