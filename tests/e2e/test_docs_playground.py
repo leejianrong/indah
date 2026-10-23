@@ -297,8 +297,12 @@ def test_stop_removes_the_frame_and_says_so(site, browser):
 
 
 @pytest.mark.pyodide
-def test_the_first_run_time_is_within_the_budget_written_on_the_page(site, browser):
-    """The docs page promises about 4 seconds once cached, and 4 to 6 on the first run."""
+def test_playground_first_frame_is_within_the_budget_written_on_the_page(site, browser):
+    """The docs page promises about 4 seconds once cached, and 4 to 6 on the first run.
+
+    The name has ``first_frame`` so CI runs it alone, not in the parallel step where other pages'
+    boots slow it (the same rule as the Studio's own first-frame test).
+    """
     ctx = browser.new_context(viewport={"width": 1100, "height": 900})
     try:
         seconds = []
