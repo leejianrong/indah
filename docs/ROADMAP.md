@@ -14,9 +14,11 @@
 | 0.4.1 (patch, about 1 week) | Public demos work; hosted path verified | 8 | IND-167, IND-33, 2 new verification cards | 1 |
 | 0.5.0 | Build your own, and the app skeleton | 24 | IND-149, 150, 146, 147, 151, 156, 144, 145 | 1 |
 | 0.6.0 | Tables, text and small controls | 25 + 5 | IND-148, 166, 153, 154, 152, 160, 164, 158, 161, 168, plus the demo cleanup card (IND-172) | 1 |
-| 0.7.0 (provisional) | Hosted Studio, command palette, promoted visuals, live docs | 28 | IND-173, 174, 175, 169, 176 (83a), 165, 157, 162, 163 | 1 |
-| 0.8.0 (provisional) | Live media and annotation | 22 | IND-74 (split 3 ways), 64, 65, 71, 56, 62 | 1, decided in the ADR |
-| Later | Needs a decision or has no demand yet | 24 | IND-57, 81, 66, 83b (IND-83), 61, 159 | - |
+| 0.7.0 (provisional) | Command palette, built-in visuals, the docs runtime | 24 | IND-165, 157, 162, 163, 176 (83a, done), 183, 184, 175 | 1 |
+| 0.8.0 (provisional) | Live docs and a playground (Pyodide, ADR-0041) | 21 | IND-181, 185, 169, 83, 61, 159 | 1 |
+| 0.9.0 (provisional) | Live media and annotation | 22 | IND-74 (split 3 ways), 64, 65, 71, 56, 62 | 1, decided in the ADR |
+| Later | Needs a decision or has no demand yet | 11 | IND-57, 81, 66 | - |
+| Superseded | The hosted Studio (ADR-0041 option B replaced it) | 6 | IND-173, 174 | - |
 | Closed as folded | | 1 | IND-155 (into IND-166) | - |
 
 All 38 cards are placed: 2 + 8 + 10 + 8 + 6 + 3 + 1 = 38 (0.4.1 also gets two new cards, not counted).
@@ -25,7 +27,7 @@ All 38 cards are placed: 2 + 8 + 10 + 8 + 6 + 3 + 1 = 38 (0.4.1 also gets two ne
 (a new component type, prop or message type is additive). The one card that could change this is
 IND-74 (WebSocket for live media): its ADR must show that the frames are the same JSON and that the
 transport is a negotiated upgrade. If it needs a mandatory handshake or a change to an existing field,
-that is a v2 and the release becomes 0.8.0 with a bump, decided by the owner.
+that is a v2 and the release becomes 0.9.0 with a bump, decided by the owner.
 
 ## Decisions (owner, 2026-10-22)
 
@@ -48,13 +50,11 @@ that is a v2 and the release becomes 0.8.0 with a bump, decided by the owner.
    decides how much of IND-157, 162 and 163 semula can build itself (next point).
 4. **IND-157, 162, 163 against the bridge.** The bridge card says the tier rail, the activity strip and
    the shaded text otherwise wait for an indah release. Once IND-150 ships (0.5.0), semula can build
-   these three itself. They are placed in 0.7.0 as *promotions*: build them in indah only if semula's
-   versions prove general. If the owner prefers built-ins regardless, move them to 0.6.0 and push IND-159 and
-   IND-161 out.
+   these three itself. The owner decided on 2026-10-23 that they are **built in**, so every app benefits, and they sit in 0.7.0.
 5. **IND-148 before IND-163.** Steps must work in a table cell (R2-5), which needs the rich cell spec.
 6. **IND-146 before IND-147, IND-151, IND-156.** The rail is built from the layout primitives, and the
    NavItem and logo live in it.
-7. **IND-168 before IND-169.** IND-169 is blocked by the Studio-home decision. IND-83 (Pyodide) is one of
+7. **IND-168 before IND-169.** IND-169 was blocked by the Studio-home decision, now made (ADR-0041, option B: the docs run Studio pages with Pyodide). IND-83 (Pyodide) is one of
    the two options IND-169 names, so a 3-point spike (83a) runs in the same release and decides it.
 8. **IND-164 and IND-165 both use Shortcuts.** Build 164 (0.6.0) first and write down the key-routing
    rule; 165 follows it.
@@ -159,43 +159,56 @@ Owner decides or does by hand:
   whether plain text gets inline code and emphasis.
 - Approve the `pypi` environment run.
 
-## 0.7.0 (provisional): hosted Studio, command palette, promoted visuals, live docs, 28 points
+## 0.7.0 (provisional): command palette, built-in visuals, the docs runtime, 24 points
 
-Theme: host the Studio (ADR-0041), make the docs interactive, finish semula's list.
+Theme: finish semula's list as built-ins, and build the foundation that lets the docs run Studio pages.
+
+| Card | Pts | State |
+|------|-----|-------|
+| IND-165 CommandPalette | 3 | done |
+| IND-157 Marked | 3 | in progress |
+| IND-162 BarStrip | 3 | done |
+| IND-163 Steps (after Marked) | 3 | |
+| IND-176 Pyodide spike, IND-83a | 3 | done |
+| IND-183 Studio page registry export and local-only marks (new, ADR-0041) | 3 | |
+| IND-184 Docs live runtime and bundle (new, ADR-0041) | 5 | |
+| IND-175 Release checklist: docs bundle and gallery redeploy | 1 | |
+
+ADRs first: ADR-0041 is accepted (option B). Order: IND-183, then IND-184, then IND-175. IND-163 follows
+IND-157 because it reuses how a built-in component becomes nameable in a list row or table cell.
+
+Risks:
+- IND-184 turns the spike's throwaway code into a docs build step. The boot protocol (handler installed
+  before any await) and the size budgets must be tested, not assumed.
+- Pyodide is pinned; an upgrade is a reviewed commit because it can change Python and package versions.
+- Phones and Safari were not measured in the spike; IND-181 and IND-185 add the checks.
+
+Owner decides:
+- Approve the `pypi` environment run for the release.
+
+## 0.8.0 (provisional): live docs and a playground, 21 points
+
+Theme: the docs and the Studio become one thing for the reader (ADR-0041): every component page can run
+its Studio page in the browser, with its source.
 
 | Card | Pts |
 |------|-----|
-| IND-169 Interactive docs from the Studio | 5 |
-| IND-165 CommandPalette | 3 |
-| IND-157 Marked | 3 |
-| IND-162 BarStrip | 3 |
-| IND-163 Steps | 3 |
-| IND-173 Studio hosted mode and /embed/ route (new, ADR-0041) | 3 |
-| IND-174 Deploy the hosted Studio and post-deploy check (new, ADR-0041) | 3 |
-| IND-176 Pyodide spike, IND-83a (new, split from IND-83) | 3 |
-| IND-175 Release checklist: redeploy Studio and gallery (new) | 1 |
+| IND-181 The indah-live element and a lazy Run it on the quickstart | 3 |
+| IND-185 CI check: every runnable Studio page runs in Pyodide | 3 |
+| IND-169 Roll live examples out across the docs | 5 |
+| IND-83 Docs Playground (83b) | 5 |
+| IND-61 Demo: DataFrame explorer (moved back in from "later") | 3 |
+| IND-159 InfoTip (moved back in from "later") | 2 |
 
-Splitting: IND-83 is 8 points. IND-176 (83a) is the timeboxed feasibility spike (3). IND-83 itself is now
-the 5 point build (83b) and stays in "later" until the spike passes.
+Order: IND-181, then IND-185, then IND-169; IND-83 once IND-181 is in.
 
-IND-61 (DataFrame explorer, 3) and IND-159 (InfoTip, 2) move to "later" to make room for the hosted Studio.
+Risks: the first load is about 9 MB (gzip) and 4 to 6 seconds, so nothing may load before the reader
+presses Run it (a test reads the network log); the 13 server-shaped pages stay "local only" with a reason;
+`threading` and `run_in_threadpool` do not work in the browser.
 
-ADRs first: ADR-0041 (Studio home, Proposed) must be accepted before IND-173 starts. Order: IND-173, then
-IND-174, then IND-169 and IND-175; IND-176 runs alongside and does not block IND-169.
+Owner decides: nothing new; the direction is set. Review the docs pages for tone before release.
 
-Risks:
-- IND-169 needs a deployed hosted Studio (IND-173, IND-174). Framing is allowed only on `/embed/` and only
-  for the docs origin (`frame-ancestors`, no `X-Frame-Options`); every other route stays as strict as now.
-  Deploying needs the owner's Fly access, and the image must stay free of Fly-specific code (PAN-130).
-- Pyodide may not run indah's server dependencies; the spike must say so early.
-- 157, 162, 163 may be dropped if semula's own bridge components make them redundant.
-
-Owner decides:
-- Built-in or semula-owned for 157, 162, 163.
-- Accept ADR-0041: a hosted Studio as its own container beside the gallery, no playground, iframes in the docs.
-- Approve the `pypi` environment run.
-
-## 0.8.0 (provisional): live media and annotation, 22 points
+## 0.9.0 (provisional): live media and annotation, 22 points
 
 Theme: the deferred live-media boundary (ADR-0017), only if the owner wants it.
 
@@ -213,7 +226,9 @@ bump is needed.
 ## Later
 
 - IND-57 RAG chat with citations (3), IND-81 LLM comparison charts (5, data goes stale), IND-66 (3, check
-  the duplicate first), IND-83b (5, after the spike).
+  the duplicate first).
+- A research card on how Streamlit runs its gallery and accepts contributions (filed separately). The
+  gallery keeps its name and stays the owner's own apps; no community contributions yet.
 
 ## 1.0
 
@@ -225,7 +240,7 @@ the hosted layer has run for real users. Exit criteria:
    an external session store (today: in memory, sticky sessions).
 4. The Studio coverage test, docs site and demos are green on the release candidate (`1.0.0rc1`, Colab and
    RunPod smoke test as in `docs/RELEASING.md`).
-Earliest sensible date: after 0.7.0.
+Earliest sensible date: after 0.8.0.
 
 ## Working rules
 
@@ -252,5 +267,5 @@ Earliest sensible date: after 0.7.0.
 | Before 0.4.1 | Decide whether to cut 0.4.1; give access for V1 and V2 |
 | Before 0.5.0 build | Accept the bridge ADR |
 | Before 0.6.0 | Settle the Text scale and inline code and emphasis in the IND-166 ADR (the default look is decided) |
-| Before 0.7.0 | Built-in or semula-owned for Marked, BarStrip, Steps; hosted Studio or not |
+| Done 2026-10-23 | Built-in for Marked, BarStrip, Steps; docs and Studio are one thing, run with Pyodide (ADR-0041 option B); gallery keeps its name, no community contributions yet |
 | Each release | Approve the `pypi` environment run |
