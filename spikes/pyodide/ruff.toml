@@ -1,0 +1,5 @@
+extend = "../../pyproject.toml"
+
+[lint]
+# A throwaway spike: embedded Python snippets and one-line prints are allowed to be long.
+ignore = ["E501"]
