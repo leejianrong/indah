@@ -71,6 +71,7 @@ set shipped so far.
 | `DataFrame` | a pandas frame, a `{columns, rows}` dict, or record dicts |
 | `Table` | an interactive table: sort, page, and select |
 | `Stat` | a metric / KPI card: a big value with a label and optional delta |
+| `BarStrip` | a small activity strip: one bar per interval (calls per minute), optionally stacked, with a tooltip per bar |
 | `JsonTree` | a collapsible, searchable JSON viewer |
 | `Diff` | a split or unified diff of two texts or JSON values |
 
@@ -160,6 +161,38 @@ text on the clipboard and shows a "Copied" toast in that tab, with no round trip
 is not a secure context (plain `http` away from `localhost`) cannot use the clipboard API; then the text
 is selected and the toast asks for Ctrl+C. The Copy button and a long block that scrolls are both reachable
 with the keyboard. `copy=False` hides the button.
+
+### Activity strips
+
+`BarStrip` is a compact strip with one bar per interval, for "calls per minute" next to a number, not
+a chart to read values from. `series` is a list (or a `Signal`, `Computed` or function returning one) with
+a number per bar, or a tuple of numbers for a stacked bar, first segment at the bottom:
+
+```python
+from indah import BarStrip, Signal
+
+calls = Signal([(3, 1), (5, 0), (2, 2)])  # (hits, misses) per minute
+BarStrip(
+    calls,
+    tones=["ok", "err"],  # theme tones: neutral, ok, warn, err, info
+    names=["hit", "miss"],
+    labels=lambda: [f"{m}m ago" for m in range(len(calls.value), 0, -1)],
+    label="Calls per minute",  # the name a screen reader hears
+    height=40,  # pixels, 8 to 240 (default 32)
+)
+```
+
+The strip updates in place when the source changes, so appending a bar from `ctx.every` or a `Stream`
+callback is cheap; only the latest 1440 bars are sent. The scale is the tallest bar unless you fix it with
+`max=`. Negative, non-finite or non-numeric values draw as zero. Tones are the theme's colours, so they
+follow light and dark and `Theme(...)`. The default tone is `info`, and a segment with no tone in the list
+is `neutral`.
+
+Colour is never the only cue. Hover a bar, or focus the strip (it is one tab stop) and use the arrow keys,
+Home and End, and a tooltip reads `12:03: 4 (hit 3, miss 1)`; a screen reader gets the same text from a
+live region. Escape hides the tooltip and Tab moves on, so the keyboard is never trapped. Give stacked bars
+`names=` and the bars `labels=` so the tooltip says what each part is. Animation is off when the reader
+asks for reduced motion.
 
 `DataFrame` duck-types its input: a pandas frame
 (via `to_dict(orient="split")`), a `{columns, rows}` dict, or a list of record

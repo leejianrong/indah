@@ -955,6 +955,35 @@
         position: absolute; width: 1px; height: 1px; overflow: hidden;
         clip: rect(0 0 0 0); white-space: nowrap;
       }
+      /* BarStrip (IND-162): a compact strip of bars, not a chart. Tones are the theme variables. */
+      .barstrip { position: relative; width: 100%; border-radius: var(--radius-sm); }
+      .barstrip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+      .barstrip-bars {
+        display: flex; align-items: flex-end; gap: 2px;
+        border-bottom: 1px solid var(--outline-soft);
+      }
+      .barstrip-bar {
+        flex: 1 1 0; min-width: 1px; height: 100%;
+        display: flex; flex-direction: column-reverse;
+        border-radius: 1px 1px 0 0;
+      }
+      .barstrip-bar.on { background: var(--surface-3); }
+      .barstrip-seg { flex: none; width: 100%; background: var(--muted); }
+      .barstrip-seg + .barstrip-seg { box-shadow: inset 0 -1px 0 var(--bg); }
+      .barstrip-seg.tone-ok { background: var(--ok); }
+      .barstrip-seg.tone-warn { background: var(--warn); }
+      .barstrip-seg.tone-err { background: var(--err); }
+      .barstrip-seg.tone-info { background: var(--primary); }
+      .barstrip-seg.tone-neutral { background: var(--muted); }
+      @media (prefers-reduced-motion: no-preference) {
+        .barstrip-seg { transition: height 0.2s ease; }
+      }
+      .barstrip-tip {
+        position: absolute; bottom: calc(100% + 6px); z-index: 70; white-space: nowrap;
+        padding: 0.3rem 0.6rem; font-size: 0.8rem; color: var(--text);
+        background: var(--surface-3); border: 1px solid var(--outline);
+        border-radius: var(--radius-sm); box-shadow: var(--shadow); pointer-events: none;
+      }
       a.link { color: var(--primary); text-decoration: none; font-weight: 600; }
       a.link:hover { text-decoration: underline; }
       a.link.active {

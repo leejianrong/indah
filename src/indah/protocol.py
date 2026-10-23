@@ -79,6 +79,7 @@ BUILTIN_TYPES = frozenset(
         "segmented",
         "date",
         "progress",
+        "barstrip",
         "spinner",
         "list",
         "chat",

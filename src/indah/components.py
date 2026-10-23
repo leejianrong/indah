@@ -2405,6 +2405,112 @@ def _progress_value(value: Any) -> float | None:
     return float(value)
 
 
+BARSTRIP_MAX_BARS = 1440  # a day of minutes; only the latest bars are sent
+
+
+class BarStrip(Component):
+    """A small activity strip: one bar per interval (calls per minute, hits and misses stacked).
+
+    ``series`` is a list with one entry per bar, or a ``Signal``, ``Computed`` or function
+    returning one. An entry is a number, or a sequence of numbers for a stacked bar (the first
+    segment at the bottom). A negative, non-finite or non-numeric value draws as zero, and only
+    the latest ``BARSTRIP_MAX_BARS`` bars are sent. The strip updates in place when the source
+    changes; it does not remount.
+
+    ``tones`` names the theme tone of each segment (``neutral``, ``ok``, ``warn``, ``err``,
+    ``info``); the default is ``info`` and a segment past the end of the list is ``neutral``.
+    Colour is never the only cue: ``names`` labels the segments and ``labels`` the bars, and the
+    tooltip (hover, or the arrow keys on the focused strip) reads "label: total (name n, ...)".
+    ``height`` is in pixels (8 to 240, default 32), ``max`` fixes the scale (the default is the
+    tallest bar), and ``label`` names the strip for assistive technology.
+    """
+
+    type = "barstrip"
+
+    def __init__(
+        self,
+        series: Source = None,
+        *,
+        height: int = 32,
+        tones: list[str] | tuple[str, ...] | None = None,
+        names: list[str] | tuple[str, ...] | None = None,
+        labels: Source = None,
+        max: float | None = None,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        if isinstance(height, bool) or not isinstance(height, int) or not 8 <= height <= 240:
+            raise ValueError(f"BarStrip height must be an integer from 8 to 240, got {height!r}")
+        for name, seq in (("tones", tones), ("names", names)):
+            if seq is not None and (isinstance(seq, str) or not isinstance(seq, (list, tuple))):
+                raise ValueError(f"BarStrip {name} must be a list of strings, got {seq!r}")
+        for tone in tones or ():
+            if tone not in BADGE_TONES:
+                raise ValueError(f"BarStrip tone must be one of {BADGE_TONES}, got {tone!r}")
+        if max is not None and (isinstance(max, bool) or not _finite(max) or max <= 0):
+            raise ValueError(f"BarStrip max must be a positive number, got {max!r}")
+        self._series = series
+        self._height = height
+        self._tones = list(tones) if tones else None
+        self._names = [str(n) for n in names] if names else None
+        self._labels = labels
+        self._labels_live = _options_are_live(labels)
+        self._max = None if max is None else float(max)
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if self._height != 32:
+            props["height"] = self._height
+        if self._tones:
+            props["tones"] = self._tones
+        if self._names:
+            props["names"] = self._names
+        if self._labels is not None and not self._labels_live:
+            props["labels"] = _bar_labels(self._labels)
+        if self._max is not None:
+            props["max"] = self._max
+        if self._label:
+            props["label"] = self._label
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {"series": lambda: _bars(_read(self._series))}
+        if self._labels_live:
+            props["labels"] = lambda: _bar_labels(_read(self._labels))
+        return props
+
+
+def _finite(value: Any) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and value == value
+        and value not in (float("inf"), float("-inf"))
+    )
+
+
+def _segment(value: Any) -> float:
+    return float(value) if _finite(value) and value > 0 else 0.0
+
+
+def _bars(series: Any) -> list[list[float]]:
+    """One list of segment values per bar, bad values as zero, the latest bars only."""
+    if not isinstance(series, (list, tuple)):
+        series = [] if series is None else list(series)
+    bars = []
+    for entry in list(series)[-BARSTRIP_MAX_BARS:]:
+        if isinstance(entry, (list, tuple)):
+            bars.append([_segment(v) for v in entry] or [0.0])
+        else:
+            bars.append([_segment(entry)])
+    return bars
+
+
+def _bar_labels(labels: Any) -> list[str]:
+    return [str(x) for x in list(labels or [])[-BARSTRIP_MAX_BARS:]]
+
+
 class Spinner(Component):
     """An indeterminate busy indicator (Slice A).
 
