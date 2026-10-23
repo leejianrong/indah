@@ -45,6 +45,16 @@ class Page:
     # Console errors / failed requests this page is *meant* to cause (a refused upload ...).
     expected_errors: tuple[str, ...] = ()
     source: str | None = None  # shown instead of the build function's source, if set
+    # Why this page cannot run in the docs' browser runtime (ADR-0041): a short reason, or None
+    # when it can. A page that sets it is still shown (source and screenshot), without Run it.
+    # Keep pages Session-shaped (no ``api/*`` file fetches, no request headers, no ``ctx.app``)
+    # and they stay runnable; see docs/STUDIO.md.
+    local_only: str | None = None
+
+
+# Why every whole app is local only: it is an ASGI app with its own data files and dependencies,
+# not a Session the browser runtime can build.
+APP_LOCAL_ONLY = "a whole ASGI app with its own data and dependencies, not a single Session"
 
 
 @dataclass(frozen=True)
@@ -65,6 +75,7 @@ class AppEntry:
     lifespan: Callable[[Any], AbstractAsyncContextManager[None]] | None = None
     # The app's indah UI (for the logo's "back to the Studio" link): attribute path on the app.
     ui_attr: str | None = "ui"
+    local_only: str = APP_LOCAL_ONLY  # a whole app never runs in the docs' browser runtime
 
 
 @dataclass

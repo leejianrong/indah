@@ -514,6 +514,7 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="upload",
+            local_only="a multipart upload is posted to api/upload, which the browser runtime does not provide",
             title="Upload",
             summary="`on_upload` receives an `UploadedFile` with its name, type and bytes.",
             build=upload_page,
@@ -524,6 +525,7 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="download",
+            local_only="a download is served from api/file/..., a route the browser runtime does not provide",
             title="Download",
             summary="A computed `DownloadFile` becomes a per-session link; change the rows, get a new file.",
             build=download_page,

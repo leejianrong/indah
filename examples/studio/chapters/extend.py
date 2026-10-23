@@ -281,6 +281,7 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="bridge",
+            local_only="the module component's JavaScript is served from api/components/<type>.js, a route the browser runtime does not provide",
             title="A module component",
             summary=(
                 "A component that ships its own ES module: props arrive as properties, "
@@ -296,6 +297,7 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="context",
+            local_only="it reads a real request's headers (ConnectionInfo), which the browser runtime does not have",
             title="Context",
             summary=(
                 "`ctx.sid`, `ctx.conn` and `ctx.on_close` describe this session and its request "

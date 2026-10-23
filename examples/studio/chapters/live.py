@@ -437,6 +437,7 @@ CHAPTER = Chapter(
     pages=[
         Page(
             slug="topic",
+            local_only="Topic needs an app object (ctx.app), which the browser runtime does not have yet",
             title="Topic: one feed, every tab",
             summary=(
                 "A producer in the app's lifespan publishes to a `Topic`. Each tab follows it with "
@@ -450,6 +451,7 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="bounded",
+            local_only="ctx.tail reads an app object (ctx.app), which the browser runtime does not have yet",
             title="Bounded streams",
             summary=(
                 "`ctx.tail(topic, limit=5)` keeps the newest five and sends only new rows, so a "
@@ -477,6 +479,7 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="tab-title",
+            local_only="favicons are served from api/brand/favicon/<name>, a route the browser runtime does not provide",
             title="Tab title and favicon",
             summary=(
                 "`ctx.title` and `ctx.favicon` change this tab's title and icon without a reload, "

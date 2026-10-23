@@ -217,6 +217,7 @@ CHAPTER = Chapter(
     pages=[
         Page(
             slug="links",
+            local_only="it assumes the Studio's own URL paths (c/<chapter>/<page>), which a docs page does not have",
             title="Link and active state",
             summary="A `Link` is a real anchor: middle-click opens a tab, a plain click navigates without a reload.",
             build=links,
@@ -227,6 +228,7 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="navitem",
+            local_only="it assumes the Studio's own URL paths (c/<chapter>/<page>), which a docs page does not have",
             title="NavItem with a count",
             summary="A `Link` for a rail: an icon, and a live count that hides at zero.",
             build=navitem,
@@ -236,6 +238,7 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="navigate",
+            local_only="it assumes the Studio's own URL paths (c/<chapter>/<page>), which a docs page does not have",
             title="ctx.navigate and not_found",
             summary="Server code can move the tab. A path with no route shows the router's `not_found` page.",
             build=navigate,
