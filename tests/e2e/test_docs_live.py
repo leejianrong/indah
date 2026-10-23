@@ -166,6 +166,7 @@ def site(tmp_path_factory):
     pages = (
         "start/choices",
         "start/reactive",
+        "start/quickstart",
         "extend/context",
         "overlays/code-editor",
         "extend/bridge",
@@ -276,6 +277,39 @@ def test_run_it_runs_a_studio_page_in_the_browser(site, browser):
         expect(second.locator("iframe")).to_have_count(1)
         second.get_by_role("button", name="Stop").click()
         expect(second.locator("iframe")).to_have_count(0)
+    finally:
+        page.close()
+
+
+@pytest.mark.e2e
+def test_the_quickstart_example_runs_in_the_browser_with_no_server(site, browser):
+    """IND-181: the quickstart's own app, from Run it to a slider moving the computed sum."""
+    _need_pyodide(site)
+    from examples.studio.chapters.start import quickstart_check
+
+    _run(
+        site,
+        browser,
+        "start/quickstart",
+        ready=lambda frame: expect(frame.get_by_role("slider").first).to_be_visible(
+            timeout=120_000
+        ),
+        check=quickstart_check,
+    )
+
+
+@pytest.mark.e2e
+def test_the_quickstart_embed_is_readable_without_running_it(site, browser):
+    """No JavaScript work needed to read it: summary, source, a link, a button that is honest."""
+    page = browser.new_page()
+    try:
+        page.goto(site.base + "/")
+        card = page.locator("indah-live[page='start/quickstart']")
+        expect(card).to_contain_text("Two sliders and a computed sum")
+        expect(card.locator("pre code")).to_contain_text('label="a"')
+        expect(card.locator(".indah-live-note")).to_contain_text("9 MB")
+        expect(card.get_by_role("link", name="Open in the Studio")).to_be_visible()
+        expect(card.locator("iframe")).to_have_count(0)
     finally:
         page.close()
 

@@ -40,6 +40,12 @@ indah.launch(indah.create_app(session=Session(page)))
 - **`launch()`** binds a free port, starts the single-port ASGI app, and prints
   the URL. In a notebook it also embeds the app inline in the cell.
 
+Try it here. This is the same app, running in your browser with no server. Nothing is
+downloaded until you press **Run it**, and then it loads about 9 MB (compressed) once. With
+JavaScript off you still see the example's source and summary, without the button.
+
+<indah-live page="start/quickstart"></indah-live>
+
 ## Launching in each environment
 
 === "Colab / Runpod"

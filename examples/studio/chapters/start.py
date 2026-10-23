@@ -29,6 +29,32 @@ def reactive_check(pw) -> None:
     expect(page.get_by_text("21.5 C is 70.7 F")).to_be_visible()
 
 
+# The app from the quickstart (website/docs/quickstart.md). tests/unit/test_docs_embeds.py fails if
+# the two drift apart, so the docs show the code that runs. (Kept above the function: the docs
+# show the function's own source.)
+def quickstart(ctx: indah.Context) -> indah.Component:
+    a, b = indah.Signal(2), indah.Signal(3)
+    total = indah.computed(lambda: f"a + b = {a.value + b.value}")
+    return indah.Column(
+        children=[
+            indah.Slider(a, min=0, max=10, label="a"),
+            indah.Slider(b, min=0, max=10, label="b"),
+            indah.Text(total),
+        ]
+    )
+
+
+def quickstart_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.get_by_text("a + b = 5")).to_be_visible()
+    slider = page.get_by_role("slider").first
+    slider.focus()
+    slider.press("ArrowRight")  # a: 2 -> 3
+    expect(page.get_by_text("a + b = 6")).to_be_visible()
+
+
 def inputs(ctx: indah.Context) -> indah.Component:
     name = indah.Signal("Ada")
     size = indah.Signal("Medium")
@@ -324,6 +350,16 @@ CHAPTER = Chapter(
             docs="quickstart.md",
             adr=(2, 10),
             check=first_app_check,
+        ),
+        Page(
+            slug="quickstart",
+            title="The quickstart app",
+            summary="Two sliders and a computed sum: the first app of the quickstart, running here.",
+            build=quickstart,
+            covers=("Signal", "computed", "Slider", "Text", "Column"),
+            docs="quickstart.md",
+            adr=(3,),
+            check=quickstart_check,
         ),
         Page(
             slug="reactive",
