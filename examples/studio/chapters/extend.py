@@ -281,7 +281,6 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="bridge",
-            local_only="the module component's JavaScript is served from api/components/<type>.js, a route the browser runtime does not provide",
             title="A module component",
             summary=(
                 "A component that ships its own ES module: props arrive as properties, "

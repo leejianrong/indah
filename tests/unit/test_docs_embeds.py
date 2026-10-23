@@ -14,10 +14,10 @@ from examples.studio.core import discover
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# The pages the Pyodide spike found server-shaped (docs/spikes/pyodide.md, section 2).
+# The pages the Pyodide spike found server-shaped (docs/spikes/pyodide.md, section 2), minus the
+# ones the docs bundle fixed with static files next to frame.html (IND-184): they run now.
+FIXED_BY_STATIC_API_FILES = {"overlays/code-editor", "extend/bridge"}
 SPIKE_LOCAL_ONLY = {
-    "overlays/code-editor",
-    "extend/bridge",
     "live/tab-title",
     "media/download",
     "overlays/context",
@@ -60,6 +60,8 @@ def test_the_spike_pages_and_whole_apps_are_marked_local_only(exported):
     by_id = {p["id"]: p for p in exported}
     for pid in SPIKE_LOCAL_ONLY:
         assert pid in by_id and not by_id[pid]["runnable"], pid
+    for pid in FIXED_BY_STATIC_API_FILES:
+        assert pid in by_id and by_id[pid]["runnable"], f"{pid} should run in the docs now"
     for p in exported:
         if p["kind"] == "app":
             assert not p["runnable"], f"{p['id']} is a whole app and must be local only"
