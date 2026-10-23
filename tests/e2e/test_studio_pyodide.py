@@ -17,6 +17,7 @@ runs in its own CI job. It skips with a clear message when the runtime cannot be
     make test-pyodide      # 4 workers; or: uv run --extra e2e --extra docs pytest -m pyodide -n 4
 """
 
+import fcntl
 import functools
 import http.server
 import importlib.util
@@ -35,6 +36,7 @@ from examples.studio import registry  # noqa: E402
 from examples.studio.core import discover  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
+CACHE_LOCK = ROOT / ".cache" / "live-pyodide.lock"
 PROBE = os.environ.get("STUDIO_PYODIDE_PROBE") == "1"
 # A page's check reloads, or waits on a server-shaped round trip, a little slower in Pyodide
 # (hosted/secret-reveal reloads the page, which restarts the runtime: about 7 s).
@@ -71,10 +73,20 @@ def bundle(tmp_path_factory):
     """The docs bundle with the pinned Pyodide self-hosted, served over HTTP."""
     build = _load_build_script()
     out = tmp_path_factory.mktemp("studio-pyodide") / "live"
-    try:
-        runtime = build.build_bundle(out, self_host=True)
-    except OSError as exc:  # no network and nothing cached for the pinned runtime
-        pytest.skip(f"the pinned Pyodide {build.PYODIDE_VERSION} could not be downloaded: {exc}")
+    # Each xdist worker builds its own bundle, but they share the Pyodide download cache: on a cold
+    # cache (CI's first run) four workers writing it at once leave partial files and every first
+    # page hangs. One build at a time; the later ones find the cache complete.
+    CACHE_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(CACHE_LOCK, "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            runtime = build.build_bundle(out, self_host=True)
+        except OSError as exc:  # no network and nothing cached for the pinned runtime
+            pytest.skip(
+                f"the pinned Pyodide {build.PYODIDE_VERSION} could not be downloaded: {exc}"
+            )
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
     handler = functools.partial(_Handler, directory=str(out))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
