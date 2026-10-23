@@ -613,6 +613,99 @@ class Code(Component):
         return {"text": lambda: str(_read(self._text))}
 
 
+def _mark_parts(mark: Any) -> tuple[int, int, str, str]:
+    if isinstance(mark, dict):
+        parts = (mark.get("start"), mark.get("end"), mark.get("tone", "neutral"), mark.get("label"))
+    elif isinstance(mark, (tuple, list)) and len(mark) in (3, 4):
+        parts = (*mark, None) if len(mark) == 3 else tuple(mark)
+    else:
+        raise ValueError(
+            "a mark is (start, end, tone), (start, end, tone, label) or a dict with those keys"
+        )
+    start, end, tone, label = parts
+    for name, value in (("start", start), ("end", end)):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(f"a mark's {name} offset must be an integer, got {value!r}")
+    if tone not in BADGE_TONES:
+        raise ValueError(f"a mark's tone must be one of {BADGE_TONES}, got {tone!r}")
+    return start, end, tone, "" if label is None else str(label)
+
+
+def marked_runs(text: str, marks: Any = ()) -> Runs:
+    """Split ``text`` into the runs :class:`Marked` draws (IND-157).
+
+    ``marks`` is a list of ``(start, end, tone)`` or ``(start, end, tone, label)`` (or dicts with
+    those keys). Offsets count Unicode code points, as Python indexes a ``str``, and ``end`` is
+    exclusive. ``tone`` is one of ``BADGE_TONES``; ``"neutral"`` is the plain highlight. A run is
+    ``[text]`` for unmarked text, ``[text, tone]`` or ``[text, tone, label]`` for a marked one, so
+    joining the first items always gives back ``text``.
+
+    The rules are fixed, so the same input gives the same runs: a range is clamped to the text; an
+    empty or inverted range is dropped; marks are taken in order of start, then end, then tone and
+    label; and where one overlaps an earlier one it is trimmed to begin where that one ends (and
+    dropped if nothing is left). Use this to build the ``runs`` field of a List item or a table row
+    that a render spec binds to ``{"component": "marked"}``.
+    """
+    text = str(text)
+    size = len(text)
+    spans = []
+    for mark in marks or ():
+        start, end, tone, label = _mark_parts(mark)
+        start, end = max(0, min(start, size)), max(0, min(end, size))
+        if end > start:
+            spans.append((start, end, tone, label))
+    spans.sort()
+    runs = Runs()
+    cursor = 0
+    for start, end, tone, label in spans:
+        start = max(start, cursor)
+        if end <= start:
+            continue
+        if start > cursor:
+            runs.append([text[cursor:start]])
+        runs.append([text[start:end], tone, label] if label else [text[start:end], tone])
+        cursor = end
+    if cursor < size:
+        runs.append([text[cursor:]])
+    return runs
+
+
+class Marked(Component):
+    """Text with shaded spans (IND-157): the part of a request that was ignored when matching,
+    the words a check flagged.
+
+    ``text`` is a string, ``Signal``, ``Computed`` or callable, and so is ``marks``, a list of
+    ``(start, end, tone)`` or ``(start, end, tone, label)`` (see :func:`marked_runs` for the
+    offsets and the overlap rules). The tones are the theme's (``ok``, ``warn``, ``err``,
+    ``info``, and ``neutral`` for a plain highlight). A tone is not colour alone: each has its own
+    underline, and a mark's ``label`` is its hover text. The spans are real inline elements, so
+    selecting and copying gives back exactly ``text``. ``label=`` names the block for a screen
+    reader. Newlines are kept.
+
+    To show it in a ``List`` item or a table cell, put ``marked_runs(text, marks)`` in the item's
+    ``runs`` field and give the spec ``{"component": "marked", "bind": {"runs": "runs"}}``.
+    """
+
+    type = "marked"
+
+    def __init__(self, text: Source, marks: Source = None, *, label: str = "") -> None:
+        super().__init__()
+        self._text = text
+        self._marks = marks
+        self._label = label
+        if not any(isinstance(s, (Signal, Computed)) or callable(s) for s in (text, marks)):
+            self._runs()  # a bad mark in static data fails here, not on the first render
+
+    def _runs(self) -> list[list[str]]:
+        return marked_runs(_read(self._text), _read(self._marks) or ())
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label} if self._label else {}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"runs": self._runs}
+
+
 class Empty(Component):
     """An empty state: what to show where there is nothing yet (IND-158).
 
@@ -2285,9 +2378,14 @@ class Stat(Component):
         return props
 
 
+class Runs(list):  # type: ignore[type-arg]
+    """What :func:`marked_runs` returns: a plain list of runs that a List item or a table row
+    carries as nested data (any other non-scalar field value is turned into text)."""
+
+
 def _json_safe(value: Any) -> Any:
     """Coerce a cell value to something JSON can carry (e.g. a numpy scalar)."""
-    if value is None or isinstance(value, (str, int, float, bool)):
+    if value is None or isinstance(value, (str, int, float, bool, Runs)):
         return value
     if hasattr(value, "item"):  # numpy / pandas scalar
         try:

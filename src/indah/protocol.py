@@ -72,6 +72,7 @@ BUILTIN_TYPES = frozenset(
         "badge",
         "code",
         "empty",
+        "marked",
         "number",
         "radio",
         "multiselect",
@@ -113,6 +114,15 @@ ALLOWED_TAGS = frozenset(
         "pre", "h1", "h2", "h3", "h4",
     }
 )  # fmt: skip
+
+
+# Built-in components a render spec may name instead of a tag (IND-157, ADR-0016 amendment). A
+# component node is a leaf: it takes only ``bind``, which maps the component's prop to a node prop
+# (or, in a List item or table cell, an item or row field). The value is the props it may bind.
+# A new entry needs a shell renderer registered under the same name (Custom.svelte).
+SPEC_COMPONENTS: dict[str, frozenset[str]] = {
+    "marked": frozenset({"runs"}),
+}
 
 
 def init_message(root: dict[str, Any], chrome: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -237,7 +247,10 @@ class RenderSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    tag: str
+    # One element, from the allowlist; or, instead, ``component`` names a built-in leaf
+    # component (SPEC_COMPONENTS). Exactly one of the two.
+    tag: str = ""
+    component: str | None = None
     attrs: dict[str, str] = Field(default_factory=dict)
     class_: str = Field(default="", alias="class")
     text: str | None = None
@@ -250,6 +263,35 @@ class RenderSpec(BaseModel):
 
     def validated(self) -> RenderSpec:
         """Recursively check tags against the allowlist; raise ``ValueError`` if not."""
+        if self.component is not None:
+            if self.tag:
+                raise ValueError("a render spec names either a tag or a component, not both")
+            if self.component not in SPEC_COMPONENTS:
+                raise ValueError(
+                    f"render component {self.component!r} is not allowed "
+                    f"(allowed: {', '.join(sorted(SPEC_COMPONENTS))})"
+                )
+            if (
+                self.attrs
+                or self.class_
+                or self.text is not None
+                or self.literal is not None
+                or self.on
+                or self.children
+            ):
+                raise ValueError(
+                    f"a component node is a leaf: {self.component!r} takes only bind, "
+                    "no attrs, class, text, literal, on or children"
+                )
+            unknown = set(self.bind) - SPEC_COMPONENTS[self.component]
+            if unknown:
+                raise ValueError(
+                    f"component {self.component!r} cannot bind {sorted(unknown)} "
+                    f"(it takes: {', '.join(sorted(SPEC_COMPONENTS[self.component]))})"
+                )
+            return self
+        if not self.tag:
+            raise ValueError("a render spec needs a tag or a component")
         if self.tag not in ALLOWED_TAGS:
             raise ValueError(
                 f"render tag {self.tag!r} is not allowed "

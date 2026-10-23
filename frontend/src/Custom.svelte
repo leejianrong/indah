@@ -4,6 +4,12 @@
   // component type renders with no shell rebuild and no runtime Node.
   import { postEvent } from "./api.js";
   import Self from "./Custom.svelte";
+  import MarkedRuns from "./MarkedRuns.svelte";
+
+  // Built-in components a spec may name instead of a tag ({component: "marked", bind: {...}}),
+  // a leaf that takes its props from the node or the List item / table row. Keep in step with
+  // SPEC_COMPONENTS in protocol.py.
+  const registry = { marked: MarkedRuns };
 
   // `row` is {key, index} when the spec renders one row of a keyed List; it rides along
   // on every event so the server knows which row the event came from.
@@ -35,6 +41,13 @@
     if (serverValue !== undefined && el && el.value !== String(serverValue)) el.value = serverValue;
   }
 
+  // For a component node: its props, read from the bound fields of this node or row.
+  let bound = $derived(
+    spec.component
+      ? Object.fromEntries(Object.entries(spec.bind || {}).map(([k, field]) => [k, props?.[field]]))
+      : {},
+  );
+
   let text = $derived(
     spec.literal != null ? spec.literal : spec.text != null ? (props[spec.text] ?? "") : null,
   );
@@ -58,7 +71,10 @@
   }
 </script>
 
-{#if children.length || text !== null}
+{#if spec.component}
+  {@const Component = registry[spec.component]}
+  {#if Component}<Component {...bound} />{/if}
+{:else if children.length || text !== null}
   <svelte:element this={spec.tag} bind:this={el} {...attrs} use:events>
     {#if text !== null}{text}{/if}
     {#each children as child}<Self spec={child} {props} {nodeId} {row} />{/each}

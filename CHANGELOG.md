@@ -25,6 +25,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   Home and End read each bar, and a live region says the same, so colour is not the only cue. It
   respects reduced motion and works under `csp="strict"`. A new component type (`barstrip`), so
   `protocol_version` stays 1 and nothing existing changes.
+- `Marked(text, marks)` and `marked_runs(text, marks)`: text with shaded spans, for the part of a request
+  that was ignored when matching or the words a check flagged. A mark is `(start, end, tone)` or
+  `(start, end, tone, label)`; offsets are Unicode code points, a range is clamped, an empty one dropped,
+  and an overlap is cut to begin where the earlier mark ends, so the same input always draws the same
+  runs. The tones are the theme's (`ok`, `warn`, `err`, `info`, `neutral`), each with its own underline as
+  well as its colour, and the label is hover text. The spans are real elements that add no characters, so
+  copying gives back the plain text. A render spec may now name a built-in leaf component,
+  `{"component": "marked", "bind": {"runs": "runs"}}`, so a `List` item or a table cell can show it from a
+  `marked_runs` field (ADR-0016 amendment). A new component type and an optional spec field (additive,
+  `protocol_version` stays 1); nothing existing changes.
 - `CommandPalette(commands, shortcut="mod+k")` and `Command(label, on_run | to=, group=, shortcut=, keywords=,
   confirm=, key=)`: the dashboard driven like a terminal. Ctrl or Cmd+K opens a dialog; type to filter, arrows
   move, Enter runs, Escape closes and gives focus back. A command runs a function (sync or `async`) or jumps

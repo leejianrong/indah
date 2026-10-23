@@ -78,3 +78,7 @@ additive (new props `columns`, `rows`, `rowKey`, `height`; a `select` event carr
   viewer's current search and filters (up to `MAX_CHECK_ALL`, 10 000 keys, advertised as
   `checkAllMax`), keeping rows already ticked. Over the cap the bar asks to narrow the search. Measured: 20k remote rows, under 200 DOM
   rows, worst frame under 100 ms while scrolling the whole table.
+
+- Amendment (IND-157): a cell's render spec may also name a built-in leaf component,
+  `{"component": "marked", "bind": {"runs": "<field>"}}`, for text with shaded spans. See the
+  amendment to ADR-0016; a cell is still display only.

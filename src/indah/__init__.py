@@ -51,6 +51,7 @@ from .components import (
     Link,
     List,
     Map,
+    Marked,
     MasterDetail,
     Menu,
     MenuItem,
@@ -85,6 +86,7 @@ from .components import (
     TextInput,
     Upload,
     UploadedFile,
+    marked_runs,
 )
 from .context import ConnectionInfo, Context
 from .custom import CustomComponent, custom, register_component
@@ -168,6 +170,7 @@ __all__ = [
     "Chart",
     "Heatmap",
     "Map",
+    "Marked",
     "DataFrame",
     "Table",
     "TableQuery",
@@ -212,6 +215,7 @@ __all__ = [
     "Empty",
     "Expander",
     # custom components (R7)
+    "marked_runs",
     "register_component",
     "custom",
     "CustomComponent",

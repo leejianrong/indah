@@ -9,6 +9,7 @@ set shipped so far.
 | Component | Use |
 |-----------|-----|
 | `Text` | a label bound to a signal, computed, or string |
+| `Marked` | text with shaded spans (the part that is ignored or flagged): `Marked(text, marks=[(start, end, tone)])` |
 | `Image` | a URL, `data:` URI, or raw PNG bytes |
 | `ImageOverlay` | an image with read-only vector overlays (boxes, masks, keypoints) |
 | `Audio` | a URL, `data:` URI, or raw audio bytes, played with native browser controls |
@@ -136,6 +137,52 @@ Plain `Text` is body text: normal size and weight, with line breaks kept. Pick a
 Plain text never interprets markup, so backticks stay literal; use `Text(..., markdown=True)`
 for code, emphasis, links and headings (a Markdown text takes no `variant`). `size="body"` and
 `size="readout"` from 0.4.0 still work and mean `variant="body"` and `variant="readout"`.
+
+### Marked text
+
+`Marked(text, marks)` shows a text with some spans shaded, such as the part of a request that was ignored
+when matching or the words a check flagged:
+
+```python
+from indah import Marked
+
+Marked(
+    "Summarise the report. Ignore the template header.",
+    [(0, 9, "info", "the task"), (22, 49, "warn", "ignored")],
+)
+```
+
+A mark is `(start, end, tone)` or `(start, end, tone, label)`. `text` and `marks` can each be a string or
+list, a `Signal`, a `Computed` or a function, so the shading follows the data. The tones are the theme's:
+`ok`, `warn`, `err`, `info`, and `neutral` for a plain highlight. A tone is never colour alone, since each
+has its own underline (solid, dashed, wavy, dotted), and the optional `label` is the span's hover text. The
+spans are real inline elements that add no characters, so selecting and copying gives back the plain text,
+and newlines are kept. `label=` on `Marked` names the block for a screen reader.
+
+Offsets count characters as Python does (Unicode code points, `end` exclusive), so `"a\U0001f600b"` has the
+emoji at offset 1. The rules are fixed so the same input always gives the same result: a range is clamped to
+the text, an empty or reversed range is dropped, marks are taken in order of start (then end), and a mark that
+overlaps an earlier one is cut to begin where the earlier one ends (and dropped if nothing is left). A tone
+that is not one of the five, or an offset that is not an integer, raises an error.
+
+To show it in a `List` item or a table cell, compute the runs with `marked_runs(text, marks)`, keep them in a
+field, and name the component in the render spec:
+
+```python
+from indah import Col, List, Table, marked_runs
+
+rows = [{"id": "a", "runs": marked_runs("GET /v1/models 200", [(4, 14, "ok")])}]
+cell = {"component": "marked", "bind": {"runs": "runs"}}
+
+List(rows, key="id", item=cell)
+Table(
+    columns=[Col("id"), Col("runs", title="Request", kind="cell", render=cell)], rows=rows, key="id"
+)
+```
+
+A `Diff` draws its own changed characters; to show shaded text beside one, put a `Marked` in the other pane
+of a `Row` or `SplitPane`. `marked_runs` returns a list that a List item or a table row carries as it is
+(other lists and dicts in an item field are shown as text).
 
 ### Empty states and code blocks
 

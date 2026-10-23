@@ -539,6 +539,40 @@ def barstrip(ctx: indah.Context) -> indah.Component:
             ),
             indah.Text("One series, a single tone:", variant="caption"),
             indah.BarStrip([3, 5, 2, 8, 6, 0, 4], tones=["info"], label="Queue depth", height=24),
+REQUEST = "Summarise the attached report in three bullet points. Ignore the template header above."
+
+
+def marked(ctx: indah.Context) -> indah.Component:
+    ignored = indah.Signal(True)
+    # Offsets count characters (Unicode code points); the last item is a label shown on hover.
+    start = REQUEST.index("Ignore")
+    marks = indah.Computed(
+        lambda: (
+            [(0, 9, "info", "the task")]
+            + ([(start, len(REQUEST), "warn", "ignored")] if ignored.value else [])
+        )
+    )
+    cell = {"component": "marked", "bind": {"runs": "runs"}}
+    rows = [
+        {"id": "a", "runs": indah.marked_runs("GET /v1/models 200", [(4, 14, "ok")])},
+        {"id": "b", "runs": indah.marked_runs("POST /v1/chat 500", [(5, 13, "err", "failed")])},
+    ]
+    return indah.Column(
+        children=[
+            indah.Marked(REQUEST, marks, label="Request"),
+            indah.Button(
+                lambda: "Stop ignoring the header" if ignored.value else "Ignore the header",
+                lambda: ignored.set(not ignored.value),
+            ),
+            indah.List(rows, key="id", item=cell),
+            indah.Table(
+                columns=[
+                    indah.Col("id"),
+                    indah.Col("runs", title="Request", kind="cell", render=cell),
+                ],
+                rows=rows,
+                key="id",
+            ),
         ]
     )
 
@@ -558,6 +592,18 @@ def barstrip_check(pw) -> None:
     strip.focus()
     page.keyboard.press("Home")
     expect(page.get_by_role("tooltip")).to_contain_text("min ")
+def marked_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    block = page.get_by_role("group", name="Request")
+    expect(block.locator("mark")).to_have_count(2)
+    # Selecting and copying gives back the plain text: the spans add no characters.
+    assert block.inner_text() == REQUEST
+    page.get_by_role("button", name="Stop ignoring the header").click()
+    expect(block.locator("mark")).to_have_count(1)
+    expect(page.locator(".list-item mark")).to_have_count(2)
+    expect(page.locator("td mark")).to_have_count(2)
 
 
 def stat(ctx: indah.Context) -> indah.Component:
@@ -816,6 +862,22 @@ CHAPTER = Chapter(
             covers=("BarStrip", "Text"),
             docs="components.md",
             check=barstrip_check,
+        ),
+        Page(
+            slug="marked",
+            title="Marked text",
+            summary=(
+                "`Marked(text, marks=[(start, end, tone)])` shades spans of a text, for the part "
+                "that is ignored or flagged. The spans add no characters, so copying gives back "
+                "the plain text, and each tone has its own underline as well as its colour. In a "
+                "list item or a table cell, put `marked_runs(text, marks)` in a field and name "
+                '`{"component": "marked"}` in the render spec.'
+            ),
+            build=marked,
+            covers=("Marked", "marked_runs", "List", "Table", "Col", "Button"),
+            docs="components.md",
+            adr=(16,),
+            check=marked_check,
         ),
         Page(
             slug="stat",

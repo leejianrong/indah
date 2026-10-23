@@ -68,3 +68,23 @@ cover it, still without a structural op or a `protocol_version` bump:
   (ADR-0013 extended to custom-render inputs), and resynced on blur.
 - A keyed list takes a signal or callable, not a `Stream`. Heterogeneous children stay the
   deferred v2 op.
+
+## Amendment (IND-157): a spec may name a built-in component
+
+`Marked` (text with shaded spans) has to appear inside a `List` item and a table cell, whose
+templates are render specs (this ADR, ADR-0012, ADR-0027). A spec could only name an HTML tag, and
+a tag cannot carry the spans without a new tag or markup in a string, so a node may now name a
+built-in leaf component instead:
+
+- `RenderSpec.component` (optional, mutually exclusive with `tag`) is one of `SPEC_COMPONENTS`
+  in `protocol.py`, today `marked`. The node is a leaf: only `bind` (component prop to node prop,
+  item field or row field), no attrs, class, text, literal, `on` or children, and only the props
+  that component lists. A node of this kind is still data, so the spec stays inert.
+- The shell keeps a matching `registry` in `Custom.svelte`. Adding a component (IND-163 `Steps`
+  will) is one entry in each place.
+- The data the component needs comes from the item, not from the spec. For `marked` the server
+  computes `runs` with `indah.marked_runs(text, marks)` (the same rules as the `Marked`
+  component, in one place), and the item or row carries them. `marked_runs` returns a `list`
+  subclass that List and Table pass through; every other non-scalar field is still turned into
+  text, so no existing item changes.
+- Additive: older specs have no `component`, and `protocol_version` stays 1.
