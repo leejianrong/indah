@@ -65,10 +65,13 @@ build: ## Build the wheel and sdist
 cleanroom: build ## Prove R4: install the wheel with JS-toolchain tripwires on PATH
 	bash scripts/cleanroom.sh
 
-docs: ## Build the documentation site into website/site/
+docs: ## Build the documentation site into website/site/ (with the live-example bundle)
+	uv run --extra docs python scripts/build_docs_live.py bundle
 	cd website && uv run --extra docs zensical build --clean
+	uv run --extra docs python scripts/build_docs_live.py finalize
 
-docs-serve: ## Live-preview the documentation site
+docs-serve: ## Live-preview the documentation site (live examples included)
+	uv run --extra docs python scripts/build_docs_live.py bundle
 	cd website && uv run --extra docs zensical serve
 
 check: lint test-fast ## The pre-push gate: lint + fast tests

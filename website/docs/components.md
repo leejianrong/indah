@@ -246,6 +246,10 @@ selected) take the same options plus an optional count and tone per option:
 `{"value": "err", "label": "Errors", "count": 2, "tone": "err"}`, or
 `Segmented(mode, options=[...], tones={"record": "err"})`.
 
+Try them here. The example runs in your browser; nothing is downloaded until you press **Run it**.
+
+<indah-live page="start/choices"></indah-live>
+
 `TextInput(value, password=True)` masks the field (an `<input type="password">`) for
 secrets like an API key. It is only display masking - the value still round-trips like
 any input, so keep it in per-session state and never log it.

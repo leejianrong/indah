@@ -10,6 +10,7 @@ repo_name = "leejianrong/indah"
 edit_uri = "edit/main/website/docs/"
 
 extra_css = ["stylesheets/extra.css"]
+extra_javascript = ["javascripts/indah-live.js"]
 
 nav = [
   { "Home" = "index.md" },

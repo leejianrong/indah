@@ -25,9 +25,13 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen --extra docs
+      - name: Build the live-example bundle (ADR-0041)
+        run: uv run --no-sync python scripts/build_docs_live.py bundle
       - name: Build the docs site
         working-directory: website
         run: uv run --no-sync zensical build --clean
+      - name: Fill the live examples for readers without JavaScript
+        run: uv run --no-sync python scripts/build_docs_live.py finalize
       # Only package the artifact on main; the PR run is a build-check.
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'

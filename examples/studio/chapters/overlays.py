@@ -565,7 +565,6 @@ CHAPTER = Chapter(
         ),
         Page(
             slug="code-editor",
-            local_only="the editor module is served from api/editor.js, a route the browser runtime does not provide",
             title="CodeEditor",
             summary="JSON and YAML editing with linting, a server-side Format button and a read-only mode.",
             build=code_editor,

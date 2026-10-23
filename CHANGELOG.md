@@ -13,6 +13,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- The docs can run Studio pages in the reader's browser (ADR-0041): `<indah-live page="...">` shows a page's
+  source and a **Run it** button that starts a Pyodide worker running the real indah `Session`, with no
+  server. Nothing loads until the button is pressed. Built by `make docs`; see `docs/STUDIO.md`. No change
+  to the library.
 - `BarStrip(series, height=, tones=, names=, labels=, max=, label=)`: a small activity strip with one
   bar per interval (calls per minute, hits and misses stacked), for a dashboard header rather than a
   chart. `series` is a list, `Signal`, `Computed` or function; a bar is a number or a tuple of segment

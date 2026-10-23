@@ -98,3 +98,37 @@ To vet every page at a glance, turn the screenshots into one sheet per chapter:
 the server process**, so it is offered to loopback clients only and the page says so. Each run is
 mounted under `/play/<id>/` (the last 16 are kept). A snippet that loops forever is reported after 5
 seconds, but Python cannot kill a thread, so it keeps running until the server restarts.
+
+## Show a page live in the docs (ADR-0041)
+
+The docs site runs Studio pages in the reader's browser with Pyodide, so a reader sees a component work
+beside the text that explains it. Put one line where the example belongs, in any page under
+`website/docs/`:
+
+```html
+<indah-live page="start/choices"></indah-live>
+```
+
+`page` is `<chapter slug>/<page slug>` (the Studio URL `c/<chapter>/<page>`). The reader sees the page's
+title, summary and source (the build function's own text, so it cannot drift) and a **Run it** button.
+Nothing loads until they press it; then about 9 MB of runtime downloads and the page runs from a worker
+with no server. Pressing **Run it** on another example stops the first.
+
+- `make docs` builds the bundle (`scripts/build_docs_live.py bundle`: the wheel from this commit,
+  `studio.zip`, `frame.html`, the worker, `pages.json`, `runtime.json`), then the site, then fills the
+  embeds so they read without JavaScript (`finalize`). `make docs-serve` builds the bundle first.
+- A page that cannot run in a browser sets `local_only="<reason>"`; its embed shows the source and the
+  reason and has no button. The `tests/unit/test_docs_embeds.py` gate fails when an embed names a page
+  that does not exist.
+- A page runs in the docs when it stays Session-shaped (see the rule above). The shell's `api/*` GET
+  routes do not exist on a static site; the bundle writes `api/editor.js` and each registered module
+  component as real files beside `frame.html`, which is why `overlays/code-editor` and `extend/bridge`
+  run. A route that serves per-session data (a download, a favicon) cannot, so those stay `local_only`.
+- Runtime files: `website/live/` (`shim.js`, `worker.js`, `bridge.py`) and
+  `website/docs/javascripts/indah-live.js` (the element). The Pyodide version is pinned in
+  `scripts/build_docs_live.py`; it loads from the jsDelivr CDN at that version, and
+  `bundle --self-host` copies it into the bundle for tests and offline copies.
+- Budgets (checked by the build and `tests/e2e/test_docs_live.py`): the wheel in the bundle at most
+  1 MB, the element script at most 10 KB, Run it to the first frame at most 8 s with a warm cache.
+- Try it locally: `uv run --extra e2e pytest tests/e2e/test_docs_live.py`.
+
