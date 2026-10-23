@@ -56,6 +56,8 @@ dev = [
 # only for the dedicated browser-e2e job (which also runs `playwright install`).
 e2e = [
     "playwright>=1.40",
+    # Runs the Studio-in-Pyodide check on several workers (tests/e2e/test_studio_pyodide.py).
+    "pytest-xdist>=3.5",
 ]
 # The documentation site (website/, built with Zensical -> GitHub Pages). Kept out
 # of `dev` so the fast dev loop stays light; CI installs it for the docs job.
@@ -72,6 +74,7 @@ markers = [
     "unit: fast, isolated tests of a single unit",
     "integration: tests across the HTTP/SSE boundary without a browser",
     "e2e: end-to-end tests through a real launched app / browser",
+    "pyodide: every runnable Studio page runs in the browser with Pyodide (ADR-0041); own CI job",
     "expects_csp_violation: this e2e test provokes a CSP violation on purpose (see conftest)",
 ]
 asyncio_mode = "auto"
