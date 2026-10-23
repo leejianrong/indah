@@ -135,6 +135,7 @@ CHAPTER = Chapter(
     pages=[
         Page(
             slug="run",
+            local_only="it runs typed code on the server; a docs playground (IND-83) will run the visitor's code in their own browser instead",
             title="Try indah code",
             summary="Pick a starting point, edit it, press Run. Each run becomes its own app under `/play/`.",
             build=playground,

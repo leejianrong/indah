@@ -62,6 +62,31 @@ seed), and free of secrets. User-facing text uses hyphens, not em-dashes. A page
 the background, but anything that must run for the life of the Studio (a producer feeding a
 `Topic`) goes in the chapter's `lifespan`.
 
+## Keep a page Session-shaped (the docs run it in the browser)
+
+The docs site runs Studio pages in the reader's browser with Pyodide (ADR-0041, `<indah-live
+page="chapter/page">`). A page runs there only if it is a plain `Session`: its build function returns a
+component and nothing else is needed. To stay runnable, a page must not
+
+- fetch `api/*` files (the editor module, a module component's JavaScript, favicons, downloads),
+- read request headers or the Studio's own URL paths (`ctx.conn`, `ctx.path` under `c/<chapter>/`),
+- use `ctx.app` (`Topic`, `ctx.tail`), or
+- take a multipart upload.
+
+If a page genuinely needs one of those, mark it with a reason and move on:
+
+```python
+Page(slug="my-feature", ..., local_only="it is served from api/my-file, which the browser has no route for")
+```
+
+A `local_only` page is still shown in the docs (source and screenshot), without a Run it button, and the
+reason is printed beside it. Whole apps (`AppEntry`) are local only by default. A runnable page must pass
+its own `check(pw)` inside Pyodide in CI (IND-185), so a page that breaks the rule fails there.
+
+`uv run python scripts/export_studio_pages.py build/pages.json` exports every page as data for the docs
+build, and `scripts/export_studio_pages.py --check` (also `tests/unit/test_docs_embeds.py`) fails when a
+`<indah-live page="...">` in `website/docs` names a page that does not exist.
+
 For a whole app (not a snippet), add an `AppEntry` to the `apps` chapter.
 
 To vet every page at a glance, turn the screenshots into one sheet per chapter:
