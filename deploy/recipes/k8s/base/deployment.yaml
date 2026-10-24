@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: indah-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: indah-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0         # start the new pod before the old one drains
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: indah-app
+    spec:
+      # preStop (5 s) + INDAH_DRAIN_SECONDS (10 s) + slack.
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: indah-app
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: indah-config
+            - secretRef:
+                name: indah-secrets   # optional: INDAH_SECRET, INDAH_DOCTOR_TOKEN, ...
+                optional: true
+          env:
+            - name: INDAH_NODE            # the pod name is the node id in X-Indah-Node
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          readinessProbe:               # 503 while draining: the pod leaves the Service
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 5
+            failureThreshold: 1
+          livenessProbe:                # 200 while the process runs
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }   # let the ingress stop sending new tabs first
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }

@@ -23,6 +23,8 @@ nav = [
     { "Build a chatbot" = "chatbot.md" },
     { "Build a dashboard" = "dashboards.md" },
     { "Host an app for real users" = "hosting.md" },
+    { "Run on Fly" = "deploy-fly.md" },
+    { "Run on Kubernetes" = "deploy-k8s.md" },
   ] },
   { "Reference" = [
     { "Components" = "components.md" },

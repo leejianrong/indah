@@ -1,0 +1,22 @@
+# k3s ships Traefik, so this is the overlay for a k3s cluster. The cookie comes from annotations on
+# the Service (Traefik reads them when the Service is an Ingress backend). Verified on k3s v1.35
+# (Traefik v3.x) in k3d: see "Run on Kubernetes" in the docs.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: indah          # the base sets it too, but not for resources added here
+resources:
+  - ../../base
+  - ingress.yaml
+patches:
+  - target: { kind: Service, name: indah-app }
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          traefik.ingress.kubernetes.io/service.sticky.cookie: "true"
+          traefik.ingress.kubernetes.io/service.sticky.cookie.name: "indah-affinity"
+          traefik.ingress.kubernetes.io/service.sticky.cookie.httponly: "true"
+          traefik.ingress.kubernetes.io/service.sticky.cookie.samesite: "lax"
+          traefik.ingress.kubernetes.io/service.sticky.cookie.maxage: "86400"
+          # Over HTTPS also add:
+          # traefik.ingress.kubernetes.io/service.sticky.cookie.secure: "true"

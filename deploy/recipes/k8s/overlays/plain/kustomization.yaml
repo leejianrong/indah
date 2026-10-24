@@ -1,0 +1,8 @@
+# Any ingress, no affinity: run ONE replica. Two replicas without affinity send some clicks to a pod
+# that does not know the tab (HTTP 409 since the loud-failure change, and the tab reconnects).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: indah          # the base sets it too, but not for resources added here
+resources:
+  - ../../base
+  - ingress.yaml

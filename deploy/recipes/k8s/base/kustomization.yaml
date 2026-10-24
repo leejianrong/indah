@@ -1,0 +1,19 @@
+# indah on Kubernetes: a Deployment, a Service, a ConfigMap and a PodDisruptionBudget.
+# Add one overlay for your ingress: overlays/traefik (k3s's default), overlays/ingress-nginx, or
+# overlays/plain (no affinity: one replica).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: indah
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml
+images:
+  - name: indah-app
+    newName: indah-app          # your registry/image
+    newTag: latest
+replicas:
+  - name: indah-app
+    count: 1                    # more than one needs affinity (the traefik and ingress-nginx overlays)

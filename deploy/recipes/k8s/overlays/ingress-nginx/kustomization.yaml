@@ -1,0 +1,9 @@
+# ingress-nginx: cookie affinity from annotations on the Ingress. `persistent` keeps a tab on its
+# pod even when you scale; indah's session state lives in that one pod, so `balanced` (which moves
+# some sessions when pods are added) would drop tabs.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: indah          # the base sets it too, but not for resources added here
+resources:
+  - ../../base
+  - ingress.yaml

@@ -1,13 +1,17 @@
 """Do a tab's stream and its events reach the same machine? (IND-171)
 
     uv run python deploy/probe/sticky_check.py https://indah-probe.fly.dev \\
-        [--events 20] [--new-conn] [--header "Name: value"]
+        [--events 20] [--new-conn] [--header "Name: value"] \\
+        [--cookies] [--machine-header x-indah-node]
 
 Opens the SSE stream for one session id, finds the "Send an event" button in the first snapshot,
 posts N events with that session id, and prints which machine answered each POST
-(``X-Probe-Machine``), the HTTP status, and how many of the resulting patches actually arrived on
-the tab's stream. With working stickiness every POST is answered by the stream's machine and every
-event produces a patch. Standard library and httpx only; the probe never stores anything.
+(``X-Probe-Machine`` by default; ``--machine-header`` names another, such as ``x-indah-node``),
+the HTTP status, and how many of the resulting patches actually arrived on the tab's stream.
+With working stickiness every POST is answered by the stream's machine and every event produces
+a patch. ``--cookies`` makes the check behave like a browser: it loads the page first and sends
+the cookies it got (an ingress affinity cookie) on the stream and on every POST. Standard
+library and httpx only; the probe never stores anything.
 """
 
 from __future__ import annotations
@@ -39,18 +43,34 @@ def main() -> None:
     ap.add_argument(
         "--header", action="append", default=[], help='extra request header "Name: value"'
     )
+    ap.add_argument(
+        "--machine-header",
+        default="x-probe-machine",
+        help="response header that names the machine or pod that answered",
+    )
+    ap.add_argument(
+        "--cookies",
+        action="store_true",
+        help="act like a browser: GET / first, then send its cookies on the stream and every POST",
+    )
     args = ap.parse_args()
     base = args.base.rstrip("/")
     extra = dict(h.split(": ", 1) for h in args.header)
     sid = uuid.uuid4().hex
     state: dict = {"machine": None, "button": None, "patches": 0, "inits": 0, "status": None}
     ready = threading.Event()
+    jar = httpx.Cookies()
+    if args.cookies:
+        with httpx.Client(timeout=20, headers=extra, cookies=jar) as first:
+            first.get(f"{base}/")
+            jar.update(first.cookies)
+        print(f"cookies from the page load: {sorted(jar.keys()) or 'none'}")
 
     def reader() -> None:
-        with httpx.Client(timeout=None, headers=extra) as c:
+        with httpx.Client(timeout=None, headers=extra, cookies=jar) as c:
             with c.stream("GET", f"{base}/api/stream", params={"sid": sid}) as r:
                 state["status"] = r.status_code
-                state["machine"] = r.headers.get("x-probe-machine")
+                state["machine"] = r.headers.get(args.machine_header)
                 for line in r.iter_lines():
                     if not line.startswith("data: "):
                         continue
@@ -69,11 +89,11 @@ def main() -> None:
     body = {"sid": sid, "component": state["button"], "event": "click", "payload": {}}
     answered: dict[str, int] = {}
     statuses: dict[int, int] = {}
-    client = None if args.new_conn else httpx.Client(timeout=20, headers=extra)
+    client = None if args.new_conn else httpx.Client(timeout=20, headers=extra, cookies=jar)
     for _ in range(args.events):
-        c = client or httpx.Client(timeout=20, headers=extra)
+        c = client or httpx.Client(timeout=20, headers=extra, cookies=jar)
         r = c.post(f"{base}/api/event", json=body)
-        m = r.headers.get("x-probe-machine", "?")
+        m = r.headers.get(args.machine_header, "?")
         answered[m] = answered.get(m, 0) + 1
         statuses[r.status_code] = statuses.get(r.status_code, 0) + 1
         if client is None:
