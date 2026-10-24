@@ -97,6 +97,16 @@ jobs:
         run: uv build
       - name: Verify metadata
         run: uvx twine check dist/*
+      # The size budget of ADR-0042: fails when the wheel, the shell, the editor, the direct
+      # dependencies or the base install go over their limit in docs/size-budget.json. To raise a
+      # limit, edit that file in the pull request that needs the room.
+      - name: Check the size budget
+        run: |
+          uv venv -q .size-venv
+          uv pip install -q --python .size-venv dist/*.whl
+          n=$(uv pip list --python .size-venv --format json | python3 -c "import json,sys; print(len(json.load(sys.stdin)) - 1)")
+          python3 scripts/size_report.py --budget docs/size-budget.json --distributions "$n" --summary | tee size.txt
+          { echo "### Size budget"; sed -n '/^| Metric/,$p' size.txt; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: dist
