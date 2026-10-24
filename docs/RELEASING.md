@@ -27,6 +27,13 @@ when the wheel, the shell (raw or gzip), `editor.js`, the direct dependencies or
 third-party distributions in a clean base install go over their limit. The job summary shows every
 number with the room left. Run it locally with `make size`.
 
+Today's numbers and limits (2026-10-24, after the lazy Map and the minified editor; each limit is about
+15 percent above the number): wheel 545,529 of 630,000 bytes, sdist 1,522,213 of 1,740,000, shell raw
+429,497 of 495,000, shell gzip 200,210 and served gzip 200,051 of 231,000, `editor.js` 409,775 raw of 472,000
+and 134,243 gzip of 155,000, `map.js` 150,690 raw of 174,000 and 43,487 gzip of 50,000, Python source 467,995
+of 540,000, 4 direct dependencies of 5 and 12 base distributions of 14. `docs/size-budget.json` is the source
+of truth; this paragraph is only a snapshot.
+
 A limit is a ceiling, not a target. A pull request that really needs more room raises the limit in
 `docs/size-budget.json` in the same diff, and says why in its description and the CHANGELOG, so a
 reviewer sees the number move. Do not raise it to make a red build green without that sentence.

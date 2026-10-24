@@ -51,11 +51,20 @@ def _served_shell_bytes() -> int:
     return len(compress.gzip_joined(csp.add_nonce_parts(html), ' nonce="' + "x" * 24 + '"'))
 
 
+def _dist_size(directory: Path, pattern: str) -> int | None:
+    """Size of the newest file matching `pattern` in `directory` (a `uv build` output), or None."""
+    found = sorted(directory.glob(pattern))
+    return found[-1].stat().st_size if found else None
+
+
 def measure() -> dict[str, int]:
     out: dict[str, int] = {}
-    wheels = sorted((ROOT / "dist").glob("indah-*.whl"))
-    if wheels:
-        out["wheel_bytes"] = wheels[-1].stat().st_size
+    wheel = _dist_size(ROOT / "dist", "indah-*.whl")
+    if wheel is not None:
+        out["wheel_bytes"] = wheel
+    sdist = _dist_size(ROOT / "dist", "indah-*.tar.gz")
+    if sdist is not None:
+        out["sdist_bytes"] = sdist
     shell, editor = STATIC / "index.html", STATIC / "editor.js"
     out["shell_raw_bytes"] = shell.stat().st_size
     out["shell_gzip_bytes"] = _gzip_size(shell)

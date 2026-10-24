@@ -20,6 +20,7 @@ def test_the_committed_budget_names_only_real_metrics():
     limits = sr.load_limits(ROOT / "docs" / "size-budget.json")
     numbers = sr.measure()
     numbers.setdefault("wheel_bytes", 0)  # only exists after `uv build`
+    numbers.setdefault("sdist_bytes", 0)  # likewise
     numbers["base_install_distributions"] = 0  # measured in CI, from the installed wheel
     unknown = set(limits) - set(numbers)
     assert not unknown, f"size-budget.json budgets metrics that are not measured: {unknown}"
@@ -76,3 +77,29 @@ def test_main_exits_zero_within_budget(tmp_path, monkeypatch):
     budget.write_text(json.dumps({"shell_gzip_bytes": 10_000_000}))
     monkeypatch.setattr("sys.argv", ["size_report.py", "--budget", str(budget)])
     assert sr.main() == 0
+
+
+def test_dist_size_takes_the_newest_file_and_is_none_without_one(tmp_path):
+    assert sr._dist_size(tmp_path, "indah-*.tar.gz") is None
+    (tmp_path / "indah-0.6.0.tar.gz").write_bytes(b"x" * 10)
+    (tmp_path / "indah-0.7.0.tar.gz").write_bytes(b"x" * 25)
+    assert sr._dist_size(tmp_path, "indah-*.tar.gz") == 25
+
+
+def test_the_committed_budget_covers_every_measured_size():
+    """After IND-215 each size the report measures has a limit, so none can drift unwatched."""
+    limits = sr.load_limits(ROOT / "docs" / "size-budget.json")
+    measured = (
+        "wheel_bytes",
+        "sdist_bytes",
+        "shell_raw_bytes",
+        "shell_gzip_bytes",
+        "shell_served_gzip_bytes",
+        "editor_raw_bytes",
+        "editor_gzip_bytes",
+        "map_raw_bytes",
+        "map_gzip_bytes",
+        "python_source_bytes",
+    )
+    for metric in measured:
+        assert metric in limits, f"{metric} has no limit in size-budget.json"
