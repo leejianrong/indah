@@ -208,7 +208,64 @@ presses Run it (a test reads the network log); the 13 server-shaped pages stay "
 
 Owner decides: nothing new; the direction is set. Review the docs pages for tone before release.
 
-## 0.9.0 (provisional): live media and annotation, 22 points
+## 0.9.0 (provisional): run it for real on Fly and k8s, 23 points
+
+Theme: a deployer on Fly or on their own k8s gets safe defaults, clear failures, drains and recipes. Owner
+priority (2026-10-24): multi-replica support sooner rather than later; this release is the groundwork and
+the ADR, 0.10.0 builds it. Background: `docs/spikes/proxy-and-sticky.md`, the 2026-10-24 explainer.
+
+| Card | Pts |
+|------|-----|
+| IND-199 Events for an unknown session fail loudly, and the tab recovers | 2 |
+| IND-198 Fly client address: the right trusted_proxies made easy (builds on IND-204) | 2 |
+| IND-200 Startup warning: forwarded headers seen but trusted_proxies unset | 1 |
+| IND-201 Readiness endpoint and graceful drain on SIGTERM | 3 |
+| IND-202 Config from environment (INDAH_SECRET, INDAH_TRUSTED_PROXIES, ...) | 2 |
+| IND-203 Opt-in X-Indah-Node header and ctx.conn.node | 1 |
+| IND-204 trusted_proxies presets: fly, cloudflare, k8s (explicit lists, never auto) | 2 |
+| IND-205 Deploy doctor page: the probe, built in | 3 |
+| IND-206 Deploy recipes: Fly and k8s (cookie affinity), manifests | 3 |
+| IND-207 ADR: multi-replica indah (owner registry, event forwarding, restorable sessions, backends) | 3 |
+| IND-189 Compress the shell and editor.js (in progress) | 2 |
+| IND-186 Measure Leaflet and uPlot, lazy Map if it pays (in progress) | 3 |
+
+Order: IND-199 and IND-200 first (cheap, visible), then IND-201, 202, 203, 204, then IND-205, then IND-207
+(the ADR gates 0.10.0) and IND-206 once the owner has run the k3s probe (PAN-130). IND-197 (shell sends a
+Fly instance header) is deprioritised: cookie affinity covers k8s and the backplane in 0.10.0 makes it
+unnecessary.
+
+Risks: readiness and drain add a new additive message type; presets must be explicit lists (never auto, never
+`*`); the Cloudflare list needs a freshness check; recipes are only as verified as the cluster they ran on.
+
+Owner decides or does by hand: the Cloudflare dashboard steps for IND-170 (`deploy/probe/README.md`); accept
+the multi-replica ADR (IND-207) before 0.10.0 starts; the `pypi` approval.
+
+## 0.10.0 (provisional): multi-replica, 22 points
+
+Theme: any replica can take a tab's event, and a restart or rollout does not lose its small state. Needs the
+IND-207 ADR accepted. Redis is an optional backend the user provides (an extra, `indah[redis]`); indah never
+runs or bundles it, and the in-memory defaults keep working with no extra service.
+
+| Card | Pts |
+|------|-----|
+| IND-208 Restorable sessions: ctx.persist and a StateStore (memory, SQLite) | 5 |
+| IND-209 Backplane core: owner registry and cross-replica event forwarding | 3 |
+| IND-210 Redis backplane and state store adapter (indah[redis]) | 3 |
+| IND-211 Multi-replica e2e: three replicas, no affinity, rolling restart | 3 |
+| IND-212 /metrics endpoint | 2 |
+| IND-213 Shared rate limits across replicas | 3 |
+| IND-187..190 follow-ups still open after 0.9.0 | - |
+| Gallery: IND-196 stale Colab notebooks (2), IND-191 catalog file (3) | 5 |
+
+Order: IND-208 and IND-209 in parallel (separate files), then IND-210, then IND-211, then IND-213, IND-212.
+
+Risks: forwarding a misrouted event adds a hop only on a misroute, so the hot path stays local; the bus needs
+authentication, size caps and tenant isolation (threat model in the ADR); a restored session must never
+include ephemeral props (ADR-0036); the owner pod dying mid-session still loses live state not persisted.
+
+Owner decides: whether Redis stays the first adapter or another backend (Postgres, NATS) comes first.
+
+## 0.11.0 (provisional): live media and annotation, 22 points
 
 Theme: the deferred live-media boundary (ADR-0017), only if the owner wants it.
 
@@ -240,7 +297,9 @@ the hosted layer has run for real users. Exit criteria:
    an external session store (today: in memory, sticky sessions).
 4. The Studio coverage test, docs site and demos are green on the release candidate (`1.0.0rc1`, Colab and
    RunPod smoke test as in `docs/RELEASING.md`).
-Earliest sensible date: after 0.8.0.
+5. Multi-replica verified on the owner's k3s and on Fly (IND-211 plus a real-cluster run), or an explicit
+   statement that 1.0 is single-process with the reasons.
+Earliest sensible date: after 0.10.0.
 
 ## Working rules
 
