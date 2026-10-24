@@ -790,11 +790,13 @@ def _table_rows(year: str) -> list[dict]:
     ]
 
 
-# The long first column is clipped (full name on hover) so the second column stays on a phone;
-# a plain table that is wider than the screen simply scrolls sideways.
+# The long first column is clipped (full name on hover) so the second column stays on a phone:
+# 18ch shows all but the longest hyphenated names, and with the short "Electors" header both
+# columns fit in a 390px viewport with no sideways scroll. (A plain table that is wider than the
+# screen simply scrolls sideways.)
 _TABLE_COLUMNS = [
-    indah.Col("name", "Division", truncate=True, max_width="13ch"),
-    indah.Col("electors", "Registered electors", kind="number"),
+    indah.Col("name", "Division", truncate=True, max_width="18ch"),
+    indah.Col("electors", "Electors", kind="number"),
 ]
 
 
