@@ -103,10 +103,17 @@ a half-typed note. Keep durable data in your own database. A restart rebuilds ea
 the tab re-initialises cleanly. There is no external session store, so **run one process** unless
 your gateway can send a tab's requests to the process that holds its session.
 
-A request for a session the process does not hold builds a new one there and answers `200`, so with
-two processes and no stickiness a button works only when it happens to reach the right one, and the
-rest do nothing, with no error. indah finds a session by the `sid` in the stream URL and in the JSON
-body of each event, not by a cookie or a header, so gateway features that pin by cookie or header
+An event for a session the process does not hold is refused: `409` with
+`{"ok": false, "error": "unknown_session"}`, and nothing is created, because the stream is what makes
+a session. The shell then opens its stream again for a fresh page and shows "Reconnected. Your last
+action was not applied, please try it again." (once, and at most one recovery every few seconds).
+Earlier versions built a new, empty session for that request and answered `200`, so a click
+simply did nothing. Restarts and evictions now look the same way to the user: one toast and a fresh page.
+
+That makes a misrouted click visible, not fixed. With two processes and no stickiness, a tab whose
+clicks land on the wrong process keeps reconnecting and losing its state, so **run one process**
+unless your gateway can pin a tab. indah finds a session by the `sid` in the stream URL and in the
+JSON body of each event, not by a cookie or a header, so gateway features that pin by cookie or header
 (Fly's replay cache, Cloudflare's session-affinity cookie) have nothing to key on today. Measured on
 Fly (IND-171): a client that sends the request header `fly-force-instance-id: <machine id>` is
 pinned to that machine. The browser shell does not send it yet.

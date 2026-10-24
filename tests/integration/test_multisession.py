@@ -7,6 +7,8 @@ The open SSE stream itself is proven in the browser e2e (KAN-1418); ASGITranspor
 buffers streaming responses, so here we inspect each session's hub directly.
 """
 
+import asyncio
+
 import httpx
 import pytest
 
@@ -94,10 +96,10 @@ async def test_a_factory_app_has_no_single_shared_session():
 
 
 @pytest.mark.integration
-async def test_an_event_creates_the_senders_session_on_first_sight():
+async def test_the_stream_creates_the_senders_session_on_first_sight_and_an_event_does_not():
     app = _counter_app()
     async with _client(app) as client:
-        await _click(client, "fresh")
+        await _click(client, "fresh")  # the fixture connects the tab first, like the shell
     assert app.state.store.get("fresh") is not None
     assert app.state.store.get("never-seen") is None
 
@@ -126,8 +128,8 @@ def test_session_and_factory_are_mutually_exclusive():
 
 @pytest.mark.integration
 async def test_factory_sees_the_first_request_connection_info():
-    """IND-87: the session is built on first sight of a sid, and its Context carries
-    that request's headers and client address."""
+    """IND-87: the session is built when the tab opens its stream (an event no longer builds one,
+    IND-199), and its Context carries that request's headers and client address."""
     from indah.context import Context
 
     seen: list[Context] = []
@@ -138,11 +140,12 @@ async def test_factory_sees_the_first_request_connection_info():
 
     app = create_app(session_factory=factory)
     async with _client(app) as client:
-        await client.post(
-            "/api/event",
-            headers={"x-probe": "yes"},
-            json={"sid": "tab-z", "component": "n1", "event": "click"},
-        )
+        try:
+            await asyncio.wait_for(
+                client.get("/api/stream", params={"sid": "tab-z"}, headers={"x-probe": "yes"}), 0.3
+            )
+        except (asyncio.TimeoutError, TimeoutError):
+            pass  # the stream is open, so the session was built
     assert seen[0].sid == "tab-z"
     assert seen[0].conn.headers["x-probe"] == "yes"
-    assert seen[0].conn.path == "/api/event"
+    assert seen[0].conn.path == "/api/stream"

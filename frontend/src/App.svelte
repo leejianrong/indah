@@ -7,6 +7,7 @@
     pushPath,
     appPath,
     postEvent,
+    setSessionLostHandler,
     PROTOCOL_VERSION,
   } from "./api.js";
   import {
@@ -225,9 +226,28 @@
         );
     }
     start();
+
+    // The server no longer holds this tab's session (it restarted, evicted it, or another process
+    // has it): an event came back 409 unknown_session (IND-199). Open the stream again for a fresh
+    // init, and say so once, instead of letting the click vanish. At most one recovery every few
+    // seconds, so two processes without affinity cannot make this a loop.
+    let lastRecover = 0;
+    let lastToast = 0;
+    setSessionLostHandler(() => {
+      const now = Date.now();
+      if (closed || signedOut || now - lastRecover < 3000) return;
+      lastRecover = now;
+      if (now - lastToast > 15000) {
+        lastToast = now;
+        showToast("Reconnected. Your last action was not applied, please try it again.", "info", 6);
+      }
+      restarts = 0;
+      start();
+    });
     return () => {
       closed = true;
       clearTimeout(timer);
+      setSessionLostHandler(null);
       if (source) source.close();
     };
   });

@@ -1368,14 +1368,19 @@ def _denied(status: int, error: str) -> JSONResponse:
 
 
 async def _open_session(
-    request: Request, sid: str | None, app_path: str | None = None
+    request: Request, sid: str | None, app_path: str | None = None, *, create: bool = True
 ) -> tuple[SessionHandle | None, JSONResponse | None, Principal | None]:
     """The session this request is allowed to use, or the refusal to send (ADR-0033).
 
     Not secure: today's behaviour (an id-less request shares ``default``), plus the principal,
     when an authenticator is set, so the factory sees ``ctx.user``. Secure: no principal is 401,
     no session id is 401 (nothing falls back to a shared session), and a session owned by
-    another principal is 403. Nothing is created for a refused request."""
+    another principal is 403. Nothing is created for a refused request.
+
+    ``create=False`` is for events and uploads: the stream is what makes a session, so an id
+    this process does not hold is ``409 unknown_session`` and nothing is created (IND-199). The
+    check comes after the secure refusals, and a signed id is bound to its principal, so the
+    ``409`` tells a caller nothing about anyone else's sessions."""
     state = request.app.state
     store: SessionStore = state.store
     principal: Principal | None = await authenticate(request, state.auth)
@@ -1393,6 +1398,8 @@ async def _open_session(
         existing = store.get(sid)
         if existing is not None and existing.owner != principal.id:
             return None, _denied(403, "forbidden"), None
+    if not create and sid and store.get(sid) is None:
+        return None, JSONResponse({"ok": False, "error": "unknown_session"}, status_code=409), None
     if state.drain.draining and store.get(sid or DEFAULT_SESSION_ID) is None:
         return None, _draining(), None  # a drain takes no new sessions (IND-201)
     info = ConnectionInfo.from_request(request, app_path, principal)
@@ -1578,7 +1585,7 @@ async def _event(request: Request) -> JSONResponse:
     if not event.sid and not request.app.state.secure:
         if not isinstance(request.app.state.store, SharedSessionStore):
             return _denied(400, "session id required")
-    handle, denied, principal = await _open_session(request, event.sid)
+    handle, denied, principal = await _open_session(request, event.sid, create=False)
     if handle is None:
         return denied
     hub = handle.hub
@@ -1638,7 +1645,7 @@ async def _upload(request: Request) -> JSONResponse:
     except MultiPartException:
         return JSONResponse({"ok": False, "error": "file too large"}, status_code=413)
 
-    handle, denied, principal = await _open_session(request, sid)
+    handle, denied, principal = await _open_session(request, sid, create=False)
     if handle is None:
         return denied
     with authz_scope(principal, request.app.state.policy):

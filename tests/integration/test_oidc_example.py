@@ -44,6 +44,12 @@ def stack():
         idp_handle.stop()
 
 
+def _connect(client, base, token):
+    """What the shell does before it clicks: open the stream (the session is built), then let go."""
+    with client.stream("GET", f"{base}/ui/api/stream", params={"sid": token}, timeout=5):
+        pass
+
+
 def _session(client: httpx.Client, base: str):
     return client.post(f"{base}/ui/api/session", json={})
 
@@ -64,6 +70,7 @@ def test_login_through_the_provider_gives_indah_a_principal_with_roles(stack):
         token = reply.json()["token"]
         # the factory ran for dana with her roles: an admin-only line is in her tree
         assert app.state.dashboard.state.store.get(token.split(".")[0]) is None  # lazily made
+        _connect(client, base, token)
         client.post(f"{base}/ui/api/event", json={"sid": token, "component": "n0", "event": "x"})
         tree = str(app.state.dashboard.state.store.get(token.split(".")[0]).session.snapshot())
         assert "Dana Ho" in tree and "Only admins see this line." in tree
@@ -76,6 +83,7 @@ def test_a_login_without_the_admin_role_does_not_get_the_admin_subtree(stack):
     with httpx.Client(follow_redirects=True) as client:
         client.get(f"{base}/ui/")
         token = _session(client, base).json()["token"]
+        _connect(client, base, token)
         client.post(f"{base}/ui/api/event", json={"sid": token, "component": "n0", "event": "x"})
     tree = str(app.state.dashboard.state.store.get(token.split(".")[0]).session.snapshot())
     assert "Only admins see this line." not in tree and "viewer" in tree
@@ -99,6 +107,7 @@ def test_logout_ends_the_login_and_the_indah_sessions(stack):
     with httpx.Client(follow_redirects=True) as client:
         client.get(f"{base}/ui/")
         token = _session(client, base).json()["token"]
+        _connect(client, base, token)
         client.post(f"{base}/ui/api/event", json={"sid": token, "component": "n0", "event": "x"})
         assert len(app.state.dashboard.state.store) == 1
         out = client.get(f"{base}/logout")  # then it redirects to /login and logs in again

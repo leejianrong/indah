@@ -125,12 +125,35 @@ export function pushPath(path, replace = false) {
   else history.pushState({}, "", href);
 }
 
+// The server answers 409 `unknown_session` when this process does not hold the tab's session:
+// it restarted, evicted it, or (with several processes and no affinity) another one has it
+// (IND-199). The app registers one handler that re-opens the stream and tells the user.
+let onSessionLost = null;
+
+export function setSessionLostHandler(fn) {
+  onSessionLost = fn;
+}
+
+async function lostSession(resp) {
+  if (resp.status !== 409) return false;
+  try {
+    const body = await resp.clone().json();
+    if (!body || body.error !== "unknown_session") return false;
+  } catch (e) {
+    return false;
+  }
+  if (onSessionLost) onSessionLost();
+  return true;
+}
+
 export function postEvent(id, event, payload) {
   fetch(apiUrl("api/event"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sid: sessionId(), component: id, event, payload: payload || {} }),
-  }).catch(() => {});
+  })
+    .then(lostSession)
+    .catch(() => {});
 }
 
 // Upload one or more files as multipart/form-data (ADR-0017), on its own route so
@@ -142,6 +165,9 @@ export function postUpload(id, files) {
   form.append("component", id);
   for (const file of files) form.append("file", file);
   return fetch(apiUrl("api/upload"), { method: "POST", body: form })
-    .then((resp) => resp.ok)
+    .then(async (resp) => {
+      if (!resp.ok) await lostSession(resp);
+      return resp.ok;
+    })
     .catch(() => false);
 }

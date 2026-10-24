@@ -124,6 +124,7 @@ async def test_unknown_component_is_rejected_400():
     assert resp.status_code == 400
 
 
+@pytest.mark.raw_events  # asserts what a refused request creates: no tab connects first
 @pytest.mark.integration
 async def test_an_oversize_file_is_rejected_413():
     app = _upload_app(max_mb=0.001)  # ~1 KB cap

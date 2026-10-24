@@ -27,6 +27,7 @@ _GO = "n1"  # ids are assigned in tree order: the Column is n0, its button n1
 BODY = f'{{"sid": "tab-1", "component": "{_GO}", "event": "click"}}'
 
 
+@pytest.mark.raw_events  # asserts what a refused request creates: no tab connects first
 @pytest.mark.integration
 @pytest.mark.parametrize(
     "ctype", ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data", None]

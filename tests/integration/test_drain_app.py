@@ -92,9 +92,13 @@ def test_events_for_an_existing_session_still_work_but_a_new_session_is_refused(
         known = httpx.post(handle.url + "/api/event", json=body)
         assert known.status_code != 503  # the session exists: the tab may finish what it did
 
+        # An event never creates a session (IND-199): for an id this process does not hold it is
+        # 409, and the shell answers by opening a stream, which a draining process refuses.
         new = httpx.post(handle.url + "/api/event", json={**body, "sid": "never-seen"})
-        assert new.status_code == 503
-        assert "retry-after" in new.headers
+        assert new.status_code == 409
+        with httpx.stream("GET", handle.url + "/api/stream", params={"sid": "never-seen"}) as r:
+            assert r.status_code == 503
+            assert "retry-after" in r.headers
     finally:
         tab.close()
         handle.stop()
