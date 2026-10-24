@@ -40,6 +40,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   `tests/unit/test_docs_embeds.py`, or `scripts/export_studio_pages.py --unembedded`) names any runnable
   Studio page with a docs target that no docs page embeds. No library change.
 
+- Hosting guide: what Fly sends to an app (measured, IND-170) and the `trusted_proxies` value that
+  works there (the private range plus the app's own public IPs; the private range alone resolves every
+  visitor to the app's address), and what sticky sessions need (IND-171: a stray event to the wrong
+  process builds a new session and is silently lost; indah finds a session by `sid`, not a cookie or
+  header, so gateway cookie affinity has nothing to key on). Docs only.
+
 ### Fixed
 
 - Docs: the summary line of a live example now shows `code` spans as code instead of with literal

@@ -100,8 +100,16 @@ your login).
 
 Session state lives in memory in the process and is meant to be disposable: filters, selection,
 a half-typed note. Keep durable data in your own database. A restart rebuilds each session and
-the tab re-initialises cleanly. With more than one process, use sticky sessions at your gateway so
-a tab's requests reach the process that holds its session. There is no external session store.
+the tab re-initialises cleanly. There is no external session store, so **run one process** unless
+your gateway can send a tab's requests to the process that holds its session.
+
+A request for a session the process does not hold builds a new one there and answers `200`, so with
+two processes and no stickiness a button works only when it happens to reach the right one, and the
+rest do nothing, with no error. indah finds a session by the `sid` in the stream URL and in the JSON
+body of each event, not by a cookie or a header, so gateway features that pin by cookie or header
+(Fly's replay cache, Cloudflare's session-affinity cookie) have nothing to key on today. Measured on
+Fly (IND-171): a client that sends the request header `fly-force-instance-id: <machine id>` is
+pinned to that machine. The browser shell does not send it yet.
 
 ## Cross-site requests
 
@@ -136,6 +144,20 @@ indah.create_app(..., trusted_proxies=["10.0.0.0/8", "203.0.113.7"])
 
 If you forget `trusted_proxies`, every client shares the gateway's address: one rate-limit bucket
 and one stream cap for everybody.
+
+#### On Fly
+
+Measured on a Fly app (IND-170), the peer is a private address in `172.16.0.0/12`, the real client is
+in `Fly-Client-IP`, and Fly sets `X-Forwarded-For` to `<client>, <your app's public IP>`. So trusting
+only the private range resolves every visitor to your app's own address. List both:
+
+```python
+indah.create_app(..., trusted_proxies=["172.16.0.0/12", "66.241.124.81", "2a09:8280:1::1c9:9684:0"])
+```
+
+Use your own addresses from `fly ips list`. This was verified for IPv4 clients; an IPv6 client was not
+tried. It was measured on the direct `*.fly.dev` path only: the path through a Cloudflare Worker is
+not measured yet. Start uvicorn with `--no-proxy-headers` if you want only indah's rules in play.
 
 ### An audit trail
 
@@ -313,7 +335,7 @@ a bad signature, audience, nonce and expiry.
 ## Checklist
 
 - `secure=True`, a `secret` from the environment, and `session_factory` (not `session`).
-- `trusted_proxies` set to your gateway; sticky sessions if you run more than one process.
+- `trusted_proxies` set to your gateway (checked with a probe, not guessed); one process, or a gateway that pins a tab to its process.
 - Restricted components built with `ctx.only`; mutating handlers wrapped in `guard`.
 - `limits=Limits.public()` (or your own), `security_headers=True`, `csp="strict"`.
 - An `audit=` hook that writes somewhere you keep.

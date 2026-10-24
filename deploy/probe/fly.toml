@@ -1,0 +1,18 @@
+# A throwaway app for IND-170 and IND-171. It is not the gallery: nothing here touches
+# indah-demos. Delete it with teardown.sh when the checks are done.
+app = "indah-probe"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
