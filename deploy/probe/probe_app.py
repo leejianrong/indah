@@ -8,7 +8,8 @@ It answers two questions on a real network path:
 * **Which machine answered?** Every response carries ``X-Probe-Machine``, and the page shows the
   machine that built the session, so a second machine answering a request is visible.
 
-``PROBE_TRUSTED_PROXIES`` (comma-separated IPs or CIDRs, default none) is read at startup, so a
+``INDAH_TRUSTED_PROXIES`` (comma-separated IPs or CIDRs, default none; ``PROBE_TRUSTED_PROXIES`` is
+an alias) is read at startup, so a
 variant is a restart, not a rebuild. Start uvicorn with ``--no-proxy-headers`` so only indah's own
 rules are under test. Nothing here is a secret and nothing is stored.
 
@@ -54,7 +55,13 @@ ECHOED = (
     "user-agent",
 )
 
-TRUSTED = [e.strip() for e in os.environ.get("PROBE_TRUSTED_PROXIES", "").split(",") if e.strip()]
+# INDAH_TRUSTED_PROXIES is the setting indah itself reads (IND-202); PROBE_TRUSTED_PROXIES stays as
+# an alias so the deploy scripts keep working. The probe passes the list explicitly because it
+# shows it on the page.
+_RAW_TRUSTED = os.environ.get("INDAH_TRUSTED_PROXIES") or os.environ.get(
+    "PROBE_TRUSTED_PROXIES", ""
+)
+TRUSTED = [e.strip() for e in _RAW_TRUSTED.split(",") if e.strip()]
 MACHINE = os.environ.get("FLY_MACHINE_ID", "local")
 REGION = os.environ.get("FLY_REGION", "")
 BOOTED = time.time()

@@ -13,6 +13,17 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- Configuration from the environment (IND-202). `create_app` reads `INDAH_SECRET`/`INDAH_SECRETS`,
+  `INDAH_TRUSTED_PROXIES`, `INDAH_ALLOWED_ORIGINS`, `INDAH_CSP` (`strict` or `off`), `INDAH_LIMITS`
+  (`public` or `none`), `INDAH_DRAIN_SECONDS`, `INDAH_FACTORY_TIMEOUT`, `INDAH_COMPRESS` and
+  `INDAH_WARN_UNTRUSTED_FORWARDING` when the matching argument is not passed, so a ConfigMap, a
+  Kubernetes Secret or `fly secrets` can configure an app with no code change. An explicit argument always
+  wins (even an empty list or `None`), a blank variable counts as unset, a bad value stops the app at start
+  with a message that names the variable, `*` is refused for the proxy list, and secret values are never
+  logged (one INFO line names the variables used). `app.state.trusted_proxies`, `allowed_origins` and
+  `env_used` expose the result. With no variable set nothing changes, and `protocol_version` stays 1. The
+  table is in the hosting guide.
+
 - Readiness and a graceful drain for rollouts (IND-201). `GET /ready` answers `200` while the process
   takes new tabs and `503` once it drains (`GET /health` stays the liveness check). On SIGTERM, under
   `launch()` or `uvicorn app:app`, the process stops taking new streams and sessions (`503` with
