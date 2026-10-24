@@ -94,6 +94,7 @@ class ConnectionInfo:
     prefix: str = ""  # the public path prefix a trusted proxy forwarded (ADR-0034), else ""
     app_path: str = "/"  # the in-app page the tab was on when it connected (ADR-0029)
     user: Principal | None = None  # who the request authenticated as (ADR-0033)
+    node: str = ""  # which process built this session (IND-203); an opaque id, never an address
 
     @classmethod
     def from_request(
@@ -107,6 +108,7 @@ class ConnectionInfo:
             client=request.client.host if request.client else None,
             path=request.url.path,
             prefix=forwarded_prefix(request.scope),
+            node=str(getattr(request.app.state, "node", "")),
         )
 
 
