@@ -487,6 +487,7 @@ start indah logs once, at INFO, which variables it used (names only).
 | `INDAH_WARN_UNTRUSTED_FORWARDING` | `warn_untrusted_forwarding=` | `0` | on |
 | `INDAH_NODE_HEADER` | `node_header=` | `1` | off |
 | `INDAH_NODE` | names the node for `node_header` | `web-1` | `FLY_MACHINE_ID`, `HOSTNAME`, or a random id |
+| `INDAH_DOCTOR_TOKEN` | `doctor=` | 16+ random characters | off |
 
 Booleans take `1`/`0`, `true`/`false`, `yes`/`no` or `on`/`off`. The secret is only read for
 `secure=True`. `INDAH_CSP` takes `strict` or `off`; a custom policy string is `csp=` in code.
@@ -525,10 +526,49 @@ the id changes while one tab is open, the gateway is not pinning that tab to a p
 session limits above). `ctx.conn.node` and `app.state.node` hold the same id with the header on or off;
 the header is off by default because it tells a visitor which of your processes they reached.
 
+### The deploy doctor
+
+When something is wrong behind a gateway, the useful page shows what the gateway did to *one request*
+and what indah made of it. Turn it on with a token (16 characters or more) and open `/_indah/doctor`:
+
+```python
+indah.create_app(..., doctor="a-long-random-token")  # or set INDAH_DOCTOR_TOKEN
+indah.create_app(..., secure=True, policy=policy, doctor=True)  # a principal holding "doctor"
+```
+
+```bash
+curl -H "Authorization: Bearer $INDAH_DOCTOR_TOKEN" 'https://app.example.com/_indah/doctor?format=json'
+```
+
+It shows:
+
+- the **resolved client** next to the real **socket peer**, the scheme and the host, and the believed
+  forwarded prefix: the first thing to compare when every visitor looks like one address;
+- the forwarded headers that matter (`X-Forwarded-For`, `Fly-Client-IP`, `CF-Connecting-IP`, `Via` and a
+  few more), from a fixed list of names. It never shows cookies, `Authorization` or any other header;
+- `trusted_proxies` as indah parsed it (preset names next to the networks they expanded to), the node, the process age and the requests it has answered, the
+  Fly region and machine or the pod name when they are set, the open sessions and streams, and the drain
+  state;
+- the settings in force as names and yes/no (never a secret), and the `INDAH_*` variables that were used
+  (names only);
+- **findings** in plain language: forwarded headers with no `trusted_proxies`, a peer that is not trusted,
+  a resolved client that is itself a proxy, a gateway header that names a different visitor (the Fly
+  mistake: the fix is the app's public IPs from `fly ips list`), a drain in progress.
+
+Reload it a few times: if the node changes, more than one process answers.
+
+Who may open it: a request with the token (as `Authorization: Bearer <token>` or `?token=`), or with
+`doctor=True` a logged-in principal holding the `doctor` permission. Everyone else gets the same plain
+`404` a missing route gives, so the page does not advertise itself. A token in a URL ends up in access
+logs and browser history, so prefer the header for scripts and use a throwaway token for a browser. Ten
+wrong tries from one address lock it out for a minute. The page is never cached or indexed and sets its
+own strict Content-Security-Policy. It is off unless you ask, and you should keep it behind the token:
+it tells whoever opens it how your deployment is wired.
+
 ## Checklist
 
 - `secure=True`, a `secret` from the environment, and `session_factory` (not `session`).
-- `trusted_proxies` set to your gateway (checked with a probe, not guessed); one process, or a gateway that pins a tab to its process.
+- `trusted_proxies` set to your gateway (checked with the deploy doctor, not guessed); one process, or a gateway that pins a tab to its process.
 - Restricted components built with `ctx.only`; mutating handlers wrapped in `guard`.
 - `limits=Limits.public()` (or your own), `security_headers=True`, `csp="strict"`.
 - `/ready` as the readiness check, SIGTERM reaching indah (Fly: `kill_signal = "SIGTERM"`), and a grace period longer than `drain_seconds`.

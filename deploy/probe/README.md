@@ -6,7 +6,7 @@ gallery and nothing in it touches `indah-demos`. Results are in
 
 | File | What |
 |------|------|
-| `probe_app.py` | the app: `GET /` (a page) and `GET /whoami` (JSON); `INDAH_TRUSTED_PROXIES` sets `trusted_proxies` (`PROBE_TRUSTED_PROXIES` is kept as an alias) |
+| `probe_app.py` | the app: `GET /` (a page with a "Send an event" button) and `GET /whoami` (flat JSON), both built on indah's deploy doctor (`indah.doctor`, IND-205); `INDAH_TRUSTED_PROXIES` sets `trusted_proxies` (`PROBE_TRUSTED_PROXIES` is kept as an alias); set `INDAH_DOCTOR_TOKEN` to also get the full doctor page at `/_indah/doctor` |
 | `deploy.sh`, `set-trusted.sh`, `teardown.sh` | deploy a new app, change `trusted_proxies` without a rebuild, delete it |
 | `sticky_check.py` | does a tab's stream and its events reach one machine? |
 | `cloudflare-worker.js` | a pass-through Worker for the Cloudflare step below |
@@ -39,7 +39,7 @@ The Fly side is already deployed: `https://indah-probe.fly.dev/whoami` answers (
 7. **Afterwards, clean up:** delete the route, the Worker `indah-probe-proxy` and the `probe` DNS
    record in the dashboard, then run `deploy/probe/teardown.sh` (or tell the agent to).
 
-The probe page shows only these request headers: `fly-client-ip`, `x-forwarded-*`, `forwarded`,
+The probe's `/whoami` and the doctor show only these request headers: `fly-client-ip`, `x-forwarded-*`, `forwarded`,
 `via`, `cf-connecting-ip`, `cf-ray`, `cf-ipcountry`, `cf-visitor`, `true-client-ip`, `host` and
 `user-agent`. It never shows cookies or credentials. Anyone who knows the address can open it, and
 it shows them their own request.
@@ -49,4 +49,4 @@ it shows them their own request.
 - `uvicorn` runs with `--no-proxy-headers` so only indah's own rules are under test.
 - `deploy.sh` and `set-trusted.sh` use `fly secrets set` only as the quickest way to restart with
   an environment variable. The value is not a secret.
-- The image pins `indah==0.6.0`; the probe needs nothing newer.
+- `deploy.sh` builds a wheel of this checkout (needs `uv`) and the image installs it, because the doctor is newer than the last PyPI release. After the release that includes it you can pin the version instead.

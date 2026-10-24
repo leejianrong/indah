@@ -101,6 +101,9 @@ from .csp import (
     render_custom,
 )
 from .custom import custom, register_component, registered
+from .doctor import PATH as DOCTOR_PATH
+from .doctor import Counter, DoctorTap, make_gate
+from .doctor import handler as _doctor
 from .drain import Drain, chain_sigterm
 from .envconfig import UNSET, EnvConfig
 from .guard import OriginGuard, normalize_origins
@@ -568,6 +571,7 @@ def create_app(
     drain_seconds: float = UNSET,
     drain_on_sigterm: bool = True,
     node_header: bool = UNSET,
+    doctor: str | bool | None = UNSET,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -695,6 +699,14 @@ def create_app(
     address or an odd value becomes a short hash). ``ctx.conn.node`` and ``app.state.node`` hold it
     with the header on or off.
 
+    ``doctor`` (off by default) mounts the deploy doctor at ``GET /_indah/doctor`` (IND-205): the
+    resolved client next to the real socket peer, the forwarded headers (an allowlist of names),
+    the node, session and stream counts, the drain state, the settings in force and plain-language
+    warnings; ``?format=json`` for scripts. Pass a token string (16 characters or more, or set
+    ``INDAH_DOCTOR_TOKEN``) that a request sends as ``Authorization: Bearer <token>`` or
+    ``?token=``, or ``True`` to admit a logged-in principal holding the ``doctor`` permission
+    (needs ``secure=True`` or ``auth=``). Anyone else gets a plain ``404``. It never shows a secret.
+
     ``compress`` (on by default) gzips the shell, ``api/editor.js`` and module component files
     for a client that sends ``Accept-Encoding: gzip`` (ADR-0042, IND-189). The event stream and
     JSON routes are never compressed. Pass ``False`` behind a gateway that should do all of it.
@@ -729,6 +741,8 @@ def create_app(
     compress = env.boolean("INDAH_COMPRESS", compress, True)
     node_header = env.boolean("INDAH_NODE_HEADER", node_header, False)
     node = resolve_node()
+    doctor_source = "doctor=" if doctor is not UNSET else "INDAH_DOCTOR_TOKEN"
+    doctor = env.doctor(doctor)
     warn_untrusted_forwarding = env.boolean(
         "INDAH_WARN_UNTRUSTED_FORWARDING", warn_untrusted_forwarding, True
     )
@@ -797,7 +811,11 @@ def create_app(
     # Outermost first: resolve the client address, then headers, then the rate limit, then
     # (secure apps) the origin guard, so a flood is turned away before it is parsed.
     proxy_notice = ProxyNotice(enabled=warn_untrusted_forwarding)
+    doctor_gate = make_gate(doctor, auth=auth, secure=secure, source=doctor_source)
+    doctor_counter = Counter()
     middleware = []
+    if doctor_gate is not None:  # outermost of all: it must see the socket before any rewrite
+        middleware.append(Middleware(DoctorTap, counter=doctor_counter))
     if node_header:  # outermost: even a refused or drained request names its process
         middleware.append(Middleware(NodeHeaderMiddleware, node=node))
     middleware.append(
@@ -846,6 +864,7 @@ def create_app(
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
             *([Route("/api/brand/logo", _logo, methods=["GET"])] if logo is not None else []),
             *([Route("/api/brand/favicon/{name}", _favicon, methods=["GET"])] if favicons else []),
+            *([Route(DOCTOR_PATH, _doctor, methods=["GET"])] if doctor_gate is not None else []),
             *([Route("/{path:path}", _spa_index, methods=["GET"])] if spa else []),
         ],
     )
@@ -864,6 +883,10 @@ def create_app(
     app.state.csp = csp
     app.state.compress = compress
     app.state.node = node
+    app.state.doctor = doctor_gate
+    app.state.doctor_counter = doctor_counter
+    app.state.limits = limits
+    app.state.security_headers = bool(security_headers)
     app.state.node_header = node_header
     app.state.trusted_proxies = parse_trusted(trusted_proxies)
     app.state.trusted_proxies_presets = expanded.presets

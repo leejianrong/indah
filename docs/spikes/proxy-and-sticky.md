@@ -4,6 +4,7 @@
 - Method: a probe app that echoes what the request looked like and which machine answered
   (`X-Probe-Machine`). Client: this machine (Singapore, public address 122.11.212.50, found with
   `curl https://api.ipify.org`, a third-party request).
+- Update (IND-205): the probe now runs on indah's built-in deploy doctor (`indah.doctor`); its `/whoami` keeps the shape used below, so the numbers and commands here still hold.
 - **Half done.** The direct Fly path and all of IND-171 are measured here. The Cloudflare Worker hop
   of IND-170 needs the owner's dashboard steps in `deploy/probe/README.md`; it is not measured, and
   IND-170 stays open.

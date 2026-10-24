@@ -13,6 +13,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- The deploy doctor (IND-205): `create_app(doctor="a-long-token")` (or `INDAH_DOCTOR_TOKEN`) mounts
+  `GET /_indah/doctor`, a page and `?format=json`, showing what a gateway did to one request and what
+  indah made of it: the resolved client next to the real socket peer, the scheme, host and prefix, the
+  forwarded headers from a fixed allowlist of names (never cookies or credentials), `trusted_proxies`, the
+  node, the process age and request count, the Fly region and machine or pod name, open sessions and
+  streams, the drain state, the settings in force (never a secret) and plain-language findings (the default
+  Fly mistake among them). `doctor=True` admits a logged-in principal holding the `doctor` permission
+  instead. Anyone else gets a plain `404`; ten wrong tokens lock an address out for a minute; the page is
+  never cached, sets its own strict Content-Security-Policy and never contains the token. Off by default;
+  no wire change and `protocol_version` stays 1. `deploy/probe` now runs on it.
 - `create_app(node_header=True)` (or `INDAH_NODE_HEADER=1`) adds `X-Indah-Node: <id>` to every response,
   the event stream's included, so you can see which replica answered (IND-203). The id is `INDAH_NODE`, else
   `FLY_MACHINE_ID`, else `HOSTNAME`, else a random per-process id, and it is opaque: an IP address or an odd
