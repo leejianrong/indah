@@ -8,6 +8,8 @@ import pytest
 
 pytest.importorskip("tomllib", reason="size_report.py needs Python 3.11+")
 
+pytestmark = pytest.mark.unit
+
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("size_report", ROOT / "scripts" / "size_report.py")
 sr = importlib.util.module_from_spec(spec)
