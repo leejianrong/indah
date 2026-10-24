@@ -82,6 +82,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Changed
 
+- The size budget (`docs/size-budget.json`) now sits about 15 percent above today's numbers instead of far
+  above them, and also covers the sdist, `editor.js` and `map.js` raw size and the Python source size
+  (`make size`, the CI `build` job summary). Raising a limit is still a reviewed change (IND-215).
+
 - `editor.js` (the lazily loaded code editor) is minified like `map.js`: 633,404 to 409,775 bytes raw and
   177,816 to 134,243 gzip (-35% raw, -24% gzip). The editor behaves the same; the wheel is 17 KB smaller and the
   docs' Pyodide bundle carries the smaller file (IND-214).
