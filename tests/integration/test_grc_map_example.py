@@ -49,14 +49,14 @@ def test_changing_the_year_radio_updates_map_stats_and_table():
 
     before_src = plot.reactive_props()["src"]()
     before_stat = stat.reactive_props()["value"]()
-    before_rows = table.reactive_props()["data"]()["rows"]
+    before_rows = table.reactive_props()["rows"]()
 
     other = next(y for y in gm.YEARS if y != gm.DEFAULT_YEAR)
     session.dispatch(radio.id, "change", {"value": other})
 
     assert plot.reactive_props()["src"]() != before_src
     assert stat.reactive_props()["value"]() != before_stat
-    assert table.reactive_props()["data"]()["rows"] != before_rows
+    assert table.reactive_props()["rows"]() != before_rows
 
 
 @pytest.mark.integration
@@ -65,8 +65,8 @@ def test_the_unmatched_2025_division_renders_as_no_data():
     divisions = gm._load("2025")["divisions"]
     unmatched = [d for d in divisions if d["electors"] is None]
     assert unmatched  # the known ELD/boundary name-join gap (see the fetch script)
-    rows = gm._table_source("2025")["rows"]
-    assert any(row[1] == "no data" for row in rows)
+    rows = gm._table_rows("2025")
+    assert any(row["electors"] == "no data" for row in rows)
 
 
 @pytest.mark.unit
