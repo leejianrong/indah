@@ -13,6 +13,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- A startup warning for the commonest proxy mistake: when a request carries `X-Forwarded-For`,
+  `Forwarded`, `X-Forwarded-Proto`, `Fly-Client-IP` or `CF-Connecting-IP` and `trusted_proxies` is
+  empty, indah logs one warning per process naming the header and the socket peer (never a value) and
+  sets `app.state.proxy_warning_issued`. `create_app(warn_untrusted_forwarding=False)` silences it for
+  an app with no proxy in front, and `launch()` does so in Colab and Runpod. Nothing else changes:
+  addresses are still believed only from `trusted_proxies`.
+
 - Compression for what indah serves (ADR-0042, IND-189): the page, `api/editor.js` and the files of a
   module component go out gzipped when the client sends `Accept-Encoding: gzip`, with `Vary:
   Accept-Encoding` and a separate `ETag` per form (`304` still works). The page goes from 581,178 to

@@ -145,6 +145,15 @@ indah.create_app(..., trusted_proxies=["10.0.0.0/8", "203.0.113.7"])
 If you forget `trusted_proxies`, every client shares the gateway's address: one rate-limit bucket
 and one stream cap for everybody.
 
+indah tells you when that is happening. The first time a request carries `X-Forwarded-For`,
+`Forwarded`, `X-Forwarded-Proto`, `Fly-Client-IP` or `CF-Connecting-IP` while `trusted_proxies` is
+empty, it logs one warning per process. The warning names the header and the socket peer, never a
+header value, and `app.state.proxy_warning_issued` becomes `True`. Silence it by setting
+`trusted_proxies`. Passing `trusted_proxies=[]` does not silence it, because that is the same as
+leaving it out. If nothing really sits in front of your app, pass
+`create_app(warn_untrusted_forwarding=False)`. `launch()` turns the warning off in Colab and Runpod,
+where the host's own proxy is always there.
+
 #### On Fly
 
 Measured on a Fly app (IND-170), the peer is a private address in `172.16.0.0/12`, the real client is

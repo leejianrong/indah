@@ -67,6 +67,15 @@ class LaunchHandle:
             quiet.setLevel(level)
 
 
+def _expect_host_proxy(app: object, environment: Environment) -> None:
+    """Colab and Runpod always put their own proxy in front, so the "forwarded header but no
+    trusted_proxies" warning (IND-200) would fire on every notebook run: turn it off there."""
+    if environment in (Environment.COLAB, Environment.RUNPOD):
+        notice = getattr(getattr(app, "state", None), "proxy_notice", None)
+        if notice is not None:
+            notice.enabled = False
+
+
 def launch(
     app: Starlette | None = None,
     *,
@@ -83,6 +92,7 @@ def launch(
 
     app = create_app() if app is None else app
     environment = detect_environment()
+    _expect_host_proxy(app, environment)
     port = find_free_port(host=host) if port is None else port
 
     # In Colab/Runpod the proxy reaches the container, so bind all interfaces.

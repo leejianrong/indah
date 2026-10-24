@@ -109,7 +109,7 @@ from .hardening import (
     peer_address,
 )
 from .protocol import EventIn, init_message, patch_message, ping_message, signed_out_message
-from .proxy import ProxyHeaders, parse_trusted
+from .proxy import ProxyHeaders, ProxyNotice, parse_trusted
 from .reactive import Signal
 from .session import DispatchResult, Session
 from .session_store import (
@@ -546,6 +546,7 @@ def create_app(
     secret: str | bytes | Sequence[str | bytes] | None = None,
     allowed_origins: Sequence[str] = (),
     trusted_proxies: Sequence[str] = (),
+    warn_untrusted_forwarding: bool = True,
     audit: AuditHook | None = None,
     audit_payloads: bool = False,
     policy: Policy | None = None,
@@ -610,7 +611,11 @@ def create_app(
 
     ``trusted_proxies`` (IPs or CIDRs of your gateway) says whose ``X-Forwarded-For``, ``-Proto``,
     ``-Host`` and ``-Prefix`` headers to believe (ADR-0034); by default none are, so a client
-    cannot pick its own address, scheme or prefix. ``audit`` is called with an
+    cannot pick its own address, scheme or prefix. If a forwarded header (``X-Forwarded-For``,
+    ``Forwarded``, ``X-Forwarded-Proto``, ``Fly-Client-IP``, ``CF-Connecting-IP``) arrives while
+    ``trusted_proxies`` is empty, one warning is logged (header names and the socket peer only)
+    and ``app.state.proxy_warning_issued`` becomes true; ``warn_untrusted_forwarding=False``
+    silences it for an app that really has no proxy in front. ``audit`` is called with an
     :class:`~indah.audit.AuditEvent` after each UI event (who, which component, which event,
     the payload keys; values only with ``audit_payloads=True``, never from a sensitive field).
 
@@ -718,7 +723,10 @@ def create_app(
 
     # Outermost first: resolve the client address, then headers, then the rate limit, then
     # (secure apps) the origin guard, so a flood is turned away before it is parsed.
-    middleware = [Middleware(ProxyHeaders, trusted=parse_trusted(trusted_proxies))]
+    proxy_notice = ProxyNotice(enabled=warn_untrusted_forwarding)
+    middleware = [
+        Middleware(ProxyHeaders, trusted=parse_trusted(trusted_proxies), notice=proxy_notice)
+    ]
     if security_headers:
         middleware.append(
             Middleware(
@@ -757,6 +765,9 @@ def create_app(
     app.state.audit = audit
     app.state.audit_payloads = audit_payloads
     app.state.policy = policy
+    proxy_notice.state = app.state
+    app.state.proxy_notice = proxy_notice
+    app.state.proxy_warning_issued = False
     app.state.csp = csp
     app.state.compress = compress
     app.state.csp_media_hosts = tuple(csp_media_hosts)
