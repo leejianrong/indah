@@ -778,17 +778,24 @@ def _stats(year: str) -> dict[str, Any]:
     return {"total": total, "count": len(divisions), "biggest": biggest}
 
 
-def _table_source(year: str) -> dict:
+def _table_rows(year: str) -> list[dict]:
+    """One dict per division, biggest first; a division with no figures sorts last."""
     rows = sorted(
         _load(year)["divisions"],
         key=lambda d: (d["electors"] is None, -(d["electors"] or 0)),
     )
-    return {
-        "columns": ["Division", "Registered electors"],
-        "rows": [
-            [d["name"], d["electors"] if d["electors"] is not None else "no data"] for d in rows
-        ],
-    }
+    return [
+        {"name": d["name"], "electors": d["electors"] if d["electors"] is not None else "no data"}
+        for d in rows
+    ]
+
+
+# The long first column is clipped (full name on hover) so the second column stays on a phone;
+# a plain table that is wider than the screen simply scrolls sideways.
+_TABLE_COLUMNS = [
+    indah.Col("name", "Division", truncate=True, max_width="13ch"),
+    indah.Col("electors", "Registered electors", kind="number"),
+]
 
 
 def build() -> indah.Session:
@@ -818,7 +825,12 @@ def build() -> indah.Session:
         ],
     )
 
-    table = indah.Table(lambda: _table_source(year.value), label="Every division")
+    table = indah.Table(
+        rows=lambda: _table_rows(year.value),
+        columns=_TABLE_COLUMNS,
+        key="name",
+        label="Every division",
+    )
 
     page = indah.Column(
         children=[

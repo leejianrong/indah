@@ -1,8 +1,8 @@
-"""A plain table fits a phone instead of hiding its second column (IND-178).
+"""A plain table scrolls sideways on a phone and keeps its cells on one line (IND-178).
 
-At 390px a table whose first column holds long names used to keep every cell on one line, so the
-first column took the whole width and the second sat behind a sideways scroll nobody could see.
-Below 560px the cells of a plain table now wrap, so both columns are on screen.
+At 390px a table whose first column holds long names is wider than the screen. The owner prefers
+a sideways scroll to wrapping, so the table stays as it is: one line per cell, inside a scroll box
+where every column can be reached. (PR #228 wrapped the cells below 560px; that was reverted.)
 """
 
 import pytest
@@ -48,6 +48,12 @@ def _open(server, width):
     return p, browser, page
 
 
+def _row_heights(page):
+    return page.evaluate(
+        "() => [...document.querySelectorAll('table.table tbody tr')].map(r => r.offsetHeight)"
+    )
+
+
 def _overflow(page):
     return page.evaluate(
         """() => {
@@ -58,13 +64,17 @@ def _overflow(page):
 
 
 @pytest.mark.e2e
-def test_both_columns_are_on_screen_at_390px(server):
+def test_a_narrow_table_scrolls_sideways_and_every_column_is_reachable(server):
     p, browser, page = _open(server, 390)
     try:
         size = _overflow(page)
-        assert size["scroll"] <= size["client"], f"the table needs a sideways scroll: {size}"
+        assert size["scroll"] > size["client"], f"the table should need a sideways scroll: {size}"
+        heights = _row_heights(page)
+        assert max(heights) == min(heights), f"cells wrapped on a phone: {heights}"
+        # Scrolling the box to its end brings the last column on screen.
+        page.evaluate("document.querySelector('.table-scroll').scrollLeft = 1e6")
         last = page.locator("table.table th").last.bounding_box()
-        assert last["x"] + last["width"] <= 390
+        assert 0 <= last["x"] and last["x"] + last["width"] <= 390
     finally:
         browser.close()
         p.stop()
@@ -74,9 +84,7 @@ def test_both_columns_are_on_screen_at_390px(server):
 def test_a_wide_screen_keeps_one_line_cells(server):
     p, browser, page = _open(server, 1200)
     try:
-        heights = page.evaluate(
-            "() => [...document.querySelectorAll('table.table tbody tr')].map(r => r.offsetHeight)"
-        )
+        heights = _row_heights(page)
         assert max(heights) == min(heights), f"rows wrapped on a wide screen: {heights}"
     finally:
         browser.close()
