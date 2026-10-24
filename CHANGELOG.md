@@ -11,6 +11,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Changed
+
+- The source distribution (sdist) no longer carries `examples/` or the gallery thumbnails: it drops from
+  6.5 MB to 1.5 MB. The wheel (what `pip install` uses) is unchanged. Tests that read `examples/` are
+  skipped when you run the suite from an sdist; clone the repository to run all of them.
+
 ### Added
 
 - Optional extras (ADR-0042): `pip install "indah[plot]"` (matplotlib), `"indah[data]"` (pandas,
