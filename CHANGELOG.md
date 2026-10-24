@@ -82,6 +82,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Changed
 
+- `editor.js` (the lazily loaded code editor) is minified like `map.js`: 633,404 to 409,775 bytes raw and
+  177,816 to 134,243 gzip (-35% raw, -24% gzip). The editor behaves the same; the wheel is 17 KB smaller and the
+  docs' Pyodide bundle carries the smaller file (IND-214).
+
 - Leaflet moved out of the shell into a lazily loaded module (ADR-0042, IND-186). The shell shrinks from
   581,046 to 428,605 bytes (243,354 to 199,839 gzip, 18 percent), so every page without a map loads
   about 44 KB less compressed. A page with a `Map` makes one more request, `api/map.js?v=<hash>` (about
