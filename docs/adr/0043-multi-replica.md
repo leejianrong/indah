@@ -1,6 +1,7 @@
 # ADR-0043: Running more than one replica
 
-- Status: **Proposed** (IND-207, for owner review; the 0.10.0 build cards start only after it is accepted)
+- Status: **Proposed** (IND-207; some decisions recorded 2026-10-24, see "Decisions so far"; the 0.9.0 build
+  cards start only after it is accepted)
 - Date: 2026-10-24
 - Deciders: Jian (owner)
 - Builds on: ADR-0010 (the session-store seam), ADR-0002 (SSE and POST, resume, epochs), ADR-0026 (hub,
@@ -8,6 +9,17 @@
   props), ADR-0037 (per-process limits), ADR-0042 (extras and size), IND-199 (loud unknown session),
   IND-201 (drain)
 - Evidence: `docs/spikes/proxy-and-sticky.md` (IND-170, IND-171), the 2026-10-24 explainer
+
+## Decisions so far (2026-10-24, owner)
+
+| Question | State | What it means for the build |
+|----------|-------|-----------------------------|
+| Q2 Is losing live handler state when an owner pod dies acceptable? | **Accepted** | Tier B restore softens it; no attempt is made to re-run a session's work elsewhere. |
+| Q5 The cluster secret | **Decided: require it explicitly** | `INDAH_CLUSTER_SECRET` (or the matching `create_app` argument) is required for the route hint and the k8s forwarder. It is never derived from `secret=`, so one secret never does two jobs. Without it the hint and `/_indah/forward` stay off. |
+| Q6 A hint-aware shell as a requirement for Tier C | **Recommended, leaning accepted** | Only indah's own shell is supported as a routing client; a third-party wire client still works on one pod or behind Tier A. Build the Fly half (IND-197, the `fly-force-instance-id` hint). Keep the k8s forwarder (IND-209) deferred unless the owner's ingress cannot do cookie affinity. |
+| Q1 What fronts the owner's k3s | **Open** | The owner is checking: Traefik or ingress-nginx talking to the pods (cookie affinity works, Tier C on k8s is unneeded), or a Cloudflare Tunnel straight to a Service (no affinity, IND-209 is needed). |
+| Q3 First state store | **Recommended: Redis**, plus a new option to evaluate | Redis is the first networked adapter. A browser-held option is added to the alternatives (see Backends); the `StateStore` interface must admit a client-held implementation. |
+| Topic and Stream across replicas | **Open** | Recommendation: document "run the producer in every replica" now; decide a pub/sub adapter later in IND-216. |
 
 ## Context
 
@@ -170,8 +182,8 @@ wrong one), so it is a plain machine id. On k8s the hint **is** a capability tha
 address to connect to, so it must be signed or the endpoint is an SSRF primitive.
 
 **Hint format (k8s forwarding).** `base64url(address "|" port "|" issued_at) "." base64url(HMAC-SHA256(
-cluster_key, "indah-route-v1" | payload))`, where `cluster_key` is derived from `create_app(secret=)`
-(secure apps) or the new `INDAH_CLUSTER_SECRET` (any app), the same on every replica. A receiver
+cluster_key, "indah-route-v1" | payload))`, where `cluster_key` comes from the explicitly configured
+`INDAH_CLUSTER_SECRET` (never derived from `create_app(secret=)`, owner decision 2026-10-24), the same on every replica. A receiver
 verifies the MAC and that `issued_at` is within 24 hours, that the address is a private or link-local
 address (never a public one: a defence in depth against a leaked key), and that the port is the app's
 own. A bad hint is a plain local attempt, which becomes the loud `409` if this replica does not hold the
@@ -275,6 +287,7 @@ not part of the first build.
 | NATS | KV bucket | request/reply fits forwarding well | KV | yes (a new system) | strong technically; a new service for one feature |
 | k8s Lease objects | one Lease per session | no | no | none, but RBAC and API-server load | per-session leases are too heavy |
 | Direct pod-to-pod HTTP | needs a registry or a hint | the HTTP call is the bus | no | no | this is the transport under the signed hint |
+| **Browser-held state** (new, 2026-10-24) | not needed | not needed | yes, in the tab (`localStorage` or `sessionStorage`) | no | a state store with no service; evaluate in the IND-208 build |
 
 **Why Redis first for the store.** Restoring after a rollout or a node move needs state that outlives
 the pod and is readable from any other pod. The owner's k3s can run Redis in minutes; Fly has Upstash
@@ -283,6 +296,22 @@ atomic counters that shared rate limits need (IND-213). indah never starts, bund
 `INDAH_REDIS_URL` points at the user's instance, TLS and auth are the URL's. What a deployment with **no**
 extra service gets: Tier A or the Tier C hint for routing, and, after the owner dies, a reload with
 default state plus one toast, never wrong data.
+
+**Browser-held state (option added 2026-10-24).** The shell keeps the small persisted values (what
+`ctx.persist` would save) in the browser and sends them back in `init` or on reconnect, so a rebuilt session
+starts from them with no service at all.
+
+- Pros: no extra service on Fly or k8s; survives the loss of any pod, a rollout and a node move; it comes with
+  the tab, so there is nothing to expire server side and no per-tab server memory.
+- Cons: the client is untrusted, so the app must validate what comes back (the same rule as any input), with
+  a size cap; a per-session HMAC key lets indah detect tampering, but it gives no secrecy (the browser can
+  read its own values); the values are per browser, not per person (a second device or a cleared browser
+  starts blank); stored values must not include secrets or anything the user must not be able to see;
+  ephemeral props (ADR-0036) are never persisted, here or elsewhere; it needs the hint-aware shell
+  (the same shell requirement as Tier C) and a shell change.
+- Verdict: **evaluate in the IND-208 build.** The `StateStore` interface must admit a client-held
+  implementation (a store that returns values the request carried, plus the signature check). Redis remains
+  the recommended first networked adapter for state that must outlive the browser.
 
 ## Failure modes
 
@@ -391,7 +420,7 @@ Everything below is additive and `protocol_version` stays 1 (ADR-0005 amendment)
 
 ## Smallest useful first slice
 
-1. **IND-206 (0.9.0)**: Tier A recipes for the owner's k3s, verified with `sticky_check.py`. No indah
+1. **IND-206 (0.8.0)**: Tier A recipes for the owner's k3s, verified with `sticky_check.py`. No indah
    code, and it answers "multi-replica on my cluster" today.
 2. **Route hint, Fly half (IND-197, revived, 5 points)**: `init.route`, the shell sends
    `fly-force-instance-id` and `X-Indah-Route`, file GET replay. Fly multi-machine works.
@@ -411,36 +440,36 @@ Everything below is additive and `protocol_version` stays 1 (ADR-0005 amendment)
 
 | Card | Was | Now | Release |
 |------|-----|-----|---------|
-| IND-197 Route hint: `init.route`, shell sends the hint and the Fly header, file GET replay | 5 (deprioritised) | **5, revived, first** | 0.10.0 |
-| IND-208 Restorable sessions: `ctx.persist`, `StateStore` (memory, SQLite) | 5 | 5 (adds version, TTL, caps, ownership check) | 0.10.0 |
-| IND-210 Redis `StateStore` adapter (`indah[redis]`) | 3 (also registry and pub/sub) | **3, store only** (no registry, no bus) | 0.10.0 |
-| IND-211 Multi-replica e2e (compose, two balancers, Fly probe run) | 3 | **5** (two balancers and a real Fly run; points are 1, 2, 3, 5, 8) | 0.10.0 |
-| IND-212 `/metrics` | 2 | 2 (adds forward and hint counters) | 0.10.0 |
-| IND-209 Peer forwarder for k8s without affinity (signed hint, `/_indah/forward`) | 3 (registry core) | **5, reshaped**; built only if the owner's ingress cannot do cookie affinity | after 0.10.0 |
-| IND-213 Shared rate limits | 3 | 3 | after 0.10.0 |
-| NEW IND-216: a `Topic` and `Stream` story for multiple replicas (decision card, see Open questions) | n/a | 2 | 0.10.0 |
+| IND-197 Route hint: `init.route`, shell sends the hint and the Fly header, file GET replay | 5 (deprioritised) | **5, revived, first** | 0.9.0 |
+| IND-208 Restorable sessions: `ctx.persist`, `StateStore` (memory, SQLite) | 5 | 5 (adds version, TTL, caps, ownership check) | 0.9.0 |
+| IND-210 Redis `StateStore` adapter (`indah[redis]`) | 3 (also registry and pub/sub) | **3, store only** (no registry, no bus) | 0.9.0 |
+| IND-211 Multi-replica e2e (compose, two balancers, Fly probe run) | 3 | **5** (two balancers and a real Fly run; points are 1, 2, 3, 5, 8) | 0.9.0 |
+| IND-212 `/metrics` | 2 | 2 (adds forward and hint counters) | 0.9.0 |
+| IND-209 Peer forwarder for k8s without affinity (signed hint, `/_indah/forward`) | 3 (registry core) | **5, reshaped**; built only if the owner's ingress cannot do cookie affinity | after 0.9.0 |
+| IND-213 Shared rate limits | 3 | 3 | after 0.9.0 |
+| NEW IND-216: a `Topic` and `Stream` story for multiple replicas (decision card, see Open questions) | n/a | 2 | 0.9.0 |
 
-0.10.0 core is IND-197, 208, 210, 211, 212 and IND-216: 5 + 5 + 3 + 5 + 2 + 2 = 22 points, plus
+0.9.0 core is IND-197, 208, 210, 211, 212 and IND-216: 5 + 5 + 3 + 5 + 2 + 2 = 22 points, plus
 the two gallery cards (IND-196, IND-191, 5 points) already planned.
 
 ## Open questions for the owner
 
-1. **What fronts your k3s?** Traefik or ingress-nginx talking to the pods (cookie affinity works,
+1. **What fronts your k3s?** (STILL OPEN, the owner is checking.) Traefik or ingress-nginx talking to the pods (cookie affinity works,
    IND-209 is not needed) or a Cloudflare Tunnel pointing at a Service (no affinity: IND-209 is
    needed)? This decides whether the k8s forwarder is built at all.
-2. **Is losing live handler state on an owner crash acceptable?** (This ADR says yes, with Tier B
-   softening it.) A design that survives it would need the session's work to be re-runnable from persisted
+2. **Is losing live handler state on an owner crash acceptable?** DECIDED 2026-10-24: yes, with Tier B
+   softening it. A design that survives it would need the session's work to be re-runnable from persisted
    inputs, which is a different framework.
-3. **Redis as the first store adapter, or Postgres?** Redis is recommended (TTLs, counters, one service for
+3. **Redis as the first store adapter, or Postgres?** (Recommended: Redis; a browser-held option is also to be evaluated, see Backends.) Redis is recommended (TTLs, counters, one service for
    state and limits); Postgres is the one most apps already run. Both fit the same interface.
-4. **`Topic` and `Stream` with more than one replica.** Background producers feed only their own replica's
+4. **`Topic` and `Stream` with more than one replica.** (STILL OPEN; recommendation: document producer-per-replica now, decide a pub/sub adapter in IND-216.) Background producers feed only their own replica's
    tabs. Options: document "run the producer in every replica", a `Topic` backend on Redis streams
    (reopens the bus we avoided), or leave it for a user who needs it. The 2-point decision card will
    write it up; the owner's semula use is the deciding case.
-5. **The cluster secret**: a separate `INDAH_CLUSTER_SECRET`, or derive it from `secret=` when the app is
-   secure? Recommended: derive for secure apps, require the variable otherwise.
+5. **The cluster secret**: DECIDED 2026-10-24: require `INDAH_CLUSTER_SECRET` explicitly; do not derive it from
+   `secret=`.
 6. **Is a hint-aware shell acceptable as a requirement** for Tier C, with Tier A or a single process as the
-   answer for third-party clients?
+   answer for third-party clients? RECOMMENDED and leaning accepted (2026-10-24): yes; build the Fly half only.
 
 ## Appendix: the Tier C flow (k8s forwarding), one page
 
