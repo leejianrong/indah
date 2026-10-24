@@ -172,6 +172,11 @@ class InMemorySessionStore:
         self._handles: OrderedDict[str, SessionHandle] = OrderedDict()
         self._last_seen: dict[str, float] = {}
 
+    @property
+    def open_sessions(self) -> int:
+        """Sessions held by this process right now (the deploy doctor shows it)."""
+        return len(self._handles)
+
     def _touch(self, session_id: str) -> None:
         if session_id in self._handles:  # not true if max_sessions evicted it below
             self._handles.move_to_end(session_id)
@@ -362,6 +367,10 @@ class SharedSessionStore:
         hub = Hub()
         session.bind_hub(hub)
         self.handle = SessionHandle(session=session, hub=hub)
+
+    @property
+    def open_sessions(self) -> int:
+        return 1
 
     def get_or_create(
         self, session_id: str, ctx_info: ConnectionInfo | None = None

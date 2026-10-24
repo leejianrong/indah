@@ -88,3 +88,12 @@ def test_the_sticky_check_finds_the_button():
     }
     assert module.find_button(tree, "Send an event") == "n3"
     assert module.find_button(tree, "Other") is None
+
+
+def test_the_doctor_page_is_there_when_a_token_is_set(monkeypatch):
+    monkeypatch.setenv("INDAH_DOCTOR_TOKEN", "probe-doctor-token-0123456789")
+    probe = load(monkeypatch, "172.16.0.0/12")
+    c = TestClient(probe.app, client=("172.16.1.2", 1))
+    assert c.get("/_indah/doctor").status_code == 404
+    ok = c.get("/_indah/doctor", headers={"Authorization": "Bearer probe-doctor-token-0123456789"})
+    assert ok.status_code == 200 and "Deploy doctor" in ok.text

@@ -20,6 +20,7 @@ names the variable. Secret values are never logged: the log names the variables 
 - ``INDAH_COMPRESS`` -> ``compress=`` (1/0, true/false, yes/no, on/off)
 - ``INDAH_WARN_UNTRUSTED_FORWARDING`` -> ``warn_untrusted_forwarding=`` (same booleans)
 - ``INDAH_NODE_HEADER`` -> ``node_header=`` (same booleans; ``INDAH_NODE`` names the node)
+- ``INDAH_DOCTOR_TOKEN`` -> ``doctor=`` (a token of 16+ characters; turns the deploy doctor on)
 """
 
 from __future__ import annotations
@@ -174,6 +175,12 @@ class EnvConfig:
         if value in _FALSE:
             return False
         raise ValueError(f"{name} must be one of 1/0, true/false, yes/no, on/off, got {text!r}")
+
+    def doctor(self, arg: Any) -> Any:
+        """``doctor=`` if given (even ``None`` or ``False``), else INDAH_DOCTOR_TOKEN, else off."""
+        if arg is not UNSET:
+            return arg
+        return self._take("INDAH_DOCTOR_TOKEN")
 
     def report(self) -> tuple[str, ...]:
         """Log once, at INFO, which variables configured this app (names only)."""

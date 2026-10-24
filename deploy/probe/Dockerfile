@@ -1,8 +1,10 @@
 FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# indah is installed from a wheel that deploy.sh builds from this checkout, so the probe runs the
+# code under test (the deploy doctor is newer than the last PyPI release).
+COPY wheels/ /wheels/
+RUN pip install --no-cache-dir /wheels/indah-*.whl "uvicorn[standard]"
 COPY probe_app.py .
 EXPOSE 8080
 # --no-proxy-headers: uvicorn's own forwarded-header handling would hide what indah does.
