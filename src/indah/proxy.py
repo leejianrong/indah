@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import os
 import re
 from collections.abc import Iterable
 from typing import Any
@@ -67,14 +68,24 @@ class ProxyNotice:
         if self.state is not None:
             self.state.proxy_warning_issued = True
         peer = (scope.get("client") or ("unknown", 0))[0]
+        if os.environ.get("FLY_APP_NAME"):
+            hint = (
+                "On Fly set trusted_proxies=[\"fly\"] (it trusts Fly's proxy range and this app's "
+                "public IPs, looked up at startup; `fly ips list` shows them)."
+            )
+        else:
+            hint = (
+                'Name your gateway with a preset (trusted_proxies=["cloudflare"], ["k8s"], '
+                '["private"], ["fly"]) or its IPs or CIDRs.'
+            )
         logger.warning(
             "Forwarded header(s) %s arrived from %s but trusted_proxies is empty, so indah ignores "
             "them: behind a proxy every visitor resolves to the proxy's address and shares one "
-            "rate-limit bucket. Set create_app(trusted_proxies=[...]) to your gateway's addresses "
-            "(see 'Behind a proxy' in the hosting guide), or pass "
+            "rate-limit bucket. %s See 'Behind a proxy' in the hosting guide, or pass "
             "warn_untrusted_forwarding=False if no proxy is in front. This is logged once.",
             ", ".join(seen),
             peer,
+            hint,
         )
 
 

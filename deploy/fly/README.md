@@ -73,3 +73,11 @@ Mode, and an edge rate-limiting rule.
 - `[http_service.concurrency]` in the generated `fly.toml` bounds simultaneous
   connections on the one machine; `deploy_fly.sh` deploys with `--ha=false` so Fly
   never provisions a second machine under load (ADR-0024).
+
+## Client address and `trusted_proxies`
+
+The gallery keys its own rate limiter on `Fly-Client-IP` (see `gallery_app.py`), so it does not need
+`trusted_proxies`. An app of yours that uses `create_app(limits=...)` or `ctx.conn.client` on Fly does:
+use `trusted_proxies=["fly"]` (or `INDAH_TRUSTED_PROXIES=fly`). It trusts Fly's proxy range plus the
+app's public IPs, which it finds by looking up `<app>.fly.dev` at start or from `INDAH_FLY_IPS`. See
+"Behind a gateway" in the hosting guide.

@@ -8,7 +8,10 @@ names the variable. Secret values are never logged: the log names the variables 
 
 - ``INDAH_SECRETS`` -> ``secret=`` as a list (comma separated; the first signs, any verifies)
 - ``INDAH_SECRET`` -> ``secret=`` (one secret; ignored when ``INDAH_SECRETS`` is set)
-- ``INDAH_TRUSTED_PROXIES`` -> ``trusted_proxies=`` (comma separated IPs or CIDRs; ``*`` refused)
+- ``INDAH_TRUSTED_PROXIES`` -> ``trusted_proxies=`` (comma separated IPs, CIDRs or preset names
+  ``fly``, ``cloudflare``, ``k8s``, ``private``; ``*`` and ``auto`` refused)
+- ``INDAH_FLY_IPS`` -> the public IPs the ``fly`` preset trusts (the preset reads it, not
+  ``create_app``)
 - ``INDAH_ALLOWED_ORIGINS`` -> ``allowed_origins=`` (comma separated ``https://host[:port]``)
 - ``INDAH_CSP`` -> ``csp=`` (``strict`` or ``off``)
 - ``INDAH_LIMITS`` -> ``limits=`` (a preset: ``public`` or ``none``)
@@ -28,7 +31,7 @@ from typing import Any
 
 from .guard import normalize_origins
 from .hardening import Limits
-from .proxy import parse_trusted
+from .proxy_presets import check_entries
 
 logger = logging.getLogger("indah")
 
@@ -93,10 +96,10 @@ class EnvConfig:
         if "*" in entries:
             raise ValueError(
                 "INDAH_TRUSTED_PROXIES: '*' is refused, it would make every forwarded header "
-                "believable. List your gateway's IPs or CIDRs."
+                "believable. List your gateway's IPs or CIDRs, or name a preset."
             )
         try:
-            parse_trusted(entries)
+            check_entries(entries)
         except ValueError as exc:
             raise ValueError(f"INDAH_TRUSTED_PROXIES: {exc}") from None
         return entries

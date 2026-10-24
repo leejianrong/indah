@@ -154,6 +154,37 @@ leaving it out. If nothing really sits in front of your app, pass
 `create_app(warn_untrusted_forwarding=False)`. `launch()` turns the warning off in Colab and Runpod,
 where the host's own proxy is always there.
 
+#### Presets
+
+Typing the right CIDRs for a platform is easy to get wrong, so `trusted_proxies` also takes preset
+names. A preset expands to an explicit list before anything else looks at it, composes with plain
+entries, and never turns on by itself:
+
+```python
+indah.create_app(..., trusted_proxies=["fly"])
+indah.create_app(..., trusted_proxies=["cloudflare", "203.0.113.7"])
+```
+
+| Preset | Expands to | Caveat |
+|--------|-----------|--------|
+| `private` | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` | trusts every host in those networks |
+| `k8s` | `private` plus `100.64.0.0/10` (CGNAT) and `fc00::/7` (unique local) | trusts every pod and node; narrow it to your ingress range when you know it |
+| `cloudflare` | Cloudflare's published edge ranges (15 IPv4, 7 IPv6), copied into indah | the list is vendored, not fetched; it is dated in `indah/cloudflare_ips.py` and refreshed by `scripts/refresh_cloudflare_ips.py` |
+| `fly` | `172.16.0.0/12` plus the app's public ingress IPs | needs the IPs: see below |
+
+A preset **trusts every address in it**. Anyone who can send a request from inside that network can
+set `X-Forwarded-For` and be believed, so use the narrowest preset that fits, and an explicit list when
+you know your gateway's addresses. `"auto"` and `"*"` are refused on purpose, and so is any name
+that is not in the table; the error lists the valid ones. In the environment,
+`INDAH_TRUSTED_PROXIES=cloudflare,203.0.113.7` works the same way.
+
+The `fly` preset finds the app's public IPs in one of two ways: `INDAH_FLY_IPS` (a comma separated list
+of single addresses from `fly ips list`) if it is set, otherwise a DNS lookup of
+`<FLY_APP_NAME>.fly.dev` when the app starts, which Fly answers with the app's public addresses (checked
+from inside a machine on the probe app, IND-198). If neither works the app stops at start with a message
+that says what to run (`fly ips list -a <app>`) and what to set. The lookup happens once, so restart the
+app after you add or change an IP.
+
 #### On Fly
 
 Measured on a Fly app (IND-170), the peer is a private address in `172.16.0.0/12`, the real client is
@@ -161,10 +192,13 @@ in `Fly-Client-IP`, and Fly sets `X-Forwarded-For` to `<client>, <your app's pub
 only the private range resolves every visitor to your app's own address. List both:
 
 ```python
+indah.create_app(..., trusted_proxies=["fly"])  # the private range plus this app's public IPs
+# the same, spelled out (use your own addresses from `fly ips list`):
 indah.create_app(..., trusted_proxies=["172.16.0.0/12", "66.241.124.81", "2a09:8280:1::1c9:9684:0"])
 ```
 
-Use your own addresses from `fly ips list`. This was verified for IPv4 clients; an IPv6 client was not
+If you list only the private range on Fly, indah logs a warning at start that names the public addresses
+it is missing and points at `["fly"]`. This was verified for IPv4 clients; an IPv6 client was not
 tried. It was measured on the direct `*.fly.dev` path only: the path through a Cloudflare Worker is
 not measured yet. Start uvicorn with `--no-proxy-headers` if you want only indah's rules in play.
 
@@ -435,7 +469,8 @@ start indah logs once, at INFO, which variables it used (names only).
 |----------|----------|---------|---------|
 | `INDAH_SECRET` | `secret=` | `INDAH_SECRET=<32+ random bytes>` | none |
 | `INDAH_SECRETS` | `secret=` as a list (rotation) | `INDAH_SECRETS=<new>,<old>` | none; wins over `INDAH_SECRET` |
-| `INDAH_TRUSTED_PROXIES` | `trusted_proxies=` | `172.16.0.0/12,66.241.124.81` | none; `*` is refused |
+| `INDAH_TRUSTED_PROXIES` | `trusted_proxies=` | `fly` or `172.16.0.0/12,66.241.124.81` | none; IPs, CIDRs or the presets `fly`, `cloudflare`, `k8s`, `private`; `*` and `auto` are refused |
+| `INDAH_FLY_IPS` | read by the `fly` preset | `66.241.124.81,2a09:8280:1::1c9:9684:0` | looked up from `<FLY_APP_NAME>.fly.dev` |
 | `INDAH_ALLOWED_ORIGINS` | `allowed_origins=` | `https://app.example.com` | none |
 | `INDAH_CSP` | `csp=` | `strict` or `off` | off |
 | `INDAH_LIMITS` | `limits=` | `public` or `none` | none |
@@ -450,7 +485,7 @@ Booleans take `1`/`0`, `true`/`false`, `yes`/`no` or `on`/`off`. The secret is o
 `secure=True`. `INDAH_CSP` takes `strict` or `off`; a custom policy string is `csp=` in code.
 
 ```bash
-fly secrets set INDAH_SECRET="$(openssl rand -hex 32)" INDAH_TRUSTED_PROXIES="172.16.0.0/12,<your app IPs>"
+fly secrets set INDAH_SECRET="$(openssl rand -hex 32)" INDAH_TRUSTED_PROXIES="fly"
 ```
 
 ```yaml

@@ -62,6 +62,12 @@ _RAW_TRUSTED = os.environ.get("INDAH_TRUSTED_PROXIES") or os.environ.get(
     "PROBE_TRUSTED_PROXIES", ""
 )
 TRUSTED = [e.strip() for e in _RAW_TRUSTED.split(",") if e.strip()]
+try:  # indah 0.9.0 and later: presets such as "fly" expand to explicit entries (IND-204)
+    from indah.proxy_presets import expand_trusted
+
+    TRUSTED = list(expand_trusted(TRUSTED).entries)
+except ImportError:
+    pass
 MACHINE = os.environ.get("FLY_MACHINE_ID", "local")
 REGION = os.environ.get("FLY_REGION", "")
 BOOTED = time.time()

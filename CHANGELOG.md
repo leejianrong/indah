@@ -19,6 +19,17 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   value becomes a short hash, so the header never carries an internal address. `ctx.conn.node` and
   `app.state.node` hold the id with the header on or off. Off by default; nothing else changes and
   `protocol_version` stays 1.
+- `trusted_proxies` presets (IND-204): `"fly"`, `"cloudflare"`, `"k8s"` and `"private"` expand to explicit
+  lists before the proxy rules see them, compose with plain entries (`["cloudflare", "203.0.113.7"]`)
+  and also work in `INDAH_TRUSTED_PROXIES`. `fly` is `172.16.0.0/12` plus the app's public ingress IPs,
+  from `INDAH_FLY_IPS` or a DNS lookup of `<FLY_APP_NAME>.fly.dev` at start (it stops with what to run
+  if it cannot find them); `cloudflare` is Cloudflare's published ranges, vendored and dated
+  (`scripts/refresh_cloudflare_ips.py`, with a test that fails after a year); `k8s` and `private` are
+  the private ranges. A preset trusts every address in it. `"auto"`, `"*"` and unknown names are
+  refused, and `app.state.trusted_proxies_presets` names the presets in use. Nothing is on by default.
+- On Fly, listing only the private range in `trusted_proxies` (so every visitor shares one address and
+  one rate-limit bucket) now logs a warning at start naming the missing public IPs and `["fly"]`; the
+  forwarded-header warning (IND-200) names the presets and, on Fly, the Fly fix (IND-198).
 - Configuration from the environment (IND-202). `create_app` reads `INDAH_SECRET`/`INDAH_SECRETS`,
   `INDAH_TRUSTED_PROXIES`, `INDAH_ALLOWED_ORIGINS`, `INDAH_CSP` (`strict` or `off`), `INDAH_LIMITS`
   (`public` or `none`), `INDAH_DRAIN_SECONDS`, `INDAH_FACTORY_TIMEOUT`, `INDAH_COMPRESS` and

@@ -114,6 +114,7 @@ from .hardening import (
 from .node import NodeHeaderMiddleware, resolve_node
 from .protocol import EventIn, init_message, patch_message, ping_message, signed_out_message
 from .proxy import ProxyHeaders, ProxyNotice, parse_trusted
+from .proxy_presets import expand_trusted, fly_gap
 from .reactive import Signal
 from .session import DispatchResult, Session
 from .session_store import (
@@ -701,6 +702,24 @@ def create_app(
     env = EnvConfig()
     csp = env.csp(csp)
     trusted_proxies = env.trusted_proxies(trusted_proxies)
+    expanded = expand_trusted(trusted_proxies)
+    trusted_proxies = expanded.entries
+    if expanded.presets:
+        logger.info(
+            "indah: trusted_proxies presets %s expanded to %d entries",
+            ", ".join(expanded.presets),
+            len(trusted_proxies),
+        )
+    elif trusted_proxies:
+        missing = fly_gap(trusted_proxies)
+        if missing:
+            logger.warning(
+                "trusted_proxies does not include this Fly app's public address(es) %s. Fly adds "
+                "them to X-Forwarded-For, so every visitor would resolve to one of them and "
+                'share a single rate-limit bucket. Use trusted_proxies=["fly"] (private range '
+                "plus the app's public IPs) or add them to the list.",
+                ", ".join(missing),
+            )
     allowed_origins = env.allowed_origins(allowed_origins)
     limits = env.limits(limits)
     factory_timeout = env.number(
@@ -847,6 +866,7 @@ def create_app(
     app.state.node = node
     app.state.node_header = node_header
     app.state.trusted_proxies = parse_trusted(trusted_proxies)
+    app.state.trusted_proxies_presets = expanded.presets
     app.state.allowed_origins = normalize_origins(allowed_origins)
     app.state.env_used = env.report()
     app.state.csp_media_hosts = tuple(csp_media_hosts)
