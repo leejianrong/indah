@@ -546,7 +546,7 @@ It shows:
   forwarded prefix: the first thing to compare when every visitor looks like one address;
 - the forwarded headers that matter (`X-Forwarded-For`, `Fly-Client-IP`, `CF-Connecting-IP`, `Via` and a
   few more), from a fixed list of names. It never shows cookies, `Authorization` or any other header;
-- `trusted_proxies` as indah parsed it, the node, the process age and the requests it has answered, the
+- `trusted_proxies` as indah parsed it (preset names next to the networks they expanded to), the node, the process age and the requests it has answered, the
   Fly region and machine or the pod name when they are set, the open sessions and streams, and the drain
   state;
 - the settings in force as names and yes/no (never a secret), and the `INDAH_*` variables that were used

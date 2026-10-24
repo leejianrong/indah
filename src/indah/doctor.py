@@ -273,6 +273,7 @@ def collect_facts(request: Request, state: Any = None) -> dict[str, Any]:
             "cookie_sent": "cookie" in request.headers,
         },
         "trusted_proxies": [str(n) for n in networks],
+        "trusted_proxies_presets": list(getattr(state, "trusted_proxies_presets", ()) or ()),
         "headers": headers,
         "sessions": {
             "open": _open_sessions(store),
@@ -510,7 +511,9 @@ request.</p></header>
 <section><h2>Forwarded headers (an allowlist of names)</h2>{
         _dl(sorted(facts["headers"].items())) if facts["headers"] else "<p class='muted'>None.</p>"
     }</section>
-<section><h2>trusted_proxies</h2>{_dl([("Networks", facts["trusted_proxies"])])}</section>
+<section><h2>trusted_proxies</h2>{
+        _dl([("Presets", facts["trusted_proxies_presets"]), ("Networks", facts["trusted_proxies"])])
+    }</section>
 <section><h2>Process</h2>{
         _dl(
             [

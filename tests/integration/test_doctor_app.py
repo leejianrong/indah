@@ -274,3 +274,12 @@ def test_the_html_page_has_the_sections_a_deployer_looks_for():
         .replace("&gt;", ">")
         .replace("&amp;", "&")
     )
+
+
+def test_presets_show_by_name_next_to_the_networks_they_expanded_to():
+    c = client(plain(doctor=TOKEN, trusted_proxies=["private", "203.0.113.7"]))
+    r = c.get(PATH, params={"token": TOKEN, "format": "json"}).json()
+    assert r["trusted_proxies_presets"] == ["private"]
+    assert "10.0.0.0/8" in r["trusted_proxies"] and "203.0.113.7/32" in r["trusted_proxies"]
+    page = c.get(PATH, params={"token": TOKEN}).text
+    assert "Presets" in page and "private" in page
