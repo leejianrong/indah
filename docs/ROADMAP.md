@@ -14,9 +14,10 @@
 | 0.4.1 (patch, about 1 week) | Public demos work; hosted path verified | 8 | IND-167, IND-33, 2 new verification cards | 1 |
 | 0.5.0 | Build your own, and the app skeleton | 24 | IND-149, 150, 146, 147, 151, 156, 144, 145 | 1 |
 | 0.6.0 | Tables, text and small controls | 25 + 5 | IND-148, 166, 153, 154, 152, 160, 164, 158, 161, 168, plus the demo cleanup card (IND-172) | 1 |
-| 0.7.0 (provisional) | Command palette, built-in visuals, the docs runtime | 24 | IND-165, 157, 162, 163, 176 (83a, done), 183, 184, 175 | 1 |
-| 0.8.0 (provisional) | Live docs and a playground (Pyodide, ADR-0041) | 21 | IND-181, 185, 169, 83, 61, 159 | 1 |
-| 0.9.0 (provisional) | Live media and annotation | 22 | IND-74 (split 3 ways), 64, 65, 71, 56, 62 | 1, decided in the ADR |
+| 0.7.0 | Command palette, built-in visuals, the docs runtime | 24 | IND-165, 157, 162, 163, 176 (83a, done), 183, 184, 175 | 1 |
+| 0.8.0 (about to release) | Live docs, deploy basics and size, in one release | about 70 | IND-181, 185, 169, 83, 61, 159, 186 to 190, 199 to 206, 214, 215, 177 to 180, 195 | 1 |
+| 0.9.0 (provisional) | Multi-replica (ADR-0043) | 22 | IND-197, 208, 210, 211, 212, 216, 196, 191 | 1 |
+| 0.10.0 (provisional) | Live media and annotation | 22 | IND-74 (split 3 ways), 64, 65, 71, 56, 62 | 1, decided in the ADR |
 | Later | Needs a decision or has no demand yet | 11 | IND-57, 81, 66 | - |
 | Superseded | The hosted Studio (ADR-0041 option B replaced it) | 6 | IND-173, 174 | - |
 | Closed as folded | | 1 | IND-155 (into IND-166) | - |
@@ -27,7 +28,7 @@ All 38 cards are placed: 2 + 8 + 10 + 8 + 6 + 3 + 1 = 38 (0.4.1 also gets two ne
 (a new component type, prop or message type is additive). The one card that could change this is
 IND-74 (WebSocket for live media): its ADR must show that the frames are the same JSON and that the
 transport is a negotiated upgrade. If it needs a mandatory handshake or a change to an existing field,
-that is a v2 and the release becomes 0.9.0 with a bump, decided by the owner.
+that is a v2 and the release becomes 0.10.0 with a bump, decided by the owner.
 
 ## Decisions (owner, 2026-10-22)
 
@@ -186,84 +187,60 @@ Risks:
 Owner decides:
 - Approve the `pypi` environment run for the release.
 
-## 0.8.0 (provisional): live docs and a playground, 21 points
+## 0.8.0 (about to release): live docs, deploy basics and size, one release
 
-Theme: the docs and the Studio become one thing for the reader (ADR-0041): every component page can run
-its Studio page in the browser, with its source.
+Owner decision (2026-10-24): one 0.8.0 with everything merged since 0.7.0, because the work overlapped and a
+second release would only repeat the upgrade notes. It is cut when IND-206 (deploy recipes) and the
+`grc-map` 18ch change have merged, after the CHANGELOG headings are tidied. Releases are tagged by Claude
+once CI on the release commit is fully green; the `pypi` approval stays the owner's.
 
-| Card | Pts |
-|------|-----|
-| IND-181 The indah-live element and a lazy Run it on the quickstart | 3 |
-| IND-185 CI check: every runnable Studio page runs in Pyodide | 3 |
-| IND-169 Roll live examples out across the docs | 5 |
-| IND-83 Docs Playground (83b) | 5 |
-| IND-61 Demo: DataFrame explorer (moved back in from "later") | 3 |
-| IND-159 InfoTip (moved back in from "later") | 2 |
+What is in it (from `git log v0.7.0..main`):
 
-Order: IND-181, then IND-185, then IND-169; IND-83 once IND-181 is in.
+| Theme | Cards |
+|-------|-------|
+| Live docs and the Playground (ADR-0041) | IND-181 quickstart Run it, IND-185 CI check that runnable pages run in Pyodide, IND-169 live examples across the docs, IND-83 the docs Playground, IND-195 backticks in summaries |
+| New component and demo | IND-159 InfoTip, IND-61 DataFrame explorer demo |
+| Extras and size (ADR-0042) | IND-187 size budget in CI, IND-188 extras `plot`, `data`, `demos`, `all`, IND-190 sdist trim, IND-189 gzip for the shell, `editor.js` and module files, IND-186 lazy Map (shell 243 to 200 KB gzip), IND-214 editor minify, IND-215 tighter budget |
+| Deploy basics | IND-199 unknown-session events fail loudly (409), IND-200 startup warning, IND-201 readiness and drain, IND-202 env config, IND-203 node header, IND-204 and IND-198 `trusted_proxies` presets, IND-205 deploy doctor page, IND-206 deploy recipes (pending) |
+| Gallery | IND-177 plots in dark mode, IND-178 table on a phone (plain tables still scroll sideways; `grc-map` clips its long column, 18ch), IND-179 charts open on a sample, IND-180 `object-detection` async start, gallery redeploy |
+| Measurements and ADRs | IND-170 (Fly half) and IND-171 sticky-session spike, ADR-0040 text scale and ADR-0042 extras (accepted), ADR-0043 multi-replica (proposed) |
 
-Risks: the first load is about 9 MB (gzip) and 4 to 6 seconds, so nothing may load before the reader
-presses Run it (a test reads the network log); the 13 server-shaped pages stay "local only" with a reason;
-`threading` and `run_in_threadpool` do not work in the browser.
+Upgrading items to flag in the release notes: an event or upload for a session id the process does not hold
+now gets `409 {"error": "unknown_session"}` instead of a silent 200 (a script that posts events without
+opening the stream first must open it); the shell, `editor.js` and module files are gzipped when the client
+accepts it (`create_app(compress=False)` turns it off); SIGTERM now drains (Fly needs
+`kill_signal = "SIGTERM"`); `Map` loads Leaflet from a lazy module (`api/map.js`).
 
-Owner decides: nothing new; the direction is set. Review the docs pages for tone before release.
+Risks: the largest minor release so far; the CHANGELOG `[Unreleased]` section has duplicate headings to merge
+first; the Cloudflare Worker hop and a real k8s cluster are still unverified (IND-170, IND-206).
 
-## 0.9.0 (provisional): run it for real on Fly and k8s, 23 points
+Owner decides or does by hand: the `pypi` approval; the Cloudflare dashboard steps for IND-170.
 
-Theme: a deployer on Fly or on their own k8s gets safe defaults, clear failures, drains and recipes. Owner
-priority (2026-10-24): multi-replica support sooner rather than later; this release is the groundwork and
-the ADR, 0.10.0 builds it. Background: `docs/spikes/proxy-and-sticky.md`, the 2026-10-24 explainer.
-
-| Card | Pts |
-|------|-----|
-| IND-199 Events for an unknown session fail loudly, and the tab recovers | 2 |
-| IND-198 Fly client address: the right trusted_proxies made easy (builds on IND-204) | 2 |
-| IND-200 Startup warning: forwarded headers seen but trusted_proxies unset | 1 |
-| IND-201 Readiness endpoint and graceful drain on SIGTERM | 3 |
-| IND-202 Config from environment (INDAH_SECRET, INDAH_TRUSTED_PROXIES, ...) | 2 |
-| IND-203 Opt-in X-Indah-Node header and ctx.conn.node | 1 |
-| IND-204 trusted_proxies presets: fly, cloudflare, k8s (explicit lists, never auto) | 2 |
-| IND-205 Deploy doctor page: the probe, built in | 3 |
-| IND-206 Deploy recipes: Fly and k8s (cookie affinity), manifests | 3 |
-| IND-207 ADR: multi-replica indah (owner registry, event forwarding, restorable sessions, backends) | 3 |
-| IND-189 Compress the shell and editor.js (in progress) | 2 |
-| IND-186 Measure Leaflet and uPlot, lazy Map if it pays (in progress) | 3 |
-
-Order: IND-199 and IND-200 first (cheap, visible), then IND-201, 202, 203, 204, then IND-205, then IND-207
-(the ADR gates 0.10.0) and IND-206 once the owner has run the k3s probe (PAN-130). IND-197 (shell sends a
-Fly instance header) is deprioritised: cookie affinity covers k8s and the backplane in 0.10.0 makes it
-unnecessary.
-
-Risks: readiness and drain add a new additive message type; presets must be explicit lists (never auto, never
-`*`); the Cloudflare list needs a freshness check; recipes are only as verified as the cluster they ran on.
-
-Owner decides or does by hand: the Cloudflare dashboard steps for IND-170 (`deploy/probe/README.md`); accept
-the multi-replica ADR (IND-207) before 0.10.0 starts; the `pypi` approval.
-
-## 0.10.0 (provisional): multi-replica, 27 points
+## 0.9.0 (provisional): multi-replica, 22 points
 
 Theme: any replica's front door works, and a restart or rollout does not lose a tab's small state. Shaped by
-ADR-0043 (multi-replica, Proposed 2026-10-24; the owner accepts it before these cards start). Redis is an
-optional state store the user provides (`indah[redis]`); indah never runs or bundles it, and the in-memory
-defaults keep working with no extra service. Routing does not need Redis: Tier A (cookie affinity, IND-206 in
-0.9.0), the Fly route hint (IND-197) and, only if the owner's ingress cannot do affinity, the k8s forwarder
-(IND-209, after this release).
+ADR-0043 (Proposed 2026-10-24; decisions so far are recorded in the ADR: losing live handler state on an
+owner crash is accepted, the cluster secret `INDAH_CLUSTER_SECRET` is required explicitly, a hint-aware shell
+is the recommended requirement). Redis is an optional state store the user provides (`indah[redis]`); indah
+never runs or bundles it, and the in-memory defaults keep working with no extra service. Routing does not
+need Redis: Tier A (cookie affinity, the IND-206 recipes in 0.8.0), the Fly route hint (IND-197) and, only if
+the owner's ingress cannot do affinity, the k8s forwarder (IND-209, deferred).
 
 | Card | Pts |
 |------|-----|
 | IND-197 Route hint: init carries an owner hint, the shell sends it (Fly header, file URLs) | 5 |
-| IND-208 Restorable sessions: ctx.persist and a StateStore (memory, SQLite) | 5 |
+| IND-208 Restorable sessions: ctx.persist and a StateStore (memory, SQLite; admit a client-held store) | 5 |
 | IND-210 Redis StateStore adapter (indah[redis]) | 3 |
 | IND-211 Multi-replica e2e: three replicas, two balancers, rolling restart, real Fly run | 5 |
 | IND-212 /metrics endpoint | 2 |
-| IND-216 Decision: Topic and Stream across replicas | 2 |
+| IND-216 Decision: Topic and Stream across replicas (recommendation: producer per replica now) | 2 |
 | Gallery: IND-196 stale Colab notebooks (2), IND-191 catalog file (3) | 5 |
 
-Moved after 0.10.0: IND-209 (peer forwarder for k8s without affinity, 5, reshaped from the registry and bus
-sketch) and IND-213 (shared rate limits, 3). IND-187..190 follow-ups still open after 0.9.0 ride along.
+Deferred past 0.9.0: IND-209 (peer forwarder for k8s without affinity, 5; built only if the k3s ingress
+cannot do cookie affinity) and IND-213 (shared rate limits, 3).
 
 Order: IND-197 and IND-208 in parallel (shell and `ctx`), then IND-210, then IND-211, then IND-212; IND-216
-any time.
+any time. Evaluate a browser-held store inside IND-208.
 
 Risks: the route hint is a small shell change plus a new `init` field (additive); a restored session must
 never include ephemeral props (ADR-0036); an owner pod dying mid-session still loses live state that was not
@@ -271,10 +248,9 @@ persisted (one toast and a restored page); `Topic` and `Stream` producers stay p
 decided.
 
 Owner decides: what fronts the k3s (Traefik or ingress-nginx talking to pods, or a Cloudflare Tunnel to a
-Service: this decides whether IND-209 is built at all); Redis or Postgres as the first store; the open
-questions in ADR-0043.
+Service; this decides whether IND-209 is built at all); Redis or Postgres for the first store; accept ADR-0043.
 
-## 0.11.0 (provisional): live media and annotation, 22 points
+## 0.10.0 (provisional): live media and annotation, 22 points
 
 Theme: the deferred live-media boundary (ADR-0017), only if the owner wants it.
 
@@ -308,7 +284,7 @@ the hosted layer has run for real users. Exit criteria:
    RunPod smoke test as in `docs/RELEASING.md`).
 5. Multi-replica verified on the owner's k3s and on Fly (IND-211 plus a real-cluster run), or an explicit
    statement that 1.0 is single-process with the reasons.
-Earliest sensible date: after 0.10.0.
+Earliest sensible date: after 0.9.0.
 
 ## Working rules
 
@@ -336,4 +312,6 @@ Earliest sensible date: after 0.10.0.
 | Before 0.5.0 build | Accept the bridge ADR |
 | Before 0.6.0 | Settle the Text scale and inline code and emphasis in the IND-166 ADR (the default look is decided) |
 | Done 2026-10-23 | Built-in for Marked, BarStrip, Steps; docs and Studio are one thing, run with Pyodide (ADR-0041 option B); gallery keeps its name, no community contributions yet |
+| Done 2026-10-24 | `grc-map` at 18ch; Claude may tag and create releases when CI is green; one 0.8.0 release; ADR-0040 and ADR-0042 accepted; cluster secret required explicitly; losing live handler state on an owner crash accepted |
+| Open | Check what fronts the k3s (Traefik, ingress-nginx or a Cloudflare Tunnel to a Service); the Cloudflare dashboard steps for IND-170 (`deploy/probe/README.md`); accept ADR-0043 |
 | Each release | Approve the `pypi` environment run |
