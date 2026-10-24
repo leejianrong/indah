@@ -30,6 +30,7 @@ from typing import Any
 
 from pydantic import ValidationError
 from starlette.applications import Starlette
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import (
@@ -88,9 +89,11 @@ from .components import (
     TextInput,
     UploadedFile,
 )
+from .compress import accepts_gzip, gzip_joined, gzip_static, matches_etag, variant_etag
 from .context import ConnectionInfo, Context
 from .csp import (
     add_nonce,
+    add_nonce_parts,
     build_csp,
     known_img_hosts,
     new_nonce,
@@ -554,6 +557,7 @@ def create_app(
     favicons: Mapping[str, str | os.PathLike[str] | bytes] | None = None,
     factory_timeout: float = DEFAULT_FACTORY_TIMEOUT,
     factory_placeholder: Callable[[], Component] | None = None,
+    compress: bool = True,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -653,6 +657,10 @@ def create_app(
     JPEG or WebP path or bytes, up to 64 KB). A session switches its tab's icon to one by name
     with ``ctx.favicon.set("alert")`` and its title with ``ctx.title.set("(2) app")``; both
     go back to the app's own with ``None`` (IND-152).
+
+    ``compress`` (on by default) gzips the shell, ``api/editor.js`` and module component files
+    for a client that sends ``Accept-Encoding: gzip`` (ADR-0042, IND-189). The event stream and
+    JSON routes are never compressed. Pass ``False`` behind a gateway that should do all of it.
     """
     if csp is not None and (not isinstance(csp, str) or not csp.strip()):
         raise ValueError("csp must be None, 'strict', or a policy string")
@@ -750,6 +758,7 @@ def create_app(
     app.state.audit_payloads = audit_payloads
     app.state.policy = policy
     app.state.csp = csp
+    app.state.compress = compress
     app.state.csp_media_hosts = tuple(csp_media_hosts)
     app.state.csp_violations = deque(maxlen=100)
     app.state.stream_limiter = StreamLimiter(limits.max_streams_per_ip)
@@ -849,12 +858,36 @@ def _chrome_html(state: Any, base_href: str | None = None) -> str:
     return html_text
 
 
-async def _index(request: Request) -> HTMLResponse:
+def _compression(request: Request) -> bool | None:
+    """``None`` when compression is off for this app, else whether this client takes gzip."""
+    if not getattr(request.app.state, "compress", True):
+        return None
+    return accepts_gzip(request.headers.get("accept-encoding"))
+
+
+async def _html_response(
+    request: Request, html_text: str, headers: dict[str, str], nonce: str | None = None
+) -> Response:
+    """The shell, gzipped when the client accepts it (ADR-0042). The page is a static template
+    with the CSP nonce inserted after each ``<script`` and ``<style``, so it is compressed in
+    cached pieces rather than once per response."""
+    gz = _compression(request)
+    if gz is None:
+        return HTMLResponse(add_nonce(html_text, nonce) if nonce else html_text, headers=headers)
+    headers = {**headers, "Vary": "Accept-Encoding"}
+    if not gz:
+        return HTMLResponse(add_nonce(html_text, nonce) if nonce else html_text, headers=headers)
+    parts = add_nonce_parts(html_text) if nonce else [html_text]
+    packed = await run_in_threadpool(gzip_joined, parts, f' nonce="{nonce}"' if nonce else "")
+    return HTMLResponse(packed, headers={**headers, "Content-Encoding": "gzip"})
+
+
+async def _index(request: Request) -> Response:
     state = request.app.state
     base = _base_href(request.scope.get("path", "/"), request.scope.get("root_path", ""))
     html_text = _chrome_html(state, base)
     if not state.csp:
-        return HTMLResponse(html_text)
+        return await _html_response(request, html_text, {})
     nonce = new_nonce()
     if state.csp == "strict":
         policy = build_csp(
@@ -864,9 +897,11 @@ async def _index(request: Request) -> HTMLResponse:
         )
     else:
         policy = render_custom(state.csp, nonce)
-    return HTMLResponse(
-        add_nonce(html_text, nonce),
-        headers={"Content-Security-Policy": policy, "Cache-Control": "no-store"},
+    return await _html_response(
+        request,
+        html_text,
+        {"Content-Security-Policy": policy, "Cache-Control": "no-store"},
+        nonce=nonce,
     )
 
 
@@ -901,9 +936,27 @@ async def _spa_index(request: Request) -> Response:
 _EDITOR_ETAG: str | None = None
 
 
+async def _static_js(request: Request, data: bytes, etag: str, key: str, cache: str) -> Response:
+    """A static JavaScript file, gzipped once (cached under ``key``) when the client accepts it,
+    with a validator per representation and ``Vary`` so a cache keeps the two apart."""
+    gz = _compression(request)
+    headers = {"Cache-Control": cache}
+    if gz is not None:
+        headers["Vary"] = "Accept-Encoding"
+    etag = variant_etag(etag, bool(gz))
+    headers["ETag"] = etag
+    if matches_etag(request.headers.get("if-none-match"), etag):
+        return Response(status_code=304, headers=headers)
+    if gz:
+        data = await run_in_threadpool(gzip_static, key, data)
+        headers["Content-Encoding"] = "gzip"
+    return Response(data, media_type="text/javascript", headers=headers)
+
+
 async def _editor_js(request: Request) -> Response:
     """The lazily loaded code editor module (ADR-0032), served from the wheel. Revalidated
-    with an ETag so a new indah version is picked up, but never re-downloaded needlessly."""
+    with an ETag so a new indah version is picked up, but never re-downloaded needlessly.
+    Gzipped when the client accepts it (ADR-0042)."""
     global _EDITOR_ETAG
     try:
         data = files("indah.static").joinpath("editor.js").read_bytes()
@@ -911,10 +964,7 @@ async def _editor_js(request: Request) -> Response:
         return Response(status_code=404)
     if _EDITOR_ETAG is None:
         _EDITOR_ETAG = '"' + hashlib.sha1(data).hexdigest()[:16] + '"'
-    headers = {"ETag": _EDITOR_ETAG, "Cache-Control": "no-cache"}
-    if request.headers.get("if-none-match") == _EDITOR_ETAG:
-        return Response(status_code=304, headers=headers)
-    return Response(data, media_type="text/javascript", headers=headers)
+    return await _static_js(request, data, _EDITOR_ETAG, "editor:" + _EDITOR_ETAG, "no-cache")
 
 
 _COMPONENT_NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
@@ -929,13 +979,11 @@ async def _component_js(request: Request) -> Response:
     reg = registered(name) if _COMPONENT_NAME.match(name) else None
     if reg is None or reg.module is None:
         return Response(status_code=404)
-    etag = f'"{reg.module_hash}"'
     pinned = request.query_params.get("v") == reg.module_hash
     cache = "public, max-age=31536000, immutable" if pinned else "no-cache"
-    headers = {"ETag": etag, "Cache-Control": cache}
-    if request.headers.get("if-none-match") == etag:
-        return Response(status_code=304, headers=headers)
-    return Response(reg.module, media_type="text/javascript", headers=headers)
+    return await _static_js(
+        request, reg.module, f'"{reg.module_hash}"', "module:" + reg.module_hash, cache
+    )
 
 
 _MAX_LOGO_BYTES = 512 * 1024

@@ -11,7 +11,19 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+
+- Compression for what indah serves (ADR-0042, IND-189): the page, `api/editor.js` and the files of a
+  module component go out gzipped when the client sends `Accept-Encoding: gzip`, with `Vary:
+  Accept-Encoding` and a separate `ETag` per form (`304` still works). The page goes from 581,178 to
+  243,716 bytes and `editor.js` from 633,404 to 177,815, so a client behind a proxy that does not
+  compress sends a quarter to a third as much. The event stream and JSON routes are never compressed.
+  The static pieces of the page are compressed once and the CSP nonce is added around them, so a page
+  load costs about 1 ms more rather than 35. `create_app(compress=False)` turns it off. No wire change
+  (`protocol_version` stays 1).
+
 ### Changed
+
 
 - The source distribution (sdist) no longer carries `examples/` or the gallery thumbnails: it drops from
   6.5 MB to 1.5 MB. The wheel (what `pip install` uses) is unchanged. Tests that read `examples/` are

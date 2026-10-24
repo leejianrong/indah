@@ -297,6 +297,27 @@ strict-origin-when-cross-origin` and `X-Frame-Options: DENY`. Pass a mapping to 
 (`{"X-Frame-Options": "SAMEORIGIN"}` if you embed the app in a page of your own origin; `""` drops
 a header). Leave it off in a notebook, where Colab shows the app in a frame.
 
+## Compression
+
+indah gzips the three things it serves that are large and static: the page itself (about 580 KB,
+244 KB gzipped), the code editor module (633 KB, 178 KB gzipped) and the files of a module
+component. A client that sends `Accept-Encoding: gzip` gets them compressed, with `Vary:
+Accept-Encoding`, so a cache keeps the two forms apart, and each form has its own `ETag` (the
+gzip one ends in `-gz`) and answers `If-None-Match` with `304`. Before this, a proxy that did not
+compress them itself (Fly and Cloudflare do) sent the full size.
+
+- The event stream (`api/stream`) and the JSON routes are never compressed, so a streamed frame
+  is not held back waiting for a compression window.
+- The page is compressed in pieces around the CSP nonce, so a page load costs about 1 ms more
+  than before (2.7 ms against 1.7 ms) rather than the 35 ms a gzip of the whole page would take.
+- Compressing the page is safe against BREACH: it carries a random nonce, the base path and your
+  own title and theme, never a session token or a secret. Tokens travel in a POST body, and
+  one-time secrets on the stream.
+- A gateway or CDN may compress again, or in a better format (brotli); that is fine, indah
+  sends an already-compressed body with `Content-Encoding: gzip` and the gateway leaves it alone.
+- `create_app(compress=False)` turns it off, for example behind a gateway that you want to do all
+  of the compression.
+
 ## Content-Security-Policy
 
 `csp="strict"` serves the shell with a per-response nonce on its inline script and style tags and
