@@ -700,6 +700,60 @@ def _map_app():
 
 
 @pytest.mark.e2e
+def test_leaflet_loads_lazily_only_for_a_map_and_by_its_content_hash():
+    """The shell does not carry Leaflet (ADR-0042): a page without a map never asks for
+    api/map.js, and a page with one asks once, with the file's content hash in the URL."""
+    import hashlib
+    from importlib.resources import files
+
+    from indah import Session, Text, create_app
+
+    digest = hashlib.sha1(files("indah.static").joinpath("map.js").read_bytes()).hexdigest()[:16]
+    plain = launch(create_app(session=Session(Text("no map here"))), block=False, open_inline=False)
+    mapped = launch(_map_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            try:
+                page = browser.new_page()
+                requests = []
+                page.on("request", lambda r: requests.append(r.url))
+                page.goto(plain.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("no map here")).to_be_visible()
+                page.wait_for_timeout(500)
+                assert not [u for u in requests if "api/map.js" in u]
+
+                requests.clear()
+                page.goto(mapped.url, wait_until="domcontentloaded")
+                expect(page.locator(".map.leaflet-container")).to_be_visible()
+                hits = [u for u in requests if "api/map.js" in u]
+                assert len(hits) == 1 and hits[0].endswith(f"api/map.js?v={digest}"), hits
+            finally:
+                browser.close()
+    finally:
+        plain.stop()
+        mapped.stop()
+
+
+@pytest.mark.e2e
+def test_a_map_module_that_cannot_load_says_so_and_the_page_keeps_working():
+    handle = launch(_map_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            try:
+                page = browser.new_page()
+                page.route("**/api/map.js*", lambda route: route.abort())
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("The map could not be loaded.")).to_be_visible()
+                expect(page.locator("button", has_text="fly")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
 def test_map_renders_markers_and_flies_to_a_new_center():
     """The map mounts a real Leaflet instance with its marker, polygon, and
     polyline, and Python setting a new center flies the existing map there (G5)."""

@@ -125,6 +125,10 @@ Try it live. Nothing downloads until you press **Run it**.
 | `JsonTree` | a collapsible, searchable JSON viewer |
 | `Diff` | a split or unified diff of two texts or JSON values |
 
+`Map` loads Leaflet the first time a map appears (one request, about 43 KB compressed), the way
+`CodeEditor` loads its editor, so an app without a map never downloads it. If it cannot load, the map
+area says so and the rest of the page keeps working.
+
 <details>
 <summary>Try these live (8 examples)</summary>
 

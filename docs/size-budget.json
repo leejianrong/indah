@@ -5,6 +5,7 @@
   "shell_served_gzip_bytes": 275000,
   "shell_raw_bytes": 650000,
   "editor_gzip_bytes": 200000,
+  "map_gzip_bytes": 50000,
   "direct_dependencies": 5,
   "base_install_distributions": 14
 }

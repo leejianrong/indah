@@ -69,6 +69,10 @@ jobs:
             echo "::error::src/indah/static/editor.js is stale; run 'make frontend' and commit the result."
             exit 1
           fi
+          if ! diff -q frontend/dist-map/map.js src/indah/static/map.js; then
+            echo "::error::src/indah/static/map.js is stale; run 'make frontend' and commit the result."
+            exit 1
+          fi
 
   # Heavy layer: renders the pre-built shell in a real Chromium and asserts the
   # DOM patches through the SSE round-trip. Kept off the fast gate; the only job

@@ -193,6 +193,7 @@ must raise on purpose, not targets.
 | `shell_gzip_bytes` | 239,950 | 275,000 | first load of the starter app; room for about 25 more components |
 | `shell_raw_bytes` | 569,673 | 650,000 | what indah sends when nothing compresses |
 | `editor_gzip_bytes` | 177,815 | 200,000 | the largest lazy module |
+| `map_gzip_bytes` | 43,487 | 50,000 | the Leaflet lazy module (IND-186) |
 | `direct_dependencies` | 4 | 5 | base install |
 | transitive distributions in the base install | 12 | 14 | measured in the CI `build` job, not by the script |
 
@@ -265,8 +266,8 @@ carry for a few hundred kilobytes.
 
 ## Follow-ups (cards to file)
 
-1. Measure the bundle share of Leaflet, uPlot and `TableRich` (bundle visualiser), and build the Map
-   lazy module if the saving holds. 3 points.
+1. **Done (IND-186, 2026-10-24).** Measured the bundle share of Leaflet, uPlot and `TableRich`, and
+   built the Map lazy module (`api/map.js`). See "Measured bundle shares" below. 3 points.
 2. Wire `scripts/size_report.py` into CI with `docs/size-budget.json`. 1 point.
 3. Add the `plot`, `data`, `demos` and `all` extras, document them, and make the gallery install
    `indah[demos]`. 2 points.
@@ -275,3 +276,47 @@ carry for a few hundred kilobytes.
    rewritten per response for the CSP nonce, so it cannot be compressed once and cached as is. 2 points.
 5. Trim the sdist (exclude `examples/` and `deploy/` thumbnails with a hatch sdist rule). It does not
    affect `pip install`, only source downloads. 1 point.
+
+## Measured bundle shares (IND-186, 2026-10-24)
+
+Measured by building the shell once as it is and then with one library stubbed out through a Vite
+alias, at the same gzip level `scripts/size_report.py` uses (9). The numbers are what the singlefile
+bundle really carries, not the library files' own sizes.
+
+| Removed from the shell | Raw bytes | Gzip bytes | Reading |
+|------------------------|-----------|------------|---------|
+| Leaflet, JS and CSS | 167,682 | 49,689 | Clears the card's 40 KB gzip line |
+| Leaflet, JS only | 152,076 | 43,759 | What the lazy module removes (the CSS stays, see below) |
+| uPlot, JS and CSS | 55,941 | 23,821 | Under the line, so `Chart` stays in the shell |
+| `TableRich` (indah's own code) | 17,649 | 5,748 | Not a library, not a candidate |
+
+(Baseline shell: 581,046 raw, 243,354 gzip.)
+
+**Decision: Map is lazy, Chart is not.** Leaflet's JS alone is 43.8 KB gzip, over the 40 KB line, and
+a map is a niche feature, so it moved to `map.js` (150,690 raw, 43,487 gzip, minified). uPlot is 23.8 KB
+gzip and `Chart` is common; an extra request on every chart page is not worth a saving that small, so
+it stays. Revisit if the shell budget gets tight.
+
+**Result.** Shell 581,046 to 428,605 raw (-152,441) and 243,354 to 199,839 gzip (-43,515). Screenshots of
+a map at 1280 and 390 px, light and dark, are byte-identical before and after.
+
+**What lazy loading costs.** One extra request the first time a map appears. Time to the first marker
+drawn, median of five, with the shell sent uncompressed as indah does (a proxy such as Fly or
+Cloudflare compresses it, which shrinks all of these):
+
+| Profile | Page without a map | Page with a map |
+|---------|--------------------|-----------------|
+| Slow 4G (1.6 Mbps, 150 ms, 4x CPU), before | 4.43 s | 4.42 s |
+| Slow 4G, after | 3.49 s (-0.94 s) | 4.65 s (+0.23 s) |
+| Fast (10 Mbps, 40 ms), before | 1.02 s | 1.00 s |
+| Fast, after | 0.99 s | 1.03 s |
+
+**Why the CSS stays in the shell.** Leaflet's CSS is about 5.9 KB gzip. A module would have to inject it
+as a `<style>` element, which the strict CSP only allows with the page's nonce (ADR-0038). Keeping the
+CSS in the shell avoids a second place that needs the nonce, for a saving of 5.9 KB.
+
+**Vite note.** Library mode keeps whitespace in an ES build, which made `map.js` 307 KB raw and 72 KB
+gzip. `frontend/vite.map.config.js` minifies fully in a last step and sets the build target to
+`esnext` (any other target makes Vite re-print the code with whitespace). `editor.js` is built the
+plain way and is 633 KB raw, 178 KB gzip, so the same step may save it a large share too; not done here.
+

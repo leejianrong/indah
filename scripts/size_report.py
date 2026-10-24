@@ -62,6 +62,9 @@ def measure() -> dict[str, int]:
     out["shell_served_gzip_bytes"] = _served_shell_bytes()
     out["editor_raw_bytes"] = editor.stat().st_size
     out["editor_gzip_bytes"] = _gzip_size(editor)
+    map_module = STATIC / "map.js"
+    out["map_raw_bytes"] = map_module.stat().st_size
+    out["map_gzip_bytes"] = _gzip_size(map_module)
     sources = (ROOT / "src" / "indah").glob("*.py")
     out["python_source_bytes"] = sum(p.stat().st_size for p in sources)
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
