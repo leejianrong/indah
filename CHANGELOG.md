@@ -11,6 +11,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-24
+
+The deployment release, plus live docs. This release makes indah easier to run for real on Fly and on your
+own Kubernetes (k3s): a readiness endpoint and a graceful drain, configuration from the environment,
+`trusted_proxies` presets, a startup warning for the commonest proxy mistake, an opt-in deploy doctor page and
+tested recipes for both. The shell is smaller (Leaflet is now a lazily loaded module, and the page and the
+editor are served compressed), the docs gain a Playground and live examples that run in your browser, and
+`InfoTip` joins the components. **Read "Upgrading" first:** an event for a session the server does not hold is
+now a `409`, not a silent `200`. `protocol_version` is still 1.
+
 ### Added
 
 - Deploy recipes (`deploy/recipes/`) and two guides, "Run on Fly" and "Run on Kubernetes". Fly: a
@@ -91,6 +101,34 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   load costs about 1 ms more rather than 35. `create_app(compress=False)` turns it off. No wire change
   (`protocol_version` stays 1).
 
+- Optional extras (ADR-0042): `pip install "indah[plot]"` (matplotlib), `"indah[data]"` (pandas,
+  numpy), `"indah[all]"` (both) and `"indah[demos]"` (the libraries the gallery demos and examples
+  use). indah duck-types these libraries, so none is required and the base install is unchanged
+  (four direct dependencies); an extra documents a tested version floor. A `DataFrame` or `Table`
+  given something it cannot read now says to use a pandas frame (`indah[data]`), a dict or a list
+  of row dicts.
+- A size budget in CI (ADR-0042): `docs/size-budget.json` limits the wheel, the shell, `editor.js`,
+  the direct dependencies and the base install, and the build job fails when one goes over. `make size`
+  runs it locally.
+
+- The docs have a **Playground** (`playground.md`): edit an indah app and run it in your own browser with
+  Pyodide, with no install and no server (ADR-0041). Write `def build()` returning a component, the same
+  contract as the Studio's local playground, so snippets move between them. Nothing loads until you press
+  Run (about 9 MB compressed the first time), a run starts in about 4 seconds once cached, your code is sent
+  nowhere, an endless loop is stopped after 5 seconds (and Stop works at any time), and a syntax error or
+  an exception is shown under the editor as a traceback from your own lines. It starts from the Studio
+  playground's examples and the quickstart. With JavaScript off the editor and the examples still read. The
+  page lists what cannot work without a server. The Studio's own playground still runs only on your
+  machine. Docs only: `src/indah` does not change.
+
+- `InfoTip(text, label=)`: a small focusable info icon that shows a short note (the design's "i" beside a
+  label). It opens on hover and keyboard focus, a click or tap pins it open, and Escape, blur or a press
+  outside closes it; Escape closes only the note, so a modal behind it stays open. It is one tab stop, a
+  real button named by `label` and described by the note (`aria-describedby`, `role="tooltip"`), the note
+  stays inside the screen at 390px, and `text` may be a `Signal`, `Computed` or function. A render spec can
+  name it (`{"component": "infotip", "bind": {"text": ...}}`) for a `List` item or a table cell. A new
+  component type and spec component, so `protocol_version` stays 1 and nothing existing changes.
+
 ### Changed
 
 - The size budget (`docs/size-budget.json`) now sits about 15 percent above today's numbers instead of far
@@ -122,38 +160,6 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   6.5 MB to 1.5 MB. The wheel (what `pip install` uses) is unchanged. Tests that read `examples/` are
   skipped when you run the suite from an sdist; clone the repository to run all of them.
 
-### Added
-
-- Optional extras (ADR-0042): `pip install "indah[plot]"` (matplotlib), `"indah[data]"` (pandas,
-  numpy), `"indah[all]"` (both) and `"indah[demos]"` (the libraries the gallery demos and examples
-  use). indah duck-types these libraries, so none is required and the base install is unchanged
-  (four direct dependencies); an extra documents a tested version floor. A `DataFrame` or `Table`
-  given something it cannot read now says to use a pandas frame (`indah[data]`), a dict or a list
-  of row dicts.
-- A size budget in CI (ADR-0042): `docs/size-budget.json` limits the wheel, the shell, `editor.js`,
-  the direct dependencies and the base install, and the build job fails when one goes over. `make size`
-  runs it locally.
-
-- The docs have a **Playground** (`playground.md`): edit an indah app and run it in your own browser with
-  Pyodide, with no install and no server (ADR-0041). Write `def build()` returning a component, the same
-  contract as the Studio's local playground, so snippets move between them. Nothing loads until you press
-  Run (about 9 MB compressed the first time), a run starts in about 4 seconds once cached, your code is sent
-  nowhere, an endless loop is stopped after 5 seconds (and Stop works at any time), and a syntax error or
-  an exception is shown under the editor as a traceback from your own lines. It starts from the Studio
-  playground's examples and the quickstart. With JavaScript off the editor and the examples still read. The
-  page lists what cannot work without a server. The Studio's own playground still runs only on your
-  machine. Docs only: `src/indah` does not change.
-
-- `InfoTip(text, label=)`: a small focusable info icon that shows a short note (the design's "i" beside a
-  label). It opens on hover and keyboard focus, a click or tap pins it open, and Escape, blur or a press
-  outside closes it; Escape closes only the note, so a modal behind it stays open. It is one tab stop, a
-  real button named by `label` and described by the note (`aria-describedby`, `role="tooltip"`), the note
-  stays inside the screen at 390px, and `text` may be a `Signal`, `Computed` or function. A render spec can
-  name it (`{"component": "infotip", "bind": {"text": ...}}`) for a `List` item or a table cell. A new
-  component type and spec component, so `protocol_version` stays 1 and nothing existing changes.
-
-### Changed
-
 - The docs show a live example next to each documented component: 73 `<indah-live>` embeds across the
   components, dashboard, quickstart, chatbot, custom components, design system and hosting pages. Nothing
   downloads until a reader presses **Run it**, and one example runs at a time; the 10 pages that need a
@@ -172,6 +178,18 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 - Docs: the summary line of a live example now shows `code` spans as code instead of with literal
   backticks (the page's source and the rest of the summary stay escaped).
 
+### Known limitations
+
+- Run one indah process per app on Fly: a gateway that cannot set its own cookie cannot pin a tab to a machine,
+  and indah does not yet route an event to the machine that holds the session (ADR-0043, proposed).
+  Cookie affinity at a Traefik ingress was measured on k3d (20 of 20 events); ingress-nginx and a Traefik
+  `IngressRoute` were not run.
+- `trusted_proxies` is verified on the direct Fly path only. The Cloudflare Worker hop (IND-170), IPv6 clients
+  and a real k3s cluster's visitor address are not yet measured.
+- A `Topic` or `Stream` reaches only the tabs on the process that produced it (IND-216).
+- `Marked` does not draw inside a `Diff` pane. A `Menu` and a module component cannot sit in a table cell.
+- The live docs examples have been tried in Chromium only; Safari, Firefox and phones are not checked.
+
 ### Upgrading
 
 - **Events need a stream first.** `POST api/event` and `POST api/upload` for a `sid` the server
@@ -179,6 +197,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   first, so nothing changes there. A script or an in-process test that posts events directly must
   first open `GET api/stream?sid=<sid>` (and let go: the session stays) or create the session
   through the store; see `tests/integration/conftest.py` for a test fixture that does it.
+- **Compression is on by default.** The page, `api/editor.js`, `api/map.js` and module files are gzipped for
+  clients that ask. `create_app(compress=False)` (or `INDAH_COMPRESS=0`) turns it off. The event stream is
+  never compressed.
+- **SIGTERM now drains.** With open tabs, a SIGTERM keeps serving them for up to `drain_seconds` (10 by
+  default) and tells them to reconnect, instead of dropping them at once. With no open stream the process
+  still exits straight away. On Fly set `kill_signal = "SIGTERM"` (its default is SIGINT, which does not
+  drain), and give Kubernetes a `terminationGracePeriodSeconds` longer than the drain.
 
 ## [0.7.0] - 2026-10-24
 
