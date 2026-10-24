@@ -22,6 +22,7 @@ import time
 import urllib.parse
 from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from datetime import datetime
 from html import escape
 from importlib.resources import files
@@ -100,6 +101,7 @@ from .csp import (
     render_custom,
 )
 from .custom import custom, register_component, registered
+from .drain import Drain, chain_sigterm
 from .guard import OriginGuard, normalize_origins
 from .hardening import (
     Limits,
@@ -123,6 +125,7 @@ from .theme import Theme
 from .transport import Hub, Item
 
 DEFAULT_HEARTBEAT_SECONDS = 15.0
+DEFAULT_DRAIN_SECONDS = 10.0
 
 # An id-less connection (a test, a curl, an old shell) shares this one session.
 # The real shell mints a per-tab id, so real viewers never land here together.
@@ -559,6 +562,8 @@ def create_app(
     factory_timeout: float = DEFAULT_FACTORY_TIMEOUT,
     factory_placeholder: Callable[[], Component] | None = None,
     compress: bool = True,
+    drain_seconds: float = DEFAULT_DRAIN_SECONDS,
+    drain_on_sigterm: bool = True,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -596,6 +601,14 @@ def create_app(
 
     ``density`` (``"comfortable"``, the default, or ``"compact"``) sets the row height and
     cell padding of tables across the app; a ``Table(density=)`` overrides it for one table.
+
+    ``drain_seconds`` (default 10) is how long a draining process keeps serving the sessions it
+    already holds before it ends the streams still open (IND-201). A drain starts on SIGTERM
+    (``launch()`` and ``uvicorn app:app`` with ``drain_on_sigterm=True``, the default) or when your
+    own shutdown code runs ``await app.state.drain.run()``. While draining, ``GET /ready`` answers
+    ``503``, new streams and new sessions are refused with ``503`` and ``Retry-After``, and every
+    open stream is sent a ``reconnect`` message so the tab moves to another process. ``GET /health``
+    stays ``200`` (liveness). With no stream open a drain is over at once.
 
     ``auth`` (an :data:`~indah.auth.Authenticator`: request -> :class:`~indah.auth.Principal`
     or ``None``) says who each request is, so a session factory can read ``ctx.user`` and each
@@ -740,11 +753,25 @@ def create_app(
         middleware.append(
             Middleware(OriginGuard, allowed_origins=normalize_origins(allowed_origins))
         )
+    drain = Drain(drain_seconds)
+
+    @asynccontextmanager
+    async def lifespan(_app: Starlette) -> AsyncIterator[None]:
+        drain.loop = asyncio.get_running_loop()
+        restore = chain_sigterm(drain, drain.loop) if drain_on_sigterm else None
+        try:
+            yield
+        finally:
+            if restore is not None:
+                restore()
+
     app = Starlette(
         middleware=middleware,
+        lifespan=lifespan,
         routes=[
             Route("/", _index, methods=["GET"]),
             Route("/health", _health, methods=["GET"]),
+            Route("/ready", _ready, methods=["GET"]),
             *([Route("/api/session", _session, methods=["POST"])] if secure else []),
             Route("/api/stream", _stream, methods=["GET"]),
             Route("/api/event", _event, methods=["POST"]),
@@ -759,6 +786,8 @@ def create_app(
         ],
     )
     app.state.store = store
+    app.state.drain = drain
+    app.state.drain_on_sigterm = drain_on_sigterm
     app.state.auth = auth
     app.state.secure = secure
     app.state.signer = signer
@@ -1101,6 +1130,24 @@ async def _health(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+async def _ready(request: Request) -> JSONResponse:
+    """Readiness for a load balancer or Kubernetes: ``200`` while this process takes new tabs,
+    ``503`` once it is draining (IND-201). Never touches a session, needs no login."""
+    headers = {"Cache-Control": "no-store"}
+    if request.app.state.drain.draining:
+        headers["Retry-After"] = "1"
+        return JSONResponse({"ready": False, "draining": True}, status_code=503, headers=headers)
+    return JSONResponse({"ready": True}, headers=headers)
+
+
+def _draining() -> JSONResponse:
+    """The refusal for a new stream or session while this process drains: try again, and the
+    platform (which has stopped routing here, see ``/ready``) sends the retry elsewhere."""
+    return JSONResponse(
+        {"ok": False, "error": "draining"}, status_code=503, headers={"Retry-After": "1"}
+    )
+
+
 async def sse_events(
     queue: asyncio.Queue[Item],
     init_payload: dict[str, Any] | None,
@@ -1197,6 +1244,15 @@ async def sse_events(
 
         emitted = 0
         for off, msg in batch:
+            kind = msg.get("type")
+            if kind == "drain_end":  # the server is ending this stream: never sent to the tab
+                return
+            if kind == "reconnect":  # not state: no id, and never skipped as already seen
+                chunk = _sse(msg)
+                pending += len(chunk)
+                emitted += 1
+                yield chunk
+                continue
             if off <= skip_upto:
                 continue
             chunk = _sse(msg, event_id=off, id_prefix=id_prefix)
@@ -1275,6 +1331,8 @@ async def _open_session(
         existing = store.get(sid)
         if existing is not None and existing.owner != principal.id:
             return None, _denied(403, "forbidden"), None
+    if state.drain.draining and store.get(sid or DEFAULT_SESSION_ID) is None:
+        return None, _draining(), None  # a drain takes no new sessions (IND-201)
     info = ConnectionInfo.from_request(request, app_path, principal)
     aget = getattr(
         store, "aget_or_create", None
@@ -1340,6 +1398,10 @@ async def _stream(request: Request) -> Response:
 
 async def _open_stream(request: Request, release: Callable[[], None]) -> Response:
     app = request.app
+    if app.state.drain.draining:
+        # A tab whose stream ended during a drain comes back here: refuse before any session is
+        # built or resumed, so it retries (``Retry-After``) and lands on another process.
+        return _draining()
     # One session per browser tab, keyed by the id the shell sends (?sid=...).
     # An id-less connection shares the default session (ADR-0010), unless the app is secure.
     # The in-app page the tab is on (``&path=``), so a deep link or reload starts there.
@@ -1351,6 +1413,7 @@ async def _open_stream(request: Request, release: Callable[[], None]) -> Respons
     hub = handle.hub
     session = handle.session
     queue = hub.subscribe()
+    app.state.drain.register(queue)
     epoch, last_event_id = _parse_last_event_id(request)
     ctx = session.ctx
     if last_event_id is None and ctx is not None and request.query_params.get("path"):
@@ -1397,6 +1460,7 @@ async def _open_stream(request: Request, release: Callable[[], None]) -> Respons
                 yield chunk
         finally:
             hub.unsubscribe(queue)
+            app.state.drain.unregister(queue)
             release()
 
     return StreamingResponse(event_source(), media_type="text/event-stream", headers=_SSE_HEADERS)

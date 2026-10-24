@@ -201,6 +201,12 @@ def signed_out_message() -> dict[str, Any]:
     return {"v": PROTOCOL_VERSION, "type": "signed_out"}
 
 
+def reconnect_message(after_ms: int) -> dict[str, Any]:
+    """This process is draining (a rollout): the shell closes the stream and opens a new one
+    after ``after_ms`` (plus a little jitter), landing on whichever process takes it next."""
+    return {"v": PROTOCOL_VERSION, "type": "reconnect", "after_ms": int(after_ms)}
+
+
 def ping_message() -> dict[str, Any]:
     return {"v": PROTOCOL_VERSION, "type": "ping"}
 

@@ -29,6 +29,10 @@ HTTP POSTs. Both ride one port so Colab's and Runpod's proxies pass them
   at least one is registered.
 - `GET /api/components/{type}.js` — the ES module of a module component (ADR-0039), served from
   memory under a strict name pattern; see [Module components](#module-components-_module).
+- `GET /health` — liveness: `200 {"status":"ok"}` while the process runs.
+- `GET /ready` — readiness (IND-201): `200 {"ready":true}` while the process takes new tabs, `503
+  {"ready":false,"draining":true}` with `Retry-After` once it is draining. No login, never touches a
+  session, `Cache-Control: no-store`. See [Drain](#drain).
 
 Every message on the SSE stream is a JSON object with a `v` field (the protocol
 version) and a `type`. The upload and file routes carry bytes, not JSON messages,
@@ -97,6 +101,7 @@ The UI is a tree of nodes. A node is:
 | `toast` | `{"v","type":"toast","message","kind","ttl"}`, plus `"action":{"id","label"}` when given | Feedback from `ctx.toast(...)`: `kind` is `info`/`success`/`warn`/`error`, `ttl` seconds (`0` = until dismissed). Sent to the calling session only; an older shell ignores it. With `action`, the shell shows a button that posts `{"component":"__toast__","event":"action","payload":{"id":<action id>}}` to `POST /api/event` and dismisses the toast. The server runs the handler once (as a normal event: `guard()`, audit and async handlers apply) and answers `200` for an id it no longer holds. An older shell shows the message without the button (additive; `protocol_version` stays 1) |
 | `ping` | `{"v","type":"ping"}` | Heartbeat, so idle-timeout proxies keep the stream open |
 | `chrome` | `{"v","type":"chrome","title","favicon"}` | `ctx.title` / `ctx.favicon` changed (IND-152): the shell sets the tab's title and icon. `title` is the whole title, or `null` for the app's own; `favicon` is a same-origin URL `api/brand/favicon/<name>` (relative to the document) or `null` for the app's own icon. It is sent to the session that changed them only, and a fresh `init` carries the current values in its `chrome` key (and resets them to the app's own when the key is absent), so a reconnect or a new session never shows a stale title. The shell applies only a favicon under `api/brand/favicon/`. An older shell ignores the message and the key (additive; `protocol_version` stays 1) |
+| `reconnect` | `{"v","type":"reconnect","after_ms"}` | This process is draining for a rollout (IND-201): the shell closes the stream and opens a new one after `after_ms` (plus up to half a second of jitter), landing on whichever process the platform sends it to next. It has no SSE `id` (it is not state, nothing resumes from it). While the old process still listens, the new stream is refused with `503` and the shell retries with a growing delay, then shows "Still reconnecting…" once. An older shell ignores the message and is simply disconnected when the drain ends, then reconnects as for any dropped stream (additive; `protocol_version` stays 1) |
 | `signed_out` | `{"v","type":"signed_out"}` | The caller's login ended (`ctx.sign_out()` or `Principal.expires_at`); the server closes the stream after it, and the shell stops reconnecting and shows a signed-out page (secure apps, ADR-0033) |
 
 A patch `change` is one of:
@@ -131,6 +136,24 @@ hub's** (the server restarted, so the offset means nothing), the server falls ba
 fresh `init` (always correct, because a `StreamText` snapshot carries its full
 accumulated text). A bare integer id (no epoch) is still accepted and skips the epoch
 check. `ping` and the `init` sent on connect carry no id (a mid-stream `init`, above, does). See ADR-0011.
+
+### Drain
+
+A process that is shutting down for a rollout (SIGTERM under `launch()` or `uvicorn app:app`, or the
+app's own `await app.state.drain.run()`) drains for `create_app(drain_seconds=)` (default 10):
+
+- `GET /ready` answers `503`.
+- A new `GET /api/stream`, and a `POST /api/event` for a session the process does not hold, are refused
+  with `503 {"ok":false,"error":"draining"}` and `Retry-After: 1`, before any session is built.
+- `POST /api/event` for a session the process already holds still works, so a tab can finish what it
+  was doing.
+- Every open stream is sent one `reconnect` message with its own `after_ms` (between 100 ms and 5 s,
+  spread over the first half of the drain), so tabs do not all arrive at the next process at once.
+- When no stream is open any more, or `drain_seconds` have passed, the streams still open are ended
+  and the process exits. With no stream open the drain is over at once.
+
+`POST api/session` (a secure app's token exchange) keeps working while draining: it creates no
+session, and a reconnecting tab needs it to reach the next process.
 
 ## Client → server events (HTTP POST)
 
