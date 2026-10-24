@@ -92,6 +92,16 @@ docs = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/indah"]
 
+# The sdist carries what a source build and its tests need, not the demos: examples/ (about 5 MB, with
+# the Colab notebooks) and the gallery thumbnails stay in the repository (ADR-0042). The wheel is not
+# affected; tests/integration/test_sdist.py checks that the wheel built from the sdist equals the one
+# built from the tree, and tests/conftest.py skips the tests that read examples/ when it is absent.
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/examples",
+    "/deploy/fly/thumbnails",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
