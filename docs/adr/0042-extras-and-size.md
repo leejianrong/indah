@@ -1,6 +1,6 @@
 # ADR-0042: Extras, lazy modules and a size budget
 
-- Status: **Proposed** (for owner review)
+- Status: **Accepted** (2026-10-24, owner)
 - Date: 2026-10-23
 - Deciders: Jian (owner)
 - Relates to: ADR-0004 (pre-built shell, no Node), ADR-0032 (lazy editor module), ADR-0039 (module
