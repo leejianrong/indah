@@ -423,6 +423,45 @@ kill_timeout = 15         # seconds, more than drain_seconds
 These snippets follow the Kubernetes and Fly documentation. The drain itself is tested here with real
 processes and a real browser; a rollout on a real cluster or a real Fly deploy is not yet.
 
+## Configuration from the environment
+
+A ConfigMap, a Kubernetes Secret or `fly secrets set` hands an app environment variables, not Python
+arguments. `create_app` reads the variables below **only when the matching argument is not passed**:
+an explicit argument always wins, even an empty list or `None`. A blank variable counts as unset. A bad
+value stops the app at start with a message that names the variable. Secret values are never logged: at
+start indah logs once, at INFO, which variables it used (names only).
+
+| Variable | Argument | Example | Default |
+|----------|----------|---------|---------|
+| `INDAH_SECRET` | `secret=` | `INDAH_SECRET=<32+ random bytes>` | none |
+| `INDAH_SECRETS` | `secret=` as a list (rotation) | `INDAH_SECRETS=<new>,<old>` | none; wins over `INDAH_SECRET` |
+| `INDAH_TRUSTED_PROXIES` | `trusted_proxies=` | `172.16.0.0/12,66.241.124.81` | none; `*` is refused |
+| `INDAH_ALLOWED_ORIGINS` | `allowed_origins=` | `https://app.example.com` | none |
+| `INDAH_CSP` | `csp=` | `strict` or `off` | off |
+| `INDAH_LIMITS` | `limits=` | `public` or `none` | none |
+| `INDAH_DRAIN_SECONDS` | `drain_seconds=` | `30` | `10` |
+| `INDAH_FACTORY_TIMEOUT` | `factory_timeout=` | `2.5` | `1` |
+| `INDAH_COMPRESS` | `compress=` | `0` | on |
+| `INDAH_WARN_UNTRUSTED_FORWARDING` | `warn_untrusted_forwarding=` | `0` | on |
+
+Booleans take `1`/`0`, `true`/`false`, `yes`/`no` or `on`/`off`. The secret is only read for
+`secure=True`. `INDAH_CSP` takes `strict` or `off`; a custom policy string is `csp=` in code.
+
+```bash
+fly secrets set INDAH_SECRET="$(openssl rand -hex 32)" INDAH_TRUSTED_PROXIES="172.16.0.0/12,<your app IPs>"
+```
+
+```yaml
+# Kubernetes: a Secret for the secret, a ConfigMap for the rest
+env:
+  - name: INDAH_SECRET
+    valueFrom: { secretKeyRef: { name: indah, key: secret } }
+envFrom:
+  - configMapRef: { name: indah-config }   # INDAH_TRUSTED_PROXIES, INDAH_DRAIN_SECONDS, ...
+```
+
+Settings with no variable (the session factory, `auth`, `policy`, `audit`, `theme`) stay in code.
+
 ## Checklist
 
 - `secure=True`, a `secret` from the environment, and `session_factory` (not `session`).

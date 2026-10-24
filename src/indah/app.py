@@ -102,6 +102,7 @@ from .csp import (
 )
 from .custom import custom, register_component, registered
 from .drain import Drain, chain_sigterm
+from .envconfig import UNSET, EnvConfig
 from .guard import OriginGuard, normalize_origins
 from .hardening import (
     Limits,
@@ -547,22 +548,22 @@ def create_app(
     auth: Authenticator | None = None,
     secure: bool = False,
     secret: str | bytes | Sequence[str | bytes] | None = None,
-    allowed_origins: Sequence[str] = (),
-    trusted_proxies: Sequence[str] = (),
-    warn_untrusted_forwarding: bool = True,
+    allowed_origins: Sequence[str] = UNSET,
+    trusted_proxies: Sequence[str] = UNSET,
+    warn_untrusted_forwarding: bool = UNSET,
     audit: AuditHook | None = None,
     audit_payloads: bool = False,
     policy: Policy | None = None,
-    limits: Limits | None = None,
-    csp: str | None = None,
+    limits: Limits | None = UNSET,
+    csp: str | None = UNSET,
     csp_media_hosts: Sequence[str] = (),
     security_headers: bool | Mapping[str, str] = False,
     logo: str | os.PathLike[str] | bytes | tuple[Any, Any] | None = None,
     favicons: Mapping[str, str | os.PathLike[str] | bytes] | None = None,
-    factory_timeout: float = DEFAULT_FACTORY_TIMEOUT,
+    factory_timeout: float = UNSET,
     factory_placeholder: Callable[[], Component] | None = None,
-    compress: bool = True,
-    drain_seconds: float = DEFAULT_DRAIN_SECONDS,
+    compress: bool = UNSET,
+    drain_seconds: float = UNSET,
     drain_on_sigterm: bool = True,
 ) -> Starlette:
     """Build the ASGI app.
@@ -676,10 +677,32 @@ def create_app(
     with ``ctx.favicon.set("alert")`` and its title with ``ctx.title.set("(2) app")``; both
     go back to the app's own with ``None`` (IND-152).
 
+    **Environment.** The arguments ``secret``, ``trusted_proxies``, ``allowed_origins``, ``csp``,
+    ``limits``, ``drain_seconds``, ``factory_timeout``, ``compress`` and
+    ``warn_untrusted_forwarding`` fall back to ``INDAH_*`` variables when they are not passed
+    (``INDAH_SECRET``/``INDAH_SECRETS``, ``INDAH_TRUSTED_PROXIES``, ``INDAH_ALLOWED_ORIGINS``,
+    ``INDAH_CSP``, ``INDAH_LIMITS``, ``INDAH_DRAIN_SECONDS``, ``INDAH_FACTORY_TIMEOUT``,
+    ``INDAH_COMPRESS``, ``INDAH_WARN_UNTRUSTED_FORWARDING``; see :mod:`indah.envconfig`). An
+    explicit argument always wins, a blank variable counts as unset, a bad value raises
+    ``ValueError`` naming the variable, and secret values are never logged.
+
     ``compress`` (on by default) gzips the shell, ``api/editor.js`` and module component files
     for a client that sends ``Accept-Encoding: gzip`` (ADR-0042, IND-189). The event stream and
     JSON routes are never compressed. Pass ``False`` behind a gateway that should do all of it.
     """
+    env = EnvConfig()
+    csp = env.csp(csp)
+    trusted_proxies = env.trusted_proxies(trusted_proxies)
+    allowed_origins = env.allowed_origins(allowed_origins)
+    limits = env.limits(limits)
+    factory_timeout = env.number(
+        "INDAH_FACTORY_TIMEOUT", factory_timeout, DEFAULT_FACTORY_TIMEOUT, positive=True
+    )
+    drain_seconds = env.number("INDAH_DRAIN_SECONDS", drain_seconds, DEFAULT_DRAIN_SECONDS)
+    compress = env.boolean("INDAH_COMPRESS", compress, True)
+    warn_untrusted_forwarding = env.boolean(
+        "INDAH_WARN_UNTRUSTED_FORWARDING", warn_untrusted_forwarding, True
+    )
     if csp is not None and (not isinstance(csp, str) or not csp.strip()):
         raise ValueError("csp must be None, 'strict', or a policy string")
     if density not in DENSITIES:
@@ -702,9 +725,17 @@ def create_app(
 
     signer: TokenSigner | None = None
     if secure:
+        secret = env.secret(secret)
         if secret is None:
-            raise ValueError("secure=True needs secret= (a long random value, e.g. from the env)")
-        signer = TokenSigner(secret)
+            raise ValueError(
+                "secure=True needs secret= (a long random value) or INDAH_SECRET in the environment"
+            )
+        try:
+            signer = TokenSigner(secret)
+        except ValueError as exc:
+            if env.secret_variable:
+                raise ValueError(f"{env.secret_variable}: {exc}") from None
+            raise
         if auth is None:
             auth = default_authenticator
         if session is not None or isinstance(store, SharedSessionStore):
@@ -799,6 +830,9 @@ def create_app(
     app.state.proxy_warning_issued = False
     app.state.csp = csp
     app.state.compress = compress
+    app.state.trusted_proxies = parse_trusted(trusted_proxies)
+    app.state.allowed_origins = normalize_origins(allowed_origins)
+    app.state.env_used = env.report()
     app.state.csp_media_hosts = tuple(csp_media_hosts)
     app.state.csp_violations = deque(maxlen=100)
     app.state.stream_limiter = StreamLimiter(limits.max_streams_per_ip)

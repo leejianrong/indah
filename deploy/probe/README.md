@@ -6,7 +6,7 @@ gallery and nothing in it touches `indah-demos`. Results are in
 
 | File | What |
 |------|------|
-| `probe_app.py` | the app: `GET /` (a page) and `GET /whoami` (JSON); `PROBE_TRUSTED_PROXIES` sets `trusted_proxies` |
+| `probe_app.py` | the app: `GET /` (a page) and `GET /whoami` (JSON); `INDAH_TRUSTED_PROXIES` sets `trusted_proxies` (`PROBE_TRUSTED_PROXIES` is kept as an alias) |
 | `deploy.sh`, `set-trusted.sh`, `teardown.sh` | deploy a new app, change `trusted_proxies` without a rebuild, delete it |
 | `sticky_check.py` | does a tab's stream and its events reach one machine? |
 | `cloudflare-worker.js` | a pass-through Worker for the Cloudflare step below |
