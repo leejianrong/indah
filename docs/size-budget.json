@@ -2,6 +2,7 @@
   "_comment": "Maximums for scripts/size_report.py (ADR-0042). A pull request that needs more room raises a limit here, in the same diff, and says why in its description and the CHANGELOG. Keys starting with an underscore are ignored.",
   "wheel_bytes": 650000,
   "shell_gzip_bytes": 275000,
+  "shell_served_gzip_bytes": 275000,
   "shell_raw_bytes": 650000,
   "editor_gzip_bytes": 200000,
   "direct_dependencies": 5,

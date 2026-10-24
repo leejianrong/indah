@@ -19,6 +19,7 @@ and say why in the description and the CHANGELOG, so a reviewer sees the number 
 
 import argparse
 import gzip
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -33,6 +34,23 @@ def _gzip_size(path: Path) -> int:
     return len(gzip.compress(path.read_bytes(), 9))
 
 
+def _load(name: str):
+    """A module of the package by file, without importing `indah` (and so pydantic)."""
+    spec = importlib.util.spec_from_file_location(f"_size_{name}", STATIC.parent / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _served_shell_bytes() -> int:
+    """The shell as indah sends it to a gzip client under `csp="strict"`: compressed in pieces
+    around the nonce, so a little larger than one gzip of the whole file (ADR-0042)."""
+    compress, csp = _load("compress"), _load("csp")
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    return len(compress.gzip_joined(csp.add_nonce_parts(html), ' nonce="' + "x" * 24 + '"'))
+
+
 def measure() -> dict[str, int]:
     out: dict[str, int] = {}
     wheels = sorted((ROOT / "dist").glob("indah-*.whl"))
@@ -41,6 +59,7 @@ def measure() -> dict[str, int]:
     shell, editor = STATIC / "index.html", STATIC / "editor.js"
     out["shell_raw_bytes"] = shell.stat().st_size
     out["shell_gzip_bytes"] = _gzip_size(shell)
+    out["shell_served_gzip_bytes"] = _served_shell_bytes()
     out["editor_raw_bytes"] = editor.stat().st_size
     out["editor_gzip_bytes"] = _gzip_size(editor)
     sources = (ROOT / "src" / "indah").glob("*.py")

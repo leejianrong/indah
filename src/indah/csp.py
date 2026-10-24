@@ -40,6 +40,18 @@ def add_nonce(html: str, nonce: str) -> str:
     return _TAG.sub(lambda m: f'<{m.group(1)} nonce="{nonce}"', html)
 
 
+def add_nonce_parts(html: str) -> list[str]:
+    """``html`` cut after each ``<script`` and ``<style`` tag name, so that joining the parts with
+    ``' nonce="N"'`` gives exactly ``add_nonce(html, "N")``. The parts are the same from one
+    response to the next, which lets a compressed copy of each be reused (ADR-0042)."""
+    parts, last = [], 0
+    for m in _TAG.finditer(html):
+        parts.append(html[last : m.end()])
+        last = m.end()
+    parts.append(html[last:])
+    return parts
+
+
 def host_source(url: str) -> str | None:
     """``https://host[:port]`` for an http(s) URL, or ``None`` for anything else.
 
