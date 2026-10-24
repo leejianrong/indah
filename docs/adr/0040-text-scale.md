@@ -1,9 +1,8 @@
 # ADR-0040: Plain `Text` is body text; a small named scale
 
-- Status: **Accepted by the owner for one decision** (2026-10-22): default `Text` looks like normal
-  body text, not a title or header, and the old look becomes opt-in. **Everything else is Proposed
-  for owner review** (the scale values, the variant names, no inline markup in plain text); the
-  build proceeds on them.
+- Status: **Accepted** (2026-10-24, owner). The owner first decided on 2026-10-22 that default `Text` looks
+  like normal body text and the old look becomes opt-in, then accepted the rest (the scale values, the
+  variant names, no inline markup in plain text) on 2026-10-24.
 - Date: 2026-10-22
 - Deciders: Jian (owner)
 - Builds on: ADR-0014, ADR-0031. Folds IND-155.
