@@ -240,30 +240,39 @@ Risks: readiness and drain add a new additive message type; presets must be expl
 Owner decides or does by hand: the Cloudflare dashboard steps for IND-170 (`deploy/probe/README.md`); accept
 the multi-replica ADR (IND-207) before 0.10.0 starts; the `pypi` approval.
 
-## 0.10.0 (provisional): multi-replica, 22 points
+## 0.10.0 (provisional): multi-replica, 27 points
 
-Theme: any replica can take a tab's event, and a restart or rollout does not lose its small state. Needs the
-IND-207 ADR accepted. Redis is an optional backend the user provides (an extra, `indah[redis]`); indah never
-runs or bundles it, and the in-memory defaults keep working with no extra service.
+Theme: any replica's front door works, and a restart or rollout does not lose a tab's small state. Shaped by
+ADR-0043 (multi-replica, Proposed 2026-10-24; the owner accepts it before these cards start). Redis is an
+optional state store the user provides (`indah[redis]`); indah never runs or bundles it, and the in-memory
+defaults keep working with no extra service. Routing does not need Redis: Tier A (cookie affinity, IND-206 in
+0.9.0), the Fly route hint (IND-197) and, only if the owner's ingress cannot do affinity, the k8s forwarder
+(IND-209, after this release).
 
 | Card | Pts |
 |------|-----|
+| IND-197 Route hint: init carries an owner hint, the shell sends it (Fly header, file URLs) | 5 |
 | IND-208 Restorable sessions: ctx.persist and a StateStore (memory, SQLite) | 5 |
-| IND-209 Backplane core: owner registry and cross-replica event forwarding | 3 |
-| IND-210 Redis backplane and state store adapter (indah[redis]) | 3 |
-| IND-211 Multi-replica e2e: three replicas, no affinity, rolling restart | 3 |
+| IND-210 Redis StateStore adapter (indah[redis]) | 3 |
+| IND-211 Multi-replica e2e: three replicas, two balancers, rolling restart, real Fly run | 5 |
 | IND-212 /metrics endpoint | 2 |
-| IND-213 Shared rate limits across replicas | 3 |
-| IND-187..190 follow-ups still open after 0.9.0 | - |
+| IND-216 Decision: Topic and Stream across replicas | 2 |
 | Gallery: IND-196 stale Colab notebooks (2), IND-191 catalog file (3) | 5 |
 
-Order: IND-208 and IND-209 in parallel (separate files), then IND-210, then IND-211, then IND-213, IND-212.
+Moved after 0.10.0: IND-209 (peer forwarder for k8s without affinity, 5, reshaped from the registry and bus
+sketch) and IND-213 (shared rate limits, 3). IND-187..190 follow-ups still open after 0.9.0 ride along.
 
-Risks: forwarding a misrouted event adds a hop only on a misroute, so the hot path stays local; the bus needs
-authentication, size caps and tenant isolation (threat model in the ADR); a restored session must never
-include ephemeral props (ADR-0036); the owner pod dying mid-session still loses live state not persisted.
+Order: IND-197 and IND-208 in parallel (shell and `ctx`), then IND-210, then IND-211, then IND-212; IND-216
+any time.
 
-Owner decides: whether Redis stays the first adapter or another backend (Postgres, NATS) comes first.
+Risks: the route hint is a small shell change plus a new `init` field (additive); a restored session must
+never include ephemeral props (ADR-0036); an owner pod dying mid-session still loses live state that was not
+persisted (one toast and a restored page); `Topic` and `Stream` producers stay per replica until IND-216 is
+decided.
+
+Owner decides: what fronts the k3s (Traefik or ingress-nginx talking to pods, or a Cloudflare Tunnel to a
+Service: this decides whether IND-209 is built at all); Redis or Postgres as the first store; the open
+questions in ADR-0043.
 
 ## 0.11.0 (provisional): live media and annotation, 22 points
 
