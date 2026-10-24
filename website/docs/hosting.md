@@ -443,6 +443,8 @@ start indah logs once, at INFO, which variables it used (names only).
 | `INDAH_FACTORY_TIMEOUT` | `factory_timeout=` | `2.5` | `1` |
 | `INDAH_COMPRESS` | `compress=` | `0` | on |
 | `INDAH_WARN_UNTRUSTED_FORWARDING` | `warn_untrusted_forwarding=` | `0` | on |
+| `INDAH_NODE_HEADER` | `node_header=` | `1` | off |
+| `INDAH_NODE` | names the node for `node_header` | `web-1` | `FLY_MACHINE_ID`, `HOSTNAME`, or a random id |
 
 Booleans take `1`/`0`, `true`/`false`, `yes`/`no` or `on`/`off`. The secret is only read for
 `secure=True`. `INDAH_CSP` takes `strict` or `off`; a custom policy string is `csp=` in code.
@@ -461,6 +463,25 @@ envFrom:
 ```
 
 Settings with no variable (the session factory, `auth`, `policy`, `audit`, `theme`) stay in code.
+
+### Which process answered
+
+With several processes, the first question when a tab misbehaves is which one answered. Turn on
+`node_header=True` (or `INDAH_NODE_HEADER=1`) and every response, the event stream's included, carries
+`X-Indah-Node: <id>`:
+
+```bash
+curl -sI https://app.example.com/ | grep -i x-indah-node
+x-indah-node: e826010b63e458
+```
+
+The id is `INDAH_NODE`, else `FLY_MACHINE_ID` (a Fly machine), else `HOSTNAME` (a pod name on
+Kubernetes), else a random id that lasts for the process. It is opaque on purpose: a value that is an IP
+address, or that has anything other than letters, digits, `.`, `_` and `-`, is replaced by a short hash
+(`n-` and ten hex digits), so the header never carries an internal address. Repeat a request a few times: if
+the id changes while one tab is open, the gateway is not pinning that tab to a process (see the sticky
+session limits above). `ctx.conn.node` and `app.state.node` hold the same id with the header on or off;
+the header is off by default because it tells a visitor which of your processes they reached.
 
 ## Checklist
 

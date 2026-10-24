@@ -13,6 +13,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- `create_app(node_header=True)` (or `INDAH_NODE_HEADER=1`) adds `X-Indah-Node: <id>` to every response,
+  the event stream's included, so you can see which replica answered (IND-203). The id is `INDAH_NODE`, else
+  `FLY_MACHINE_ID`, else `HOSTNAME`, else a random per-process id, and it is opaque: an IP address or an odd
+  value becomes a short hash, so the header never carries an internal address. `ctx.conn.node` and
+  `app.state.node` hold the id with the header on or off. Off by default; nothing else changes and
+  `protocol_version` stays 1.
 - Configuration from the environment (IND-202). `create_app` reads `INDAH_SECRET`/`INDAH_SECRETS`,
   `INDAH_TRUSTED_PROXIES`, `INDAH_ALLOWED_ORIGINS`, `INDAH_CSP` (`strict` or `off`), `INDAH_LIMITS`
   (`public` or `none`), `INDAH_DRAIN_SECONDS`, `INDAH_FACTORY_TIMEOUT`, `INDAH_COMPRESS` and

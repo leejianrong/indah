@@ -16,6 +16,7 @@ names the variable. Secret values are never logged: the log names the variables 
 - ``INDAH_FACTORY_TIMEOUT`` -> ``factory_timeout=`` (seconds, more than 0)
 - ``INDAH_COMPRESS`` -> ``compress=`` (1/0, true/false, yes/no, on/off)
 - ``INDAH_WARN_UNTRUSTED_FORWARDING`` -> ``warn_untrusted_forwarding=`` (same booleans)
+- ``INDAH_NODE_HEADER`` -> ``node_header=`` (same booleans; ``INDAH_NODE`` names the node)
 """
 
 from __future__ import annotations

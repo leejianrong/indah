@@ -111,6 +111,7 @@ from .hardening import (
     StreamLimiter,
     peer_address,
 )
+from .node import NodeHeaderMiddleware, resolve_node
 from .protocol import EventIn, init_message, patch_message, ping_message, signed_out_message
 from .proxy import ProxyHeaders, ProxyNotice, parse_trusted
 from .reactive import Signal
@@ -565,6 +566,7 @@ def create_app(
     compress: bool = UNSET,
     drain_seconds: float = UNSET,
     drain_on_sigterm: bool = True,
+    node_header: bool = UNSET,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -686,6 +688,12 @@ def create_app(
     explicit argument always wins, a blank variable counts as unset, a bad value raises
     ``ValueError`` naming the variable, and secret values are never logged.
 
+    ``node_header`` (off by default; ``INDAH_NODE_HEADER=1``) adds ``X-Indah-Node: <id>`` to every
+    response, so you can see which replica answered a request (IND-203). The id is ``INDAH_NODE``,
+    else ``FLY_MACHINE_ID``, else ``HOSTNAME``, else a random per-process id; it is opaque (an IP
+    address or an odd value becomes a short hash). ``ctx.conn.node`` and ``app.state.node`` hold it
+    with the header on or off.
+
     ``compress`` (on by default) gzips the shell, ``api/editor.js`` and module component files
     for a client that sends ``Accept-Encoding: gzip`` (ADR-0042, IND-189). The event stream and
     JSON routes are never compressed. Pass ``False`` behind a gateway that should do all of it.
@@ -700,6 +708,8 @@ def create_app(
     )
     drain_seconds = env.number("INDAH_DRAIN_SECONDS", drain_seconds, DEFAULT_DRAIN_SECONDS)
     compress = env.boolean("INDAH_COMPRESS", compress, True)
+    node_header = env.boolean("INDAH_NODE_HEADER", node_header, False)
+    node = resolve_node()
     warn_untrusted_forwarding = env.boolean(
         "INDAH_WARN_UNTRUSTED_FORWARDING", warn_untrusted_forwarding, True
     )
@@ -768,9 +778,12 @@ def create_app(
     # Outermost first: resolve the client address, then headers, then the rate limit, then
     # (secure apps) the origin guard, so a flood is turned away before it is parsed.
     proxy_notice = ProxyNotice(enabled=warn_untrusted_forwarding)
-    middleware = [
+    middleware = []
+    if node_header:  # outermost: even a refused or drained request names its process
+        middleware.append(Middleware(NodeHeaderMiddleware, node=node))
+    middleware.append(
         Middleware(ProxyHeaders, trusted=parse_trusted(trusted_proxies), notice=proxy_notice)
-    ]
+    )
     if security_headers:
         middleware.append(
             Middleware(
@@ -830,6 +843,8 @@ def create_app(
     app.state.proxy_warning_issued = False
     app.state.csp = csp
     app.state.compress = compress
+    app.state.node = node
+    app.state.node_header = node_header
     app.state.trusted_proxies = parse_trusted(trusted_proxies)
     app.state.allowed_origins = normalize_origins(allowed_origins)
     app.state.env_used = env.report()
