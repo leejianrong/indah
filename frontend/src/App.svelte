@@ -145,15 +145,47 @@
     let source = null;
     let closed = false;
     let restarts = 0;
+    // A draining server (a rollout) sent `reconnect` (IND-201): this tab leaves its stream and
+    // keeps trying until some process takes it. Refused with 503 while the old one still
+    // listens, refused outright while nothing does, so it retries with a growing delay.
+    let leaving = false;
+    let attempts = 0;
+    let timer = null;
+
+    function retryIn(ms) {
+      clearTimeout(timer);
+      timer = setTimeout(
+        () => {
+          if (!closed && !signedOut) start();
+        },
+        ms + Math.random() * 500,
+      );
+    }
+
+    function leave(afterMs) {
+      leaving = true;
+      attempts = 0;
+      if (source) source.close();
+      status.update((s) => ({ ...s, live: false, text: "reconnecting…" }));
+      retryIn(Math.max(0, Number(afterMs) || 0));
+    }
 
     function connect() {
       source = new EventSource(streamUrl());
-      source.onopen = () => status.set({ live: true, text: "live" });
+      source.onopen = () => {
+        leaving = false;
+        attempts = 0;
+        status.set({ live: true, text: "live" });
+      };
       source.onmessage = (event) => {
         if (signedOut) return;
-        status.set({ live: true, text: "live" });
         try {
           const msg = JSON.parse(event.data);
+          if (msg && msg.type === "reconnect") {
+            leave(msg.after_ms);
+            return;
+          }
+          status.set({ live: true, text: "live" });
           applyMessage(msg);
           if (msg && msg.type === "signed_out") source.close(); // no reconnect after sign-out
         } catch (err) {
@@ -163,6 +195,16 @@
       source.onerror = () => {
         if (signedOut) return;
         status.update((s) => ({ ...s, live: false, text: "reconnecting…" }));
+        if (leaving) {
+          // CLOSED: refused (503 from a draining server). Otherwise EventSource retries by itself.
+          if (source.readyState === EventSource.CLOSED) {
+            source.close();
+            attempts++;
+            if (attempts === 3) showToast("Still reconnecting…", "warn", 4);
+            if (attempts <= 15) retryIn(Math.min(1000 * attempts, 5000));
+          }
+          return;
+        }
         // CLOSED means the server refused the stream (401/403), not a dropped connection
         // (which EventSource retries itself): get a session again, once or twice, then give up.
         if (source.readyState === EventSource.CLOSED && restarts++ < 2) start();
@@ -185,6 +227,7 @@
     start();
     return () => {
       closed = true;
+      clearTimeout(timer);
       if (source) source.close();
     };
   });

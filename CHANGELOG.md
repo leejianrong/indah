@@ -13,6 +13,19 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- Readiness and a graceful drain for rollouts (IND-201). `GET /ready` answers `200` while the process
+  takes new tabs and `503` once it drains (`GET /health` stays the liveness check). On SIGTERM, under
+  `launch()` or `uvicorn app:app`, the process stops taking new streams and sessions (`503` with
+  `Retry-After`), sends every open stream a `reconnect` message with a spread-out delay, keeps answering
+  the sessions it holds, and exits when the last stream has gone or after
+  `create_app(drain_seconds=10)`. The shell moves to the next process without an error, retrying while the
+  old one still refuses it. `LaunchHandle.drain()` does the same from code, `drain_on_sigterm=False` leaves
+  SIGTERM alone, and `await app.state.drain.run()` is the hook for gunicorn, a parent app or anything else.
+  With no stream open the drain is over at once, so a quiet process exits as quickly as before. A new
+  additive message type and route (`protocol_version` stays 1); an older shell ignores `reconnect` and
+  reconnects as for any dropped stream. `hosting.md` has a readiness, `preStop` and Fly `kill_signal`
+  recipe. The Fly and Kubernetes settings follow their documentation and have not been run on a real
+  cluster; the drain is tested with real processes and a real browser.
 - A startup warning for the commonest proxy mistake: when a request carries `X-Forwarded-For`,
   `Forwarded`, `X-Forwarded-Proto`, `Fly-Client-IP` or `CF-Connecting-IP` and `trusted_proxies` is
   empty, indah logs one warning per process naming the header and the socket peer (never a value) and

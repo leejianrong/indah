@@ -362,12 +362,74 @@ The example installs authlib and itsdangerous itself (`pip install authlib itsda
 has no dependency on them. It is tested against an in-process test provider, including tokens with
 a bad signature, audience, nonce and expiry.
 
+## Rolling out without losing tabs
+
+When a process is replaced (a new image on Kubernetes or Fly), its open tabs are connected to it.
+indah drains first: on SIGTERM the process stops taking new tabs, tells every open one to reconnect
+elsewhere, keeps answering the sessions it still holds, and exits when the last stream is gone or
+after `drain_seconds` (default 10), whichever is first. A tab reconnects without an error. It shows
+"reconnecting…", and a quiet "Still reconnecting…" note only if that takes more than a few tries. A
+tab that lands on the next process starts a fresh session there, so state that is not in your own
+database is rebuilt, not carried over.
+
+- `GET /health` is liveness: `200` while the process runs.
+- `GET /ready` is readiness: `200`, then `503` once the drain starts. It needs no login and touches
+  no session.
+- `create_app(drain_seconds=10)` sets the drain length; `drain_on_sigterm=False` leaves SIGTERM
+  alone (you drain yourself).
+- Under `launch()` and `uvicorn app:app` the SIGTERM handler is installed for you. Under gunicorn
+  workers, a parent app that mounts indah, or anything else, call
+  `await app.state.drain.run()` from your own shutdown hook. A second SIGTERM stops at once.
+
+`LaunchHandle.drain()` does the same from code (`wait=False` returns as soon as the drain has begun);
+`stop()` is unchanged and does not wait for tabs, so call `drain()` first when you want them to move.
+
+### On Kubernetes
+
+```yaml
+spec:
+  terminationGracePeriodSeconds: 30   # more than preStop + drain_seconds
+  containers:
+    - name: app
+      readinessProbe:
+        httpGet: { path: /ready, port: 7860 }
+        periodSeconds: 5
+      livenessProbe:
+        httpGet: { path: /health, port: 7860 }
+      lifecycle:
+        preStop:
+          exec: { command: ["sleep", "5"] }   # let the ingress stop routing here first
+```
+
+Kubernetes removes the pod from the service as soon as it starts terminating, and sends SIGTERM after
+`preStop` finishes. The short sleep gives the ingress time to stop sending new tabs to the old pod
+before the drain begins. Several replicas also need your ingress to keep a tab on one pod; see
+"Sessions and tokens" above.
+
+### On Fly
+
+```toml
+kill_signal = "SIGTERM"   # Fly's default signal is SIGINT, which indah does not drain on
+kill_timeout = 15         # seconds, more than drain_seconds
+
+[[http_service.checks]]
+  method = "GET"
+  path = "/ready"
+  interval = "10s"
+  timeout = "2s"
+  grace_period = "10s"
+```
+
+These snippets follow the Kubernetes and Fly documentation. The drain itself is tested here with real
+processes and a real browser; a rollout on a real cluster or a real Fly deploy is not yet.
+
 ## Checklist
 
 - `secure=True`, a `secret` from the environment, and `session_factory` (not `session`).
 - `trusted_proxies` set to your gateway (checked with a probe, not guessed); one process, or a gateway that pins a tab to its process.
 - Restricted components built with `ctx.only`; mutating handlers wrapped in `guard`.
 - `limits=Limits.public()` (or your own), `security_headers=True`, `csp="strict"`.
+- `/ready` as the readiness check, SIGTERM reaching indah (Fly: `kill_signal = "SIGTERM"`), and a grace period longer than `drain_seconds`.
 - An `audit=` hook that writes somewhere you keep.
 - Your own login ended when you call `ctx.sign_out()`; session cookies `HttpOnly`, `Secure` and
   `SameSite=Lax`.

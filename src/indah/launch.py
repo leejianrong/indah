@@ -7,7 +7,9 @@ a plain script it blocks until interrupted.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import signal
 import socket
 import threading
 import time
@@ -50,11 +52,40 @@ class LaunchHandle:
     port: int
     _server: object
     _thread: threading.Thread
+    _app: object = None
+
+    def drain(self, wait: bool = True, timeout: float | None = None) -> None:
+        """Start a graceful drain (IND-201), the same one SIGTERM starts under ``launch()``.
+
+        The app stops taking new tabs (``GET /ready`` answers ``503``), tells every open stream
+        to reconnect elsewhere, and keeps serving the sessions it holds. With ``wait`` (the
+        default) this returns when no stream is open, or after the app's ``drain_seconds``
+        (``timeout`` overrides the wait), whichever comes first, ending any stream still open;
+        with ``wait=False`` it returns as soon as the drain has begun. It does not stop the
+        server: call :meth:`stop` after it. With no stream open it returns at once."""
+        drain = getattr(getattr(self._app, "state", None), "drain", None)
+        loop = getattr(drain, "loop", None)
+        if drain is None or loop is None or loop.is_closed():
+            return
+
+        async def begin() -> None:
+            drain.begin()
+
+        asyncio.run_coroutine_threadsafe(begin(), loop).result(5)
+        if not wait:
+            return
+        limit = drain.seconds + 5 if timeout is None else timeout
+        future = asyncio.run_coroutine_threadsafe(drain.wait(), loop)
+        try:
+            future.result(limit)
+        except Exception:  # a timeout or a loop that is already gone: stop() takes over
+            future.cancel()
 
     def stop(self) -> None:
         """Shut the server down. An SSE stream never ends on its own, so uvicorn is given
         ``STOP_GRACE_SECONDS`` to drain (``timeout_graceful_shutdown``) and then cancels
-        the streams still open, which lets the thread end and frees the port."""
+        the streams still open, which lets the thread end and frees the port. For a graceful
+        exit that lets tabs move first, call :meth:`drain` before this."""
         # Cancelling an open stream is what we asked for, so keep uvicorn from logging it
         # as a server error.
         quiet = logging.getLogger("uvicorn.error")
@@ -123,13 +154,41 @@ def launch(
     if block is None:
         block = not notebook
 
-    handle = LaunchHandle(url=url, port=port, _server=server, _thread=thread)
+    handle = LaunchHandle(url=url, port=port, _server=server, _thread=thread, _app=app)
     if block:
+        previous = _drain_on_sigterm(handle)
         try:
             thread.join()
         except KeyboardInterrupt:
             handle.stop()
+        finally:
+            if previous is not None:
+                signal.signal(signal.SIGTERM, previous)
     return handle
+
+
+def _drain_on_sigterm(handle: LaunchHandle) -> object | None:
+    """A blocking ``launch()`` in the main thread drains on SIGTERM, then stops (IND-201).
+
+    A second SIGTERM stops at once. Returns the old handler to put back, or ``None`` when no
+    handler was installed (not the main thread, an app with ``drain_on_sigterm=False``)."""
+    state = getattr(handle._app, "state", None)
+    drain = getattr(state, "drain", None)
+    if drain is None or threading.current_thread() is not threading.main_thread():
+        return None
+    if not getattr(state, "drain_on_sigterm", True):
+        return None
+    log = logging.getLogger("indah")
+
+    def on_term(signum: int, frame: object) -> None:
+        if drain.draining:
+            handle.stop()
+            return
+        log.info("indah: SIGTERM, draining for up to %.0f s", drain.seconds)
+        handle.drain()
+        handle.stop()
+
+    return signal.signal(signal.SIGTERM, on_term)
 
 
 def _in_notebook() -> bool:
