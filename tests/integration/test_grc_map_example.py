@@ -89,3 +89,15 @@ def test_global_domain_spans_every_cached_year():
     ]
     assert vmin == min(all_values)
     assert vmax == max(all_values)
+
+
+@pytest.mark.integration
+def test_table_columns_are_sized_to_fit_a_phone():
+    """The division column is clipped at 18ch (full name on hover) and the number column has a short
+    header, so both columns fit a 390px viewport with no sideways scroll (IND-178). Measured in a
+    real browser at the time; this pins the two knobs that decide it."""
+    gm = _load_example()
+    name, electors = gm._TABLE_COLUMNS
+    assert name.truncate is True
+    assert name.max_width == "18ch"
+    assert len(electors.title) <= 10  # "Electors", not "Registered electors"
