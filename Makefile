@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e test-pyodide build cleanroom docs docs-serve release-check post-release check clean
+.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e test-pyodide build size cleanroom docs docs-serve release-check post-release check clean
 
 # Print a free host port (stdlib only; no lsof/nc needed).
 FREE_PORT := python3 -c 'import socket;s=socket.socket();s.bind(("",0));p=s.getsockname()[1];s.close();print(p)'
@@ -61,6 +61,11 @@ test: ## Run the full test suite
 
 build: ## Build the wheel and sdist
 	uv build
+
+size: build ## Check the size budget (ADR-0042): wheel, shell, editor and base install against docs/size-budget.json
+	rm -rf .size-venv && uv venv -q .size-venv && uv pip install -q --python .size-venv dist/*.whl
+	n=$$(uv pip list --python .size-venv --format json | python3 -c "import json,sys; print(len(json.load(sys.stdin)) - 1)"); \
+	python3 scripts/size_report.py --budget docs/size-budget.json --distributions $$n --summary; rc=$$?; rm -rf .size-venv; exit $$rc
 
 cleanroom: build ## Prove R4: install the wheel with JS-toolchain tripwires on PATH
 	bash scripts/cleanroom.sh

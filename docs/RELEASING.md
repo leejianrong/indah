@@ -20,6 +20,17 @@ It installs the freshly built wheel into a throwaway venv with `node`, `npm`,
 log is empty and the app builds its tree and serves the pre-built shell. `twine
 check dist/*` (also run in CI) is the metadata/README gate.
 
+## The size budget (every pull request)
+
+CI's `build` job runs `scripts/size_report.py` against `docs/size-budget.json` (ADR-0042) and fails
+when the wheel, the shell (raw or gzip), `editor.js`, the direct dependencies or the number of
+third-party distributions in a clean base install go over their limit. The job summary shows every
+number with the room left. Run it locally with `make size`.
+
+A limit is a ceiling, not a target. A pull request that really needs more room raises the limit in
+`docs/size-budget.json` in the same diff, and says why in its description and the CHANGELOG, so a
+reviewer sees the number move. Do not raise it to make a red build green without that sentence.
+
 ## Release candidates
 
 An RC (`X.Y.ZrcN`) is a pre-release: `pip install indah` skips it, so testers must
