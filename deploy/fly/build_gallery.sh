@@ -21,7 +21,33 @@ examples=(chatbot training_dashboard diffusion poster upload_classify object_det
 # range: with ">=" Docker reuses the cached pip layer, so the image kept an old release
 # while the demos copied in beside it used newer API (gpx-viewer broke on a pre-0.3.0
 # indah, IND-167). Deploy after the release is on PyPI.
-INDAH_REQ="indah==$(sed -n 's/^version = "\(.*\)"/\1/p' "$repo/pyproject.toml" | head -1)"
+INDAH_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$repo/pyproject.toml" | head -1)"
+
+# The demo libraries (numpy, pillow, onnxruntime, huggingface_hub, matplotlib) come from the
+# `indah[demos]` extra (ADR-0042, IND-188) once the pinned release provides it. A release that
+# predates the extra (0.7.0 and older) would install `indah[demos]` WITHOUT the libraries (pip only
+# warns about an unknown extra), so the script asks PyPI and, if the extra is missing or PyPI cannot
+# be reached, falls back to naming the libraries here. Delete the fallback when 0.8.0 or later is
+# the oldest release anyone deploys.
+DEMO_LIBS=(numpy pillow onnxruntime huggingface_hub matplotlib)
+if python3 - "$INDAH_VERSION" <<'PY'
+import json, sys, urllib.request
+try:
+    url = f"https://pypi.org/pypi/indah/{sys.argv[1]}/json"
+    with urllib.request.urlopen(url, timeout=15) as r:
+        requires = json.load(r)["info"].get("requires_dist") or []
+except Exception:
+    sys.exit(1)
+sys.exit(0 if any("extra == 'demos'" in x or 'extra == "demos"' in x for x in requires) else 1)
+PY
+then
+  INDAH_REQ="indah[demos]==$INDAH_VERSION"
+  EXTRA_LIBS=()
+else
+  echo "note: indah $INDAH_VERSION on PyPI does not provide the 'demos' extra (or PyPI is unreachable); naming the demo libraries instead" >&2
+  INDAH_REQ="indah==$INDAH_VERSION"
+  EXTRA_LIBS=("${DEMO_LIBS[@]}")
+fi
 
 rm -rf "$out"
 mkdir -p "$out"
@@ -35,11 +61,7 @@ done
 {
   echo "$INDAH_REQ"
   echo "uvicorn[standard]"
-  echo "matplotlib"          # charts.py uses it (duck-typed); the rest need only indah
-  echo "onnxruntime"         # upload_classify.py/object_detection.py's real ONNX models (CPU)
-  echo "pillow"              # upload_classify.py/object_detection.py's image decode/resize
-  echo "huggingface_hub"     # download + cache both demos' ONNX weights
-  echo "numpy"               # audio_analysis.py: waveform synthesis + numpy.fft spectrogram
+  for lib in "${EXTRA_LIBS[@]+"${EXTRA_LIBS[@]}"}"; do echo "$lib"; done
 } > "$out/requirements.txt"
 
 cat > "$out/Dockerfile" <<'DOCKER'

@@ -2436,7 +2436,10 @@ def _to_records(source: Any, key: str | None) -> list[dict[str, Any]]:
     if hasattr(source, "columns") and hasattr(source, "to_dict"):  # pandas, duck-typed
         source = source.to_dict(orient="records")
     if not isinstance(source, (list, tuple)):
-        raise TypeError(f"Table rows must be a list of dicts, not {type(source).__name__}")
+        raise TypeError(
+            f"Table rows must be a list of dicts (or a pandas DataFrame: "
+            f'pip install "indah[data]"), not {type(source).__name__}'
+        )
     out: list[dict[str, Any]] = []
     for row in source:
         if not isinstance(row, dict):
@@ -2517,7 +2520,10 @@ def _to_table(source: Any) -> dict[str, Any]:
         columns = list(source[0].keys())
         rows = [[_json_safe(row.get(c)) for c in columns] for row in source]
         return {"columns": [str(c) for c in columns], "rows": rows}
-    raise TypeError(f"DataFrame cannot render a {type(source).__name__}")
+    raise TypeError(
+        f"DataFrame cannot render a {type(source).__name__}: pass a pandas DataFrame "
+        f'(pip install "indah[data]"), a {{"columns", "rows"}} dict or a list of row dicts'
+    )
 
 
 class StreamText(Component):

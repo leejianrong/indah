@@ -40,6 +40,30 @@ Repository = "https://github.com/leejianrong/indah"
 Issues = "https://github.com/leejianrong/indah/issues"
 
 [project.optional-dependencies]
+# Feature extras (ADR-0042). indah duck-types these libraries, so none is required; an extra only
+# documents a tested floor and keeps the library out of the base install. Install with, for
+# example, `pip install "indah[plot]"`. `all` is the union of the feature extras and never holds
+# tooling or the demo libraries.
+plot = [
+    "matplotlib>=3.7",
+]
+data = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+]
+# What the gallery demos and the examples need; the gallery image installs `indah[demos]`.
+demos = [
+    "numpy>=1.24",
+    "pillow>=10",
+    "onnxruntime>=1.17",
+    "huggingface_hub>=0.23",
+    "matplotlib>=3.7",
+]
+all = [
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "numpy>=1.24",
+]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",

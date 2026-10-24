@@ -9,6 +9,22 @@ frontend ships pre-built inside the wheel.
 pip install indah
 ```
 
+### Optional extras
+
+The base install keeps four dependencies. indah never imports the libraries below itself: it
+accepts their objects by duck-typing, so you only need an extra when your app uses the library
+and you want a tested version range installed with it.
+
+| Install | Adds | For |
+|---------|------|-----|
+| `pip install "indah[plot]"` | `matplotlib` | `Plot(figure)` |
+| `pip install "indah[data]"` | `pandas`, `numpy` | `DataFrame` and `Table` from a pandas frame, numpy values in cells |
+| `pip install "indah[all]"` | `plot` + `data` | both of the above |
+| `pip install "indah[demos]"` | `numpy`, `pillow`, `onnxruntime`, `huggingface_hub`, `matplotlib` | running the gallery demos and the examples |
+
+Quote the brackets in `zsh`. The extras do not make the install smaller; they only keep heavy
+libraries out of the base install. The reasons are in ADR-0042.
+
 ## Your first app
 
 An app is a tree of components bound to reactive signals. Mutate a signal and only

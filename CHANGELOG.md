@@ -13,6 +13,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- Optional extras (ADR-0042): `pip install "indah[plot]"` (matplotlib), `"indah[data]"` (pandas,
+  numpy), `"indah[all]"` (both) and `"indah[demos]"` (the libraries the gallery demos and examples
+  use). indah duck-types these libraries, so none is required and the base install is unchanged
+  (four direct dependencies); an extra documents a tested version floor. A `DataFrame` or `Table`
+  given something it cannot read now says to use a pandas frame (`indah[data]`), a dict or a list
+  of row dicts.
+- A size budget in CI (ADR-0042): `docs/size-budget.json` limits the wheel, the shell, `editor.js`,
+  the direct dependencies and the base install, and the build job fails when one goes over. `make size`
+  runs it locally.
+
 - The docs have a **Playground** (`playground.md`): edit an indah app and run it in your own browser with
   Pyodide, with no install and no server (ADR-0041). Write `def build()` returning a component, the same
   contract as the Studio's local playground, so snippets move between them. Nothing loads until you press

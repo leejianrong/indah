@@ -21,7 +21,7 @@ gallery, live, no install and no clone.
 > and layout containers, data-driven lists (chat/gallery), per-session state, file
 > upload/download, and charting (server-PNG `Plot` plus client-side `Chart`,
 > `Heatmap`, an interactive `Table`, `Stat` cards, and `ImageOverlay`). Install with
-> `pip install indah`. Start with [`docs/PLAN.md`](docs/PLAN.md) for the plan and
+> `pip install indah` (optional extras: `indah[plot]`, `indah[data]`, `indah[all]`, `indah[demos]`). Start with [`docs/PLAN.md`](docs/PLAN.md) for the plan and
 > [`docs/SLICES.md`](docs/SLICES.md) for what is built.
 
 ## Why another one
