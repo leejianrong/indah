@@ -104,16 +104,17 @@ def frame_html(shell: str) -> str:
 
 def static_api_files(out: Path) -> list[str]:
     """Real files where the shell fetches ``api/*`` GET routes, so those pages run (a static host
-    has no routes): the editor module and each registered module component."""
+    has no routes): the editor and map modules and each registered module component."""
     import importlib
 
     custom = importlib.import_module("indah.custom")  # not `indah.custom`, the function
     written = []
-    editor = ROOT / "src" / "indah" / "static" / "editor.js"
-    if editor.is_file():
-        (out / "api").mkdir(exist_ok=True)
-        shutil.copy(editor, out / "api" / "editor.js")
-        written.append("api/editor.js")
+    for name in ("editor.js", "map.js"):  # the shell's lazily loaded modules (ADR-0032, ADR-0042)
+        module = ROOT / "src" / "indah" / "static" / name
+        if module.is_file():
+            (out / "api").mkdir(exist_ok=True)
+            shutil.copy(module, out / "api" / name)
+            written.append(f"api/{name}")
     for reg in custom._REGISTRY.values():
         if reg.module:
             target = out / "api" / "components" / f"{reg.type}.js"

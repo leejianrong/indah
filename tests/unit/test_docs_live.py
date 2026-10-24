@@ -44,6 +44,7 @@ def test_the_bundle_has_everything_the_runtime_loads(bundle):
     assert json.loads((out / "runtime.json").read_text()) == runtime
     # the shell's api/* GET routes become real files next to frame.html
     assert (out / "api" / "editor.js").is_file()
+    assert (out / "api" / "map.js").is_file()
     assert (out / "api" / "components" / "tier-rail.js").is_file()
 
 

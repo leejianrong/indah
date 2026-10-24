@@ -55,7 +55,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Changed
 
-
+- Leaflet moved out of the shell into a lazily loaded module (ADR-0042, IND-186). The shell shrinks from
+  581,046 to 428,605 bytes (243,354 to 199,839 gzip, 18 percent), so every page without a map loads
+  about 44 KB less compressed. A page with a `Map` makes one more request, `api/map.js?v=<hash>` (about
+  43 KB compressed, cached for good because the URL carries the file's hash), the first time a map
+  appears; on a throttled slow-4G profile that cost 0.2 s on a map page and saved 0.9 s on a page
+  without one. A map looks and behaves as before (screenshots at desktop and phone width are identical
+  in light and dark). If the module cannot load, the map area says so and the rest of the page
+  works. No Python API and no wire change, so `protocol_version` stays 1.
 - The source distribution (sdist) no longer carries `examples/` or the gallery thumbnails: it drops from
   6.5 MB to 1.5 MB. The wheel (what `pip install` uses) is unchanged. Tests that read `examples/` are
   skipped when you run the suite from an sdist; clone the repository to run all of them.

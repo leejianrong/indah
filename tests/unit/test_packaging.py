@@ -82,6 +82,27 @@ def test_code_editor_module_ships_in_the_package():
 
 
 @pytest.mark.unit
+def test_map_module_ships_in_the_package_and_the_shell_asks_for_its_hash():
+    """The shell loads api/map.js?v=<hash of the shipped file>; a stale build of either one
+    would ask for a hash the server does not have (the CI `frontend` job also diffs both)."""
+    import hashlib
+
+    static = files("indah.static")
+    module = static.joinpath("map.js").read_bytes()
+    assert b"createMap" in module and len(module) > 100_000  # Leaflet, minified
+    digest = hashlib.sha1(module).hexdigest()[:16]
+    assert digest.encode() in static.joinpath("index.html").read_bytes()
+
+
+@pytest.mark.unit
+def test_leaflet_is_not_inlined_in_the_shell():
+    """Leaflet lives in map.js, so the shell stays small and an app without a map never loads it."""
+    shell = files("indah.static").joinpath("index.html").read_bytes()
+    assert b"Leaflet 1.9" not in shell  # the library's license banner moved to map.js
+    assert b"Leaflet 1.9" in files("indah.static").joinpath("map.js").read_bytes()
+
+
+@pytest.mark.unit
 def test_py_typed_marker_ships_in_the_package():
     # PEP 561: without the marker, strict mypy ignores indah's inline annotations.
     assert files("indah").joinpath("py.typed").is_file()

@@ -808,6 +808,7 @@ def create_app(
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
             Route("/api/editor.js", _editor_js, methods=["GET"]),
+            Route("/api/map.js", _map_js, methods=["GET"]),
             Route("/api/components/{name}.js", _component_js, methods=["GET"]),
             *([Route("/api/csp-report", _csp_report, methods=["POST"])] if csp == "strict" else []),
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
@@ -1007,7 +1008,7 @@ async def _spa_index(request: Request) -> Response:
     return await _index(request)
 
 
-_EDITOR_ETAG: str | None = None
+_LAZY_DIGESTS: dict[str, str] = {}
 
 
 async def _static_js(request: Request, data: bytes, etag: str, key: str, cache: str) -> Response:
@@ -1027,18 +1028,30 @@ async def _static_js(request: Request, data: bytes, etag: str, key: str, cache: 
     return Response(data, media_type="text/javascript", headers=headers)
 
 
-async def _editor_js(request: Request) -> Response:
-    """The lazily loaded code editor module (ADR-0032), served from the wheel. Revalidated
-    with an ETag so a new indah version is picked up, but never re-downloaded needlessly.
-    Gzipped when the client accepts it (ADR-0042)."""
-    global _EDITOR_ETAG
-    try:
-        data = files("indah.static").joinpath("editor.js").read_bytes()
-    except FileNotFoundError:
-        return Response(status_code=404)
-    if _EDITOR_ETAG is None:
-        _EDITOR_ETAG = '"' + hashlib.sha1(data).hexdigest()[:16] + '"'
-    return await _static_js(request, data, _EDITOR_ETAG, "editor:" + _EDITOR_ETAG, "no-cache")
+def _lazy_module(filename: str) -> Callable[[Request], Awaitable[Response]]:
+    """A route serving one lazily loaded shell module from the wheel (ADR-0032 editor, ADR-0042
+    map). The file name is fixed where the route is declared, so nothing the client sends becomes
+    a path. A request that carries the module's content hash (``?v=``, as the shell builds it) is
+    cached for good; any other is revalidated with the ETag, so a new indah version is picked up
+    but never re-downloaded needlessly. Gzipped when the client accepts it (ADR-0042)."""
+
+    async def handler(request: Request) -> Response:
+        try:
+            data = files("indah.static").joinpath(filename).read_bytes()
+        except FileNotFoundError:
+            return Response(status_code=404)
+        digest = _LAZY_DIGESTS.get(filename)
+        if digest is None:
+            digest = _LAZY_DIGESTS[filename] = hashlib.sha1(data).hexdigest()[:16]
+        pinned = request.query_params.get("v") == digest
+        cache = "public, max-age=31536000, immutable" if pinned else "no-cache"
+        return await _static_js(request, data, f'"{digest}"', f"{filename}:{digest}", cache)
+
+    return handler
+
+
+_editor_js = _lazy_module("editor.js")
+_map_js = _lazy_module("map.js")
 
 
 _COMPONENT_NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
