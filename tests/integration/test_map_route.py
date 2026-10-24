@@ -27,11 +27,24 @@ async def test_map_module_is_served_as_javascript_with_an_etag_and_304():
         assert first.headers["cache-control"] == "no-cache"
         assert b"createMap" in first.content
         etag = first.headers["etag"]
-        assert etag == f'"{DIGEST}"'
+        assert etag.startswith(f'"{DIGEST}')  # a gzipped body has its own validator (ADR-0042)
         again = await c.get("/api/map.js", headers={"If-None-Match": etag})
         assert again.status_code == 304 and again.content == b""
         stale = await c.get("/api/map.js", headers={"If-None-Match": '"nope"'})
         assert stale.status_code == 200
+
+
+@pytest.mark.integration
+async def test_map_module_is_gzipped_when_accepted_and_plain_when_not():
+    async with _client(create_app()) as c:
+        raw = (await c.get("/api/map.js", headers={"Accept-Encoding": "identity"})).content
+        zipped = await c.get("/api/map.js", headers={"Accept-Encoding": "gzip"})
+        assert zipped.headers["content-encoding"] == "gzip"
+        assert zipped.headers["vary"] == "Accept-Encoding"
+        assert zipped.content == raw  # httpx decodes it: same bytes, smaller on the wire
+        assert (await c.get("/api/map.js", headers={"Accept-Encoding": "identity"})).headers[
+            "etag"
+        ] == f'"{DIGEST}"'
 
 
 @pytest.mark.integration
