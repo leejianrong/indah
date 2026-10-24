@@ -19,6 +19,7 @@ logs to show the real client.
 from __future__ import annotations
 
 import ipaddress
+import logging
 import re
 from collections.abc import Iterable
 from typing import Any
@@ -26,6 +27,56 @@ from typing import Any
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 Network = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+logger = logging.getLogger("indah")
+
+# Headers a gateway adds. Seeing one while ``trusted_proxies`` is empty usually means the app is
+# behind a proxy and every visitor will resolve to the proxy's address (IND-200).
+_FORWARDING_HEADERS = (
+    b"x-forwarded-for",
+    b"forwarded",
+    b"x-forwarded-proto",
+    b"fly-client-ip",
+    b"cf-connecting-ip",
+)
+
+
+class ProxyNotice:
+    """Whether to warn, once per app, that forwarded headers arrived with no ``trusted_proxies``.
+
+    ``enabled`` can be turned off (``create_app(warn_untrusted_forwarding=False)``, or
+    ``launch()`` in a notebook, where the host's proxy is expected). ``issued`` is set after the
+    warning is logged and mirrored to ``app.state.proxy_warning_issued`` once ``state`` is set.
+    """
+
+    def __init__(self, enabled: bool = True) -> None:
+        self.enabled = enabled
+        self.issued = False
+        self.state: Any = None
+
+    def check(self, scope: Scope) -> None:
+        """Log the warning the first time a forwarding header is seen; a boolean test after that."""
+        if self.issued or not self.enabled:
+            return
+        seen = sorted(
+            {k.decode("latin-1") for k, _ in scope.get("headers", ()) if k in _FORWARDING_HEADERS}
+        )
+        if not seen:
+            return
+        self.issued = True
+        if self.state is not None:
+            self.state.proxy_warning_issued = True
+        peer = (scope.get("client") or ("unknown", 0))[0]
+        logger.warning(
+            "Forwarded header(s) %s arrived from %s but trusted_proxies is empty, so indah ignores "
+            "them: behind a proxy every visitor resolves to the proxy's address and shares one "
+            "rate-limit bucket. Set create_app(trusted_proxies=[...]) to your gateway's addresses "
+            "(see 'Behind a proxy' in the hosting guide), or pass "
+            "warn_untrusted_forwarding=False if no proxy is in front. This is logged once.",
+            ", ".join(seen),
+            peer,
+        )
+
 
 _SEGMENT = re.compile(r"[A-Za-z0-9._~\-]+")
 _HOST = re.compile(r"[A-Za-z0-9.\-]+(:\d{1,5})?|\[[0-9A-Fa-f:]+\](:\d{1,5})?")
@@ -93,11 +144,16 @@ def safe_prefix(raw: str | None) -> str:
 class ProxyHeaders:
     """ASGI middleware applying the trusted-proxy rules above to each HTTP request."""
 
-    def __init__(self, app: ASGIApp, trusted: tuple[Network, ...]) -> None:
+    def __init__(
+        self, app: ASGIApp, trusted: tuple[Network, ...], notice: ProxyNotice | None = None
+    ) -> None:
         self.app = app
         self.trusted = trusted
+        self.notice = notice
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and not self.trusted and self.notice is not None:
+            self.notice.check(scope)
         if scope["type"] == "http" and self.trusted:
             peer = (scope.get("client") or (None, 0))[0]
             if is_trusted(peer, self.trusted):
