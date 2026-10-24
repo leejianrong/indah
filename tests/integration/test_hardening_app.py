@@ -58,6 +58,7 @@ async def test_security_headers_on_a_page_a_json_reply_and_an_error():
         assert (await client.get("/")).headers["x-frame-options"] == "SAMEORIGIN"
 
 
+@pytest.mark.raw_events  # asserts what a refused request creates: no tab connects first
 @pytest.mark.integration
 async def test_rate_limit_returns_429_before_anything_is_created():
     limits = Limits(rate={"/api/event": Rate(per_second=0.001, burst=2)})
@@ -66,8 +67,10 @@ async def test_rate_limit_returns_429_before_anything_is_created():
         codes = [
             (await client.post("/api/event", json=_event(f"s{i}"))).status_code for i in range(4)
         ]
-    assert codes == [200, 200, 429, 429]
-    assert len(app.state.store) == 2  # the refused ones never reached the store
+    # the first two pass the limiter and reach the route (409: no tab holds those ids, IND-199);
+    # the rest are refused by the limiter before anything else runs
+    assert codes == [409, 409, 429, 429]
+    assert len(app.state.store) == 0  # nothing was created, by either kind of refusal
 
 
 @pytest.mark.integration

@@ -179,6 +179,16 @@ sends without a preflight) from reaching the handler.
 A handler that refuses the caller (`guard(...)` or `ctx.require(...)`, ADR-0035) makes the
 request answer `403`; the tab also receives a `toast` of kind `warn`.
 
+The stream is what makes a session, so an event (and an upload) whose `sid` this process does not
+hold is answered `409` with `{"ok": false, "error": "unknown_session"}`, and nothing is created.
+That happens after a restart or an eviction, and with several processes and no affinity when the
+request reaches a process that does not hold the tab's session. The shell reacts by opening
+`api/stream` again (a fresh `init`) and showing one toast; it recovers at most once every few
+seconds. The refusals above come first on a secure app (`401`, `403`), and a signed id is bound to
+its principal, so the `409` says nothing about anyone else's sessions. An app built on one shared
+`Session` (`create_app(session=)`) has nothing to be unknown and is unchanged. A new status on an
+existing route is additive: `protocol_version` stays 1.
+
 An app with `Limits` (ADR-0037) may also answer `429` (with `Retry-After`) on `api/event`,
 `api/upload` and `api/stream` when an address is over its rate, or has too many streams open;
 nothing is created for such a request. A client should back off for `Retry-After` seconds.

@@ -63,6 +63,15 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   without one. A map looks and behaves as before (screenshots at desktop and phone width are identical
   in light and dark). If the module cannot load, the map area says so and the rest of the page
   works. No Python API and no wire change, so `protocol_version` stays 1.
+- An event or an upload for a session the process does not hold is now `409` with
+  `{"ok": false, "error": "unknown_session"}` and creates nothing (IND-199). It used to build a new,
+  empty session and answer `200`, so after a restart, an eviction or a misrouted click (two
+  processes, no affinity) the click silently did nothing. The shell opens its stream again for a
+  fresh page and shows one toast, "Reconnected. Your last action was not applied, please try it
+  again.", at most once every few seconds. Secure apps keep their `401` and `403` first, and an app
+  built on one shared `Session` is unchanged. A new status on an existing route, so
+  `protocol_version` stays 1. The stream is what makes a session: a script or a test that posts
+  events directly must open `api/stream` with the same `sid` first (see Upgrading).
 - The source distribution (sdist) no longer carries `examples/` or the gallery thumbnails: it drops from
   6.5 MB to 1.5 MB. The wheel (what `pip install` uses) is unchanged. Tests that read `examples/` are
   skipped when you run the suite from an sdist; clone the repository to run all of them.
@@ -116,6 +125,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 - Docs: the summary line of a live example now shows `code` spans as code instead of with literal
   backticks (the page's source and the rest of the summary stay escaped).
+
+### Upgrading
+
+- **Events need a stream first.** `POST api/event` and `POST api/upload` for a `sid` the server
+  does not hold now answer `409` instead of creating a session. A browser always opens the stream
+  first, so nothing changes there. A script or an in-process test that posts events directly must
+  first open `GET api/stream?sid=<sid>` (and let go: the session stays) or create the session
+  through the store; see `tests/integration/conftest.py` for a test fixture that does it.
 
 ## [0.7.0] - 2026-10-24
 
