@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: indah-app
+spec:
+  # ingressClassName: <your class>   (omit to use the cluster default)
+  rules:
+    - host: indah.example.com     # your host
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: indah-app
+                port: { name: http }

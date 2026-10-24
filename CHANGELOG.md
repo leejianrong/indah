@@ -13,6 +13,17 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- Deploy recipes (`deploy/recipes/`) and two guides, "Run on Fly" and "Run on Kubernetes". Fly: a
+  `fly.toml` for one machine (`/ready` check, `kill_signal = "SIGTERM"`, `INDAH_TRUSTED_PROXIES=fly`) and a
+  deploy script. Kubernetes: a kustomize base (readiness and liveness probes, `preStop`, grace period,
+  ConfigMap, PodDisruptionBudget) with overlays for Traefik (k3s's default ingress), ingress-nginx and
+  plain. They were run on k3s v1.35 with Traefik in k3d and on a throwaway Fly app; with two replicas the
+  Traefik cookie kept 20 of 20 events on the tab's pod and without it only 10 of 20 took effect. The guides
+  list what was and was not checked: ingress-nginx (retired upstream in March 2026), a Traefik
+  `IngressRoute`, and the real visitor address on a real k3s were not tested.
+- `deploy/probe/sticky_check.py` takes `--cookies` (act like a browser: send the cookies from the page load
+  on the stream and every event) and `--machine-header` (read the answering process from any header).
+
 - The deploy doctor (IND-205): `create_app(doctor="a-long-token")` (or `INDAH_DOCTOR_TOKEN`) mounts
   `GET /_indah/doctor`, a page and `?format=json`, showing what a gateway did to one request and what
   indah made of it: the resolved client next to the real socket peer, the scheme, host and prefix, the

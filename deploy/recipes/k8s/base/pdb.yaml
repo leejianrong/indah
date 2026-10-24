@@ -1,0 +1,11 @@
+# Lets a node drain take one pod at a time. With a single replica it does not protect anything,
+# and it does not block a drain either (maxUnavailable, not minAvailable).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: indah-app
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: indah-app

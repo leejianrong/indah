@@ -112,11 +112,18 @@ simply did nothing. Restarts and evictions now look the same way to the user: on
 
 That makes a misrouted click visible, not fixed. With two processes and no stickiness, a tab whose
 clicks land on the wrong process keeps reconnecting and losing its state, so **run one process**
-unless your gateway can pin a tab. indah finds a session by the `sid` in the stream URL and in the
-JSON body of each event, not by a cookie or a header, so gateway features that pin by cookie or header
-(Fly's replay cache, Cloudflare's session-affinity cookie) have nothing to key on today. Measured on
-Fly (IND-171): a client that sends the request header `fly-force-instance-id: <machine id>` is
-pinned to that machine. The browser shell does not send it yet.
+unless your gateway can pin a tab.
+
+What can pin a tab depends on what the browser sends on every request. indah finds a session by the
+`sid` in the stream URL and in the JSON body of each event, not by a cookie or a header, so a gateway
+that would have to *read* the `sid` (Fly's replay cache, a hash on a header you do not send) has
+nothing to key on. A gateway that **sets its own cookie** on the first page load does not need the
+`sid`: the browser sends that cookie on the stream and on every event, and the gateway keeps routing
+to the same process. That works today on an ingress such as Traefik: on two replicas, 20 of 20 events
+stayed on the stream's pod with the cookie and 10 of 20 without it (see [Run on
+Kubernetes](deploy-k8s.md)). Fly Proxy has no such cookie. Measured on Fly (IND-171): a client that
+sends the request header `fly-force-instance-id: <machine id>` is pinned to that machine, and the
+browser shell does not send it yet.
 
 ## Cross-site requests
 
@@ -426,6 +433,9 @@ database is rebuilt, not carried over.
 `stop()` is unchanged and does not wait for tabs, so call `drain()` first when you want them to move.
 
 ### On Kubernetes
+
+Ready-made manifests, with the checks that were run on them, are in [Run on Kubernetes](deploy-k8s.md);
+the Fly equivalent is [Run on Fly](deploy-fly.md).
 
 ```yaml
 spec:

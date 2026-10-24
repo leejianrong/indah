@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: indah-config
+data:
+  # Which proxies may set X-Forwarded-For. "k8s" is every private range plus CGNAT: broad. When you
+  # know your ingress pods' range, name it instead (k3s default: 10.42.0.0/16), or "10.42.0.0/16".
+  INDAH_TRUSTED_PROXIES: "k8s"
+  INDAH_NODE_HEADER: "1"        # X-Indah-Node: which pod answered (the pod name)
+  INDAH_DRAIN_SECONDS: "10"     # keep this lower than terminationGracePeriodSeconds minus preStop

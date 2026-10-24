@@ -74,6 +74,8 @@ dev = [
     "authlib>=1.3",
     "itsdangerous>=2",
     "cryptography>=42",
+    # The deploy recipes test (tests/unit/test_deploy_recipes.py) parses their YAML.
+    "pyyaml>=6",
 ]
 # The browser layer of the e2e suite (marked `e2e`). Kept out of `dev`/the fast
 # gate so `uv sync --extra dev` stays light and Node/browser-free; CI installs it

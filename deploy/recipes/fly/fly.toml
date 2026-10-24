@@ -1,0 +1,44 @@
+# indah on Fly: one machine. Copy this file, change `app`, and deploy with ./deploy.sh.
+#
+# One machine is deliberate: a tab's state lives in one process (ADR-0010), Fly Proxy routes each
+# request on its own, and it has no cookie affinity. A second machine would send some clicks to a
+# process that does not know the tab. See "Run on Fly" in the docs before you scale out.
+app = "my-indah-app"
+primary_region = "sin"
+
+# Fly's default stop signal is SIGINT, which indah does not drain on.
+kill_signal = "SIGTERM"
+kill_timeout = 15          # seconds: more than INDAH_DRAIN_SECONDS
+
+[build]
+  [build.args]
+    # What pip installs. Needs the first release after 0.7.0 (see ../app/Dockerfile).
+    INDAH_SPEC = "indah"
+
+[env]
+  INDAH_TRUSTED_PROXIES = "fly"   # the private range plus this app's public IPs, found at start
+  INDAH_NODE_HEADER = "1"         # X-Indah-Node on every response: which machine answered
+  INDAH_DRAIN_SECONDS = "10"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"      # a stopped machine drops every open tab
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/ready"
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
