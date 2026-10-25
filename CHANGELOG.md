@@ -11,6 +11,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-25
+
+The multi-replica release. indah can now run on more than one machine or pod: on Fly the shell tells the proxy
+which machine owns the tab, a tab's small state survives a restart or a move through a state store (memory,
+SQLite or Redis), and an opt-in `/metrics` endpoint feeds a scraper or an autoscaler. A three-replica test
+runs in CI, and the route hint was checked on three real Fly machines. Nothing changes unless you turn it on.
+`protocol_version` is still 1.
+
 ### Added
 
 - A `/metrics` endpoint (IND-212): `create_app(metrics="a-long-token")` (or `INDAH_METRICS_TOKEN`) mounts
@@ -49,8 +57,21 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   (Fly's `400`, or a `409`) re-opens the stream. `INDAH_ROUTE_HINT` / `route_hint=` is `auto`, `fly` or `off`;
   `auto` is on only on Fly with a cluster secret, and the secret is never taken from `secret=`. Off by default
   elsewhere, additive, `protocol_version` stays 1; an older shell ignores the field. The deploy doctor shows the
-  setting, and `deploy/probe/sticky_check.py --follow-route` acts like the shell. Not yet run on a real
-  three-machine Fly app.
+  setting, and `deploy/probe/sticky_check.py --follow-route` acts like the shell. Run on a real three-machine
+  Fly app: 20 of 20 events and patches with the hint, 2 of 20 without (`docs/spikes/multi-replica-e2e.md`).
+
+### Known limitations
+
+- Live handler state (a running task, a stream in progress) is lost when the machine that owns a tab dies;
+  the tab recovers its `ctx.persist` state and carries on (ADR-0043).
+- Only Fly has a route hint. On Kubernetes, use cookie affinity on the ingress (verified with Traefik on k3d);
+  the in-cluster forwarder (IND-209) is not built.
+- `INDAH_CLUSTER_SECRET` only switches the hint on; nothing is signed with it yet, so a secret mismatch between
+  replicas is not detected.
+- `Topic` and `Stream` are per replica: run the producer in every replica. Rate limits are per process too.
+- The Redis store, the Kubernetes and Fly snippets in the hosting guide and the `/metrics` HPA example were
+  not run against a real Upstash, cluster or Prometheus. The browser rolling-deploy check was run against a
+  simulated Fly, not on Fly.
 
 ## [0.8.0] - 2026-10-24
 
