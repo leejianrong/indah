@@ -114,6 +114,10 @@ from .hardening import (
     StreamLimiter,
     peer_address,
 )
+from .metrics import PATH as METRICS_PATH
+from .metrics import PERMISSION as METRICS_PERMISSION
+from .metrics import Metrics
+from .metrics import handler as _metrics
 from .node import NodeHeaderMiddleware, resolve_node
 from .protocol import EventIn, init_message, patch_message, ping_message, signed_out_message
 from .proxy import ProxyHeaders, ProxyNotice, parse_trusted
@@ -577,6 +581,7 @@ def create_app(
     cluster_secret: str | None = None,
     route_hint: str | None = None,
     doctor: str | bool | None = UNSET,
+    metrics: str | bool | None = UNSET,
     state_store: StateStore | str | None = UNSET,
     state_namespace: str = UNSET,
     persist_ttl: float = UNSET,
@@ -715,6 +720,13 @@ def create_app(
     ``?r=<machine>``. The cluster secret is never taken from ``secret=``; without it the hint is
     off.
 
+    ``metrics`` (off by default) mounts ``GET /metrics`` (IND-212): Prometheus text for this process
+    (open sessions and streams, events, handler errors, drain state, forwards and forward
+    failures), behind the same gate as the doctor: a token of 16+ characters (or
+    ``INDAH_METRICS_TOKEN``) sent as ``Authorization: Bearer <token>`` or ``?token=``, or ``True``
+    to admit a logged-in principal holding the ``metrics`` permission. Anyone else gets a plain
+    ``404``. See ``indah.metrics``.
+
     ``doctor`` (off by default) mounts the deploy doctor at ``GET /_indah/doctor`` (IND-205): the
     resolved client next to the real socket peer, the forwarded headers (an allowlist of names),
     the node, session and stream counts, the drain state, the settings in force and plain-language
@@ -849,6 +861,16 @@ def create_app(
     proxy_notice = ProxyNotice(enabled=warn_untrusted_forwarding)
     doctor_gate = make_gate(doctor, auth=auth, secure=secure, source=doctor_source)
     doctor_counter = Counter()
+    metrics_source = "metrics=" if metrics is not UNSET else "INDAH_METRICS_TOKEN"
+    metrics_gate = make_gate(
+        env.metrics(metrics),
+        auth=auth,
+        secure=secure,
+        source=metrics_source,
+        name="metrics",
+        permission=METRICS_PERMISSION,
+    )
+    metrics_counts = Metrics()
     middleware = []
     if doctor_gate is not None:  # outermost of all: it must see the socket before any rewrite
         middleware.append(Middleware(DoctorTap, counter=doctor_counter))
@@ -901,6 +923,7 @@ def create_app(
             *([Route("/api/brand/logo", _logo, methods=["GET"])] if logo is not None else []),
             *([Route("/api/brand/favicon/{name}", _favicon, methods=["GET"])] if favicons else []),
             *([Route(DOCTOR_PATH, _doctor, methods=["GET"])] if doctor_gate is not None else []),
+            *([Route(METRICS_PATH, _metrics, methods=["GET"])] if metrics_gate is not None else []),
             *([Route("/{path:path}", _spa_index, methods=["GET"])] if spa else []),
         ],
     )
@@ -931,6 +954,12 @@ def create_app(
             store.route_hint = route.hint
     app.state.doctor = doctor_gate
     app.state.doctor_counter = doctor_counter
+    app.state.metrics_gate = metrics_gate
+    app.state.metrics = metrics_counts
+    if isinstance(store, SharedSessionStore):
+        store.handle.session.on_error = metrics_counts.count_error
+    elif hasattr(store, "on_error"):
+        store.on_error = metrics_counts.count_error
     app.state.limits = limits
     app.state.security_headers = bool(security_headers)
     app.state.node_header = node_header
@@ -1695,6 +1724,7 @@ async def _event(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "unknown event"}, status_code=400)
     if result.forbidden:
         return _denied(403, "forbidden")
+    request.app.state.metrics.events += 1
     _audit(request, handle, principal, event.component, event.event, event.payload)
     _publish_result(hub, result)
     return JSONResponse({"ok": True})
@@ -1771,6 +1801,7 @@ def _replay_file(request: Request) -> Response | None:
         or not _MACHINE_ID.fullmatch(target)
     ):
         return None
+    request.app.state.metrics.forwards += 1
     return Response(
         content='{"ok": false, "error": "unknown_session"}',
         status_code=409,

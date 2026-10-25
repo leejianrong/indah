@@ -29,6 +29,7 @@ names the variable. Secret values are never logged: the log names the variables 
 - ``INDAH_CLUSTER_SECRET`` -> ``cluster_secret=`` (never derived from ``secret=``; the route hint
   needs it)
 - ``INDAH_DOCTOR_TOKEN`` -> ``doctor=`` (a token of 16+ characters; turns the deploy doctor on)
+- ``INDAH_METRICS_TOKEN`` -> ``metrics=`` (a token of 16+ characters; turns ``GET /metrics`` on)
 """
 
 from __future__ import annotations
@@ -221,6 +222,12 @@ class EnvConfig:
         if arg is not UNSET:
             return arg
         return self._take("INDAH_DOCTOR_TOKEN")
+
+    def metrics(self, arg: Any) -> Any:
+        """``metrics=`` if given, else INDAH_METRICS_TOKEN, else off."""
+        if arg is not UNSET:
+            return arg
+        return self._take("INDAH_METRICS_TOKEN")
 
     def report(self) -> tuple[str, ...]:
         """Log once, at INFO, which variables configured this app (names only)."""

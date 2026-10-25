@@ -128,11 +128,13 @@ class Gate:
         *,
         token: str | None,
         permission: bool,
+        permission_name: str = "doctor",
         auth: Any = None,
         now: Callable[[], float] = time.monotonic,
     ) -> None:
         self.token = token
         self.permission = permission
+        self.permission_name = permission_name
         self.auth = auth
         self._now = now
         self._failures: OrderedDict[str, deque[float]] = OrderedDict()
@@ -176,7 +178,7 @@ class Gate:
         if self.permission:
             principal = await authenticate(request, self.auth)
             if principal is not None and can(
-                principal, PERMISSION, getattr(request.app.state, "policy", None)
+                principal, self.permission_name, getattr(request.app.state, "policy", None)
             ):
                 return True
         # Only a request that offered a token and was wrong counts toward the lockout.
@@ -193,26 +195,31 @@ def make_gate(
     auth: Any,
     secure: bool,
     source: str = "doctor=",
+    name: str = "doctor",
+    permission: str = "doctor",
     now: Callable[[], float] = time.monotonic,
 ) -> Gate | None:
-    """The gate for ``create_app(doctor=arg)``; ``None`` when the doctor is off."""
+    """The gate for ``create_app(doctor=arg)``; ``None`` when the doctor is off. ``/metrics`` reuses
+    it with its own ``name`` (for messages) and ``permission`` (IND-212)."""
     if arg is None or arg is False:
         return None
     if arg is True:
         if not (secure or auth is not None):
             raise ValueError(
-                "doctor=True admits a logged-in principal holding the 'doctor' permission, so it "
-                "needs secure=True (or auth=). To use a shared token instead pass "
-                "doctor='a-long-random-token' or set INDAH_DOCTOR_TOKEN."
+                f"{name}=True admits a logged-in principal holding the '{permission}' permission, "
+                f"so it needs secure=True (or auth=). To use a shared token instead pass "
+                f"{name}='a-long-random-token' or set INDAH_{name.upper()}_TOKEN."
             )
-        return Gate(token=None, permission=True, auth=auth, now=now)
+        return Gate(token=None, permission=True, permission_name=permission, auth=auth, now=now)
     if isinstance(arg, str):
         if len(arg) < MIN_TOKEN:
             raise ValueError(
-                f"{source}: the doctor token must be at least {MIN_TOKEN} characters "
+                f"{source}: the {name} token must be at least {MIN_TOKEN} characters "
                 f'(try: python -c "import secrets; print(secrets.token_urlsafe(24))")'
             )
-        return Gate(token=arg, permission=auth is not None, auth=auth, now=now)
+        return Gate(
+            token=arg, permission=auth is not None, permission_name=permission, auth=auth, now=now
+        )
     raise ValueError(f"{source} must be a token string, True, False or None, got {arg!r}")
 
 

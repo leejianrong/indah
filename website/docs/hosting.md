@@ -612,6 +612,7 @@ start indah logs once, at INFO, which variables it used (names only).
 | `INDAH_ROUTE_HINT` | `route_hint=` | `auto`, `fly` or `off` | `auto`: on for Fly when `FLY_MACHINE_ID` is set and a cluster secret is given, else off |
 | `INDAH_CLUSTER_SECRET` | `cluster_secret=` | 16+ random characters | none; never taken from `INDAH_SECRET` |
 | `INDAH_DOCTOR_TOKEN` | `doctor=` | 16+ random characters | off |
+| `INDAH_METRICS_TOKEN` | `metrics=` | 16+ random characters | off |
 
 Booleans take `1`/`0`, `true`/`false`, `yes`/`no` or `on`/`off`. The secret is only read for
 `secure=True`. `INDAH_CSP` takes `strict` or `off`; a custom policy string is `csp=` in code.
@@ -688,6 +689,67 @@ logs and browser history, so prefer the header for scripts and use a throwaway t
 wrong tries from one address lock it out for a minute. The page is never cached or indexed and sets its
 own strict Content-Security-Policy. It is off unless you ask, and you should keep it behind the token:
 it tells whoever opens it how your deployment is wired.
+
+### Metrics
+
+For Prometheus, and for autoscaling on open streams, turn on `GET /metrics`. It is off unless you ask,
+and it is gated like the doctor: the same token rules, and the same plain `404` for everyone else.
+
+```python
+indah.create_app(..., metrics="a-long-random-token")  # or set INDAH_METRICS_TOKEN
+indah.create_app(..., secure=True, policy=policy, metrics=True)  # a principal holding "metrics"
+```
+
+The doctor token does not open it, and the metrics token does not open the doctor. The text is in the
+Prometheus format and describes one process (your scraper adds the `instance` label):
+
+| Series | Kind | Meaning |
+|---|---|---|
+| `indah_sessions_open` | gauge | sessions this process holds |
+| `indah_streams_open` | gauge | open SSE streams (tabs connected right now) |
+| `indah_draining` | gauge | `1` while the process drains, else `0` |
+| `indah_events_total` | counter | events dispatched to a session |
+| `indah_errors_total` | counter | handler exceptions (a `guard` refusal is not an error) |
+| `indah_forwards_total` | counter | requests sent on to the process that owns the session (Fly file replays today) |
+| `indah_forward_failures_total` | counter | forwards that did not reach it (stays `0` until the Kubernetes forwarder exists) |
+| `indah_build_info` | gauge | always `1`, with the indah `version` as a label |
+
+It holds counts only: no session id, user, path or secret. Keep `/metrics` off the public internet
+anyway: let your scraper reach it inside the cluster, and have the ingress refuse the path from outside.
+If your own app serves a route called `/metrics`, indah's takes the path while it is on.
+
+A scrape with a bearer token (Prometheus `scrape_config`):
+
+```yaml
+scrape_configs:
+  - job_name: indah
+    authorization: {type: Bearer, credentials_file: /etc/prometheus/indah-token}
+    static_configs: [{targets: ["indah.default.svc:8000"]}]
+```
+
+To scale on open streams, a replica's load is its connected tabs, so average `indah_streams_open` per
+pod. With the Prometheus adapter exposing it as a pods metric (the adapter rule is yours to write), an
+HPA looks like this. It is an example from the format, not something checked on a cluster:
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: indah}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: indah}
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Pods
+      pods:
+        metric: {name: indah_streams_open}
+        target: {type: AverageValue, averageValue: "200"}
+  behavior:
+    scaleDown: {stabilizationWindowSeconds: 300}   # tabs reconnect on a drain; do not flap
+```
+
+Scale-down ends streams, and a tab reconnects to another pod (see rolling out above), so keep the
+window long.
 
 ## Checklist
 
