@@ -216,7 +216,8 @@ def test_killed_owner_gives_one_toast_and_the_restored_state(fleet, page):
         "window.__toasts = 0; new MutationObserver((ms) => ms.forEach((m) =>"
         " m.addedNodes.forEach((n) => { if (n.nodeType !== 1) return;"
         " const all = n.matches('.toast') ? [n] : [...n.querySelectorAll('.toast')];"
-        " all.forEach((t) => { if (t.textContent.includes('Reconnected. Your')) window.__toasts++; });"
+        " all.forEach((t) => {"
+        " if (t.textContent.includes('Reconnected. Your')) window.__toasts++; });"
         " }))).observe(document, {subtree: true, childList: true});"
     )
     page.goto(fleet["fly"], wait_until="domcontentloaded")
