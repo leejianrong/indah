@@ -213,11 +213,20 @@ class InMemorySessionStore:
         return handle
 
     def _register(
-        self, session_id: str, ctx: Context, hub: Hub, session: Session, owner: str | None
+        self,
+        session_id: str,
+        ctx: Context,
+        hub: Hub,
+        session: Session,
+        owner: str | None,
+        *,
+        ready: bool = True,
     ) -> SessionHandle:
         session.ctx = ctx
         session.session_id = session_id  # so served file URLs route back here
         session.bind_hub(hub)
+        if ready:  # not for a placeholder: the real tree is checked when it arrives
+            ctx._session_ready(session)  # ctx.persist: the tree exists, saving may start
         handle = SessionHandle(session=session, hub=hub, owner=owner)
         self._handles[session_id] = handle
         if self.max_sessions is not None:
@@ -277,7 +286,12 @@ class InMemorySessionStore:
 
         root = self._placeholder() if self._placeholder is not None else Skeleton(lines=4)
         handle = self._register(
-            session_id, build.ctx, build.hub, Session(Column(children=[root])), build.owner
+            session_id,
+            build.ctx,
+            build.hub,
+            Session(Column(children=[root])),
+            build.owner,
+            ready=False,
         )
         self._placeholders[session_id] = handle
         return handle
@@ -309,6 +323,7 @@ class InMemorySessionStore:
         session.session_id = session_id
         session.bind_hub(build.hub)
         placeholder.session = session
+        build.ctx._session_ready(session)
         session.forget_ephemeral()
         build.hub.publish(init_message(session.snapshot(), chrome=build.ctx._chrome()))
 

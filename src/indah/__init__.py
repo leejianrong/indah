@@ -105,6 +105,7 @@ from .session_store import (
     SessionStore,
     SharedSessionStore,
 )
+from .state import MemoryStateStore, SqliteStateStore, StateStore
 from .stream import Stream
 from .theme import Theme
 
@@ -120,6 +121,9 @@ __all__ = [
     "LaunchHandle",
     "Session",
     "Stream",
+    "StateStore",
+    "MemoryStateStore",
+    "SqliteStateStore",
     "Theme",
     "Topic",
     "Context",

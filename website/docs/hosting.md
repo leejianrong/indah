@@ -100,7 +100,8 @@ your login).
 
 Session state lives in memory in the process and is meant to be disposable: filters, selection,
 a half-typed note. Keep durable data in your own database. A restart rebuilds each session and
-the tab re-initialises cleanly. There is no external session store, so **run one process** unless
+the tab re-initialises cleanly; `ctx.persist` can bring its small state back (see "Restorable
+sessions" below). Sessions themselves are not shared, so **run one process** unless
 your gateway can send a tab's requests to the process that holds its session.
 
 An event for a session the process does not hold is refused: `409` with
@@ -474,6 +475,77 @@ kill_timeout = 15         # seconds, more than drain_seconds
 These snippets follow the Kubernetes and Fly documentation. The drain itself is tested here with real
 processes and a real browser; a rollout on a real cluster or a real Fly deploy is not yet.
 
+## Restorable sessions
+
+A tab's session lives in one process, so a restart, a rollout or a move to another replica starts it
+again. `ctx.persist` keeps the small state worth keeping (the selected tab, filters, a half-typed
+note) in a **state store** and puts it back when the session is rebuilt:
+
+```python
+def build(ctx):
+    tab = Signal("overview")
+    filters = Signal({})
+    ctx.persist("tab", tab)  # restores the saved value now, saves on every change
+    ctx.persist("filters", filters, version=2, ttl=3600)
+    ...
+```
+
+The value is restored inside the factory, before the first paint. After that it is saved when it changes
+(a burst of keystrokes is one write, about a quarter of a second later) and once more when the session
+ends. A tab is found again by its session id: the shell keeps it in `sessionStorage`, so a reload or a
+rebuild on another replica finds the same state. A new tab, another browser or another device starts
+from the defaults. In a `secure` app the saved value also records the user, and it is ignored for anyone
+else.
+
+```python
+create_app(session_factory=build, state_store="sqlite:///state.db")
+```
+
+| Store | Use it for | Notes |
+|-------|------------|-------|
+| `"memory"` (default) | a tab rebuilt in the same process (an idle session reaped, a dropped stream) | does not survive a restart |
+| `"sqlite:///state.db"` | one replica that restarts | the standard library, one file; do not share it between replicas over a network file system |
+| your own `StateStore` | a store shared by every replica | five methods (`get`, `set`, `delete`, `delete_prefix`, `close`), each plain or `async def` |
+
+A Redis store is planned (IND-210). Nothing runs or bundles a service for you.
+
+What is saved, and what never is:
+
+- **Plain JSON only**: `str`, `int`, `float`, `bool`, `None`, `list` and `dict` with string keys. Anything
+  else raises `ValueError` at the `persist` call.
+- **Size caps**: 16 KB per value and 128 KB per session. A larger value is not saved (one warning), and the
+  older copy is removed so it cannot come back over a newer one. `INDAH_PERSIST_MAX_BYTES` or
+  `persist_max_bytes=` changes the per-value cap.
+- **Lifetime**: 24 hours after the last write (`ttl=` per value, `INDAH_PERSIST_TTL` or `persist_ttl=` for
+  the default).
+- **No secrets**: persist UI state, not tokens. A signal shown in a `SecretReveal` (an ephemeral prop) is
+  refused with an error in the log, and anything stored for it is deleted. A store holds what your app
+  chose to save, so treat it like your own database.
+- **Shape changes**: pass `version=` and bump it when a signal's shape changes; older values are ignored.
+  `validate=` can veto a restored value.
+- **Failures**: a store that is down never breaks the tab. A failed read starts from the defaults, a failed
+  write is dropped, and the log says so about once a minute.
+- With an `async` store, the read is awaited in the background, so the saved values arrive a moment after
+  the first paint.
+
+`guard` and your `Policy` are unaffected: restoring a value runs no handler. Several apps that share one
+store should each set `state_namespace=` (or `INDAH_STATE_NAMESPACE`) so their keys do not meet.
+
+The browser could also hold this state itself and send it back, which needs no store at all. That is not
+built: the browser can read and change its own values, so the app would have to validate every restored
+value, and it needs a shell change. The `StateStore` interface admits such a store when it is wanted.
+
+<indah-live page="live/persist"></indah-live>
+
+## Topic and Stream with several replicas
+
+A `Topic` and a `Stream` live in one process: a producer feeds the tabs of **its own** replica only. With
+more than one replica, run the producer in **every** replica and let each one read the source itself (a
+poll, a queue consumer, a database change feed). Every replica then holds the same recent history and its
+own tabs follow it. There is no bus between replicas, and a `Topic` you publish to in one replica is not
+seen in another. If you need a shared feed that a single producer fills, tell us what you are feeding
+it from; a Redis-backed `Topic` is a later card, not part of the current design.
+
 ## Configuration from the environment
 
 A ConfigMap, a Kubernetes Secret or `fly secrets set` hands an app environment variables, not Python
@@ -493,6 +565,10 @@ start indah logs once, at INFO, which variables it used (names only).
 | `INDAH_LIMITS` | `limits=` | `public` or `none` | none |
 | `INDAH_DRAIN_SECONDS` | `drain_seconds=` | `30` | `10` |
 | `INDAH_FACTORY_TIMEOUT` | `factory_timeout=` | `2.5` | `1` |
+| `INDAH_STATE_STORE` | `state_store=` | `memory` or `sqlite:///state.db` | `memory`; where `ctx.persist` saves |
+| `INDAH_STATE_NAMESPACE` | `state_namespace=` | `orders` | `indah` |
+| `INDAH_PERSIST_TTL` | `persist_ttl=` | `3600` | `86400` (seconds after the last write) |
+| `INDAH_PERSIST_MAX_BYTES` | `persist_max_bytes=` | `8192` | `16384` (per value) |
 | `INDAH_COMPRESS` | `compress=` | `0` | on |
 | `INDAH_WARN_UNTRUSTED_FORWARDING` | `warn_untrusted_forwarding=` | `0` | on |
 | `INDAH_NODE_HEADER` | `node_header=` | `1` | off |

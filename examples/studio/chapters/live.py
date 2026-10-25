@@ -138,6 +138,38 @@ def every_check(pw) -> None:
     assert page.get_by_text("Refreshed ").inner_text() != first
 
 
+# -- ctx.persist ---------------------------------------------------------------------------------
+
+
+def persist(ctx: indah.Context) -> indah.Component:
+    view = indah.Signal("overview")
+    draft = indah.Signal("")
+    # Saved when they change, put back when this tab's session is built again (a reload here, a
+    # restart or a move to another replica in production). Plain JSON values only.
+    ctx.persist("view", view)
+    ctx.persist("draft", draft, ttl=3600)
+    return indah.Column(
+        children=[
+            indah.Select(view, options=["overview", "billing", "settings"], label="View"),
+            indah.TextInput(draft, label="Draft note", placeholder="Type, then reload this page"),
+            indah.Text(lambda: f"Showing {view.value}; draft is {len(draft.value)} characters."),
+        ]
+    )
+
+
+def persist_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    page.get_by_label("View").select_option("billing")
+    page.get_by_label("Draft note").fill("remember me")
+    expect(page.get_by_text("Showing billing; draft is 11 characters.")).to_be_visible()
+    page.wait_for_timeout(600)  # saves are coalesced for a quarter of a second
+    page.reload()
+    expect(page.get_by_text("Showing billing; draft is 11 characters.")).to_be_visible()
+    expect(page.get_by_label("Draft note")).to_have_value("remember me")
+
+
 # -- Tab title and favicon -----------------------------------------------------------------------
 
 # A red dot, registered below with create_app(favicons=) in the chapter's app_kwargs.
@@ -462,6 +494,21 @@ CHAPTER = Chapter(
             docs="dashboards.md",
             adr=(26,),
             check=bounded_check,
+        ),
+        Page(
+            slug="persist",
+            local_only="restoring needs a server that outlives the tab, and the browser runtime has none",
+            title="ctx.persist: a tab that comes back",
+            summary=(
+                "`ctx.persist(name, signal)` saves a signal's value and puts it back when the tab's "
+                "session is built again. Pick a view, type a note and reload the page: both return. "
+                'The same happens after a restart with `state_store="sqlite:///state.db"`.'
+            ),
+            build=persist,
+            covers=("Context", "Signal", "StateStore", "MemoryStateStore", "SqliteStateStore"),
+            docs="hosting.md#restorable-sessions",
+            adr=(43,),
+            check=persist_check,
         ),
         Page(
             slug="every",
