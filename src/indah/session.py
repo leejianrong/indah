@@ -80,6 +80,8 @@ class Session:
         # The route hint (IND-197) a minted file URL carries as ``?r=``, so a misrouted GET can be
         # sent to this session's machine. Empty when the hint is off.
         self.route_hint: str = ""
+        # Called once per handler exception (IND-212, the /metrics error count); set by the store.
+        self.on_error: Callable[[], None] | None = None
         # The Context the store built this session with (None for a hand-built or
         # shared session); ``close`` runs its on_close callbacks.
         self.ctx: Context | None = None
@@ -213,6 +215,8 @@ class Session:
                 self._hub.publish(toast_message("You are not allowed to do that.", "warn", 4.0))
             return
         logger.exception("indah handler raised", exc_info=exc)
+        if self.on_error is not None:
+            self.on_error()
         if self._hub is not None:
             self._hub.publish(error_message(f"{type(exc).__name__}: {exc}"))
 

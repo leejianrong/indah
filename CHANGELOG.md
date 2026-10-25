@@ -13,6 +13,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- A `/metrics` endpoint (IND-212): `create_app(metrics="a-long-token")` (or `INDAH_METRICS_TOKEN`) mounts
+  `GET /metrics` in Prometheus text format, hand-written with no new dependency. Series: open sessions
+  and streams, events, handler errors, drain state, forwards and forward failures, and a build-info label.
+  It is off by default and gated like the deploy doctor (a bearer token, or `metrics=True` for a principal
+  holding the `metrics` permission); everyone else gets a plain 404. `hosting.md` has a scrape example and
+  an HPA on open streams. No new public name.
 - Restorable sessions (IND-208, ADR-0043 Tier B). `ctx.persist(name, signal)` saves a signal's JSON value
   into a state store, keyed by user and session id, and restores it inside the session factory when the tab's
   session is built again (after a restart, a rollout, an idle session reaped or a move to another replica).
