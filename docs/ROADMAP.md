@@ -16,8 +16,8 @@
 | 0.6.0 | Tables, text and small controls | 25 + 5 | IND-148, 166, 153, 154, 152, 160, 164, 158, 161, 168, plus the demo cleanup card (IND-172) | 1 |
 | 0.7.0 | Command palette, built-in visuals, the docs runtime | 24 | IND-165, 157, 162, 163, 176 (83a, done), 183, 184, 175 | 1 |
 | 0.8.0 (about to release) | Live docs, deploy basics and size, in one release | about 70 | IND-181, 185, 169, 83, 61, 159, 186 to 190, 199 to 206, 214, 215, 177 to 180, 195 | 1 |
-| 0.9.0 (provisional) | Multi-replica (ADR-0043) | 22 | IND-197, 208, 210, 211, 212, 216, 196, 191 | 1 |
-| 0.10.0 (provisional) | Live media and annotation | 22 | IND-74 (split 3 ways), 64, 65, 71, 56, 62 | 1, decided in the ADR |
+| 0.9.0 (released) | Multi-replica (ADR-0043) | 17 | IND-197, 208, 210, 211, 212, 216 | 1 |
+| 0.10.0 (provisional) | Live media and annotation, plus the gallery cards | 22 + 8 | IND-74 (split 3 ways), 64, 65, 71, 56, 62; gallery: IND-191, 192, 193, 196 | 1, decided in the ADR |
 | Later | Needs a decision or has no demand yet | 11 | IND-57, 81, 66 | - |
 | Superseded | The hosted Studio (ADR-0041 option B replaced it) | 6 | IND-173, 174 | - |
 | Closed as folded | | 1 | IND-155 (into IND-166) | - |
@@ -216,7 +216,7 @@ first; the Cloudflare Worker hop and a real k8s cluster are still unverified (IN
 
 Owner decides or does by hand: the `pypi` approval; the Cloudflare dashboard steps for IND-170.
 
-## 0.9.0 (provisional): multi-replica, 22 points
+## 0.9.0 (released 2026-10-25): multi-replica, 17 points
 
 Theme: any replica's front door works, and a restart or rollout does not lose a tab's small state. Shaped by
 ADR-0043 (Accepted 2026-10-25; decisions so far are recorded in the ADR: losing live handler state on an
@@ -234,8 +234,8 @@ the owner's ingress cannot do affinity, the k8s forwarder (IND-209, deferred).
 | IND-211 Multi-replica e2e: three replicas, two balancers, rolling restart, real Fly run | 5 |
 | IND-212 /metrics endpoint | 2 |
 | IND-216 Decision: Topic and Stream across replicas (recommendation: producer per replica now) | 2 |
-| Gallery: IND-196 stale Colab notebooks (2), IND-191 catalog file (3) | 5 |
 
+The gallery cards IND-191 and IND-196 were planned here but not done in 0.9.0; they moved to 0.10.0 (below).
 Deferred past 0.9.0: IND-209 (peer forwarder for k8s without affinity, 5; built only if the k3s ingress
 cannot do cookie affinity) and IND-213 (shared rate limits, 3).
 
@@ -250,13 +250,17 @@ decided.
 Owner decides: what fronts the k3s (Traefik or ingress-nginx talking to pods, or a Cloudflare Tunnel to a
 Service; this decides whether IND-209 is built at all); Redis or Postgres for the first store; accept ADR-0043.
 
-## 0.10.0 (provisional): live media and annotation, 22 points
+## 0.10.0 (provisional): live media and annotation, 22 points, plus the gallery cards
 
 Theme: the deferred live-media boundary (ADR-0017), only if the owner wants it.
 
 IND-74 is 8 points and is split: **74a** ADR for the Tier-1 transport (2), **74b** server WebSocket
 endpoint (3), **74c** shell client and fallback to SSE (3). Then IND-64 (3), IND-65 (2), IND-71 annotation
 (3), IND-56 segmentation (3), IND-62 video detection (3).
+
+Gallery cards (they can also ship as a 0.9.x patch; the owner decides): IND-191 catalog file (3, done), IND-192
+scheduled link check (2), IND-193 policy page (1), IND-196 stale Colab notebooks (2). IND-194 plans the next batch
+of apps with the owner.
 
 Risks: Colab has no WebSocket proxy, so every feature must fall back to Tier 0 (SSE and POST); the CSP
 `connect-src` policy and the origin guard must cover `ws:`; a protocol bump if the ADR cannot keep the
