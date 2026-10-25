@@ -11,6 +11,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Fixed
+
+- The Colab notebooks in `examples/colab/` had drifted from the demo sources (ten of fourteen embedded old
+  code). They are regenerated, `make colab` rebuilds them, and a fast-layer test now fails whenever a
+  committed notebook differs from what the generator produces, or the demo list and the gallery catalog
+  disagree (IND-196).
+
 ### Changed
 
 - The public gallery's cards now come from one catalog file, `deploy/fly/gallery.toml`, instead of

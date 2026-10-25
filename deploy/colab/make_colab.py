@@ -7,7 +7,9 @@ example file from GitHub, and launches it - so it embeds inline in a Colab cell
 source of demos, and writes examples/colab/<slug>.ipynb (committed so the
 "Open in Colab" links resolve).
 
-Run:  python deploy/colab/make_colab.py
+Run:  make colab   (or: uv run python deploy/colab/make_colab.py)
+
+tests/unit/test_colab_notebooks.py fails when a committed notebook is stale.
 """
 
 from __future__ import annotations
@@ -91,19 +93,31 @@ def notebook(slug: str, example: str, title: str, extra: str) -> dict:
     }
 
 
-def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
-    made = []
+def manifest_rows() -> list[tuple[str, str, str, str]]:
+    """The (slug, example, title, extra) rows of deploy/spaces/demos.tsv."""
+    rows = []
     for line in MANIFEST.read_text().splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
         slug, example, title, _emoji, extra = line.split("\t")
-        path = OUT / f"{slug}.ipynb"
-        path.write_text(json.dumps(notebook(slug, example, title, extra), indent=1) + "\n")
-        made.append(path.relative_to(REPO))
-    for p in made:
-        print(f"wrote {p}")
+        rows.append((slug, example, title, extra))
+    return rows
+
+
+def render_all() -> dict[Path, str]:
+    """Every notebook as text, keyed by its path under examples/colab (nothing is written)."""
+    return {
+        OUT / f"{slug}.ipynb": json.dumps(notebook(slug, example, title, extra), indent=1) + "\n"
+        for slug, example, title, extra in manifest_rows()
+    }
+
+
+def main() -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
+    for path, text in render_all().items():
+        path.write_text(text)
+        print(f"wrote {path.relative_to(REPO)}")
 
 
 if __name__ == "__main__":
