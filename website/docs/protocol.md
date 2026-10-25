@@ -94,7 +94,7 @@ The UI is a tree of nodes. A node is:
 
 | Type | Shape | When |
 |------|-------|------|
-| `init` | `{"v","type":"init","root":<node>}`, plus `"chrome":{"title","favicon"}` when the session has changed them (see `chrome`) | On connect, or a resume that fell back to a full snapshot. It can also arrive mid-stream (with an SSE id): an `async def` session factory that outlived `factory_timeout` showed a `skeleton` first, and this `init` replaces the whole tree with the real one (IND-153). The shell already handles a second `init` |
+| `init` | `{"v","type":"init","root":<node>}`, plus `"chrome":{"title","favicon"}` when the session has changed them (see `chrome`), plus `"route":{"hint","node","transport"}` when the route hint is on (see "Route hint") | On connect, or a resume that fell back to a full snapshot. It can also arrive mid-stream (with an SSE id): an `async def` session factory that outlived `factory_timeout` showed a `skeleton` first, and this `init` replaces the whole tree with the real one (IND-153). The shell already handles a second `init` |
 | `patch` | `{"v","type":"patch","changes":[<change>,...]}` | Granular updates to existing nodes |
 | `error` | `{"v","type":"error","message":"..."}` | A handler failed; the shell shows a toast |
 | `navigate` | `{"v","type":"navigate","path","replace"}` | `ctx.navigate(...)`: the shell pushes (or, with `replace`, rewrites) its history entry to the in-app `path`. An older shell ignores it |
@@ -189,6 +189,26 @@ its principal, so the `409` says nothing about anyone else's sessions. An app bu
 `Session` (`create_app(session=)`) has nothing to be unknown and is unchanged. A new status on an
 existing route is additive: `protocol_version` stays 1.
 
+### Route hint
+
+With several machines behind one address, an event must reach the machine that holds the tab's
+stream. When the server's route hint is on (Fly, with `INDAH_CLUSTER_SECRET` set; ADR-0043, IND-197),
+every `init` carries `"route": {"hint", "node", "transport"}`. `hint` is the machine id (letters and
+digits, up to 32), `node` is the process's opaque node id, and `transport` is `"fly"`: the client
+should send the hint back on every `POST api/event` and `POST api/upload` as the request header
+`X-Indah-Route: <hint>` and, for `"fly"`, also `fly-force-instance-id: <hint>`, which Fly Proxy
+obeys. The client keeps the latest hint in memory; each `init` replaces it, and an `init` without
+`route` clears it. A file URL the server mints carries `?r=<hint>`; a GET for it that reaches a
+machine that does not hold the session is answered with `fly-replay: instance=<hint>` (status
+`409`, so it is loud where there is no Fly Proxy to replay it) and never replayed twice. The
+server ignores `X-Indah-Route` itself: it does not forward.
+
+A client that gets `409` `owner_unreachable` (reserved for the Kubernetes forwarder, not sent yet),
+`409` `unknown_session`, or, when it sent `fly-force-instance-id`, a `400` that is not indah's own
+JSON (Fly's answer for a machine that no longer exists) should open `api/stream` again for a fresh
+`init`; the shell does, once every few seconds. Everything here is additive: an older shell ignores
+`route` and sends no hint, which behaves as before. `protocol_version` stays 1.
+
 An app with `Limits` (ADR-0037) may also answer `429` (with `Retry-After`) on `api/event`,
 `api/upload` and `api/stream` when an address is over its rate, or has too many streams open;
 nothing is created for such a request. A client should back off for `Retry-After` seconds.
@@ -250,7 +270,8 @@ in that session and exposes them at this URL. The response body is the bytes, wi
 the file's `Content-Type` and a `Content-Disposition: attachment; filename="…"`.
 The `token` is unguessable and the file lives in one session's store, so it is
 reachable only through that session (an unknown `sid` or `token` is `404`). The URL
-is document-relative, so it resolves behind Colab/Runpod proxy base paths.
+is document-relative, so it resolves behind Colab/Runpod proxy base paths. With the route hint on
+(see "Route hint") the URL ends in `?r=<machine id>`; the owner ignores it.
 
 ## Built-in component types
 

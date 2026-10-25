@@ -77,6 +77,9 @@ class Session:
         # stamps session_id so the URL routes back to this session; "default" is the
         # id-less fallback (a single-shared app resolves any id to its one session).
         self.session_id: str = "default"
+        # The route hint (IND-197) a minted file URL carries as ``?r=``, so a misrouted GET can be
+        # sent to this session's machine. Empty when the hint is off.
+        self.route_hint: str = ""
         # The Context the store built this session with (None for a hand-built or
         # shared session); ``close`` runs its on_close callbacks.
         self.ctx: Context | None = None
@@ -156,7 +159,8 @@ class Session:
         while len(self._files) > self._MAX_FILES:
             oldest = next(iter(self._files))
             del self._files[oldest]
-        return f"api/file/{self.session_id}/{token}"
+        url = f"api/file/{self.session_id}/{token}"
+        return f"{url}?r={self.route_hint}" if self.route_hint else url
 
     def get_file(self, token: str) -> tuple[bytes, str, str] | None:
         """The ``(data, filename, media_type)`` for a token, or ``None``."""

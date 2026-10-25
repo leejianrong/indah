@@ -25,6 +25,9 @@ names the variable. Secret values are never logged: the log names the variables 
 - ``INDAH_COMPRESS`` -> ``compress=`` (1/0, true/false, yes/no, on/off)
 - ``INDAH_WARN_UNTRUSTED_FORWARDING`` -> ``warn_untrusted_forwarding=`` (same booleans)
 - ``INDAH_NODE_HEADER`` -> ``node_header=`` (same booleans; ``INDAH_NODE`` names the node)
+- ``INDAH_ROUTE_HINT`` -> ``route_hint=`` (``auto``, ``fly`` or ``off``; read by :mod:`indah.route`)
+- ``INDAH_CLUSTER_SECRET`` -> ``cluster_secret=`` (never derived from ``secret=``; the route hint
+  needs it)
 - ``INDAH_DOCTOR_TOKEN`` -> ``doctor=`` (a token of 16+ characters; turns the deploy doctor on)
 """
 

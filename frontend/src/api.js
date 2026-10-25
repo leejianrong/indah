@@ -125,9 +125,32 @@ export function pushPath(path, replace = false) {
   else history.pushState({}, "", href);
 }
 
+// The route hint (IND-197, ADR-0043). With several processes behind one address, an event must reach
+// the process that holds this tab's stream. Its init says which: `route: {hint, node, transport}`.
+// The shell keeps the latest one in memory and sends it on every event and upload as X-Indah-Route;
+// on Fly (`transport: "fly"`) it also sends `fly-force-instance-id`, which Fly Proxy obeys. Every
+// init replaces it, and an init without one (the hint is off, or an older server) clears it.
+let route = null;
+
+export function setRoute(next) {
+  route =
+    next && typeof next.hint === "string" && /^[A-Za-z0-9]{1,32}$/.test(next.hint)
+      ? { hint: next.hint, transport: next.transport }
+      : null;
+}
+
+function routeHeaders() {
+  if (!route) return {};
+  const headers = { "X-Indah-Route": route.hint };
+  if (route.transport === "fly") headers["fly-force-instance-id"] = route.hint;
+  return headers;
+}
+
 // The server answers 409 `unknown_session` when this process does not hold the tab's session:
 // it restarted, evicted it, or (with several processes and no affinity) another one has it
-// (IND-199). The app registers one handler that re-opens the stream and tells the user.
+// (IND-199). `owner_unreachable` is the same to the tab. With the Fly header on, a 400 that is not
+// indah's own JSON is Fly saying the machine is gone. The app registers one handler that re-opens
+// the stream and tells the user.
 let onSessionLost = null;
 
 export function setSessionLostHandler(fn) {
@@ -135,13 +158,24 @@ export function setSessionLostHandler(fn) {
 }
 
 async function lostSession(resp) {
-  if (resp.status !== 409) return false;
-  try {
-    const body = await resp.clone().json();
-    if (!body || body.error !== "unknown_session") return false;
-  } catch (e) {
-    return false;
+  let lost = false;
+  if (resp.status === 409) {
+    try {
+      const body = await resp.clone().json();
+      lost = !!body && (body.error === "unknown_session" || body.error === "owner_unreachable");
+    } catch (e) {
+      lost = false;
+    }
+  } else if (resp.status === 400 && route && route.transport === "fly") {
+    try {
+      const body = await resp.clone().json();
+      lost = !body || typeof body !== "object" || !("ok" in body);
+    } catch (e) {
+      lost = true; // not indah's JSON: the proxy refused a machine that no longer exists
+    }
   }
+  if (!lost) return false;
+  route = null; // the old machine is not coming back for this tab; the next init names a new one
   if (onSessionLost) onSessionLost();
   return true;
 }
@@ -149,7 +183,7 @@ async function lostSession(resp) {
 export function postEvent(id, event, payload) {
   fetch(apiUrl("api/event"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...routeHeaders() },
     body: JSON.stringify({ sid: sessionId(), component: id, event, payload: payload || {} }),
   })
     .then(lostSession)
@@ -164,7 +198,7 @@ export function postUpload(id, files) {
   form.append("sid", sessionId());
   form.append("component", id);
   for (const file of files) form.append("file", file);
-  return fetch(apiUrl("api/upload"), { method: "POST", body: form })
+  return fetch(apiUrl("api/upload"), { method: "POST", headers: routeHeaders(), body: form })
     .then(async (resp) => {
       if (!resp.ok) await lostSession(resp);
       return resp.ok;

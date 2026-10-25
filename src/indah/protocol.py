@@ -128,13 +128,21 @@ SPEC_COMPONENTS: dict[str, frozenset[str]] = {
 }
 
 
-def init_message(root: dict[str, Any], chrome: dict[str, Any] | None = None) -> dict[str, Any]:
+def init_message(
+    root: dict[str, Any],
+    chrome: dict[str, Any] | None = None,
+    route: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """The full tree. ``chrome`` (``{"title", "favicon"}``) rides along when the session has
     changed the tab's title or icon (IND-152), so a fresh init restores them; it is left off
-    otherwise, and a shell that ignores it just keeps the app's own."""
+    otherwise, and a shell that ignores it just keeps the app's own. ``route``
+    (``{"hint","node","transport"}``) names the process that holds this stream, for a
+    deployment with several (IND-197); it is left off when the route hint is off."""
     message: dict[str, Any] = {"v": PROTOCOL_VERSION, "type": "init", "root": root}
     if chrome:
         message["chrome"] = chrome
+    if route:
+        message["route"] = route
     return message
 
 

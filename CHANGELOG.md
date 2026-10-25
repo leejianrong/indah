@@ -27,6 +27,15 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   store is IND-210) and a store shared over a network file system is not tested.
 - The hosting guide says that `Topic` and `Stream` are per replica (IND-216): run the producer in every
   replica.
+- The route hint for several Fly machines (IND-197, ADR-0043). With `INDAH_CLUSTER_SECRET` (or
+  `create_app(cluster_secret=)`) set on Fly, `init` carries `route: {hint, node, transport}`; the shell sends
+  the machine id as `fly-force-instance-id` and `X-Indah-Route` on every event and upload, and file URLs carry
+  `?r=<machine id>`, which a machine that does not hold the session answers with `fly-replay`. A gone machine
+  (Fly's `400`, or a `409`) re-opens the stream. `INDAH_ROUTE_HINT` / `route_hint=` is `auto`, `fly` or `off`;
+  `auto` is on only on Fly with a cluster secret, and the secret is never taken from `secret=`. Off by default
+  elsewhere, additive, `protocol_version` stays 1; an older shell ignores the field. The deploy doctor shows the
+  setting, and `deploy/probe/sticky_check.py --follow-route` acts like the shell. Not yet run on a real
+  three-machine Fly app.
 
 ## [0.8.0] - 2026-10-24
 

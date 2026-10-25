@@ -2,7 +2,7 @@
 
     uv run python deploy/probe/sticky_check.py https://indah-probe.fly.dev \\
         [--events 20] [--new-conn] [--header "Name: value"] \\
-        [--cookies] [--machine-header x-indah-node]
+        [--cookies] [--machine-header x-indah-node] [--follow-route]
 
 Opens the SSE stream for one session id, finds the "Send an event" button in the first snapshot,
 posts N events with that session id, and prints which machine answered each POST
@@ -11,7 +11,10 @@ the HTTP status, and how many of the resulting patches actually arrived on the t
 With working stickiness every POST is answered by the stream's machine and every event produces
 a patch. ``--cookies`` makes the check behave like a browser: it loads the page first and sends
 the cookies it got (an ingress affinity cookie) on the stream and on every POST. Standard
-library and httpx only; the probe never stores anything.
+library and httpx only; the probe never stores anything. ``--follow-route`` acts like indah's shell
+(IND-197): it takes ``route`` from the first ``init`` (the app needs ``INDAH_CLUSTER_SECRET``) and
+sends ``X-Indah-Route`` and, on Fly, ``fly-force-instance-id`` on every POST, with no gateway
+config.
 """
 
 from __future__ import annotations
@@ -53,11 +56,23 @@ def main() -> None:
         action="store_true",
         help="act like a browser: GET / first, then send its cookies on the stream and every POST",
     )
+    ap.add_argument(
+        "--follow-route",
+        action="store_true",
+        help="send the route hint from init on every POST, like the shell does (IND-197)",
+    )
     args = ap.parse_args()
     base = args.base.rstrip("/")
     extra = dict(h.split(": ", 1) for h in args.header)
     sid = uuid.uuid4().hex
-    state: dict = {"machine": None, "button": None, "patches": 0, "inits": 0, "status": None}
+    state: dict = {
+        "machine": None,
+        "button": None,
+        "patches": 0,
+        "inits": 0,
+        "status": None,
+        "route": None,
+    }
     ready = threading.Event()
     jar = httpx.Cookies()
     if args.cookies:
@@ -77,6 +92,7 @@ def main() -> None:
                     msg = json.loads(line[6:])
                     if msg.get("type") == "init":
                         state["inits"] += 1
+                        state["route"] = msg.get("route")
                         state["button"] = find_button(msg["root"], "Send an event")
                         ready.set()
                     elif msg.get("type") == "patch":
@@ -85,14 +101,22 @@ def main() -> None:
     threading.Thread(target=reader, daemon=True).start()
     if not ready.wait(40) or not state["button"]:
         raise SystemExit(f"no snapshot with the button (stream status {state['status']})")
-    print(f"stream: machine {state['machine']}, session {sid[:8]}")
+    print(f"stream: machine {state['machine']}, session {sid[:8]}, route {state['route']}")
+    route_headers: dict[str, str] = {}
+    if args.follow_route:
+        route = state["route"]
+        if not route:
+            raise SystemExit("--follow-route: init carried no route (is INDAH_CLUSTER_SECRET set?)")
+        route_headers["X-Indah-Route"] = route["hint"]
+        if route.get("transport") == "fly":
+            route_headers["fly-force-instance-id"] = route["hint"]
     body = {"sid": sid, "component": state["button"], "event": "click", "payload": {}}
     answered: dict[str, int] = {}
     statuses: dict[int, int] = {}
     client = None if args.new_conn else httpx.Client(timeout=20, headers=extra, cookies=jar)
     for _ in range(args.events):
         c = client or httpx.Client(timeout=20, headers=extra, cookies=jar)
-        r = c.post(f"{base}/api/event", json=body)
+        r = c.post(f"{base}/api/event", json=body, headers=route_headers)
         m = r.headers.get(args.machine_header, "?")
         answered[m] = answered.get(m, 0) + 1
         statuses[r.status_code] = statuses.get(r.status_code, 0) + 1
