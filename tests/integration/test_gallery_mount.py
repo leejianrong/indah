@@ -108,6 +108,7 @@ async def test_gallery_index_is_a_landing_page():
     assert 'href="chatbot/"' in body  # demo card link, relative -> base-path safe
     assert "token by token" in body  # the demo's blurb rendered on its card
     assert 'src="thumbnails/chatbot.png"' in body  # real screenshot thumbnail wired in
+    assert 'href="https://indah.abangai.dev/docs/gallery-policy/"' in body  # policy page
 
 
 @pytest.mark.integration
