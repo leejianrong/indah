@@ -51,3 +51,4 @@ website/docs/assets/live/
 
 # The probe image installs a wheel deploy/probe/deploy.sh builds from this checkout
 deploy/probe/wheels/
+deploy/fly/gallery_status.json

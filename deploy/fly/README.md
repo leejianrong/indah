@@ -22,6 +22,8 @@ The Colab one-click badges remain the free, zero-host baseline.
   entries are examples this gallery runs; `listed` entries are apps hosted elsewhere and show as a
   card that links out. `gallery_catalog.py` loads and validates it; add a demo by adding an entry
   (and its module to `examples=(...)` in `build_gallery.sh` and to `SLUGS` in the e2e test).
+- `gallery_health.py`, `check_gallery_links.py`, `.github/workflows/gallery-links.yml` - the weekly
+  link check for `listed` entries (IND-192). See "Listed apps: link check" below.
 - `build_gallery.sh` - assembles `build/`: `gallery_app.py` + the demo example files
   + the Dockerfile / requirements / fly.toml.
 - `deploy_fly.sh` - builds then `fly deploy`s the one app.
@@ -85,3 +87,26 @@ The gallery keys its own rate limiter on `Fly-Client-IP` (see `gallery_app.py`),
 use `trusted_proxies=["fly"]` (or `INDAH_TRUSTED_PROXIES=fly`). It trusts Fly's proxy range plus the
 app's public IPs, which it finds by looking up `<app>.fly.dev` at start or from `INDAH_FLY_IPS`. See
 "Behind a gateway" in the hosting guide.
+
+## Listed apps: link check
+
+A scheduled workflow (`gallery-links.yml`, Mondays plus a manual run) requests each `listed` entry's
+URL: https only, no credentials, HEAD then GET, at most three redirects, 15 seconds. It also reports
+any listed thumbnail that is missing or over the size limit. The result goes to the run's step
+summary. A dead listed app does not fail the run; only a script error does.
+
+Per app it keeps `last_ok` and a count of consecutive failures. At 3 the card shows "Not responding";
+at 8 the card is left out. The first success resets the count, so a recovered app returns with no
+code change.
+
+**How the status reaches the live page.** The gallery reads `gallery_status.json` once, at startup,
+and makes no outbound request at request time. The workflow cannot push to `main`, so it force-pushes
+the file to a `gallery-status` branch. Before a deploy, fetch it into the checkout (it is git-ignored
+here); `build_gallery.sh` copies it into the image:
+
+```bash
+git fetch origin gallery-status
+git show FETCH_HEAD:gallery_status.json > deploy/fly/gallery_status.json
+```
+
+So a card changes on the next deploy, not the moment a check runs. With no file, every card shows.

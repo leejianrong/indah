@@ -24,6 +24,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
   ask for removal. No community submissions are open yet (IND-193).
 
+- A weekly link check for apps listed in the public gallery (`.github/workflows/gallery-links.yml`,
+  not run at deploy). It requests each listed URL (https only, HEAD then GET, a few redirects),
+  writes a step summary and records the result on a `gallery-status` branch. After 3 failed checks in
+  a row the card says "Not responding"; after 8 it is left out; one success brings it back with no
+  code change. The status reaches the live page with the next gallery deploy (IND-192).
+
 ### Changed
 
 - The public gallery's cards now come from one catalog file, `deploy/fly/gallery.toml`, instead of

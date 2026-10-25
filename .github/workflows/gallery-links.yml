@@ -1,0 +1,44 @@
+name: Gallery links
+
+# Weekly check of the apps LISTED in deploy/fly/gallery.toml (IND-192). Not part of deploy.
+# The status file lives on the `gallery-status` branch (never main: main takes PRs only), so the
+# failure counts survive between runs. The live gallery picks it up at its next deploy.
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: gallery-links
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the previous status, if any
+        run: |
+          if git ls-remote --exit-code --heads origin gallery-status >/dev/null 2>&1; then
+            git fetch --depth=1 origin gallery-status
+            git show FETCH_HEAD:gallery_status.json > deploy/fly/gallery_status.json
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check the listed apps
+        run: python deploy/fly/check_gallery_links.py
+        working-directory: deploy/fly
+      - name: Record the status on the gallery-status branch
+        run: |
+          d="$(mktemp -d)"
+          cp deploy/fly/gallery_status.json "$d/"
+          cd "$d"
+          git init -q -b gallery-status
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gallery_status.json
+          git commit -q -m "Gallery link status"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gallery-status
