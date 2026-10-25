@@ -325,3 +325,30 @@ async def test_listed_entry_text_is_escaped():
     async with _client(gallery) as client:
         body = (await client.get("/")).text
     assert "<script>x</script>" not in body
+
+
+def _listed(slug, title):
+    return {
+        "slug": slug,
+        "title": title,
+        "blurb": "Hosted elsewhere.",
+        "author": "Someone",
+        "kind": "listed",
+        "url": f"https://{slug}.example/",
+    }
+
+
+@pytest.mark.integration
+async def test_listed_card_shows_not_responding_and_hidden_is_omitted_then_recovers():
+    build_gallery = _build_gallery()
+    listed = [_listed("fine", "Fine app"), _listed("slow", "Slow app"), _listed("dead", "Dead app")]
+    status = {"slow": {"failures": 3}, "dead": {"failures": 8}}
+    async with _client(build_gallery([], listed, status)) as client:
+        text = (await client.get("/")).text
+    assert "Fine app" in text and "Slow app" in text and "Dead app" not in text
+    assert text.count("Not responding") == 1
+    # The same catalog with a recovered status file: no code change, both cards are plain again.
+    recovered = {"slow": {"failures": 0}, "dead": {"failures": 0}}
+    async with _client(build_gallery([], listed, recovered)) as client:
+        text = (await client.get("/")).text
+    assert "Dead app" in text and "Not responding" not in text

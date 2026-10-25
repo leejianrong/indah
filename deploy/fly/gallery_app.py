@@ -22,6 +22,7 @@ import importlib
 from pathlib import Path
 from typing import Any
 
+import gallery_health
 from gallery_catalog import CATALOG, THUMB_DIR, hosted, load_catalog, validate_catalog
 from gallery_catalog import listed as listed_entries
 from starlette.applications import Starlette
@@ -90,10 +91,15 @@ def _listed_card(d: dict[str, Any]) -> str:
     title = html.escape(d["title"])
     blurb = html.escape(d.get("blurb", ""))
     author = html.escape(d.get("author", ""))
+    tag = (
+        '<span class="card-tag">Not responding</span>'
+        if d.get("status") == "not_responding"
+        else ""
+    )
     return (
         f'<a class="card" href="{html.escape(d["url"], quote=True)}" target="_blank" '
         f'rel="noopener noreferrer">{_thumb(d)}'
-        f'<span class="card-body"><span class="card-title">{title}</span>'
+        f'<span class="card-body"><span class="card-title">{title}</span>{tag}'
         f'<span class="card-blurb">{blurb}</span>'
         f'<span class="card-blurb">External app by {author}</span></span></a>'
     )
@@ -145,14 +151,18 @@ def _fly_client_ip(scope: Scope) -> str:
 
 
 def build_gallery(
-    demos: list[dict[str, Any]], listed: list[dict[str, Any]] | None = None
+    demos: list[dict[str, Any]],
+    listed: list[dict[str, Any]] | None = None,
+    status: dict[str, Any] | None = None,
 ) -> ASGIApp:
     """Mount each demo app under `/<slug>` and serve a gallery index at `/`.
 
     ``demos`` is a list of ``{"slug","title","emoji","blurb","app"}`` (``app`` is an ASGI app).
     ``listed`` holds catalog entries for apps hosted elsewhere; they get a card that links out.
+    ``status`` is the link-check state (``gallery_health``); no network call is made here.
     """
-    outside = listed or []
+    # Listed apps: the weekly link check's status decides what shows (hidden ones are left out).
+    outside = gallery_health.apply_status(listed or [], status or {})
 
     async def index(_request):
         return HTMLResponse(_index_html(demos, outside))
@@ -206,4 +216,4 @@ def create_gallery() -> ASGIApp:
         mod.app.state.source_url = e.get("source_url") or f"{SOURCE_BASE}/{e['module']}.py"
         apply_public_session_limits(mod.app)
         demos.append({**e, "app": mod.app})
-    return build_gallery(demos, listed_entries(entries))
+    return build_gallery(demos, listed_entries(entries), gallery_health.load_state())

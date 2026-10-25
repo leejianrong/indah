@@ -52,8 +52,12 @@ fi
 rm -rf "$out"
 mkdir -p "$out"
 cp "$here/gallery_app.py" "$out/"
-cp "$here/gallery_catalog.py" "$here/gallery.toml" "$out/"  # the catalog and its loader
+cp "$here/gallery_catalog.py" "$here/gallery_health.py" "$here/gallery.toml" "$out/"  # the catalog and its loader
 cp "$here/landing.html" "$out/"   # the landing-page template gallery_app.py reads
+# The link-check status for listed apps (IND-192), if one is present. Fetch the latest first:
+#   git fetch origin gallery-status && git show FETCH_HEAD:gallery_status.json > deploy/fly/gallery_status.json
+# Without it every listed card shows.
+[ -f "$here/gallery_status.json" ] && cp "$here/gallery_status.json" "$out/"
 cp -r "$here/thumbnails" "$out/"  # real per-demo screenshots for the gallery cards
 for mod in "${examples[@]}"; do
   cp "$repo/examples/$mod.py" "$out/$mod.py"
