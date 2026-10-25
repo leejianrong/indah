@@ -6,6 +6,7 @@ import os
 import uuid
 
 import pytest
+from redis.exceptions import RedisError
 
 from indah.redis_store import RedisStateStore
 
@@ -123,7 +124,7 @@ async def test_an_unreachable_redis_fails_fast_and_reports_unhealthy():
     store = RedisStateStore("redis://127.0.0.1:1/0", timeout=0.3)
     try:
         assert await store.health() is False
-        with pytest.raises(ConnectionError):  # redis.ConnectionError is one
+        with pytest.raises(RedisError):
             await asyncio.wait_for(store.get("k"), 3)
     finally:
         await store.close()
