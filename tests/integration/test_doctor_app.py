@@ -283,3 +283,30 @@ def test_presets_show_by_name_next_to_the_networks_they_expanded_to():
     assert "10.0.0.0/8" in r["trusted_proxies"] and "203.0.113.7/32" in r["trusted_proxies"]
     page = c.get(PATH, params={"token": TOKEN}).text
     assert "Presets" in page and "private" in page
+
+
+class _Store:
+    def __init__(self, up):
+        self.up = up
+
+    async def health(self):
+        return self.up
+
+
+def test_the_doctor_shows_the_state_store_kind_and_health():
+    up = client(plain(doctor=TOKEN, state_store=_Store(True)))
+    facts = up.get(PATH, params={"token": TOKEN, "format": "json"}).json()
+    assert facts["settings"]["state_store"] == "_Store"
+    assert facts["settings"]["state_store_health"] == "ok"
+    page = up.get(PATH, params={"token": TOKEN}).text
+    assert "_Store: ok" in page
+
+    down = client(plain(doctor=TOKEN, state_store=_Store(False)))
+    facts = down.get(PATH, params={"token": TOKEN, "format": "json"}).json()
+    assert facts["settings"]["state_store_health"] == "unreachable"
+    assert "state store does not answer" in facts["warnings"][0]["text"]
+
+
+def test_a_store_without_a_health_check_adds_nothing():
+    facts = client(plain(doctor=TOKEN)).get(PATH, params={"token": TOKEN, "format": "json"}).json()
+    assert "state_store_health" not in facts["settings"]

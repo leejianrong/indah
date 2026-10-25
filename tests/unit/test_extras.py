@@ -25,6 +25,7 @@ def _names(requirements):
 def test_the_feature_extras_hold_what_the_adr_says():
     assert _names(EXTRAS["plot"]) == {"matplotlib"}
     assert _names(EXTRAS["data"]) == {"pandas", "numpy"}
+    assert _names(EXTRAS["redis"]) == {"redis"}
     assert _names(EXTRAS["demos"]) == {
         "numpy",
         "pillow",
@@ -34,14 +35,14 @@ def test_the_feature_extras_hold_what_the_adr_says():
     }
 
 
-def test_all_is_plot_plus_data_and_never_tooling_or_demos():
+def test_all_is_the_feature_extras_and_never_tooling_or_demos():
     flat = _names(EXTRAS["all"])
-    assert flat == _names(EXTRAS["plot"]) | _names(EXTRAS["data"])
+    assert flat == _names(EXTRAS["plot"]) | _names(EXTRAS["data"]) | _names(EXTRAS["redis"])
     assert not flat & {"pytest", "playwright", "zensical", "onnxruntime", "pillow"}
 
 
 def test_every_feature_requirement_has_a_version_floor():
-    for extra in ("plot", "data", "demos"):
+    for extra in ("plot", "data", "redis", "demos"):
         for requirement in EXTRAS[extra]:
             assert re.search(r">=\s*\d", requirement), f"{extra}: {requirement!r} has no floor"
 
