@@ -114,8 +114,7 @@ def test_rediss_urls_and_acl_users_are_accepted():
 
 async def test_a_down_redis_degrades_ctx_persist_to_defaults(caplog, monkeypatch):
     """The ADR-0043 degraded mode: reads start from defaults, writes drop, one log line."""
-    from indah import Signal
-    from indah import state
+    from indah import Signal, state
     from indah.state import _Persistence
 
     monkeypatch.setattr(state, "_warned", {})  # the log is rate limited per process
