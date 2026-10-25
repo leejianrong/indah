@@ -7,6 +7,7 @@ that lets indah run behind Colab's/Runpod's proxies (ADR-0001), exercised locall
 
 import importlib.util
 import re
+import sys
 from pathlib import Path
 
 import httpx
@@ -24,6 +25,8 @@ _GALLERY = _DEPLOY_FLY / "gallery_app.py"
 
 
 def _load_gallery_module():
+    if str(_DEPLOY_FLY) not in sys.path:
+        sys.path.insert(0, str(_DEPLOY_FLY))  # gallery_app imports gallery_catalog beside it
     spec = importlib.util.spec_from_file_location("gallery_app", _GALLERY)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -82,9 +85,17 @@ async def test_gallery_index_lists_the_mounted_demos():
 @pytest.mark.integration
 async def test_gallery_index_is_a_landing_page():
     build_gallery = _build_gallery()
-    # A real slug so its blurb renders on the card.
+    # A real slug so its thumbnail renders on the card.
     gallery = build_gallery(
-        [{"slug": "chatbot", "title": "Streaming chatbot", "emoji": "💬", "app": _counter_app()}]
+        [
+            {
+                "slug": "chatbot",
+                "title": "Streaming chatbot",
+                "emoji": "💬",
+                "blurb": "Chat replies streamed token by token into role bubbles.",
+                "app": _counter_app(),
+            }
+        ]
     )
     async with _client(gallery) as client:
         r = await client.get("/")
@@ -260,16 +271,16 @@ def test_apply_public_session_limits_ignores_a_shared_store():
 
 
 @pytest.mark.integration
-def test_build_gallery_script_copies_every_manifest_module():
+def test_build_gallery_script_copies_every_catalog_module():
     """build_gallery.sh's ``examples=(...)`` array must list every module
-    ``create_gallery()`` imports (MANIFEST's 4th column) - otherwise the Fly image
-    is missing a demo's source file and the whole gallery fails to import at
-    container startup. Caught for real once: MANIFEST grew map_poster/grc_map
+    ``create_gallery()`` imports (each hosted entry's module in gallery.toml) - otherwise the
+    Fly image is missing a demo's source file and the whole gallery fails to import at
+    container startup. Caught for real once: the catalog grew map_poster/grc_map
     (R2-8/R2-10) but the script's hardcoded array wasn't updated to match."""
-    spec = importlib.util.spec_from_file_location("gallery_app_manifest", _GALLERY)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    manifest_modules = {mod for _slug, _title, _emoji, mod in module.MANIFEST}
+    _load_gallery_module()
+    import gallery_catalog
+
+    manifest_modules = {e["module"] for e in gallery_catalog.hosted(gallery_catalog.load_catalog())}
 
     script = (_DEPLOY_FLY / "build_gallery.sh").read_text(encoding="utf-8")
     match = re.search(r"^examples=\(([^)]*)\)", script, re.MULTILINE)
@@ -279,3 +290,37 @@ def test_build_gallery_script_copies_every_manifest_module():
     assert manifest_modules <= script_modules, (
         f"missing from build_gallery.sh's examples=(...): {manifest_modules - script_modules}"
     )
+
+
+_LISTED = {
+    "slug": "their-app",
+    "title": "Their app",
+    "blurb": "Hosted by someone else.",
+    "emoji": "🔗",
+    "thumbnail": "chatbot.png",
+    "url": "https://example.com/app",
+    "author": "Someone",
+}
+
+
+@pytest.mark.integration
+async def test_a_listed_entry_is_an_outbound_card_not_an_iframe():
+    gallery = _build_gallery()([], listed=[_LISTED])
+    async with _client(gallery) as client:
+        r = await client.get("/")
+    body = r.text
+    assert 'href="https://example.com/app"' in body
+    assert 'rel="noopener noreferrer"' in body
+    assert "Hosted by someone else." in body
+    assert 'src="thumbnails/chatbot.png"' in body
+    assert "<iframe" not in body
+    async with _client(gallery) as client:
+        assert (await client.get("/their-app/")).status_code == 404  # nothing is mounted
+
+
+@pytest.mark.integration
+async def test_listed_entry_text_is_escaped():
+    gallery = _build_gallery()([], listed=[{**_LISTED, "title": "<script>x</script>"}])
+    async with _client(gallery) as client:
+        body = (await client.get("/")).text
+    assert "<script>x</script>" not in body

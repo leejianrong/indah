@@ -18,6 +18,10 @@ The Colab one-click badges remain the free, zero-host baseline.
 
 - `gallery_app.py` - the single Starlette app (`build_gallery` mounts the demos;
   `create_gallery` imports the examples and is the uvicorn factory entrypoint).
+- `gallery.toml` - the catalog: one `[[app]]` per card (title, blurb, thumbnail, tags). `hosted`
+  entries are examples this gallery runs; `listed` entries are apps hosted elsewhere and show as a
+  card that links out. `gallery_catalog.py` loads and validates it; add a demo by adding an entry
+  (and its module to `examples=(...)` in `build_gallery.sh` and to `SLUGS` in the e2e test).
 - `build_gallery.sh` - assembles `build/`: `gallery_app.py` + the demo example files
   + the Dockerfile / requirements / fly.toml.
 - `deploy_fly.sh` - builds then `fly deploy`s the one app.
