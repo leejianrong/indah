@@ -54,3 +54,8 @@ the callbacks registered through `ctx.on_close` (ADR-0025). The factory may take
 factory are unchanged; a custom store must accept the extra optional parameter. An external
 backend remains deferred (see `docs/SEMULA-REQUESTS-PLAN.md`, H4, for what it would need:
 named state, a hub backend and a topic backend).
+
+## Amendment (2026-10-25): persisted state is a second seam
+
+`ctx.persist` and the `StateStore` interface (ADR-0043, IND-208) carry a session's small JSON state across
+a rebuild. They sit beside this seam, not in it: sessions themselves are still process-local.

@@ -36,6 +36,7 @@ from .protocol import chrome_message, navigate_message, signed_out_message, toas
 from .proxy import forwarded_prefix
 from .reactive import Computation, Computed, Signal, effect
 from .routes import Route, match_routes, normalize_path
+from .state import _Persistence, persistence_for
 from .stream import Stream
 
 if TYPE_CHECKING:
@@ -153,6 +154,7 @@ class Context:
         self._chrome_sent: tuple[str | None, str | None] = (None, None)
         self._bad_favicons: set[str] = set()
         self._chrome_effect: Computation = effect(self._sync_chrome)
+        self._persistence: _Persistence | None = None  # built by the first ctx.persist
 
     def _bind_hub(self, hub: Hub) -> None:
         self._hub = hub
@@ -366,6 +368,49 @@ class Context:
             else:
                 failing = False
 
+    def persist(
+        self,
+        name: str,
+        signal: Signal[Any],
+        *,
+        version: int = 1,
+        ttl: float | None = None,
+        max_bytes: int | None = None,
+        validate: Callable[[Any], bool] | None = None,
+    ) -> None:
+        """Keep ``signal``'s value across a restart, a rollout or a move to another replica.
+
+        Call it in the session factory, after creating the signal. If a value was saved for this
+        tab (same session id, same user), the signal is set to it now, before the first paint.
+        After that the value is saved whenever it changes (a burst of changes is one write).
+        ``name`` identifies it within the session. Only a ``Signal`` the app writes is accepted.
+
+        The value must be plain JSON: ``str``, ``int``, ``float``, ``bool``, ``None``, ``list``
+        and ``dict`` with string keys; anything else raises ``ValueError`` here. A value over
+        ``max_bytes`` (default 16 KB; 128 KB for the session) is not saved, with one warning.
+        ``ttl`` is how long a saved value lives after its last write (default 24 hours).
+        ``version`` goes with the value: bump it when the signal's shape changes, and old data is
+        ignored. ``validate(value)`` may veto a restored value (return ``False``).
+
+        Never persist a secret. A signal shown in an ephemeral prop (``SecretReveal``) is
+        refused and anything stored for it is removed. Keep it to small UI state (filters, the
+        selected tab, a draft); durable data belongs in your own database. Values are per
+        browser tab: a new tab, another device or another user starts from the defaults. With
+        the default in-memory store, a restart of the process still starts blank; use
+        ``create_app(state_store="sqlite:///state.db")`` or your own ``StateStore``.
+
+        ``guard`` and ``Policy`` are unaffected: restoring a value runs no handler."""
+        if self._persistence is None:
+            self._persistence = persistence_for(self)
+        self._persistence.add(
+            name, signal, version=version, ttl=ttl, max_bytes=max_bytes, validate=validate
+        )
+
+    def _session_ready(self, session: Any) -> None:
+        """The store calls this once the session's tree exists: saving starts."""
+        if self._persistence is not None:
+            self._persistence.session_ready(session)
+
     def latest(self, topic: Topic[T], *, initial: Any = _MISSING) -> Signal[T | None]:
         """A signal holding the newest item published to ``topic`` (for a badge count, a
         status line). Starts at ``initial``, else the topic's latest retained item, else
@@ -391,6 +436,8 @@ class Context:
             return
         self._closed = True
         self._chrome_effect.dispose()
+        if self._persistence is not None:
+            self._persistence.close()
         for task in list(self._spawned):
             task.cancel()
         self._spawned.clear()

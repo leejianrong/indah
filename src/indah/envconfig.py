@@ -17,6 +17,11 @@ names the variable. Secret values are never logged: the log names the variables 
 - ``INDAH_LIMITS`` -> ``limits=`` (a preset: ``public`` or ``none``)
 - ``INDAH_DRAIN_SECONDS`` -> ``drain_seconds=`` (seconds, 0 or more)
 - ``INDAH_FACTORY_TIMEOUT`` -> ``factory_timeout=`` (seconds, more than 0)
+- ``INDAH_STATE_STORE`` -> ``state_store=`` (``memory`` or ``sqlite:///path``; where ``ctx.persist``
+  keeps what it saves)
+- ``INDAH_STATE_NAMESPACE`` -> ``state_namespace=`` (a name that keeps apps sharing one store apart)
+- ``INDAH_PERSIST_TTL`` -> ``persist_ttl=`` (seconds a saved value lives after its last write)
+- ``INDAH_PERSIST_MAX_BYTES`` -> ``persist_max_bytes=`` (the largest value ``ctx.persist`` saves)
 - ``INDAH_COMPRESS`` -> ``compress=`` (1/0, true/false, yes/no, on/off)
 - ``INDAH_WARN_UNTRUSTED_FORWARDING`` -> ``warn_untrusted_forwarding=`` (same booleans)
 - ``INDAH_NODE_HEADER`` -> ``node_header=`` (same booleans; ``INDAH_NODE`` names the node)
@@ -161,6 +166,38 @@ class EnvConfig:
             raise ValueError(f"{name} must be more than 0, got {text!r}")
         if not positive and value < 0:
             raise ValueError(f"{name} must be 0 or more, got {text!r}")
+        return value
+
+    def state_store(self, arg: Any) -> Any:
+        """``state_store=`` if given (a store, or a spec string), else INDAH_STATE_STORE, else the
+        in-memory store."""
+        from .state import MemoryStateStore, state_store_from_spec
+
+        if arg is not UNSET and arg is not None:
+            return state_store_from_spec(arg) if isinstance(arg, str) else arg
+        if arg is None:
+            return MemoryStateStore()
+        text = self._take("INDAH_STATE_STORE")
+        return MemoryStateStore() if text is None else state_store_from_spec(text)
+
+    def namespace(self, arg: Any) -> str:
+        if arg is not UNSET:
+            return arg
+        return self._take("INDAH_STATE_NAMESPACE") or "indah"
+
+    def whole_number(self, name: str, arg: Any, default: int) -> int:
+        """A count of bytes: a whole number more than 0."""
+        if arg is not UNSET:
+            return arg
+        text = self._take(name)
+        if text is None:
+            return default
+        try:
+            value = int(text)
+        except ValueError:
+            raise ValueError(f"{name} must be a whole number of bytes, got {text!r}") from None
+        if value < 1:
+            raise ValueError(f"{name} must be more than 0, got {text!r}")
         return value
 
     def boolean(self, name: str, arg: Any, default: bool) -> bool:

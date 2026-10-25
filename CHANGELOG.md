@@ -11,6 +11,23 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+
+- Restorable sessions (IND-208, ADR-0043 Tier B). `ctx.persist(name, signal)` saves a signal's JSON value
+  into a state store, keyed by user and session id, and restores it inside the session factory when the tab's
+  session is built again (after a restart, a rollout, an idle session reaped or a move to another replica).
+  Options: `version=`, `ttl=`, `max_bytes=`, `validate=`. Writes are coalesced and flushed when the session
+  ends. New public names `StateStore`, `MemoryStateStore` (the default) and `SqliteStateStore` (standard
+  library, one file), plus `create_app(state_store=, state_namespace=, persist_ttl=, persist_max_bytes=)` and
+  `INDAH_STATE_STORE`, `INDAH_STATE_NAMESPACE`, `INDAH_PERSIST_TTL`, `INDAH_PERSIST_MAX_BYTES`. Values must be
+  plain JSON; defaults are 16 KB per value, 128 KB per session and 24 hours; a signal shown in an ephemeral
+  prop (`SecretReveal`) is never stored and anything stored for it is deleted; a value saved for another
+  user is ignored. A store that fails never breaks a tab. A store method may be `async def`. No wire change,
+  `protocol_version` stays 1. The deploy doctor shows the store kind. Not yet shared between replicas (a Redis
+  store is IND-210) and a store shared over a network file system is not tested.
+- The hosting guide says that `Topic` and `Stream` are per replica (IND-216): run the producer in every
+  replica.
+
 ## [0.8.0] - 2026-10-24
 
 The deployment release, plus live docs. This release makes indah easier to run for real on Fly and on your

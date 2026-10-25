@@ -288,6 +288,7 @@ def collect_facts(request: Request, state: Any = None) -> dict[str, Any]:
             "secure": bool(getattr(state, "secure", False)),
             "csp": "off" if not csp else ("strict" if csp == "strict" else "custom"),
             "compress": bool(getattr(state, "compress", False)),
+            "state_store": type(getattr(state, "state_store", None)).__name__,
             "node_header": bool(getattr(state, "node_header", False)),
             "rate_limit": bool(limits and limits.rate),
             "stream_cap_per_address": getattr(limits, "max_streams_per_ip", None),

@@ -504,3 +504,34 @@ the two gallery cards (IND-196, IND-191, 5 points) already planned.
  Fly:  steps 2 and the forward are replaced by the header fly-force-instance-id: <A's machine id>,
        so the Fly Proxy delivers the POST straight to A. B never sees it.
 ```
+
+## Amendment (2026-10-25, IND-208): what was built for Tier B, and the browser-held verdict
+
+Built as designed, with these differences, each chosen for the code as it is:
+
+- **`StateStore` methods are plain or `async`** (the protocol types them as `T | Awaitable[T]`). The
+  in-memory and SQLite stores are plain functions, so a sync session factory can restore with no event loop.
+  A networked or client-held store is `async def`.
+- **An async read is applied a moment after the first paint**, not bounded by the factory timeout: a sync
+  `ctx.persist` cannot await, so the read runs as a `ctx.spawn` task and sets the signal when it returns. A
+  store that answers in a plain call (memory, SQLite) restores before the first snapshot, as designed.
+- **Saving starts when the tree exists** (`ctx._session_ready`, called by the store after the factory
+  returns, and after the real tree replaces a placeholder). That is when a signal bound to an ephemeral
+  prop can be found, by reading the component's ephemeral getters in a tracking computation and following
+  computeds. Such a signal is not stored, its stored copy is deleted and an error is logged; it does not
+  raise, because the check cannot run inside `persist` (the tree is not built yet). Nothing is written
+  before that point.
+- **Extra settings**: `state_namespace` (the first part of the key, so apps sharing one store do not
+  meet), `persist_ttl` and `persist_max_bytes` with their `INDAH_` variables. `INDAH_STATE_STORE` accepts
+  `memory` and `sqlite:///path` today; `redis://` is refused with a clear message until IND-210.
+- A value over a cap is not written **and its older copy is deleted**, so a stale value never comes back
+  over a newer one.
+
+**Browser-held state: evaluated, not built.** The `StateStore` interface admits it (a store built per request
+from what the tab sent back, with `get` answering from that blob and `set` collecting what to send; a
+contract test in `tests/unit/test_state_store.py` shows such an `async` store satisfies the protocol). Not
+built now because: the shell would need to keep the values, send them on `init` or reconnect and sign them
+(a shell change in the same files as the route hint, IND-197); the app must treat every restored value as
+untrusted input anyway; the values are per browser and cannot be shared with a second device; and the
+two stores that exist cover the owner's cases (SQLite for one replica, Redis for several, IND-210). It stays
+a candidate if a deployment must restore with no service at all.

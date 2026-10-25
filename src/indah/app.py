@@ -127,6 +127,7 @@ from .session_store import (
     SessionStore,
     SharedSessionStore,
 )
+from .state import DEFAULT_MAX_BYTES, DEFAULT_TTL, StateStore
 from .theme import Theme
 from .transport import Hub, Item
 
@@ -572,6 +573,10 @@ def create_app(
     drain_on_sigterm: bool = True,
     node_header: bool = UNSET,
     doctor: str | bool | None = UNSET,
+    state_store: StateStore | str | None = UNSET,
+    state_namespace: str = UNSET,
+    persist_ttl: float = UNSET,
+    persist_max_bytes: int = UNSET,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -707,6 +712,14 @@ def create_app(
     ``?token=``, or ``True`` to admit a logged-in principal holding the ``doctor`` permission
     (needs ``secure=True`` or ``auth=``). Anyone else gets a plain ``404``. It never shows a secret.
 
+    ``state_store`` (default in memory, or ``INDAH_STATE_STORE``) is where ``ctx.persist`` keeps
+    what a tab's session saves, so a rebuilt session starts from it (ADR-0043). Pass a
+    :class:`~indah.state.StateStore`, or ``"memory"`` or ``"sqlite:///state.db"``. Keys include
+    ``state_namespace`` (default ``indah``): give apps that share one store different ones.
+    ``persist_ttl`` (default 24 hours, ``INDAH_PERSIST_TTL``) is how long a value lives after its
+    last write, and ``persist_max_bytes`` (default 16384, ``INDAH_PERSIST_MAX_BYTES``) the largest
+    single value saved.
+
     ``compress`` (on by default) gzips the shell, ``api/editor.js`` and module component files
     for a client that sends ``Accept-Encoding: gzip`` (ADR-0042, IND-189). The event stream and
     JSON routes are never compressed. Pass ``False`` behind a gateway that should do all of it.
@@ -738,6 +751,12 @@ def create_app(
         "INDAH_FACTORY_TIMEOUT", factory_timeout, DEFAULT_FACTORY_TIMEOUT, positive=True
     )
     drain_seconds = env.number("INDAH_DRAIN_SECONDS", drain_seconds, DEFAULT_DRAIN_SECONDS)
+    state_store = env.state_store(state_store)
+    state_namespace = env.namespace(state_namespace)
+    persist_ttl = env.number("INDAH_PERSIST_TTL", persist_ttl, DEFAULT_TTL, positive=True)
+    persist_max_bytes = env.whole_number(
+        "INDAH_PERSIST_MAX_BYTES", persist_max_bytes, DEFAULT_MAX_BYTES
+    )
     compress = env.boolean("INDAH_COMPRESS", compress, True)
     node_header = env.boolean("INDAH_NODE_HEADER", node_header, False)
     node = resolve_node()
@@ -869,6 +888,10 @@ def create_app(
         ],
     )
     app.state.store = store
+    app.state.state_store = state_store
+    app.state.state_namespace = state_namespace
+    app.state.persist_ttl = persist_ttl
+    app.state.persist_max_bytes = persist_max_bytes
     app.state.drain = drain
     app.state.drain_on_sigterm = drain_on_sigterm
     app.state.auth = auth
