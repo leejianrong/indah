@@ -18,6 +18,7 @@ nav = [
     { "Quickstart" = "quickstart.md" },
     { "Playground" = "playground.md" },
     { "Demo gallery" = "gallery.md" },
+    { "Gallery policy" = "gallery-policy.md" },
   ] },
   { "Guides" = [
     { "Build a chatbot" = "chatbot.md" },

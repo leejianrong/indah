@@ -18,6 +18,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   committed notebook differs from what the generator produces, or the demo list and the gallery catalog
   disagree (IND-196).
 
+### Added
+
+- A gallery policy page on the docs site (`website/docs/gallery-policy.md`), linked from the gallery's
+  footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
+  ask for removal. No community submissions are open yet (IND-193).
+
 ### Changed
 
 - The public gallery's cards now come from one catalog file, `deploy/fly/gallery.toml`, instead of
