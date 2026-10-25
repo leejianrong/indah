@@ -11,6 +11,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Changed
+
+- The public gallery's cards now come from one catalog file, `deploy/fly/gallery.toml`, instead of
+  `MANIFEST` and `BLURBS` in code. A `listed` entry shows a card that links to an app hosted elsewhere
+  (opens with `rel="noopener noreferrer"`, never an iframe). A fast-layer test checks the file: unique
+  slugs, https only, plain text, blurb length, and that each thumbnail exists and is small. The
+  gallery looks as before (IND-191).
+
 ## [0.9.0] - 2026-10-25
 
 The multi-replica release. indah can now run on more than one machine or pod: on Fly the shell tells the proxy

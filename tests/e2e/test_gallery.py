@@ -1,6 +1,6 @@
 """Open every demo of the public gallery in a real browser (IND-167).
 
-Two targets, one test per demo in ``MANIFEST``:
+Two targets, one test per hosted demo in ``gallery.toml``:
 
 * **Post-deploy** - set ``GALLERY_URL`` (for example https://indah-demos.fly.dev) and the
   tests check the live site, so a stale or broken deploy shows up before a visitor finds it.
@@ -47,13 +47,12 @@ SLUGS = [
 _ALLOWED = ("tile.openstreetmap", "favicon")
 
 
-def test_manifest_matches_the_list_here():
-    """Keep SLUGS in step with the gallery, so a new demo gets a smoke test."""
-    pytest.importorskip("starlette")
-    text = (ROOT / "deploy" / "fly" / "gallery_app.py").read_text()
-    for slug in SLUGS:
-        assert f'("{slug}",' in text, f"{slug} is not in the gallery MANIFEST"
-    assert text.count('\n    ("') >= len(SLUGS), "a demo was added to MANIFEST: add it to SLUGS"
+def test_catalog_matches_the_list_here():
+    """Keep SLUGS in step with the gallery catalog, so a new demo gets a smoke test."""
+    import gallery_catalog
+
+    hosted = {e["slug"] for e in gallery_catalog.hosted(gallery_catalog.load_catalog())}
+    assert hosted == set(SLUGS), f"gallery.toml and SLUGS differ: {hosted ^ set(SLUGS)}"
 
 
 @pytest.fixture(scope="module")

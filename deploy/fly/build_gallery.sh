@@ -13,7 +13,7 @@ out="$here/build"
 app="${FLY_APP:-indah-demos}"
 region="${FLY_REGION:-sin}"
 
-# Example modules the gallery mounts (must match MANIFEST in gallery_app.py).
+# Example modules the gallery mounts (must cover every hosted entry's module in gallery.toml).
 examples=(chatbot training_dashboard diffusion poster upload_classify object_detection charts stocks dataframe_explorer prettymap map_poster grc_map audio_analysis gpx_viewer)
 
 # Install the published wheel from PyPI (the python:3.12-slim base has no git, and a
@@ -52,6 +52,7 @@ fi
 rm -rf "$out"
 mkdir -p "$out"
 cp "$here/gallery_app.py" "$out/"
+cp "$here/gallery_catalog.py" "$here/gallery.toml" "$out/"  # the catalog and its loader
 cp "$here/landing.html" "$out/"   # the landing-page template gallery_app.py reads
 cp -r "$here/thumbnails" "$out/"  # real per-demo screenshots for the gallery cards
 for mod in "${examples[@]}"; do

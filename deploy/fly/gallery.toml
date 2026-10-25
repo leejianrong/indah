@@ -1,0 +1,178 @@
+# The gallery catalog: one [[app]] table per card on the landing page.
+#
+# kind = "hosted": an example in this repo that the gallery runs under /<slug>. Needs `module`
+#   (the file in examples/, without .py). The deployed indah version applies, so
+#   `indah_version` is left out.
+# kind = "listed": an app someone hosts elsewhere. The card links out and the gallery runs
+#   nothing. Needs `url` (https), `thumbnail`, `source_url` and `indah_version`.
+#
+# thumbnail is a file name in deploy/fly/thumbnails/. A hosted entry without one shows an emoji tile.
+# Rules are enforced by tests/unit/test_gallery_catalog.py. Plain text only: no HTML in any field.
+
+[[app]]
+slug = "chatbot"
+title = "Streaming chatbot"
+emoji = "💬"
+blurb = "Chat replies streamed token by token into role bubbles."
+author = "indah"
+kind = "hosted"
+module = "chatbot"
+thumbnail = "chatbot.png"
+tags = ["llm", "streaming"]
+added = "2026-09-15"
+
+[[app]]
+slug = "training-dashboard"
+title = "Live training dashboard"
+emoji = "📈"
+blurb = "Loss curves and live KPI cards while a model trains."
+author = "indah"
+kind = "hosted"
+module = "training_dashboard"
+thumbnail = "training-dashboard.png"
+tags = ["streaming", "charts"]
+added = "2026-09-16"
+
+[[app]]
+slug = "diffusion"
+title = "Image generation"
+emoji = "🎨"
+blurb = "A prompt-to-image sampler refining from noise, with live progress."
+author = "indah"
+kind = "hosted"
+module = "diffusion"
+thumbnail = "diffusion.png"
+tags = ["images", "streaming"]
+added = "2026-09-16"
+
+[[app]]
+slug = "poster"
+title = "Poster generator"
+emoji = "🖼️"
+blurb = "Tweak controls, watch a poster re-render live, then download it."
+author = "indah"
+kind = "hosted"
+module = "poster"
+thumbnail = "poster.png"
+tags = ["images"]
+added = "2026-09-16"
+
+[[app]]
+slug = "image-classify"
+title = "Image classifier"
+emoji = "🔍"
+blurb = "Pick a sample photo or upload your own, and see the top predictions."
+author = "indah"
+kind = "hosted"
+module = "upload_classify"
+thumbnail = "image-classify.png"
+tags = ["images", "upload"]
+added = "2026-09-16"
+
+[[app]]
+slug = "object-detection"
+title = "Object detection"
+emoji = "🎯"
+blurb = "Pick a sample photo or upload your own; hover a box for its label."
+author = "indah"
+kind = "hosted"
+module = "object_detection"
+thumbnail = "object-detection.png"
+tags = ["images", "upload"]
+added = "2026-09-19"
+
+[[app]]
+slug = "charts"
+title = "Hybrid charting"
+emoji = "📊"
+blurb = "An interactive client chart beside a server plot and a heatmap."
+author = "indah"
+kind = "hosted"
+module = "charts"
+thumbnail = "charts.png"
+tags = ["charts"]
+added = "2026-09-16"
+
+[[app]]
+slug = "stocks"
+title = "Stock peer analysis"
+emoji = "💹"
+blurb = "Pick peers and a horizon; see who's beating the group average."
+author = "indah"
+kind = "hosted"
+module = "stocks"
+thumbnail = "stocks.png"
+tags = ["data", "charts"]
+added = "2026-09-16"
+
+[[app]]
+slug = "dataframe-explorer"
+title = "DataFrame explorer"
+emoji = "🔎"
+blurb = "Filter, sort and search 3,000 rows; tick some and the chart follows."
+author = "indah"
+kind = "hosted"
+module = "dataframe_explorer"
+thumbnail = "dataframe-explorer.png"
+tags = ["data", "tables"]
+added = "2026-10-24"
+
+[[app]]
+slug = "prettymap"
+title = "Pretty map"
+emoji = "🗺️"
+blurb = "Restyle a generated city map and download it as SVG."
+author = "indah"
+kind = "hosted"
+module = "prettymap"
+thumbnail = "prettymap.png"
+tags = ["maps"]
+added = "2026-09-16"
+
+[[app]]
+slug = "map-poster"
+title = "Map poster"
+emoji = "🗾"
+blurb = "A real OpenStreetMap neighborhood, restyled as a poster."
+author = "indah"
+kind = "hosted"
+module = "map_poster"
+thumbnail = "map-poster.png"
+tags = ["maps"]
+added = "2026-09-20"
+
+[[app]]
+slug = "grc-map"
+title = "GRC map"
+emoji = "🇸🇬"
+blurb = "Singapore's electoral divisions, shaded by electorate, over 4 elections."
+author = "indah"
+kind = "hosted"
+module = "grc_map"
+thumbnail = "grc-map.png"
+tags = ["maps", "data"]
+added = "2026-09-20"
+
+[[app]]
+slug = "audio-analysis"
+title = "Audio analysis"
+emoji = "🎧"
+blurb = "Synthesized vowels and instrument notes, streamed into a live spectrogram."
+author = "indah"
+kind = "hosted"
+module = "audio_analysis"
+thumbnail = ""
+tags = ["audio", "streaming"]
+added = "2026-09-22"
+
+[[app]]
+slug = "gpx-viewer"
+title = "GPX viewer"
+emoji = "🥾"
+blurb = "Scrub a real hiking trail; the map marker and elevation profile move together."
+author = "indah"
+kind = "hosted"
+module = "gpx_viewer"
+thumbnail = "gpx-viewer.png"
+tags = ["maps", "charts"]
+added = "2026-09-22"
