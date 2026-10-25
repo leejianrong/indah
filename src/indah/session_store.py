@@ -167,6 +167,7 @@ class InMemorySessionStore:
         self._building: dict[str, _Build] = {}
         self._placeholders: dict[str, SessionHandle] = {}
         self.app: object | None = None  # bound by create_app; handed to each Context
+        self.route_hint = ""  # set by create_app (IND-197): stamped on each session for file URLs
         self.max_sessions = max_sessions
         self.idle_timeout_seconds = idle_timeout_seconds
         self._handles: OrderedDict[str, SessionHandle] = OrderedDict()
@@ -224,6 +225,7 @@ class InMemorySessionStore:
     ) -> SessionHandle:
         session.ctx = ctx
         session.session_id = session_id  # so served file URLs route back here
+        session.route_hint = self.route_hint
         session.bind_hub(hub)
         if ready:  # not for a placeholder: the real tree is checked when it arrives
             ctx._session_ready(session)  # ctx.persist: the tree exists, saving may start

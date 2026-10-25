@@ -119,6 +119,8 @@ from .protocol import EventIn, init_message, patch_message, ping_message, signed
 from .proxy import ProxyHeaders, ProxyNotice, parse_trusted
 from .proxy_presets import expand_trusted, fly_gap
 from .reactive import Signal
+from .route import MACHINE_ID as _MACHINE_ID
+from .route import resolve_route_hint
 from .session import DispatchResult, Session
 from .session_store import (
     DEFAULT_FACTORY_TIMEOUT,
@@ -572,6 +574,8 @@ def create_app(
     drain_seconds: float = UNSET,
     drain_on_sigterm: bool = True,
     node_header: bool = UNSET,
+    cluster_secret: str | None = None,
+    route_hint: str | None = None,
     doctor: str | bool | None = UNSET,
     state_store: StateStore | str | None = UNSET,
     state_namespace: str = UNSET,
@@ -704,6 +708,13 @@ def create_app(
     address or an odd value becomes a short hash). ``ctx.conn.node`` and ``app.state.node`` hold it
     with the header on or off.
 
+    ``route_hint`` (``auto``, ``fly``, ``off``; ``INDAH_ROUTE_HINT``) and ``cluster_secret``
+    (``INDAH_CLUSTER_SECRET``) are for several Fly machines (IND-197, ADR-0043). With both in force
+    (``auto`` means on when ``FLY_MACHINE_ID`` is set) the ``init`` message names this machine, the
+    shell sends it back as ``fly-force-instance-id`` on events and uploads, and file URLs carry
+    ``?r=<machine>``. The cluster secret is never taken from ``secret=``; without it the hint is
+    off.
+
     ``doctor`` (off by default) mounts the deploy doctor at ``GET /_indah/doctor`` (IND-205): the
     resolved client next to the real socket peer, the forwarded headers (an allowlist of names),
     the node, session and stream counts, the drain state, the settings in force and plain-language
@@ -760,6 +771,12 @@ def create_app(
     compress = env.boolean("INDAH_COMPRESS", compress, True)
     node_header = env.boolean("INDAH_NODE_HEADER", node_header, False)
     node = resolve_node()
+    route = resolve_route_hint(route_hint, cluster_secret)
+    if route is None and route_hint == "fly":
+        logger.warning(
+            "route_hint='fly' is set but there is no cluster secret, so the route hint is off. "
+            "Set INDAH_CLUSTER_SECRET (or cluster_secret=) to turn it on."
+        )
     doctor_source = "doctor=" if doctor is not UNSET else "INDAH_DOCTOR_TOKEN"
     doctor = env.doctor(doctor)
     warn_untrusted_forwarding = env.boolean(
@@ -906,6 +923,12 @@ def create_app(
     app.state.csp = csp
     app.state.compress = compress
     app.state.node = node
+    app.state.route_hint = route
+    if route is not None:
+        if isinstance(store, SharedSessionStore):
+            store.handle.session.route_hint = route.hint
+        elif hasattr(store, "route_hint"):
+            store.route_hint = route.hint
     app.state.doctor = doctor_gate
     app.state.doctor_counter = doctor_counter
     app.state.limits = limits
@@ -1571,8 +1594,11 @@ async def _open_stream(request: Request, release: Callable[[], None]) -> Respons
         # because a StreamText snapshot carries its full accumulated text).
         session.forget_ephemeral()  # a secret shown earlier cannot be in this snapshot
         ctx = getattr(session, "ctx", None)
+        route = app.state.route_hint
         init_payload: dict[str, Any] | None = init_message(
-            session.snapshot(), chrome=ctx._chrome() if ctx is not None else None
+            session.snapshot(),
+            chrome=ctx._chrome() if ctx is not None else None,
+            route=route.wire(app.state.node) if route is not None else None,
         )
         replay = []
     else:
@@ -1730,6 +1756,29 @@ async def _upload(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True, "files": [f.filename for f in files]})
 
 
+def _replay_file(request: Request) -> Response | None:
+    """On Fly, a GET for a file this machine does not hold goes to the machine named in ``?r=``
+    (IND-197): a browser navigation cannot set ``fly-force-instance-id``, so the URL carries the
+    hint and Fly Proxy replays the request (a GET has no body, so the 1 MB replay limit never
+    applies). A request that was already replayed, an odd hint and our own id are not replayed."""
+    route = request.app.state.route_hint
+    target = request.query_params.get("r", "")
+    if (
+        route is None
+        or route.transport != "fly"
+        or target == route.hint
+        or "fly-replay-src" in request.headers
+        or not _MACHINE_ID.fullmatch(target)
+    ):
+        return None
+    return Response(
+        content='{"ok": false, "error": "unknown_session"}',
+        status_code=409,
+        media_type="application/json",
+        headers={"fly-replay": f"instance={target}", "Cache-Control": "no-store"},
+    )
+
+
 async def _file(request: Request) -> Response:
     """Serve a file handed back to a viewer (ADR-0017): file-out over a blob URL.
 
@@ -1740,7 +1789,7 @@ async def _file(request: Request) -> Response:
     store: SessionStore = request.app.state.store
     handle = store.get(request.path_params["sid"])
     if handle is None:
-        return Response(status_code=404)
+        return _replay_file(request) or Response(status_code=404)
     if request.app.state.secure:
         principal = await authenticate(request, request.app.state.auth)
         if principal is None:

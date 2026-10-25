@@ -8,6 +8,7 @@
     appPath,
     postEvent,
     setSessionLostHandler,
+    setRoute,
     PROTOCOL_VERSION,
   } from "./api.js";
   import {
@@ -87,6 +88,7 @@
       return;
     }
     if (msg.type === "init") {
+      setRoute(msg.route); // which process holds this stream (IND-197); none clears it
       applyChrome(msg.chrome); // a fresh init restores the session's title and icon, or the app's
       const map = new Map();
       structure.set(splitTree(msg.root, map));

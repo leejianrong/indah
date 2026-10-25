@@ -123,8 +123,44 @@ nothing to key on. A gateway that **sets its own cookie** on the first page load
 to the same process. That works today on an ingress such as Traefik: on two replicas, 20 of 20 events
 stayed on the stream's pod with the cookie and 10 of 20 without it (see [Run on
 Kubernetes](deploy-k8s.md)). Fly Proxy has no such cookie. Measured on Fly (IND-171): a client that
-sends the request header `fly-force-instance-id: <machine id>` is pinned to that machine, and the
-browser shell does not send it yet.
+sends the request header `fly-force-instance-id: <machine id>` is pinned to that machine. indah's
+own shell can send it: see [Several Fly machines](#several-fly-machines).
+
+### Several Fly machines
+
+Turn on the route hint and the shell does the pinning itself, with no gateway configuration. Set a
+cluster secret (any long random string, the same on every machine) and scale out:
+
+```bash
+fly secrets set INDAH_CLUSTER_SECRET="$(openssl rand -hex 32)"
+fly scale count 3
+```
+
+On Fly, `INDAH_ROUTE_HINT=auto` turns the hint on once the secret is set. The stream's first message
+then names the machine that holds the tab (`route` in `init`, see the [protocol](protocol.md)), and the
+shell sends that machine id as `fly-force-instance-id` (and `X-Indah-Route`) with every event and
+upload. Download links carry `?r=<machine id>`: a browser navigation cannot set a header, so a machine
+that receives a link for another machine's file answers `fly-replay` and Fly Proxy sends the request
+to the right one.
+
+What to know:
+
+- **The secret is explicit.** It is never taken from `INDAH_SECRET`, so one secret does not do two
+  jobs. Without it the hint stays off (`route_hint="fly"` with no secret logs a warning). On Fly the hint is
+  only a machine id, so nothing is signed with the secret yet.
+- **If the machine is gone** (a deploy replaced it, it was stopped), Fly answers `400` for the header
+  or indah answers `409`. The shell opens its stream again on a machine that is running, shows the
+  one "Reconnected" toast, and the next click works. The session's state is not carried over.
+- **Only indah's shell sends the hint.** A script that talks to the wire protocol directly still works
+  on one machine; to use several, read `route` from `init` and send the header yourself
+  (`deploy/probe/sticky_check.py --follow-route` does this).
+- **A Cloudflare Worker** in front passes request headers through, so the hint should survive it.
+  That was not tested.
+- `peers` (a forwarder for Kubernetes without cookie affinity) is not built; `INDAH_ROUTE_HINT=peers`
+  is refused. On Kubernetes use an ingress with cookie affinity (see [Run on Kubernetes](deploy-k8s.md)).
+
+Not yet checked on real machines: 20 of 20 events on a three-machine Fly app (the unit, integration and
+browser tests cover the shell, the headers and the replay; the probe run is still to do).
 
 ## Cross-site requests
 
@@ -573,6 +609,8 @@ start indah logs once, at INFO, which variables it used (names only).
 | `INDAH_WARN_UNTRUSTED_FORWARDING` | `warn_untrusted_forwarding=` | `0` | on |
 | `INDAH_NODE_HEADER` | `node_header=` | `1` | off |
 | `INDAH_NODE` | names the node for `node_header` | `web-1` | `FLY_MACHINE_ID`, `HOSTNAME`, or a random id |
+| `INDAH_ROUTE_HINT` | `route_hint=` | `auto`, `fly` or `off` | `auto`: on for Fly when `FLY_MACHINE_ID` is set and a cluster secret is given, else off |
+| `INDAH_CLUSTER_SECRET` | `cluster_secret=` | 16+ random characters | none; never taken from `INDAH_SECRET` |
 | `INDAH_DOCTOR_TOKEN` | `doctor=` | 16+ random characters | off |
 
 Booleans take `1`/`0`, `true`/`false`, `yes`/`no` or `on`/`off`. The secret is only read for
