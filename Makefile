@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e test-multireplica test-pyodide build size cleanroom docs docs-serve release-check post-release check clean
+.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend colab fmt lint test test-fast test-e2e test-multireplica test-pyodide build size cleanroom docs docs-serve release-check post-release check clean
 
 # Print a free host port (stdlib only; no lsof/nc needed).
 FREE_PORT := python3 -c 'import socket;s=socket.socket();s.bind(("",0));p=s.getsockname()[1];s.close();print(p)'
@@ -37,6 +37,9 @@ setup: ## Install dev dependencies into a local venv
 
 frontend: ## Rebuild the Svelte shell into the package (needs Node)
 	cd frontend && npm ci && npm run build:indah
+
+colab: ## Regenerate examples/colab/*.ipynb from the demo sources
+	uv run python deploy/colab/make_colab.py
 
 hooks: ## Install the git pre-push hook
 	git config core.hooksPath .githooks

@@ -180,8 +180,8 @@ built-in demo inline in a notebook). The chatbot is walked through step by step 
 the docs: [Build a chatbot](https://indah.abangai.dev/docs/chatbot/).
 
 The Colab notebooks are generated from the demo manifest by
-[`deploy/colab/make_colab.py`](deploy/colab/make_colab.py); regenerate them after
-adding a demo.
+[`deploy/colab/make_colab.py`](deploy/colab/make_colab.py); run `make colab` after
+editing a demo or adding one (a unit test fails while a notebook is stale).
 
 ## Planning and design
 
