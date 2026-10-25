@@ -118,4 +118,23 @@ also why it waits for the owner.
 
 ### Results
 
-Pending.
+Run on 2026-10-25, three `shared-cpu-1x` machines in `sin` on a throwaway `indah-probe` (since destroyed),
+the hint on through `INDAH_CLUSTER_SECRET`, `--autostop=off`. Steps 1 to 3 and the Fly Proxy answers of step 5
+were run. The browser steps (the rolling deploy with a tab open, the "Reconnected" toast) and the Upstash
+restore check were not run on Fly; the compose fixture covers them against a simulated Fly.
+
+| Check | Result |
+|-------|--------|
+| `sticky_check.py --new-conn` (no route) | NOT STICKY: events answered by all three machines, 2 of 20 patches reached the tab, 18 returned `409` |
+| `--follow-route` | STICKY: 20 of 20 events and 20 of 20 patches, every POST answered by the stream's machine |
+| `--follow-route --new-conn` | STICKY: 20 of 20 and 20 of 20, on a different machine from the first run |
+| `init.route` | `{hint: <machine id>, node: <machine id>, transport: "fly"}`, the hint equal to the machine that built the session |
+| Header for an id that does not exist | `400`, empty body, `server: Fly/...` (this confirms the shell's assumption: a `400` that is not indah's JSON means "machine gone") |
+| Header for a stopped machine | Fly Proxy starts it (autostart on) and routes the request there: about 2.7 s cold, then indah answers `409 unknown_session` as JSON, so the shell reopens the stream and the tab recovers |
+
+Notes:
+
+- The stopped-machine case is gentler than the simulation: with autostart on, a gone owner does not give a
+  `400`; the replacement is woken and answers `409`. The `400` path is for a machine that was destroyed (a
+  scale-down or a deploy that replaced it).
+- Not measured: the time from stopping the owner to a working tab in a browser.
