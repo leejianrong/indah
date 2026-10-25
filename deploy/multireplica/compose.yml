@@ -1,0 +1,63 @@
+# Three indah replicas, one Redis and two balancers (IND-211, ADR-0043). A test fixture, not a
+# deployment. Run it with `make test-multireplica`; the test starts and stops it.
+#
+#   plain spray   the host port of balancer:8081
+#   simulated Fly the host port of balancer:8082
+name: indah-multireplica
+x-replica: &replica
+  build:
+    context: ../..
+    dockerfile: deploy/multireplica/Dockerfile
+  image: indah-multireplica
+  depends_on:
+    redis: {condition: service_healthy}
+  stop_grace_period: 15s
+  ports: ["127.0.0.1::8000"]  # the tests read each replica's doctor directly
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/ready', timeout=2)"]
+    interval: 2s
+    timeout: 3s
+    retries: 15
+x-env: &env
+  INDAH_STATE_STORE: redis://redis:6379/0
+  INDAH_DRAIN_SECONDS: "3"
+  INDAH_DOCTOR_TOKEN: doctor-token-for-the-test-only
+  INDAH_METRICS_TOKEN: metrics-token-for-the-test-only
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  r1:
+    <<: *replica
+    environment: {<<: *env, FLY_MACHINE_ID: n1, INDAH_CLUSTER_SECRET: cluster-secret-for-the-test}
+  r2:
+    <<: *replica
+    environment: {<<: *env, FLY_MACHINE_ID: n2, INDAH_CLUSTER_SECRET: cluster-secret-for-the-test}
+  r3:
+    <<: *replica
+    environment: {<<: *env, FLY_MACHINE_ID: n3, INDAH_CLUSTER_SECRET: cluster-secret-for-the-test}
+
+  # A replica that is misconfigured on purpose: no cluster secret, so its route hint is off. Only
+  # started by the scenario that checks the fleet flags it; never behind a balancer.
+  odd:
+    <<: *replica
+    profiles: ["odd"]
+    environment: {<<: *env, FLY_MACHINE_ID: n4}
+
+  balancer:
+    image: nginx:1.27-alpine
+    depends_on:
+      r1: {condition: service_healthy}
+      r2: {condition: service_healthy}
+      r3: {condition: service_healthy}
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./proxy_common.conf:/etc/nginx/proxy_common.conf:ro
+    ports: ["127.0.0.1::8081", "127.0.0.1::8082"]

@@ -400,6 +400,8 @@ Everything below is additive and `protocol_version` stays 1 (ADR-0005 amendment)
   flagged; and the existing `deploy/probe/sticky_check.py` reports 20 of 20. A real-Fly run on the probe
   app with three machines and the header is part of IND-211's acceptance, since the simulation is not
   Fly.
+  Built: `deploy/multireplica/`, `tests/e2e/test_multireplica.py`, `docs/spikes/multi-replica-e2e.md` (the
+  Docker half is done; the real-Fly run is pending the owner).
 - **Real cluster**: IND-206 applies the manifests to the owner's k3s and records whether Traefik's cookie
   affinity gives 20 of 20.
 
