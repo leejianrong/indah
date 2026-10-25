@@ -485,7 +485,7 @@ note) in a **state store** and puts it back when the session is rebuilt:
 def build(ctx):
     tab = Signal("overview")
     filters = Signal({})
-    ctx.persist("tab", tab)          # restores the saved value now, saves on every change
+    ctx.persist("tab", tab)  # restores the saved value now, saves on every change
     ctx.persist("filters", filters, version=2, ttl=3600)
     ...
 ```
