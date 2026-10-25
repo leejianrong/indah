@@ -523,7 +523,8 @@ Built as designed, with these differences, each chosen for the code as it is:
   before that point.
 - **Extra settings**: `state_namespace` (the first part of the key, so apps sharing one store do not
   meet), `persist_ttl` and `persist_max_bytes` with their `INDAH_` variables. `INDAH_STATE_STORE` accepts
-  `memory` and `sqlite:///path` today; `redis://` is refused with a clear message until IND-210.
+  `memory`, `sqlite:///path` and (IND-210) `redis://host/db`; `redis` alone reads the URL from `INDAH_REDIS_URL`
+  so a password can live in its own Secret.
 - A value over a cap is not written **and its older copy is deleted**, so a stale value never comes back
   over a newer one.
 

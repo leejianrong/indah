@@ -148,8 +148,9 @@ off-by-default hosting layer (auth, authz, hardening, CSP; all pure Python). The
 |-------|-------|---------|--------|
 | `plot` | `matplotlib` | `Plot(figure)`; the matplotlib chart in the built-in demo | add now (documents the tested floor) |
 | `data` | `pandas`, `numpy` | `DataFrame` and `Table` from frames; numpy scalars in cells | add now |
+| `redis` | `redis>=5` | the Redis state store, `INDAH_STATE_STORE=redis://...` (ADR-0043, IND-210) | added by IND-210; imported on use |
 | `demos` | `numpy`, `pillow`, `onnxruntime`, `huggingface_hub`, `matplotlib` | the gallery demos and examples (the list `build_gallery.sh` installs) | add now; the gallery build installs `indah[demos]` |
-| `all` | `plot` + `data` | everything above except demos | add now |
+| `all` | `plot` + `data` + `redis` | everything above except demos | add now |
 | `media` | `pillow`, `numpy` | `Image` from a PIL image or array (not supported today) | wait for the feature |
 | `geo` | not decided | tracks, shapes | wait for a Python-side need (`Map` is client side) |
 

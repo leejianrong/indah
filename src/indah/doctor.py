@@ -24,6 +24,7 @@ facts for scripts. The page never contains the token or any secret.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import html
 import ipaddress
@@ -550,6 +551,9 @@ request.</p></header>
             [
                 ("secure", st["secure"]),
                 ("csp", st["csp"]),
+                ("state store", f"{st['state_store']}: {st['state_store_health']}")
+                if "state_store_health" in st
+                else ("state store", st["state_store"]),
                 ("compress", st["compress"]),
                 ("node_header", st["node_header"]),
                 ("route hint", st["route_hint"]),
@@ -570,6 +574,27 @@ request.</p></header>
 </main></body></html>"""
 
 
+async def _add_store_health(facts: dict[str, Any], store: Any) -> None:
+    """A store that can be down (Redis) says whether it answers: ``ok`` or ``unreachable``."""
+    check = getattr(store, "health", None)
+    if not callable(check):
+        return
+    try:
+        up = await asyncio.wait_for(check(), 3.0)
+    except Exception:
+        up = False
+    facts["settings"]["state_store_health"] = "ok" if up else "unreachable"
+    if not up:
+        facts["warnings"].insert(
+            0,
+            _warn(
+                "The state store does not answer. ctx.persist starts from defaults and drops "
+                "writes until it does. Check INDAH_STATE_STORE, the network path and the "
+                "credentials."
+            ),
+        )
+
+
 async def handler(request: Request) -> Response:
     """``GET /_indah/doctor``: gated; ``404`` for everyone else."""
     state = request.app.state
@@ -577,6 +602,7 @@ async def handler(request: Request) -> Response:
     if gate is None or not await gate.allows(request):
         return _nothing()
     facts = collect_facts(request, state)
+    await _add_store_health(facts, getattr(state, "state_store", None))
     headers = {
         "Cache-Control": "no-store",
         "X-Robots-Tag": "noindex, nofollow",

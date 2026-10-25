@@ -51,6 +51,10 @@ data = [
     "pandas>=2.0",
     "numpy>=1.24",
 ]
+# The Redis state store (ADR-0043, IND-210): imported on use, so the base install does not carry it.
+redis = [
+    "redis>=5",
+]
 # What the gallery demos and the examples need; the gallery image installs `indah[demos]`.
 demos = [
     "numpy>=1.24",
@@ -63,6 +67,7 @@ all = [
     "matplotlib>=3.7",
     "pandas>=2.0",
     "numpy>=1.24",
+    "redis>=5",
 ]
 dev = [
     "pytest>=8",
@@ -76,6 +81,10 @@ dev = [
     "cryptography>=42",
     # The deploy recipes test (tests/unit/test_deploy_recipes.py) parses their YAML.
     "pyyaml>=6",
+    # The Redis state store (indah/redis_store.py) is tested against an in-process fake; a real
+    # Redis is opt-in (mark `redis`, INDAH_TEST_REDIS_URL).
+    "redis>=5",
+    "fakeredis>=2.23",
 ]
 # The browser layer of the e2e suite (marked `e2e`). Kept out of `dev`/the fast
 # gate so `uv sync --extra dev` stays light and Node/browser-free; CI installs it
@@ -112,6 +121,7 @@ markers = [
     "e2e: end-to-end tests through a real launched app / browser",
     "pyodide: every runnable Studio page runs in the browser with Pyodide (ADR-0041); own CI job",
     "expects_csp_violation: this e2e test provokes a CSP violation on purpose (see conftest)",
+    "redis: runs against a real Redis at INDAH_TEST_REDIS_URL; skipped when it is not set",
     "raw_events: post events without the tab connecting first (see tests/integration/conftest.py)",
 ]
 asyncio_mode = "auto"

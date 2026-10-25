@@ -541,9 +541,71 @@ create_app(session_factory=build, state_store="sqlite:///state.db")
 |-------|------------|-------|
 | `"memory"` (default) | a tab rebuilt in the same process (an idle session reaped, a dropped stream) | does not survive a restart |
 | `"sqlite:///state.db"` | one replica that restarts | the standard library, one file; do not share it between replicas over a network file system |
-| your own `StateStore` | a store shared by every replica | five methods (`get`, `set`, `delete`, `delete_prefix`, `close`), each plain or `async def` |
+| `"redis://host:6379/0"` | several replicas, or state that must outlive a pod | `pip install "indah[redis]"`; you provide the Redis (see below) |
+| your own `StateStore` | any other shared store | five methods (`get`, `set`, `delete`, `delete_prefix`, `close`), each plain or `async def` |
 
-A Redis store is planned (IND-210). Nothing runs or bundles a service for you.
+Nothing runs or bundles a service for you.
+
+### Redis
+
+Redis is the store to use when a rolled-out or moved replica must find the state the old one saved. Install
+the extra (`pip install "indah[redis]"`, which adds the `redis` package; the base install does not need it)
+and point the app at your Redis:
+
+```bash
+INDAH_STATE_STORE=redis://redis:6379/0        # or: create_app(state_store="redis://redis:6379/0")
+INDAH_STATE_STORE=redis INDAH_REDIS_URL=...   # the URL in its own Secret, with the password in it
+```
+
+- **TLS and users**: `rediss://` is TLS, and `redis://app:password@host:6379/0` signs in as an ACL user. That
+  user needs `GET`, `SET`, `DEL`, `UNLINK`, `SCAN` and `PING` on the keys `indah:*` (your `state_namespace`
+  is the first part of each key). For example `ACL SETUSER app on >password ~indah:* +get +set +del
+  +unlink +scan +ping`.
+- **Expiry** is Redis's own: each write sets the value's lifetime (24 hours by default, see above).
+- **Failures**: timeouts are one second. A Redis that is down or slow never holds a tab: the saved values
+  are read in the background after the first paint, a failed read starts from the defaults, a failed write
+  is dropped, and the log says so about once a minute. A connection that was cut is reopened on the next call.
+- **The doctor** (`/_indah/doctor`) shows the store kind and, for Redis, `ok` or `unreachable` with a warning.
+- **Not in this store**: no registry of which replica holds which tab, and no pub/sub, so a `Topic` is still
+  per replica (below).
+
+On Kubernetes, a Redis `Deployment` and a `Service` named `redis` are enough for a start (one replica,
+no persistence: restored state is a convenience, and losing it only sends tabs back to their defaults):
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: redis}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: redis}}
+  template:
+    metadata: {labels: {app: redis}}
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["--save", "", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-ttl"]
+          ports: [{containerPort: 6379}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: redis}
+spec:
+  selector: {app: redis}
+  ports: [{port: 6379}]
+```
+
+Then set `INDAH_STATE_STORE=redis://redis:6379/0` in the app's ConfigMap. Without a password, keep the
+Service inside the cluster and add a NetworkPolicy; with one, put the URL in a Secret and use
+`INDAH_STATE_STORE=redis` with `INDAH_REDIS_URL` from it.
+
+On Fly, use Upstash Redis (`fly redis create`, which prints a `rediss://` URL) or a Redis of your own on
+a Fly app, in the same region as your machines, and set the URL as a secret:
+`fly secrets set INDAH_STATE_STORE=redis INDAH_REDIS_URL='rediss://default:...@fly-...upstash.io:6379'`.
+
+These snippets are not yet applied to a real cluster or a real Fly app; the store itself is tested against
+a real Redis in CI.
 
 What is saved, and what never is:
 
@@ -601,7 +663,8 @@ start indah logs once, at INFO, which variables it used (names only).
 | `INDAH_LIMITS` | `limits=` | `public` or `none` | none |
 | `INDAH_DRAIN_SECONDS` | `drain_seconds=` | `30` | `10` |
 | `INDAH_FACTORY_TIMEOUT` | `factory_timeout=` | `2.5` | `1` |
-| `INDAH_STATE_STORE` | `state_store=` | `memory` or `sqlite:///state.db` | `memory`; where `ctx.persist` saves |
+| `INDAH_STATE_STORE` | `state_store=` | `memory`, `sqlite:///state.db`, `redis://host:6379/0` or `redis` | `memory`; where `ctx.persist` saves |
+| `INDAH_REDIS_URL` | (with `state_store="redis"`) | `rediss://user:pw@host:6379/0` | none; the Redis URL, kept apart so it can be a Secret |
 | `INDAH_STATE_NAMESPACE` | `state_namespace=` | `orders` | `indah` |
 | `INDAH_PERSIST_TTL` | `persist_ttl=` | `3600` | `86400` (seconds after the last write) |
 | `INDAH_PERSIST_MAX_BYTES` | `persist_max_bytes=` | `8192` | `16384` (per value) |

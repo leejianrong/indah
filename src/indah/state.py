@@ -10,8 +10,9 @@ the session is built again::
         tab = Signal("overview")
         ctx.persist("tab", tab)  # restores the saved value, then saves on change
 
-Stores here: :class:`MemoryStateStore` (the default, process-local) and :class:`SqliteStateStore`
-(stdlib, one file). A store method may be a plain function or ``async def``, so a networked or a
+Stores here: :class:`MemoryStateStore` (the default, process-local), :class:`SqliteStateStore`
+(stdlib, one file) and, in ``indah.redis_store``, ``RedisStateStore`` (``indah[redis]``, shared
+between replicas). A store method may be a plain function or ``async def``, so a networked or a
 client-held store fits the same interface.
 
 What is never stored: a signal the app did not register, a value that is not plain JSON, a signal
@@ -180,8 +181,9 @@ class SqliteStateStore:
 
 
 def state_store_from_spec(spec: str) -> StateStore:
-    """``memory``, ``sqlite:///relative.db``, ``sqlite:////absolute.db`` or ``sqlite:///:memory:``
-    (what ``INDAH_STATE_STORE`` and ``create_app(state_store="...")`` accept)."""
+    """``memory``, ``sqlite:///relative.db``, ``sqlite:////absolute.db``, ``sqlite:///:memory:``,
+    ``redis://host:6379/0`` or ``rediss://`` for TLS (needs ``indah[redis]``). These are what
+    ``INDAH_STATE_STORE`` and ``create_app(state_store="...")`` accept."""
     text = spec.strip()
     if text == "memory":
         return MemoryStateStore()
@@ -193,12 +195,15 @@ def state_store_from_spec(spec: str) -> StateStore:
             "INDAH_STATE_STORE: sqlite:/// needs a file path, for example sqlite:///state.db"
         )
     if text.startswith(("redis://", "rediss://")):
-        raise ValueError(
-            "INDAH_STATE_STORE: a Redis store is not available in this version "
-            "(use 'memory' or 'sqlite:///path', or pass your own StateStore in code)"
-        )
+        from .redis_store import RedisStateStore
+
+        try:
+            return RedisStateStore(text)  # ImportError names indah[redis] when it is missing
+        except ValueError as exc:
+            raise ValueError(f"INDAH_STATE_STORE: not a Redis URL ({exc})") from None
     raise ValueError(
-        f"INDAH_STATE_STORE must be 'memory' or 'sqlite:///path', got {text.split(':')[0]!r}"
+        "INDAH_STATE_STORE must be 'memory', 'sqlite:///path' or 'redis://host:6379/0', "
+        f"got {text.split(':')[0]!r}"
     )
 
 

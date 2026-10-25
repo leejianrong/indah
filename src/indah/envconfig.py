@@ -17,8 +17,9 @@ names the variable. Secret values are never logged: the log names the variables 
 - ``INDAH_LIMITS`` -> ``limits=`` (a preset: ``public`` or ``none``)
 - ``INDAH_DRAIN_SECONDS`` -> ``drain_seconds=`` (seconds, 0 or more)
 - ``INDAH_FACTORY_TIMEOUT`` -> ``factory_timeout=`` (seconds, more than 0)
-- ``INDAH_STATE_STORE`` -> ``state_store=`` (``memory`` or ``sqlite:///path``; where ``ctx.persist``
-  keeps what it saves)
+- ``INDAH_STATE_STORE`` -> ``state_store=`` (``memory``, ``sqlite:///path``,
+  ``redis://host:6379/0`` or ``redis`` with the URL in
+  ``INDAH_REDIS_URL``; where ``ctx.persist`` keeps what it saves)
 - ``INDAH_STATE_NAMESPACE`` -> ``state_namespace=`` (a name that keeps apps sharing one store apart)
 - ``INDAH_PERSIST_TTL`` -> ``persist_ttl=`` (seconds a saved value lives after its last write)
 - ``INDAH_PERSIST_MAX_BYTES`` -> ``persist_max_bytes=`` (the largest value ``ctx.persist`` saves)
@@ -182,6 +183,11 @@ class EnvConfig:
         if arg is None:
             return MemoryStateStore()
         text = self._take("INDAH_STATE_STORE")
+        if text == "redis":  # the URL (with its password) may live in its own Secret
+            url = self._take("INDAH_REDIS_URL")
+            if url is None:
+                raise ValueError("INDAH_STATE_STORE=redis needs the URL in INDAH_REDIS_URL")
+            text = url
         return MemoryStateStore() if text is None else state_store_from_spec(text)
 
     def namespace(self, arg: Any) -> str:

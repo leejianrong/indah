@@ -31,6 +31,15 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   user is ignored. A store that fails never breaks a tab. A store method may be `async def`. No wire change,
   `protocol_version` stays 1. The deploy doctor shows the store kind. Not yet shared between replicas (a Redis
   store is IND-210) and a store shared over a network file system is not tested.
+- A Redis state store (IND-210, ADR-0043). `INDAH_STATE_STORE=redis://host:6379/0` (or `rediss://` for TLS,
+  or `redis` with the URL in the new `INDAH_REDIS_URL`) and `create_app(state_store="redis://...")` keep
+  `ctx.persist` state in a Redis you provide, so a rebuilt session on another replica finds it. New extra
+  `indah[redis]` (`redis>=5`), imported on use: the base install is unchanged, and a missing package says
+  how to install it. New public name `indah.redis_store.RedisStateStore`. Expiry is Redis's own; timeouts
+  are one second and a Redis that is down makes `ctx.persist` start from defaults and drop writes, with one
+  log line a minute. The deploy doctor shows the store kind and, for Redis, `ok` or `unreachable`. The
+  hosting guide has the ACL, a Kubernetes Redis and the Fly setup. Not included: a registry and pub/sub.
+  `RedisStateStore` is importable from `indah.redis_store` and is not in `indah.__all__`, so it is not imported with `indah`. Previously `redis://` was refused with a message.
 - The hosting guide says that `Topic` and `Stream` are per replica (IND-216): run the producer in every
   replica.
 - The route hint for several Fly machines (IND-197, ADR-0043). With `INDAH_CLUSTER_SECRET` (or

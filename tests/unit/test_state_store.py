@@ -1,10 +1,14 @@
 """The StateStore contract, run against every store (ADR-0043, IND-208).
 
-One suite, so a later adapter (Redis, IND-210) has to behave exactly like these two.
+One suite, so every adapter (memory, SQLite, Redis) behaves the same. The Redis rows run against
+an in-process fake (fakeredis); the same suite runs against a real Redis in
+tests/integration/test_redis_store.py when INDAH_TEST_REDIS_URL is set.
 """
 
 import asyncio
 import inspect
+import time
+from collections.abc import Callable
 
 import pytest
 
@@ -12,24 +16,49 @@ from indah.state import MemoryStateStore, SqliteStateStore, StateStore, state_st
 
 
 class Clock:
+    """A settable clock. ``on_move`` lets a store whose expiry the server owns (Redis) follow it."""
+
     def __init__(self) -> None:
-        self.now = 1000.0
+        self._now = 1000.0
+        self.on_move: Callable[[float], None] | None = None
+
+    @property
+    def now(self) -> float:
+        return self._now
+
+    @now.setter
+    def now(self, value: float) -> None:
+        delta, self._now = value - self._now, value
+        if self.on_move is not None and delta:
+            self.on_move(delta)
 
     def __call__(self) -> float:
         return self.now
 
 
-@pytest.fixture(params=["memory", "sqlite", "sqlite-file"])
-def made(request, tmp_path):
+@pytest.fixture(params=["memory", "sqlite", "sqlite-file", "redis"])
+def made(request, tmp_path, monkeypatch):
     clock = Clock()
-    if request.param == "memory":
+    if request.param == "redis":
+        fakeredis = pytest.importorskip("fakeredis")
+        from indah.redis_store import RedisStateStore
+
+        # fakeredis reads time.time for expiry: move it with the test clock.
+        real = time.time
+        offset = [0.0]
+        monkeypatch.setattr(time, "time", lambda: real() + offset[0])
+        clock.on_move = lambda delta: offset.__setitem__(0, offset[0] + delta)
+        client = fakeredis.FakeAsyncRedis(server=fakeredis.FakeServer())
+        store = RedisStateStore(client=client)
+    elif request.param == "memory":
         store = MemoryStateStore(clock=clock)
     elif request.param == "sqlite":
         store = SqliteStateStore(":memory:", clock=clock)
     else:
         store = SqliteStateStore(str(tmp_path / "state.db"), clock=clock)
     yield store, clock
-    store.close()
+    if request.param != "redis":  # an async close needs the loop this fixture has left
+        store.close()
 
 
 async def _call(value):
@@ -142,8 +171,8 @@ def test_spec_strings():
     store = state_store_from_spec("sqlite:///:memory:")
     assert isinstance(store, SqliteStateStore)
     store.close()
-    with pytest.raises(ValueError, match="INDAH_STATE_STORE"):
-        state_store_from_spec("redis://localhost")
+    redis_store = state_store_from_spec("redis://localhost:6399/2")  # lazy: connects on first use
+    assert type(redis_store).__name__ == "RedisStateStore"
     with pytest.raises(ValueError, match="INDAH_STATE_STORE"):
         state_store_from_spec("bogus")
     with pytest.raises(ValueError, match="INDAH_STATE_STORE"):

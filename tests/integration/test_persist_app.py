@@ -121,7 +121,8 @@ def test_the_environment_picks_the_store(monkeypatch, tmp_path):
 @pytest.mark.parametrize(
     ("name", "value"),
     [
-        ("INDAH_STATE_STORE", "redis://localhost"),
+        ("INDAH_STATE_STORE", "redis://localhost:notaport"),
+        ("INDAH_STATE_STORE", "redis"),  # needs INDAH_REDIS_URL
         ("INDAH_STATE_STORE", "nonsense"),
         ("INDAH_PERSIST_TTL", "soon"),
         ("INDAH_PERSIST_TTL", "0"),
