@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e test-pyodide build size cleanroom docs docs-serve release-check post-release check clean
+.PHONY: help demo demo-notebook demo-docker demo-traefik demo-docker-down setup hooks frontend fmt lint test test-fast test-e2e test-multireplica test-pyodide build size cleanroom docs docs-serve release-check post-release check clean
 
 # Print a free host port (stdlib only; no lsof/nc needed).
 FREE_PORT := python3 -c 'import socket;s=socket.socket();s.bind(("",0));p=s.getsockname()[1];s.close();print(p)'
@@ -55,6 +55,9 @@ test-fast: ## Run the fast layer (unit + integration, no infra)
 
 test-e2e: ## Run the heavy layer (browser / real launched app)
 	uv run pytest -m e2e -q
+
+test-multireplica: ## Three replicas + Redis + two balancers in Docker (needs Docker and Chromium; about 3 min)
+	INDAH_TEST_MULTIREPLICA=1 uv run --extra e2e --extra redis pytest -m multireplica -q --durations=0
 
 test: ## Run the full test suite
 	uv run pytest -q

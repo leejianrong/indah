@@ -1,0 +1,59 @@
+name: Multi-replica e2e
+
+# IND-211, ADR-0043: three indah replicas, a Redis and two balancers (plain spray, simulated Fly) in
+# Docker Compose. Slow (builds an image, runs a browser), so its own workflow like studio-pyodide: path
+# filters keep it off PRs that cannot affect it; it always runs on main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "deploy/multireplica/**"
+      - "deploy/probe/sticky_check.py"
+      - "src/indah/**"
+      - "frontend/**"
+      - "tests/e2e/test_multireplica.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/multireplica.yml"
+
+concurrency:
+  group: multireplica-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  multireplica:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --extra dev --extra e2e --extra redis
+      - name: Install Chromium for Playwright
+        run: uv run playwright install --with-deps chromium
+      - name: Three replicas, Redis and two balancers
+        env:
+          INDAH_TEST_MULTIREPLICA: "1"
+        run: |
+          set -o pipefail
+          uv run pytest -m multireplica -q --durations=0 | tee multireplica.log
+      - name: Timings in the job summary
+        if: always()
+        run: |
+          {
+            echo '### Multi-replica timings'
+            echo '```'
+            grep -E "s (setup|call|teardown) |passed|failed" multireplica.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose -f deploy/multireplica/compose.yml logs --no-color --tail 100
+      - name: Tear down
+        if: always()
+        run: docker compose -f deploy/multireplica/compose.yml --profile odd down -v --timeout 5

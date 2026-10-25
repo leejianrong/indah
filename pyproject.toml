@@ -122,6 +122,7 @@ markers = [
     "pyodide: every runnable Studio page runs in the browser with Pyodide (ADR-0041); own CI job",
     "expects_csp_violation: this e2e test provokes a CSP violation on purpose (see conftest)",
     "redis: runs against a real Redis at INDAH_TEST_REDIS_URL; skipped when it is not set",
+    "multireplica: three replicas + Redis + two balancers in Docker (IND-211); opt-in with INDAH_TEST_MULTIREPLICA=1",
     "raw_events: post events without the tab connecting first (see tests/integration/conftest.py)",
 ]
 asyncio_mode = "auto"
