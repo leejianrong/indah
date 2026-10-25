@@ -203,7 +203,7 @@ What is in it (from `git log v0.7.0..main`):
 | Extras and size (ADR-0042) | IND-187 size budget in CI, IND-188 extras `plot`, `data`, `demos`, `all`, IND-190 sdist trim, IND-189 gzip for the shell, `editor.js` and module files, IND-186 lazy Map (shell 243 to 200 KB gzip), IND-214 editor minify, IND-215 tighter budget |
 | Deploy basics | IND-199 unknown-session events fail loudly (409), IND-200 startup warning, IND-201 readiness and drain, IND-202 env config, IND-203 node header, IND-204 and IND-198 `trusted_proxies` presets, IND-205 deploy doctor page, IND-206 deploy recipes (pending) |
 | Gallery | IND-177 plots in dark mode, IND-178 table on a phone (plain tables still scroll sideways; `grc-map` clips its long column, 18ch), IND-179 charts open on a sample, IND-180 `object-detection` async start, gallery redeploy |
-| Measurements and ADRs | IND-170 (Fly half) and IND-171 sticky-session spike, ADR-0040 text scale and ADR-0042 extras (accepted), ADR-0043 multi-replica (proposed) |
+| Measurements and ADRs | IND-170 (Fly half) and IND-171 sticky-session spike, ADR-0040 text scale and ADR-0042 extras (accepted), ADR-0043 multi-replica (accepted 2026-10-25) |
 
 Upgrading items to flag in the release notes: an event or upload for a session id the process does not hold
 now gets `409 {"error": "unknown_session"}` instead of a silent 200 (a script that posts events without
@@ -219,7 +219,7 @@ Owner decides or does by hand: the `pypi` approval; the Cloudflare dashboard ste
 ## 0.9.0 (provisional): multi-replica, 22 points
 
 Theme: any replica's front door works, and a restart or rollout does not lose a tab's small state. Shaped by
-ADR-0043 (Proposed 2026-10-24; decisions so far are recorded in the ADR: losing live handler state on an
+ADR-0043 (Accepted 2026-10-25; decisions so far are recorded in the ADR: losing live handler state on an
 owner crash is accepted, the cluster secret `INDAH_CLUSTER_SECRET` is required explicitly, a hint-aware shell
 is the recommended requirement). Redis is an optional state store the user provides (`indah[redis]`); indah
 never runs or bundles it, and the in-memory defaults keep working with no extra service. Routing does not
