@@ -1,7 +1,6 @@
 # ADR-0043: Running more than one replica
 
-- Status: **Proposed** (IND-207; some decisions recorded 2026-10-24, see "Decisions so far"; the 0.9.0 build
-  cards start only after it is accepted)
+- Status: **Accepted** 2026-10-25 (IND-207; decisions in "Decisions so far"; the 0.9.0 build cards may start)
 - Date: 2026-10-24
 - Deciders: Jian (owner)
 - Builds on: ADR-0010 (the session-store seam), ADR-0002 (SSE and POST, resume, epochs), ADR-0026 (hub,
@@ -19,7 +18,7 @@
 | Q6 A hint-aware shell as a requirement for Tier C | **Recommended, leaning accepted** | Only indah's own shell is supported as a routing client; a third-party wire client still works on one pod or behind Tier A. Build the Fly half (IND-197, the `fly-force-instance-id` hint). Keep the k8s forwarder (IND-209) deferred unless the owner's ingress cannot do cookie affinity. |
 | Q1 What fronts the owner's k3s | **Open** | The owner is checking: Traefik or ingress-nginx talking to the pods (cookie affinity works, Tier C on k8s is unneeded), or a Cloudflare Tunnel straight to a Service (no affinity, IND-209 is needed). |
 | Q3 First state store | **Recommended: Redis**, plus a new option to evaluate | Redis is the first networked adapter. A browser-held option is added to the alternatives (see Backends); the `StateStore` interface must admit a client-held implementation. |
-| Topic and Stream across replicas | **Open** | Recommendation: document "run the producer in every replica" now; decide a pub/sub adapter later in IND-216. |
+| Topic and Stream across replicas | **Decided 2026-10-25: producer per replica** | Document that every replica runs its own producer and reads the source itself (IND-216). No bus now; a Redis-backed Topic is a later card if a user needs it. |
 
 ## Context
 
