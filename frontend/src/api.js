@@ -205,3 +205,20 @@ export function postUpload(id, files) {
     })
     .catch(() => false);
 }
+
+// The live socket (ADR-0045). The shell learns from window.__INDAH_CHROME__.live whether the server
+// serves one; the URL is the document-relative path as ws(s), with the route hint as ?r= when there
+// is one (a WebSocket cannot set request headers).
+export function liveConfig() {
+  const live = typeof window !== "undefined" ? (window.__INDAH_CHROME__ || {}).live : null;
+  return live && typeof live.path === "string" ? live : null;
+}
+
+export function liveUrl() {
+  const live = liveConfig();
+  if (!live) return null;
+  const url = new URL(apiUrl(live.path));
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  if (route) url.searchParams.set("r", route.hint);
+  return url.toString();
+}

@@ -21,6 +21,7 @@ from .components import (
     Badge,
     BarStrip,
     Button,
+    Camera,
     Card,
     Chart,
     Chat,
@@ -96,6 +97,7 @@ from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
 from .hardening import Limits, Rate
 from .launch import LaunchHandle, launch
+from .live import Frame, Live
 from .push import Topic
 from .reactive import Computed, Signal, batch, computed, effect
 from .session import DispatchResult, Session
@@ -192,6 +194,10 @@ __all__ = [
     # file upload / download (ADR-0017)
     "Upload",
     "UploadedFile",
+    # live media, Tier 1 (ADR-0045)
+    "Camera",
+    "Frame",
+    "Live",
     "Diff",
     "Download",
     "DownloadFile",

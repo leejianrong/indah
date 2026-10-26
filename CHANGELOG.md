@@ -11,6 +11,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+
+- Tier 1 live media transport (ADR-0045, IND-74): `create_app(live=True)` (or `live=Live(...)`, with
+  `pip install "indah[live]"`) serves an opt-in `WebSocket /api/live` that carries binary frames from the
+  browser, and a `Camera` component whose handler receives each JPEG as a `Frame`. Latest frame wins at
+  both ends, so a slow model sees a lower rate and never a growing delay. The upgrade checks `Origin` on
+  every app, goes through the same session identity checks as an event, honours trusted proxies, and adds
+  the socket origin to the strict CSP `connect-src` only when live is on. Off by default, never offered on
+  Colab, where `Camera` falls back to one snapshot a second over the upload route. `protocol_version` stays 1.
+
 ### Changed
 
 - Shell: on a phone-width screen a `Chart` (and anything in a `Grid` or `Sidebar`) no longer pushes the

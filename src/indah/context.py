@@ -40,7 +40,7 @@ from .state import _Persistence, persistence_for
 from .stream import Stream
 
 if TYPE_CHECKING:
-    from starlette.requests import Request
+    from starlette.requests import HTTPConnection
 
     from .push import Topic
     from .transport import Hub
@@ -99,7 +99,7 @@ class ConnectionInfo:
 
     @classmethod
     def from_request(
-        cls, request: Request, app_path: str | None = None, user: Principal | None = None
+        cls, request: HTTPConnection, app_path: str | None = None, user: Principal | None = None
     ) -> ConnectionInfo:
         return cls(
             app_path=app_path or "/",
