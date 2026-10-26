@@ -1734,6 +1734,42 @@ def _to_columns(value: Any) -> list[list[Any]]:
     return cols
 
 
+_NAMED_COLORMAPS = ("magma", "viridis", "gray")
+
+
+def _colormap(value: Any) -> Any:
+    """A built-in colormap name, or two to nine colour stops (hex, rgb(), or ``var(--token)``)."""
+    if isinstance(value, (list, tuple)):
+        if not 2 <= len(value) <= 9:
+            raise ValueError("a colormap given as stops needs two to nine colours")
+        return [_color(c, "colormap stop") for c in value]
+    return value
+
+
+def _row_labels(labels: Any) -> list[str]:
+    if not labels:
+        return []
+    if len(labels) > 64:
+        raise ValueError("a heatmap takes at most 64 row labels")
+    return [str(label)[:12] for label in labels]
+
+
+def _col_groups(groups: Any) -> list[dict[str, Any]]:
+    """Labelled brackets over runs of columns: ``[{"start": 0, "end": 80, "label": "rod 0"}]``."""
+    out: list[dict[str, Any]] = []
+    for group in groups or []:
+        if not isinstance(group, dict) or not {"start", "end", "label"} <= set(group):
+            raise ValueError("a column group is a dict with 'start', 'end' and 'label'")
+        start = int(_number(group["start"], "group start", 0, 1e6))
+        end = int(_number(group["end"], "group end", 0, 1e6))
+        if end < start:
+            raise ValueError("a column group's end must not be before its start")
+        out.append({"start": start, "end": end, "label": str(group["label"])[:40]})
+    if len(out) > 24:
+        raise ValueError("a heatmap takes at most 24 column groups")
+    return out
+
+
 class Heatmap(Component):
     """A client-side heatmap / 2-D field (ADR-0019): spectrograms, heatmaps, maps.
 
@@ -1764,19 +1800,38 @@ class Heatmap(Component):
         self,
         z: Source = None,
         *,
-        colormap: str = "magma",
+        colormap: str | list[str] = "magma",
         zmin: float | None = None,
         zmax: float | None = None,
         title: str = "",
         x_label: str = "",
         y_label: str = "",
         height: int | str = 240,
+        null_color: str | None = None,
+        origin: str = "bottom",
+        row_labels: list[str] | None = None,
+        col_groups: list[dict[str, Any]] | None = None,
+        mark_x: Source = None,
+        mark_y: Source = None,
+        mark_color: str | None = None,
     ) -> None:
         super().__init__()
         self._reactive = z is not None
         self._z = z
+        self._colormap = _colormap(colormap)
+        if origin not in ("bottom", "top"):
+            raise ValueError(f"Heatmap origin must be 'bottom' or 'top', got {origin!r}")
+        self._origin = origin
+        self._null_color = _color(null_color, "null_color") if null_color else None
+        self._row_labels = _row_labels(row_labels)
+        self._col_groups = _col_groups(col_groups)
+        for name, source in (("mark_x", mark_x), ("mark_y", mark_y)):
+            if source is not None and not _is_source(source):
+                _number(source, name, 0, 1e9)
+        self._mark_x = mark_x
+        self._mark_y = mark_y
+        self._mark_color = _color(mark_color, "mark_color") if mark_color else None
         self._buffer: list[list[Any]] = []
-        self._colormap = colormap
         self._zmin = zmin
         self._zmax = zmax
         self._title = title
@@ -1799,14 +1854,32 @@ class Heatmap(Component):
             "yLabel": self._y_label,
             "height": self._height,
         }
+        if self._origin != "bottom":
+            props["origin"] = self._origin
+        if self._null_color:
+            props["nullColor"] = self._null_color
+        if self._row_labels:
+            props["rowLabels"] = self._row_labels
+        if self._col_groups:
+            props["colGroups"] = self._col_groups
+        if self._mark_color:
+            props["markColor"] = self._mark_color
+        for name, source in (("markX", self._mark_x), ("markY", self._mark_y)):
+            if source is not None and not _is_source(source):
+                props[name] = source
         if not self._reactive:
             props["z"] = [list(col) for col in self._buffer]
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {}
         if self._reactive:
-            return {"z": lambda: _to_columns(_read(self._z))}
-        return {}
+            props["z"] = lambda: _to_columns(_read(self._z))
+        if self._mark_x is not None and _is_source(self._mark_x):
+            props["markX"] = lambda: _opt_number(_read(self._mark_x))
+        if self._mark_y is not None and _is_source(self._mark_y):
+            props["markY"] = lambda: _opt_number(_read(self._mark_y))
+        return props
 
     # -- streaming API (only when z= is unset) -------------------------------
 

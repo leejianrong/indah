@@ -200,6 +200,51 @@ def chart_kinds(ctx: indah.Context) -> indah.Component:
     )
 
 
+def heatmap_marks(ctx: indah.Context) -> indah.Component:
+    state = indah.Signal(12)
+    action = indah.Signal(2)
+    cols = 24
+    field = [
+        [None if (x * 5 + y * 3) % 7 < 2 else round(math.sin(x / 3 + y), 2) for y in range(4)]
+        for x in range(cols)
+    ]  # None is a cell with no value, drawn blank rather than as the lowest colour
+    return indah.Column(
+        children=[
+            indah.Row(
+                children=[
+                    indah.Slider(state, min=0, max=cols - 1, step=1, label="State"),
+                    indah.Slider(action, min=0, max=3, step=1, label="Action"),
+                ]
+            ),
+            indah.Heatmap(
+                field,
+                colormap=["var(--err)", "var(--surface-2)", "var(--ok)"],
+                zmin=-1,
+                zmax=1,
+                null_color="var(--surface)",
+                origin="top",
+                row_labels=["up", "down", "left", "right"],
+                col_groups=[
+                    {"start": 0, "end": 11, "label": "first half"},
+                    {"start": 12, "end": 23, "label": "second half"},
+                ],
+                mark_x=state,
+                mark_y=action,
+                height=190,
+                title="Blank cells, labels, groups and a marked cell",
+            ),
+        ]
+    )
+
+
+def heatmap_marks_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".heatmap canvas").first).to_be_visible()
+    page.wait_for_function("() => document.querySelector('.heatmap').__heatmap.ncols === 24")
+
+
 def chart_kinds_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -507,6 +552,19 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(44,),
             check=chart_kinds_check,
+        ),
+        Page(
+            slug="heatmap-marks",
+            title="Heatmap labels and marks",
+            summary=(
+                "A colormap can be your own colour stops, a cell with no value stays blank, rows and "
+                "runs of columns can be labelled, and one cell can be spotlit (`mark_x`, `mark_y`)."
+            ),
+            build=heatmap_marks,
+            covers=(),
+            docs="components.md",
+            adr=(44,),
+            check=heatmap_marks_check,
         ),
         Page(
             slug="heatmap",

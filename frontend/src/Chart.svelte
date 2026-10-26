@@ -113,7 +113,6 @@
       }
     }
     ctx.setLineDash([]);
-    if (props.highlight != null) drawHighlight(self, ctx, dpr);
     if (props.playhead != null) {
       const x = self.valToPos(props.playhead, "x", true);
       ctx.strokeStyle = resolveColor(el, "var(--text)");
@@ -123,6 +122,7 @@
       ctx.lineTo(x, top + height);
       ctx.stroke();
     }
+    if (props.highlight != null) drawHighlight(self, ctx, dpr); // above the playhead line
     ctx.restore();
   }
 
@@ -133,7 +133,7 @@
     if (at < 0) return;
     const next = xs[at + 1] ?? xs[at - 1];
     const pitch = next == null ? 6 * dpr : Math.abs(self.valToPos(next, "x", true) - self.valToPos(xs[at], "x", true));
-    const w = Math.max(3 * dpr, pitch * 0.95);
+    const w = Math.max(4 * dpr, pitch * 0.95);
     ctx.fillStyle = resolveColor(el, props.highlightColor || "var(--x-gold, #d9a300)");
     ySeries().forEach((s, i) => {
       if (typeof s !== "object" || s.kind !== "bars") return;

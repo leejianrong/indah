@@ -41,6 +41,12 @@ CSS indah does not expose.
    changes `data-theme`, so charts follow the theme without the app recolouring them. Colours are
    checked in Python (`url(` and anything that is not a colour is refused).
 
+6. **Heatmap**: `colormap` also takes two to nine colour stops (so a diverging scale can follow the
+   theme); `null_color` paints a cell with no value instead of the lowest colour, which is how a
+   masked cell (an illegal move) reads as blank; `origin="top"` puts row 0 on top; `row_labels` and
+   `col_groups` draw labels in the canvas; `mark_x` and `mark_y` (reactive) spotlight a column and
+   ring a cell. The canvas is drawn at the device pixel ratio so its text stays sharp.
+
 All of these are additive: a new component type or prop, with no `protocol_version` bump (ADR-0005).
 
 ## Alternatives considered

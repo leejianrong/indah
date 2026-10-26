@@ -29,6 +29,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   a chart takes fixed `x_range` / `y_range`, a reactive `playhead` (a vertical line, with `shade_after` dimming
   what comes after it), a reactive `highlight` bar, horizontal `rules`, and `legend="labels"`. Colours written
   as `var(--token)` follow the light and dark switch (ADR-0044).
+- `Heatmap` takes its own colour stops (`colormap=[...]`, hex or `var(--token)`), `null_color` so a cell with
+  no value is blank instead of the lowest colour, `origin="top"`, `row_labels`, `col_groups` (labelled
+  brackets over runs of columns), and a spotlit column with a ringed cell (`mark_x`, `mark_y`, reactive)
+  (ADR-0044).
 - A gallery policy page on the docs site (`website/docs/gallery-policy.md`), linked from the gallery's
   footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
   ask for removal. No community submissions are open yet (IND-193).
