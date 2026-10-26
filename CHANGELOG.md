@@ -25,6 +25,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   streaming each word into a `StreamText` as it is chosen. It has a chain order from 1 to 3, a length, a
   randomness control, an optional start word and a fixed-seed switch for repeatable poems (IND-219).
 
+- A sorting visualiser for the public gallery (`examples/sorting.py`): pick bubble, insertion, selection,
+  merge or quick sort, an array size from 10 to 100 and a speed, and watch the bars rearrange with live
+  comparison and swap counts. The algorithms are plain generators that yield one step at a time, and each
+  run stops at a fixed step limit. It uses `BarStrip`, with a bar's colour showing whether it is being
+  compared, swapped or sorted.
+
 - A gallery policy page on the docs site (`website/docs/gallery-policy.md`), linked from the gallery's
   footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
   ask for removal. No community submissions are open yet (IND-193).

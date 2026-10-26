@@ -45,6 +45,7 @@ DEMOS = [
     ("grc-map", "grc_map", None),
     ("gpx-viewer", "gpx_viewer", None),
     ("markov-poet", "markov_poet", "poem"),
+    ("sorting", "sorting", "sort"),
 ]
 
 VIEWPORT = {"width": 900, "height": 640}  # ~14:10, matches the card's aspect ratio
@@ -85,6 +86,9 @@ def _nudge(page, kind: str | None) -> None:
         elif kind == "poem":
             page.get_by_role("button", name="Generate").click(timeout=2000)
             page.wait_for_timeout(2500)  # ~40 words at 40 ms each
+        elif kind == "sort":
+            page.get_by_role("button", name="Sort", exact=True).click(timeout=2000)
+            page.wait_for_timeout(900)  # mid-run, with amber and red bars showing
         elif kind == "sample":
             # Click a bundled real sample photo -- a real classifier's bars over a
             # generic synthetic image would be meaningless.
@@ -98,7 +102,10 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch()
+        only = set(sys.argv[1:])  # optional: slugs to capture, default all
         for slug, module, nudge in DEMOS:
+            if only and slug not in only:
+                continue
             port = _free_port()
             app = importlib.import_module(module).app
             server = _serve(app, port)
