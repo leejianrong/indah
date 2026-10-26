@@ -55,6 +55,11 @@ data = [
 redis = [
     "redis>=5",
 ]
+# The Tier 1 live media WebSocket (ADR-0045): uvicorn serves a WebSocket only with one of these
+# installed. Off by default, so the base install does not carry it.
+live = [
+    "websockets>=12",
+]
 # What the gallery demos and the examples need; the gallery image installs `indah[demos]`.
 demos = [
     "numpy>=1.24",
@@ -85,12 +90,16 @@ dev = [
     # Redis is opt-in (mark `redis`, INDAH_TEST_REDIS_URL).
     "redis>=5",
     "fakeredis>=2.23",
+    # The live media route (ADR-0045) is tested in-process, and needs this to build.
+    "websockets>=12",
 ]
 # The browser layer of the e2e suite (marked `e2e`). Kept out of `dev`/the fast
 # gate so `uv sync --extra dev` stays light and Node/browser-free; CI installs it
 # only for the dedicated browser-e2e job (which also runs `playwright install`).
 e2e = [
     "playwright>=1.40",
+    # A real uvicorn serving the live WebSocket to a browser (tests/e2e/test_live_camera.py).
+    "websockets>=12",
     # Runs the Studio-in-Pyodide check on several workers (tests/e2e/test_studio_pyodide.py).
     "pytest-xdist>=3.5",
 ]

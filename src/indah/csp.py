@@ -79,8 +79,16 @@ def known_img_hosts() -> list[str]:
     return [*DEFAULT_IMG_HOSTS, *(h for h in _registered if h not in DEFAULT_IMG_HOSTS)]
 
 
-def build_csp(nonce: str, *, img_hosts: Iterable[str], report_uri: str | None = None) -> str:
-    """The strict policy for one response. ``img_hosts`` are extra ``scheme://host`` sources."""
+def build_csp(
+    nonce: str,
+    *,
+    img_hosts: Iterable[str],
+    report_uri: str | None = None,
+    connect_extra: Iterable[str] = (),
+) -> str:
+    """The strict policy for one response. ``img_hosts`` are extra ``scheme://host`` sources;
+    ``connect_extra`` adds sources to ``connect-src`` (the live WebSocket origin, ADR-0045)."""
+    connect = " ".join(["'self'", *connect_extra])
     images = " ".join(["'self'", "data:", "blob:", *img_hosts])
     directives = [
         "default-src 'none'",
@@ -90,7 +98,7 @@ def build_csp(nonce: str, *, img_hosts: Iterable[str], report_uri: str | None = 
         f"img-src {images}",
         f"media-src {images.replace(' data:', ' data:', 1)}",
         "font-src 'self' data:",
-        "connect-src 'self'",
+        f"connect-src {connect}",
         "frame-ancestors 'self'",
         "base-uri 'self'",
         "form-action 'self'",

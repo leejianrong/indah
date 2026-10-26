@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from starlette.requests import Request
+    from starlette.requests import HTTPConnection, Request
 
 logger = logging.getLogger("indah")
 
@@ -81,13 +81,14 @@ def default_authenticator(request: Request) -> Principal | None:
     return None
 
 
-async def authenticate(request: Request, auth: Authenticator | None) -> Principal | None:
+async def authenticate(request: HTTPConnection, auth: Authenticator | None) -> Principal | None:
     """Run ``auth`` for ``request``; ``None`` for no authenticator, no identity, an expired
-    one, or any failure."""
+    one, or any failure. On the live route ``request`` is a ``WebSocket`` (ADR-0045): an
+    authenticator should read only ``headers``, ``cookies`` and ``client``, which both have."""
     if auth is None:
         return None
     try:
-        result = auth(request)
+        result = auth(request)  # type: ignore[arg-type]
         if inspect.isawaitable(result):
             result = await result
     except Exception:

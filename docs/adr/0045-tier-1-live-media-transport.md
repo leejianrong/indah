@@ -1,6 +1,6 @@
 # ADR-0045: Tier 1 live media transport (WebSocket, opt-in)
 
-- Status: Proposed
+- Status: Accepted (transport and `Camera` built, 2026-10-27)
 - Date: 2026-10-27
 - Deciders: Jian (owner)
 
@@ -185,3 +185,18 @@ node types go in the built-ins like any component, and the socket has its own `v
    loop and the Tier 0 snapshot fallback, protocol.md.
 2. Demo IND-64: webcam detection with `Camera` plus `ImageOverlay`.
 3. `Microphone` and the streaming ASR demo (IND-65); IND-62 needs only Tier 0.
+
+## As built (IND-74, 2026-10-27)
+
+- Built as designed with these differences. A sync `on_frame` handler runs on the event loop, like
+  an `Upload` handler, not in a worker thread: signals are written inside the session's dispatch
+  batch, which a thread would escape. Docs say to `await asyncio.to_thread(...)` inside an `async`
+  handler for a heavy model.
+- `live=True` on Colab is ignored with a warning and the route is not mounted. A socket whose hello
+  names a component that is not a `Camera` is closed `4403`; a byte budget over
+  `Live.max_bytes_per_second` is `1008`.
+- `Camera.transport` is a signal the shell updates through a `transport` event. The snapshot
+  fallback posts to `POST /api/upload`, which dispatches the same handler.
+- Not built yet: `Microphone` (hello `kind: "audio"` is refused with `4400` until it exists), and
+  multi-replica routing of the socket is not wired or tested (the shell appends `?r=`, but the
+  server does not replay a socket; a replica without the session closes it `4409`).

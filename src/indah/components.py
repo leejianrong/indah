@@ -21,6 +21,7 @@ import json
 import logging
 import math
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
@@ -28,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .csp import register_img_host
 from .diff import compute_diff
 from .keys import normalize_keys
+from .live import Frame
 from .markdown import to_blocks
 from .protocol import RenderSpec
 from .reactive import Computed, Signal, effect
@@ -2856,6 +2858,84 @@ class Upload(Component):
                     return result  # async handler: awaited as a background task
             return True  # always handled (a no-op without a handler), never 400s
         return False
+
+
+class Camera(Component):
+    """A live webcam input (ADR-0045).
+
+    The shell asks the browser for the camera, shows a preview and sends one JPEG per tick to
+    ``on_frame``, a plain handler (ADR-0009) that receives a :class:`~indah.live.Frame`. It may be
+    sync or ``async def``; a slow handler sees a lower frame rate, always on the newest frame
+    (late frames are dropped, never queued). Run a heavy model with
+    ``await asyncio.to_thread(model, frame.data)`` so the event loop stays free. Set results on
+    signals as usual, for example ``ImageOverlay(boxes=...)``.
+
+    With ``create_app(live=True)`` and ``pip install "indah[live]"`` frames travel over a
+    WebSocket (Tier 1). Anywhere that is unavailable (Colab, a proxy that blocks upgrades, a
+    server without ``live``) the same capture loop posts about one frame a second to the upload
+    route (Tier 0), so the same handler still runs, slower. ``transport`` is a signal that says
+    which: ``"live"``, ``"snapshot"`` or ``"off"``.
+
+    ``fps`` is the capture rate, ``max_width`` the widest frame sent (pixels) and ``quality`` the
+    JPEG quality in ``(0, 1]``.
+    """
+
+    type = "camera"
+
+    def __init__(
+        self,
+        on_frame: Callable[[Frame], Any] | None = None,
+        *,
+        label: str = "",
+        fps: float = 5,
+        max_width: int = 640,
+        quality: float = 0.7,
+    ) -> None:
+        super().__init__()
+        if fps <= 0 or fps > 60:
+            raise ValueError("Camera fps must be in (0, 60]")
+        if max_width < 16:
+            raise ValueError("Camera max_width must be at least 16")
+        if not 0 < quality <= 1:
+            raise ValueError("Camera quality must be in (0, 1]")
+        self._on_frame = on_frame
+        self._label = label
+        self._fps = fps
+        self._max_width = int(max_width)
+        self._quality = quality
+        self.transport: Signal[str] = Signal("off")
+
+    def static_props(self) -> dict[str, Any]:
+        return {
+            "label": self._label,
+            "fps": self._fps,
+            "maxWidth": self._max_width,
+            "quality": self._quality,
+        }
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        frame: Frame | None = None
+        if event == "frame":
+            # Only the live socket builds a Frame; a JSON POST cannot, so one is ignored.
+            candidate = payload.get("frame")
+            frame = candidate if isinstance(candidate, Frame) else None
+        elif event == "upload":  # the Tier 0 snapshot fallback posts a JPEG to the upload route
+            files = payload.get("files") or []
+            if files:
+                first = files[0]
+                frame = Frame(first.data, first.content_type or "image/jpeg", 0, time.time())
+        elif event == "transport":
+            value = payload.get("value")
+            if value in ("live", "snapshot", "off"):
+                self.transport.set(value)
+            return True
+        else:
+            return False
+        if frame is not None and self._on_frame is not None:
+            result = self._on_frame(frame)
+            if inspect.iscoroutine(result):
+                return result  # async handler: awaited as a background task
+        return True
 
 
 @dataclass

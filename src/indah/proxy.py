@@ -165,7 +165,7 @@ class ProxyHeaders:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http" and not self.trusted and self.notice is not None:
             self.notice.check(scope)
-        if scope["type"] == "http" and self.trusted:
+        if scope["type"] in ("http", "websocket") and self.trusted:  # a WebSocket too (ADR-0045)
             peer = (scope.get("client") or (None, 0))[0]
             if is_trusted(peer, self.trusted):
                 scope = self._believe(scope)
@@ -181,7 +181,7 @@ class ProxyHeaders:
             scope["client"] = (client, 0)
         proto = headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
         if proto in ("http", "https"):
-            scope["scheme"] = proto
+            scope["scheme"] = proto if scope["type"] == "http" else proto.replace("http", "ws")
         host = headers.get("x-forwarded-host", "").split(",")[0].strip()
         if host and _HOST.fullmatch(host):
             raw: list[tuple[bytes, bytes]] = [(k, v) for k, v in scope["headers"] if k != b"host"]
