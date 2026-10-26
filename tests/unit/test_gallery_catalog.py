@@ -57,7 +57,7 @@ def _hosted(**over):
 def test_the_real_catalog_is_valid():
     entries = cat.load_catalog()
     assert cat.validate_catalog(entries) == []
-    assert len(cat.hosted(entries)) == 15
+    assert len(cat.hosted(entries)) == 16
 
 
 def test_a_sound_hosted_and_listed_entry_pass():

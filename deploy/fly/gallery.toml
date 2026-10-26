@@ -188,3 +188,15 @@ module = "markov_poet"
 thumbnail = "markov-poet.png"
 tags = ["text", "streaming"]
 added = "2026-10-26"
+
+[[app]]
+slug = "sorting"
+title = "Sorting visualiser"
+emoji = "📶"
+blurb = "Watch bubble, insertion, selection, merge or quick sort rearrange bars, with live comparison and swap counts."
+author = "indah"
+kind = "hosted"
+module = "sorting"
+thumbnail = "sorting.png"
+tags = ["algorithms", "charts"]
+added = "2026-10-26"

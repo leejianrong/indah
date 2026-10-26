@@ -173,6 +173,7 @@ script ([ADR-0023](docs/adr/0023-demo-hosting.md)).
 | DataFrame explorer | [Open](https://indah-demos.fly.dev/dataframe-explorer/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/dataframe-explorer.ipynb) | [`dataframe_explorer.py`](examples/dataframe_explorer.py) |
 | Pretty map | [Open](https://indah-demos.fly.dev/prettymap/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/prettymap.ipynb) | [`prettymap.py`](examples/prettymap.py) |
 | Audio analysis | [Open](https://indah-demos.fly.dev/audio-analysis/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/audio-analysis.ipynb) | [`audio_analysis.py`](examples/audio_analysis.py) |
+| Sorting visualiser | [Open](https://indah-demos.fly.dev/sorting/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/sorting.ipynb) | [`sorting.py`](examples/sorting.py) |
 
 Also: [`examples/starter_components.py`](examples/starter_components.py) (a ~20-line
 tour of the component set) and [`examples/demo.ipynb`](examples/demo.ipynb) (the
