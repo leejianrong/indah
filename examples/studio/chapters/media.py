@@ -420,6 +420,43 @@ def download_check(pw) -> None:
         assert fh.read() == "n,square\n0,0\n1,1\n2,4\n3,9\n"
 
 
+# ---- camera -----------------------------------------------------------------------------------
+
+
+def camera(ctx: indah.Context) -> indah.Component:
+    seen = indah.Signal(0)
+    last = indah.Signal("no frame yet")
+
+    def on_frame(frame: indah.Frame) -> None:  # a plain handler; it may be `async def` too
+        seen.set(seen.value + 1)
+        last.set(f"{frame.size // 1024} KiB {frame.content_type}, frame {frame.seq}")
+
+    cam = indah.Camera(on_frame, label="Your camera", fps=2, max_width=320)
+    return indah.Column(
+        children=[
+            cam,
+            indah.Text(lambda: f"{seen.value} frame(s) received, last: {last.value}"),
+            indah.Text(lambda: f"Sent over: {cam.transport.value}"),
+            indah.Text(
+                "Frames go over a WebSocket when the app is made with `create_app(live=True)` "
+                '(`indah.Live(...)` tunes the caps; needs `pip install "indah[live]"`). Without it '
+                "this page sends about one snapshot a second, which also works on Colab.",
+                markdown=True,
+            ),
+        ]
+    )
+
+
+def camera_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.get_by_text("0 frame(s) received")).to_be_visible()
+    page.get_by_role("button", name="Start camera").click()
+    # The test browser has no camera: the shell says so instead of failing.
+    expect(page.get_by_text("No camera could be opened.")).to_be_visible()
+
+
 CHAPTER = Chapter(
     slug="media",
     title="Media and files",
@@ -460,6 +497,20 @@ CHAPTER = Chapter(
             covers=("Map",),
             docs="components.md",
             check=map_check,
+        ),
+        Page(
+            slug="camera",
+            title="Camera",
+            summary=(
+                "A webcam preview whose frames reach a Python handler as a `Frame`. Press "
+                "**Start camera** and allow it; the counts below update as frames arrive."
+            ),
+            build=camera,
+            covers=("Camera", "Frame", "Live"),
+            docs="hosting.md#live-camera",
+            adr=(45,),
+            check=camera_check,
+            local_only="needs a camera and a server route that receives the frames",
         ),
         Page(
             slug="plot",
