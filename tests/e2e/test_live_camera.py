@@ -70,3 +70,33 @@ def test_frames_flow_as_snapshots_when_live_is_off():
         assert "Snapshots:" in text
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_the_webcam_detection_demo_draws_boxes_from_a_fake_camera():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "examples" / "webcam_detect.py"
+    spec = importlib.util.spec_from_file_location("webcam_detect_e2e", path)
+    demo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(demo)
+    demo.detect = lambda data: [
+        {"x": 0.2, "y": 0.2, "w": 0.4, "h": 0.4, "label": "cup", "score": 0.9}
+    ]
+    handle = launch(
+        create_app(session_factory=demo.build_session, live=True), block=False, open_inline=False
+    )
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch(args=FAKE_CAMERA)
+            page = browser.new_context(permissions=["camera"]).new_page()
+            page.goto(handle.url)
+            page.get_by_role("button", name="Start camera").click()
+            page.wait_for_selector(".ov-box", timeout=20000)
+            page.wait_for_function(
+                "() => /sent over live/.test(document.body.innerText)", timeout=5000
+            )
+            browser.close()
+    finally:
+        handle.stop()
