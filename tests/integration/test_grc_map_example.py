@@ -101,3 +101,40 @@ def test_table_columns_are_sized_to_fit_a_phone():
     assert name.truncate is True
     assert name.max_width == "18ch"
     assert len(electors.title) <= 10  # "Electors", not "Registered electors"
+
+
+@pytest.mark.integration
+def test_colourbar_ticks_are_few_and_readable():
+    """The ticks used to run together ("100000120000140000"): few of them, with a compact format."""
+    gm = _load_example()
+    fig = gm.render_choropleth(gm.DEFAULT_YEAR)
+    cbar_ax = fig.axes[-1]
+    fig.canvas.draw()
+    labels = [t.get_text() for t in cbar_ax.get_xticklabels() if t.get_text()]
+    assert 3 <= len(labels) <= 6
+    assert all(len(label) <= 5 for label in labels), labels  # e.g. "100k", never "100000"
+    assert any(label.endswith("k") for label in labels)
+
+
+@pytest.mark.integration
+def test_no_data_is_distinct_from_the_low_end_and_is_in_the_legend():
+    gm = _load_example()
+    fig = gm.render_choropleth(gm.DEFAULT_YEAR)
+    assert gm.NO_DATA_COLOR.lower() not in {gm.RAMP_LOW.lower(), "#d8d2c8"}  # not the old beige
+    legend_texts = [t.get_text() for t in fig.texts] + [
+        t.get_text() for ax in fig.axes for t in ax.texts
+    ]
+    legend = fig.axes[0].get_legend()
+    if legend is not None:
+        legend_texts += [t.get_text() for t in legend.get_texts()]
+    assert any("no data" in t.lower() for t in legend_texts)
+
+
+@pytest.mark.integration
+def test_division_outlines_are_light_not_heavy():
+    gm = _load_example()
+    fig = gm.render_choropleth(gm.DEFAULT_YEAR)
+    coll = fig.axes[0].collections[0]
+    assert max(coll.get_linewidths()) <= 0.3
+    edge = coll.get_edgecolor()[0][:3]
+    assert sum(edge) / 3 > 0.7  # a pale line between fills, not black ink
