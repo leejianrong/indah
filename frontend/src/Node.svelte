@@ -13,6 +13,7 @@
   import Table from "./Table.svelte";
   import ImageOverlay from "./ImageOverlay.svelte";
   import Camera from "./Camera.svelte";
+  import Microphone from "./Microphone.svelte";
   import Overlay from "./Overlay.svelte";
   import Tip from "./Tip.svelte";
   import Choice from "./Choice.svelte";
@@ -707,6 +708,8 @@
   <ImageOverlay {props} />
 {:else if node.type === "camera"}
   <Camera {node} {props} />
+{:else if node.type === "microphone"}
+  <Microphone {node} {props} />
 {:else if node.type === "table"}
   <Table {props} nodeId={node.id} />
 {:else if node.type === "stat"}

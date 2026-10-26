@@ -9,7 +9,7 @@
   "editor_gzip_bytes": 155000,
   "map_raw_bytes": 174000,
   "map_gzip_bytes": 50000,
-  "python_source_bytes": 540000,
+  "python_source_bytes": 560000,
   "direct_dependencies": 5,
   "base_install_distributions": 14
 }

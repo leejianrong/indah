@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .csp import register_img_host
 from .diff import compute_diff
 from .keys import normalize_keys
-from .live import Frame
+from .live import AudioChunk, Frame
 from .markdown import to_blocks
 from .protocol import RenderSpec
 from .reactive import Computed, Signal, effect
@@ -2935,6 +2935,77 @@ class Camera(Component):
             result = self._on_frame(frame)
             if inspect.iscoroutine(result):
                 return result  # async handler: awaited as a background task
+        return True
+
+
+class Microphone(Component):
+    """A live microphone input (ADR-0045).
+
+    The shell asks the browser for the microphone and streams 16-bit mono PCM at ``sample_rate``
+    to ``on_audio``, a plain handler (ADR-0009) that receives an :class:`~indah.live.AudioChunk`
+    (sync or ``async def``; chunks arrive in order, one handler at a time). If the handler falls
+    behind, the oldest waiting audio is dropped past ``Live.audio_buffer_seconds`` and the next
+    chunk's ``dropped_before`` says so. Run a model with ``await asyncio.to_thread(...)``.
+
+    Needs ``create_app(live=True)`` and ``pip install "indah[live]"``. There is no live path
+    without a WebSocket (Colab, a proxy that blocks upgrades): the browser then records, and when
+    you press Stop sends the whole take once as ``"audio/wav"``. ``transport`` says which:
+    ``"live"``, ``"recording"`` or ``"off"``. The browser only gives out the microphone on
+    ``https://`` pages or ``localhost``.
+    """
+
+    type = "microphone"
+
+    def __init__(
+        self,
+        on_audio: Callable[[AudioChunk], Any] | None = None,
+        *,
+        label: str = "",
+        sample_rate: int = 16000,
+    ) -> None:
+        super().__init__()
+        if not 8000 <= sample_rate <= 48000:
+            raise ValueError("Microphone sample_rate must be in [8000, 48000]")
+        self._on_audio = on_audio
+        self._label = label
+        self._sample_rate = int(sample_rate)
+        self.transport: Signal[str] = Signal("off")
+
+    @property
+    def sample_rate(self) -> int:
+        return self._sample_rate
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label, "sampleRate": self._sample_rate}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        chunk: AudioChunk | None = None
+        if event == "audio":
+            # Only the live socket builds a chunk; a JSON POST cannot, so one is ignored.
+            candidate = payload.get("chunk")
+            chunk = candidate if isinstance(candidate, AudioChunk) else None
+        elif event == "upload":  # the record-then-upload fallback posts one WAV take
+            files = payload.get("files") or []
+            if files:
+                first = files[0]
+                chunk = AudioChunk(
+                    first.data,
+                    first.content_type or "audio/wav",
+                    0,
+                    time.time(),
+                    self._sample_rate,
+                )
+        elif event == "transport":
+            value = payload.get("value")
+            if value in ("live", "recording", "off"):
+                self.transport.set(value)
+            return True
+        else:
+            return False
+        if chunk is not None and self._on_audio is not None:
+            result = self._on_audio(chunk)
+            if inspect.iscoroutine(result):
+                return result
         return True
 
 

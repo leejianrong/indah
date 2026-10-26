@@ -200,3 +200,22 @@ node types go in the built-ins like any component, and the socket has its own `v
 - Not built yet: `Microphone` (hello `kind: "audio"` is refused with `4400` until it exists), and
   multi-replica routing of the socket is not wired or tested (the shell appends `?r=`, but the
   server does not replay a socket; a replica without the session closes it `4409`).
+
+## As built, Microphone (IND-65, 2026-10-27)
+
+- `Microphone(on_audio, label=, sample_rate=16000)` and `AudioChunk(data, content_type, seq, ts,
+  sample_rate, dropped_before)` are public. Hello `kind: "audio"` is accepted and must name a
+  `Microphone` (a mismatched kind and component is `4403`). Same security path as video: origin,
+  identity, authz, audit, caps.
+- The queue is `live.AudioQueue`: ordered, bounded by the new `Live.audio_buffer_seconds` (2.0) at
+  the node's rate, drops oldest and reports `dropped_before`. One handler runs at a time, in order.
+- The worklet (`static/live-audio.js`) downsamples the capture rate to `sample_rate` and posts about
+  100 ms of PCM16 per frame. It is served at `GET /api/live-audio.js` only when live is on, so a
+  default app has no new route and its CSP is unchanged (`script-src 'self'` already covers it).
+- Fallback without a socket (Colab, no `live=`): the shell records with a `ScriptProcessorNode` (no
+  extra route needed), caps a take at 60 s, and on Stop posts one WAV to the upload route; the same
+  handler gets one `AudioChunk` with `content_type="audio/wav"`. `Microphone.transport` is `"live"`,
+  `"recording"` or `"off"`.
+- Demo: `examples/mic_transcribe.py` (Whisper tiny through `transformers`, the user's dependency).
+  Not listed in the public gallery, pending the owner's decision above.
+- IND-62 (stepped video detection) needed nothing from this ADR, as planned: Tier 0.

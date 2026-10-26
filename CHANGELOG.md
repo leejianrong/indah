@@ -13,6 +13,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- A `Microphone` component and `AudioChunk` (ADR-0045, IND-65): the live socket now also carries 16-bit
+  mono PCM from an AudioWorklet to an `on_audio` handler, in order, with a bounded queue that drops the
+  oldest audio past `Live.audio_buffer_seconds` and reports `dropped_before`. The worklet is served from
+  `/api/live-audio.js` only when `live=True`. Without a socket (Colab) it records and sends one WAV take on
+  Stop. Opt-in, off by default, no change to the default CSP or routes. A live transcription example,
+  `examples/mic_transcribe.py`, streams the mic through Whisper. The Python source size limit in
+  `docs/size-budget.json` goes from 540000 to 560000 bytes to make room for it (the live layer is ordinary
+  Python source, not a new dependency).
 - A live webcam detection example, `examples/webcam_detect.py` (IND-64): the Tier 1 `Camera` feeding the
   same SSD-MobileNetV1 detector as the object detection demo, with each frame shown with its boxes. It runs on
   a laptop or your own server; on Colab it falls back to snapshots.

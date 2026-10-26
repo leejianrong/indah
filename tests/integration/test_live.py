@@ -12,7 +12,7 @@ import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from indah import Camera, Live, Principal, Text, create_app
+from indah import Camera, Live, Microphone, Principal, Text, create_app
 from indah.components import Column
 from indah.context import ConnectionInfo
 from indah.live import (
@@ -24,6 +24,7 @@ from indah.live import (
     CLOSE_TOO_MANY,
     CLOSE_UNAUTHENTICATED,
     CLOSE_UNKNOWN_SESSION,
+    AudioChunk,
     pack_frame,
 )
 from indah.reactive import Signal
@@ -144,7 +145,7 @@ def test_a_stalled_handler_gets_the_first_then_only_the_newest_frame():
     [
         "not json",
         json.dumps({"type": "hello", "v": 2, "sid": SID, "component": "n1", "kind": "video"}),
-        json.dumps({"type": "hello", "v": 1, "sid": SID, "component": "n1", "kind": "audio"}),
+        json.dumps({"type": "hello", "v": 1, "sid": SID, "component": "n1", "kind": "midi"}),
         json.dumps({"type": "hello", "v": 1, "sid": SID, "kind": "video"}),
     ],
 )
@@ -367,3 +368,94 @@ def test_on_colab_live_is_not_offered(monkeypatch, caplog):
     with pytest.raises(WebSocketDisconnect), client.websocket_connect("/api/live"):
         pass
     assert any("Colab" in r.message for r in caplog.records)
+
+
+# -- Microphone (IND-65) -------------------------------------------------------------------------
+
+
+def _mic_app(chunks: list, *, slow: bool = False, release: threading.Event | None = None, **kw):
+    got = threading.Event()
+
+    def factory() -> Session:
+        async def on_audio(chunk: AudioChunk):
+            chunks.append(chunk)
+            got.set()
+            if slow and release is not None:
+                while not release.is_set():
+                    await asyncio.sleep(0.01)
+
+        return Session(Column(children=[Microphone(on_audio, sample_rate=8000), Text("x")]))
+
+    kw.setdefault("live", True)
+    return create_app(session_factory=factory, **kw), got
+
+
+@pytest.mark.integration
+def test_audio_chunks_reach_the_handler_in_order_with_their_rate():
+    chunks: list[AudioChunk] = []
+    app, got = _mic_app(chunks)
+    _open(app)
+    with TestClient(app).websocket_connect("/api/live") as ws:
+        ws.send_text(_hello(kind="audio"))
+        assert ws.receive_json() == {"type": "ready"}
+        for seq in (1, 2, 3):
+            ws.send_bytes(pack_frame(seq, b"\x01\x00" * 10))
+        deadline = threading.Event()
+        for _ in range(100):
+            if len(chunks) == 3:
+                break
+            deadline.wait(0.03)
+    assert [c.seq for c in chunks] == [1, 2, 3]
+    assert all(c.sample_rate == 8000 and c.size == 20 for c in chunks)
+    assert all(c.dropped_before == 0 for c in chunks)
+
+
+@pytest.mark.integration
+def test_a_video_hello_cannot_drive_a_microphone_nor_the_reverse():
+    chunks: list[AudioChunk] = []
+    app, _ = _mic_app(chunks)
+    _open(app)
+    with TestClient(app).websocket_connect("/api/live") as ws:
+        ws.send_text(_hello(kind="video"))  # n1 is the Microphone
+        assert _closed_with(ws) == CLOSE_FORBIDDEN
+    cam_app, _ = _app()
+    _open(cam_app)
+    with TestClient(cam_app).websocket_connect("/api/live") as ws:
+        ws.send_text(_hello(kind="audio"))  # n1 is a Camera
+        assert _closed_with(ws) == CLOSE_FORBIDDEN
+
+
+@pytest.mark.integration
+def test_a_backed_up_audio_queue_drops_the_oldest_and_says_so():
+    chunks: list[AudioChunk] = []
+    release = threading.Event()
+    # 8000 Hz * 2 bytes * 0.001 s budget is tiny: it holds only the newest chunk
+    app, got = _mic_app(chunks, slow=True, release=release, live=Live(audio_buffer_seconds=0.01))
+    _open(app)
+    with TestClient(app).websocket_connect("/api/live") as ws:
+        ws.send_text(_hello(kind="audio"))
+        ws.receive_json()
+        ws.send_bytes(pack_frame(1, b"\x00" * 100))
+        assert got.wait(3)  # the handler holds chunk 1
+        for seq in (2, 3, 4):
+            ws.send_bytes(pack_frame(seq, b"\x00" * 100))
+        threading.Event().wait(0.3)
+        release.set()
+        for _ in range(100):
+            if len(chunks) >= 2:
+                break
+            threading.Event().wait(0.03)
+        release.set()
+    assert chunks[0].seq == 1
+    assert chunks[1].seq == 4 and chunks[1].dropped_before == 2
+
+
+@pytest.mark.integration
+def test_the_worklet_is_served_only_when_live_is_on():
+    on, _ = _mic_app([])
+    res = TestClient(on).get("/api/live-audio.js")
+    assert res.status_code == 200
+    assert "javascript" in res.headers["content-type"]
+    assert "registerProcessor" in res.text
+    off, _ = _mic_app([], live=False)
+    assert TestClient(off).get("/api/live-audio.js").status_code == 404

@@ -38,7 +38,8 @@ Layout:
   `examples/semula_pending.py`, `semula_entries.py`, `semula_routes.py`, `semula_editor.py`,
   `semula_hosted.py` (two users, three roles, token screen, hardening on), `semula_showcase.py`: the
   full apps, each runnable alone and mounted in the Studio;
-  `examples/webcam_detect.py` the Tier 1 live webcam demo (opt-in `live=True`, `indah[live]`, ADR-0045);
+  `examples/webcam_detect.py` the Tier 1 live webcam demo and `examples/mic_transcribe.py` the live microphone
+  transcription demo (opt-in `live=True`, `indah[live]`, ADR-0045);
   `examples/oidc_login.py` the OIDC login recipe (authlib in the parent app; no indah dependency);
   `examples/studio/` the **indah Studio** (`make demo`): one app showing every feature, a page per
   feature with its source, plus the full apps and a playground (read `docs/STUDIO.md`; a new public
