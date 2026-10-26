@@ -30,10 +30,22 @@ def test_the_poem_opens_filled_not_blank():
     assert len(_node(session, "streamtext").text.split()) >= 20
 
 
+# Seeds whose poem is short: with ``finish_sentence`` a poem that finds no full stop within the
+# extra words is cut back to the last one, so the length slider is a target, not a floor (IND-234).
+# 38 gives 22 words, 140 gives 21 tokens; 7 is an ordinary one.
 @pytest.mark.integration
-async def test_generate_streams_the_poem_word_by_word(monkeypatch):
+@pytest.mark.parametrize("seed", [7, 38, 140, 241])
+async def test_generate_streams_the_poem_word_by_word(monkeypatch, seed):
+    import random
+    from types import SimpleNamespace
+
     example = _load_example()
     monkeypatch.setattr(example, "WORD_DELAY", 0)
+    monkeypatch.setattr(
+        example,
+        "random",
+        SimpleNamespace(Random=lambda s=None: random.Random(seed if s is None else s)),
+    )
     session = example.build()
     hub = Hub()
     session.bind_hub(hub)
@@ -50,9 +62,9 @@ async def test_generate_streams_the_poem_word_by_word(monkeypatch):
         for change in msg.get("changes", [])
         if "append" in change and "text" in change["append"]
     ]
-    assert len(appended) > 20  # one append per token, not one big patch
+    assert len(appended) > 10  # one append per token, not one big patch
     assert "".join(appended).strip() == stream.text.strip()
-    assert len(stream.text.split()) >= 30
+    assert len(stream.text.split()) >= 15
     assert stream.text.strip().rstrip("\"')").endswith((".", "!", "?"))
 
 
