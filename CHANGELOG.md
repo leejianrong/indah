@@ -20,6 +20,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- `Frame`: a fixed design-size stage (default 1920 by 1080) that scales to fit the window, so a
+  dashboard has no scrollbar at any window size; `fit="width"` for a compact one inside a card and
+  `kiosk=True` for a full-window recording. `Grid` takes a track list (`columns="760px 1fr"`) and
+  `rows`, the new `Cell` spans columns or rows, and `Chart` and `Heatmap` accept `height="fill"` to
+  take the height their card gives them (ADR-0044).
 - A gallery policy page on the docs site (`website/docs/gallery-policy.md`), linked from the gallery's
   footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
   ask for removal. No community submissions are open yet (IND-193).

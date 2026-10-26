@@ -1530,7 +1530,7 @@ class Chart(Component):
         title: str = "",
         x_label: str = "",
         y_label: str = "",
-        height: int = 240,
+        height: int | str = 240,
         points: bool = False,
     ) -> None:
         super().__init__()
@@ -1541,7 +1541,7 @@ class Chart(Component):
         self._title = title
         self._x_label = x_label
         self._y_label = y_label
-        self._height = int(height)
+        self._height = _plot_height(height)
         self._points = bool(points)
         self._session: Session | None = None
 
@@ -1649,7 +1649,7 @@ class Heatmap(Component):
         title: str = "",
         x_label: str = "",
         y_label: str = "",
-        height: int = 240,
+        height: int | str = 240,
     ) -> None:
         super().__init__()
         self._reactive = z is not None
@@ -1661,7 +1661,7 @@ class Heatmap(Component):
         self._title = title
         self._x_label = x_label
         self._y_label = y_label
-        self._height = int(height)
+        self._height = _plot_height(height)
         self._session: Session | None = None
 
     def bind(self, session: Session) -> None:
@@ -3054,8 +3054,54 @@ class Skeleton(Component):
         return props
 
 
+def _plot_height(value: int | str) -> int | str:
+    """A plot's height: pixels, or ``"fill"`` to take the height its container gives it."""
+    if value == "fill":
+        return "fill"
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 40:
+        raise ValueError(f"height must be a number of pixels (40 or more) or 'fill', got {value!r}")
+    return int(value)
+
+
+_TRACK_TOKEN = re.compile(
+    r"auto|min-content|max-content|\d+(?:\.\d+)?(?:px|rem|em|%|fr)|minmax\([a-z0-9.%, -]{1,40}\)"
+)
+_LENGTH = re.compile(r"\d+(?:\.\d+)?(?:px|rem|em|%)?")
+
+
+def _tracks(value: str, name: str) -> str:
+    """A CSS track list (``"760px 1fr"``, ``"minmax(0, 1fr) auto"``), checked token by token so
+    nothing else can ride in on the style attribute."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be a non-empty track list such as '760px 1fr'")
+    rest = value.strip()
+    count = 0
+    while rest:
+        match = re.match(r"minmax\([^()]*\)|\S+", rest)
+        token = match.group(0)
+        if not _TRACK_TOKEN.fullmatch(token):
+            raise ValueError(f"{name}: {token!r} is not a track size (px, rem, em, %, fr, auto)")
+        rest = rest[match.end() :].lstrip()
+        count += 1
+        if count > 24:
+            raise ValueError(f"{name} has too many tracks")
+    return " ".join(value.split())
+
+
+def _length(value: str, name: str) -> str:
+    text = str(value).strip()
+    if not _LENGTH.fullmatch(text):
+        raise ValueError(f"{name} must be a CSS length such as '16px' or '1rem', got {value!r}")
+    return text
+
+
 class Grid(Component):
-    """An N-column grid of children that collapses to one column at phone width."""
+    """A grid of children that collapses to one column at phone width.
+
+    ``columns`` is a count (``3`` is three equal columns) or a track list (``"760px 1fr"``).
+    ``rows`` is an optional track list (``"auto 1fr"``); without it rows size to their content.
+    Inside a :class:`Frame` the grid never collapses, because a frame is a fixed design size.
+    """
 
     type = "grid"
 
@@ -3063,15 +3109,118 @@ class Grid(Component):
         self,
         children: list[Component] | None = None,
         *,
-        columns: int = 2,
+        columns: int | str = 2,
+        rows: str | None = None,
         gap: str = "1rem",
     ) -> None:
         super().__init__(children)
         self._columns = columns
+        self._rows = _tracks(rows, "Grid rows") if rows is not None else None
         self._gap = gap
+        if isinstance(columns, str):
+            self._tracks: str | None = _tracks(columns, "Grid columns")
+        else:
+            self._tracks = None
 
     def static_props(self) -> dict[str, Any]:
-        return {"columns": int(self._columns), "gap": self._gap}
+        props: dict[str, Any] = {"gap": self._gap}
+        if self._tracks is not None:
+            props["tracks"] = self._tracks
+        else:
+            props["columns"] = int(self._columns)
+        if self._rows is not None:
+            props["rows"] = self._rows
+        return props
+
+
+class Cell(Component):
+    """A grid cell that spans more than one column or row: ``Cell([chart], columns=2)``.
+
+    A plain child of a ``Grid`` takes one cell. Wrap it in a ``Cell`` to stretch it across
+    ``columns`` or ``rows``; the child fills the cell."""
+
+    type = "cell"
+
+    def __init__(
+        self, children: list[Component] | None = None, *, columns: int = 1, rows: int = 1
+    ) -> None:
+        super().__init__(children)
+        for name, value in (("columns", columns), ("rows", rows)):
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 24:
+                raise ValueError(f"Cell {name} must be an integer from 1 to 24, got {value!r}")
+        self._columns = columns
+        self._rows = rows
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if self._columns != 1:
+            props["columns"] = self._columns
+        if self._rows != 1:
+            props["rows"] = self._rows
+        return props
+
+
+class Frame(Component):
+    """A fixed-size stage that scales to fit the window: a dashboard that never scrolls.
+
+    The children are laid out once, inside a ``width`` by ``height`` design box (pixels), and the
+    whole box is scaled uniformly to the space available, centred, so the layout is the same at
+    1280 by 720 as at 4K and (with the default fit) never produces a scrollbar. It is what a
+    screen recording wants: design at 1920 by 1080, record at any size.
+
+    ``columns`` and ``rows`` are CSS track lists for the grid the children fill, in order (so
+    ``columns="1fr", rows="56px 1fr 200px"`` is a header, a body and a footer). ``fit="contain"``
+    (the default) scales to the width the parent gives and the height left in the window below
+    the frame, up as well as down; ``fit="shrink"`` only ever scales down; ``fit="width"`` fits
+    the width only and lets the height follow the aspect ratio, for a compact frame inside a
+    card. ``kiosk=True`` covers the whole window, hiding indah's own header, for recording.
+    """
+
+    type = "frame"
+
+    def __init__(
+        self,
+        children: list[Component] | None = None,
+        *,
+        width: int = 1920,
+        height: int = 1080,
+        columns: str = "1fr",
+        rows: str | None = None,
+        gap: str = "1rem",
+        padding: str = "1.25rem",
+        fit: str = "contain",
+        kiosk: bool = False,
+    ) -> None:
+        super().__init__(children)
+        for name, value in (("width", width), ("height", height)):
+            if isinstance(value, bool) or not isinstance(value, int) or not 200 <= value <= 8000:
+                raise ValueError(f"Frame {name} must be an integer from 200 to 8000, got {value!r}")
+        if fit not in ("contain", "shrink", "width"):
+            raise ValueError(f"Frame fit must be 'contain', 'shrink' or 'width', got {fit!r}")
+        self._width = width
+        self._height = height
+        self._columns = _tracks(columns, "Frame columns")
+        self._rows = _tracks(rows, "Frame rows") if rows is not None else None
+        self._gap = _length(gap, "Frame gap")
+        self._padding = _length(padding, "Frame padding")
+        self._fit = fit
+        self._kiosk = bool(kiosk)
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {
+            "width": self._width,
+            "height": self._height,
+            "tracks": self._columns,
+            "gap": self._gap,
+            "padding": self._padding,
+        }
+        if self._rows is not None:
+            props["rows"] = self._rows
+        if self._fit != "contain":
+            props["fit"] = self._fit
+        if self._kiosk:
+            props["kiosk"] = True
+        return props
 
 
 class Shortcuts(Component):

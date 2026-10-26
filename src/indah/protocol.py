@@ -43,6 +43,8 @@ BUILTIN_TYPES = frozenset(
     {
         "column",
         "card",
+        "frame",
+        "cell",
         "text",
         "button",
         "slider",

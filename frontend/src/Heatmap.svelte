@@ -7,6 +7,7 @@
   let { props } = $props();
   let el = $state();
   let canvas = $state();
+  let titleEl = $state();
   let ctx = null;
   const off = typeof document !== "undefined" ? document.createElement("canvas") : null;
   const offctx = off ? off.getContext("2d") : null;
@@ -52,7 +53,11 @@
     const cols = props.z ?? [];
     if (!canvas || !ctx || !offctx) return;
     const w = el?.clientWidth || 400;
-    const h = props.height ?? 240;
+    // height="fill" (ADR-0044): the container's height, less the title row above the canvas.
+    const h =
+      props.height === "fill"
+        ? Math.max(40, Math.floor((el?.clientHeight || 0) - (titleEl ? titleEl.offsetHeight + 5 : 0)))
+        : (props.height ?? 240);
     canvas.width = w;
     canvas.height = h;
     el.__heatmap = { ncols: cols.length, nrows: 0 }; // for debugging / e2e
@@ -114,6 +119,6 @@
 </script>
 
 <div class="heatmap" bind:this={el}>
-  {#if props.title}<span class="heatmap-title">{props.title}</span>{/if}
+  {#if props.title}<span class="heatmap-title" bind:this={titleEl}>{props.title}</span>{/if}
   <canvas bind:this={canvas}></canvas>
 </div>

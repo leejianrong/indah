@@ -46,11 +46,21 @@
     return cols;
   }
 
+  // height="fill" (ADR-0044): the plot takes the height its container gives it, less the title
+  // and legend uPlot adds around the plot area (measured once the plot exists).
+  function plotHeight() {
+    if (props.height !== "fill") return props.height ?? 240;
+    const chrome = u
+      ? u.root.offsetHeight - u.height
+      : (props.title ? 32 : 0) + (ySeries().length > 1 ? 28 : 0);
+    return Math.max(60, Math.floor(((el && el.clientHeight) || 300) - chrome));
+  }
+
   function options() {
     const axis = { stroke: AXIS, grid: { stroke: "rgba(140,133,144,0.18)" }, ticks: { stroke: AXIS } };
     return {
       width: (el && el.clientWidth) || 400,
-      height: props.height ?? 240,
+      height: plotHeight(),
       title: props.title ?? "",
       scales: { x: { time: false } },
       series: seriesConfig(),
@@ -100,7 +110,10 @@
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver((entries) => {
       const w = Math.round(entries[0].contentRect.width);
-      if (u && w && Math.abs(w - u.width) > 1) u.setSize({ width: w, height: props.height ?? 240 });
+      if (!u || !w) return;
+      const h = plotHeight();
+      if (Math.abs(w - u.width) > 1 || (props.height === "fill" && Math.abs(h - u.height) > 1))
+        u.setSize({ width: w, height: h });
     });
     ro.observe(el);
     return () => ro.disconnect();

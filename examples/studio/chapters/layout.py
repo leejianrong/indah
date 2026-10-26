@@ -45,6 +45,42 @@ def containers_check(pw) -> None:
     assert d["y"] > a["y"] + 20  # the fourth tile wraps to a second row
 
 
+def frame(ctx: indah.Context) -> indah.Component:
+    def tile(title: str, text: str) -> indah.Component:
+        return indah.Card(title=title, padding="0.75rem", children=[indah.Text(text)])
+
+    return indah.Frame(
+        width=800,
+        height=450,
+        fit="width",
+        columns="200px 1fr 1fr",
+        rows="60px 1fr 90px",
+        gap="12px",
+        padding="12px",
+        children=[
+            indah.Cell(columns=3, children=[tile("Header", "A row of the frame, 60px tall")]),
+            indah.Cell(rows=2, children=[tile("Rail", "200px wide, two rows tall")]),
+            tile("Body", "1fr"),
+            tile("Side", "1fr"),
+            indah.Cell(columns=2, children=[tile("Footer", "Spans two columns")]),
+        ],
+    )
+
+
+def frame_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.get_by_text("Spans two columns")).to_be_visible()
+    host = page.locator(".frame-viewport").first.bounding_box()
+    stage = page.locator(".frame-stage").first.bounding_box()
+    assert abs(stage["width"] - host["width"]) < 3  # scaled to the width it was given
+    assert abs(stage["height"] / stage["width"] - 450 / 800) < 0.01  # the aspect is kept
+    rail = page.get_by_text("Rail", exact=True).bounding_box()
+    footer = page.get_by_text("Footer", exact=True).bounding_box()
+    assert footer["y"] > rail["y"]  # the footer sits below the header row
+
+
 def spacing(ctx: indah.Context) -> indah.Component:
     def export() -> indah.Component:
         return indah.Button("Export", on_click=lambda: None, variant="ghost")
@@ -483,6 +519,20 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(15,),
             check=containers_check,
+        ),
+        Page(
+            slug="frame",
+            title="Frame and Cell",
+            summary=(
+                "`Frame` lays children out once in a fixed design box and scales it to fit, so a "
+                "dashboard is the same at any window size; `Grid` tracks and `Cell` spans place "
+                "the pieces."
+            ),
+            build=frame,
+            covers=("Frame", "Cell"),
+            docs="components.md",
+            adr=(44,),
+            check=frame_check,
         ),
         Page(
             slug="spacing",

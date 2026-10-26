@@ -9,6 +9,7 @@
   import Steps from "./Steps.svelte";
   import Chart from "./Chart.svelte";
   import Heatmap from "./Heatmap.svelte";
+  import Frame from "./Frame.svelte";
   import MapView from "./Map.svelte";
   import Table from "./Table.svelte";
   import ImageOverlay from "./ImageOverlay.svelte";
@@ -215,13 +216,30 @@
 {:else if node.type === "grid"}
   <div
     class="grid"
-    style="gap: {props.gap ?? '1rem'}; grid-template-columns: repeat({props.columns ??
-      2}, minmax(0, 1fr));"
+    style="gap: {props.gap ?? '1rem'}; --cols: {props.tracks ??
+      `repeat(${props.columns ?? 2}, minmax(0, 1fr))`}; grid-template-columns: var(--cols);{props.rows
+      ? ` grid-template-rows: ${props.rows};`
+      : ''}"
   >
     {#each node.children as child (child.id)}
       <Self node={child} />
     {/each}
   </div>
+{:else if node.type === "cell"}
+  <div
+    class="cell"
+    style="grid-column: span {props.columns ?? 1}; grid-row: span {props.rows ?? 1};"
+  >
+    {#each node.children as child (child.id)}
+      <Self node={child} />
+    {/each}
+  </div>
+{:else if node.type === "frame"}
+  <Frame {props}>
+    {#each node.children as child (child.id)}
+      <Self node={child} />
+    {/each}
+  </Frame>
 {:else if node.type === "sidebar"}
   <div class="sidebar-layout">
     {#if node.children.length}
@@ -680,12 +698,12 @@
     <span class="download disabled">{props.label ?? "Download"}</span>
   {/if}
 {:else if node.type === "chart"}
-  <div class="field">
+  <div class="field" class:fill={props.height === "fill"}>
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}
     <Chart {props} />
   </div>
 {:else if node.type === "heatmap"}
-  <div class="field">
+  <div class="field" class:fill={props.height === "fill"}>
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}
     <Heatmap {props} />
   </div>
