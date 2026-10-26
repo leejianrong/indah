@@ -11,6 +11,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-26
+
+A gallery patch. The public gallery has four new demos, its cards come from one catalog file, and the
+Colab notebooks are current again. The `indah` package itself is unchanged since 0.9.0 (no change under
+`src/`), so there is nothing to upgrade; the new version number lets the gallery deploy pin a release that
+matches the demos it serves. `protocol_version` is still 1.
+
 ### Fixed
 
 - The Colab notebooks in `examples/colab/` had drifted from the demo sources (ten of fourteen embedded old
@@ -59,6 +66,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   (opens with `rel="noopener noreferrer"`, never an iframe). A fast-layer test checks the file: unique
   slugs, https only, plain text, blurb length, and that each thumbnail exists and is small. The
   gallery looks as before (IND-191).
+
+### Known limitations
+
+- The link check has not run on GitHub yet and has only seen an empty catalog, so no real URL has been
+  fetched. The status it records reaches the live gallery only on the next deploy.
+- The Markov poet's verses were typed from memory, not diffed against Project Gutenberg, so a word or two may
+  differ from the standard text.
 
 ## [0.9.0] - 2026-10-25
 
