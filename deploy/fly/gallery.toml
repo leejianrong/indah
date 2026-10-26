@@ -212,3 +212,15 @@ module = "expenses"
 thumbnail = "expenses.png"
 tags = ["finance", "state"]
 added = "2026-10-26"
+
+[[app]]
+slug = "automaton"
+title = "Cellular automata"
+emoji = "🧬"
+blurb = "Conway's Game of Life and 1-D rules 30, 90 and 110, evolving live on a grid you control."
+author = "indah"
+kind = "hosted"
+module = "automaton"
+thumbnail = "automaton.png"
+tags = ["simulation", "streaming"]
+added = "2026-10-26"

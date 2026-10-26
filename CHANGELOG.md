@@ -36,6 +36,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   run stops at a fixed step limit. It uses `BarStrip`, with a bar's colour showing whether it is being
   compared, swapped or sorted.
 
+- A cellular automata demo for the gallery (`examples/automaton.py`): Conway's Game of Life and the
+  one-dimensional rules (30, 90, 110, or any rule number), streamed generation by generation onto a
+  `Heatmap`. It has pattern, rule, speed and grid-size controls (up to 64 x 64), play, pause, step and
+  reset, a generation counter, and a cap of 600 generations per run. Pure Python, no extra dependency
+  (IND-217).
+
 - A gallery policy page on the docs site (`website/docs/gallery-policy.md`), linked from the gallery's
   footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
   ask for removal. No community submissions are open yet (IND-193).
