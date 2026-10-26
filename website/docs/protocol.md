@@ -309,7 +309,7 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths. With 
 | `image` | display | `src`, `alt` | — |
 | `imageoverlay` | display | `src`, `alt`, `boxes:[{x,y,w,h,label?,color?,score?}]`, `points:[{x,y,label?,color?}]`, `masks:[{src,opacity}]` (coords in `[0,1]`) | — |
 | `audio` | display | `src` (a URL or `data:` URI) | — |
-| `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?}]`, `title`, `xLabel`, `yLabel`, `height` (px or `"fill"`), `points`, `label` | — (grows via `append` patches) |
+| `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?,kind?,width?,dash?,alpha?,size?}]`, `title`, `xLabel`, `yLabel`, `height` (px or `"fill"`), `points`, `label`; optional `xRange`, `yRange` (`[low, high]`), `playhead`, `highlight` (an x value; reactive), `shadeAfter`, `highlightColor`, `rules:[{y,label?,color?,dash?}]`, `legend` (`labels` / `off`; absent = auto) | — (grows via `append` patches) |
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height` (px or `"fill"`), `label` | — (grows via `append` patches) |
 | `map` | display | `center:[lat,lon]`, `zoom`, `markers:[{lat,lon,label?,color?,radius?}]`, `polygons:[{points:[[lat,lon],...],label?,color?,fillOpacity?}]`, `polylines:[{points:[[lat,lon],...],label?,color?,weight?}]`, `tileUrl`, `attribution`, `height`, `label` | — (pan/zoom is client-side only, not reported back) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |

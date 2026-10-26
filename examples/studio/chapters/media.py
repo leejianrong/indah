@@ -156,6 +156,61 @@ def live_chart_check(pw) -> None:
     page.wait_for_function("() => document.querySelector('.chart').__uplot.data[0].length === 20")
 
 
+def chart_kinds(ctx: indah.Context) -> indah.Component:
+    rng = random.Random(3)
+    n = 60
+    decay = [[i, round(0.97**i, 4)] for i in range(1, n + 1)]
+    dots = [
+        [i, round(40 + 55 * (1 - 0.97**i) + rng.uniform(-12, 12), 1), None] for i in range(1, n + 1)
+    ]
+    for row in dots[::7]:
+        row[1], row[2] = None, row[1] - 25  # a few runs that did badly
+    at = indah.Signal(30)
+
+    return indah.Column(
+        children=[
+            indah.Slider(at, min=1, max=n, step=1, label="Current episode"),
+            indah.Chart(
+                decay,
+                series=[{"label": "decay", "kind": "bars", "stroke": "var(--primary)"}],
+                title="Bars, with a playhead, the future dimmed and the current bar highlighted",
+                x_range=(0.5, n + 0.5),
+                y_range=(0, 1),
+                playhead=at,
+                shade_after=True,
+                highlight=at,
+                highlight_color="var(--ok)",
+                legend="off",
+                height=170,
+            ),
+            indah.Chart(
+                dots,
+                series=[
+                    {"label": "good", "kind": "scatter", "stroke": "var(--primary)", "size": 6},
+                    {"label": "poor", "kind": "scatter", "stroke": "var(--muted)", "size": 6},
+                ],
+                title="Scatter dots and a dashed reference rule",
+                x_range=(0.5, n + 0.5),
+                y_range=(0, 110),
+                rules=[{"y": 90, "label": "target 90", "color": "var(--ok)"}],
+                legend="labels",
+                height=170,
+            ),
+        ]
+    )
+
+
+def chart_kinds_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".chart canvas").nth(1)).to_be_visible()
+    expect(page.get_by_text("good", exact=True)).to_be_visible()  # the labels-only legend
+    page.wait_for_function(
+        "() => document.querySelectorAll('.chart')[1].__uplot.data[0].length === 60"
+    )
+
+
 # ---- heatmap ----------------------------------------------------------------------------------
 
 
@@ -438,6 +493,20 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(18,),
             check=live_chart_check,
+        ),
+        Page(
+            slug="chart-kinds",
+            title="Bars, dots and markers",
+            summary=(
+                "A series can be bars or dots. A playhead dims what has not happened yet, a "
+                "highlight picks out one bar, and a rule marks a target. Colours written as "
+                "`var(--token)` follow the light and dark switch."
+            ),
+            build=chart_kinds,
+            covers=(),
+            docs="components.md",
+            adr=(44,),
+            check=chart_kinds_check,
         ),
         Page(
             slug="heatmap",

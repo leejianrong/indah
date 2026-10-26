@@ -25,6 +25,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   `kiosk=True` for a full-window recording. `Grid` takes a track list (`columns="760px 1fr"`) and
   `rows`, the new `Cell` spans columns or rows, and `Chart` and `Heatmap` accept `height="fill"` to
   take the height their card gives them (ADR-0044).
+- `Chart` series can be `kind="bars"` or `"scatter"` (dots only), with `width`, `dash`, `alpha` and `size`; and
+  a chart takes fixed `x_range` / `y_range`, a reactive `playhead` (a vertical line, with `shade_after` dimming
+  what comes after it), a reactive `highlight` bar, horizontal `rules`, and `legend="labels"`. Colours written
+  as `var(--token)` follow the light and dark switch (ADR-0044).
 - A gallery policy page on the docs site (`website/docs/gallery-policy.md`), linked from the gallery's
   footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
   ask for removal. No community submissions are open yet (IND-193).

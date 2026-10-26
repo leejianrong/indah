@@ -1464,14 +1464,92 @@ def _figure_src(value: Any) -> str:
     return _image_src(value)
 
 
+_SERIES_KINDS = ("line", "scatter", "bars")
+_COLOR_OK = re.compile(r"[A-Za-z0-9 #%.,()\-_/]{1,80}")
+
+
+def _color(value: Any, name: str) -> str:
+    """A CSS colour or ``var(--token)``: the characters a colour needs and nothing that could
+    fetch a resource (the token form lets a plot follow the light/dark switch, ADR-0044)."""
+    text = str(value).strip()
+    if not _COLOR_OK.fullmatch(text) or "url(" in text.lower() or "expression" in text.lower():
+        raise ValueError(f"{name} must be a CSS colour such as '#2ec4b6' or 'var(--x-exploit)'")
+    return text
+
+
+def _number(value: Any, name: str, lo: float, hi: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not lo <= value <= hi:
+        raise ValueError(f"{name} must be a number from {lo} to {hi}, got {value!r}")
+    return value
+
+
 def _normalise_series(spec: Any) -> dict[str, Any]:
-    """A series descriptor: ``"loss"`` or ``{"label","stroke"}`` -> a wire dict."""
-    if isinstance(spec, dict):
-        out: dict[str, Any] = {"label": str(spec.get("label", ""))}
-        if spec.get("stroke"):
-            out["stroke"] = str(spec["stroke"])
-        return out
-    return {"label": str(spec)}
+    """A series descriptor: ``"loss"`` or a dict -> a wire dict.
+
+    A dict takes ``label``, ``stroke`` (a colour), ``kind`` (``"line"``, ``"scatter"`` for dots
+    only, ``"bars"``), ``width``, ``dash`` (``[dash, gap]`` in px), ``alpha`` (0 to 1) and ``size``
+    (a scatter dot's diameter, px)."""
+    if not isinstance(spec, dict):
+        return {"label": str(spec)}
+    out: dict[str, Any] = {"label": str(spec.get("label", ""))}
+    if spec.get("stroke"):
+        out["stroke"] = _color(spec["stroke"], "series stroke")
+    if "kind" in spec and spec["kind"] != "line":
+        if spec["kind"] not in _SERIES_KINDS:
+            raise ValueError(f"series kind must be one of {_SERIES_KINDS}, got {spec['kind']!r}")
+        out["kind"] = spec["kind"]
+    if "width" in spec:
+        out["width"] = _number(spec["width"], "series width", 0, 20)
+    if "alpha" in spec:
+        out["alpha"] = _number(spec["alpha"], "series alpha", 0, 1)
+    if "size" in spec:
+        out["size"] = _number(spec["size"], "series size", 1, 30)
+    if "dash" in spec and spec["dash"]:
+        dash = spec["dash"]
+        if not isinstance(dash, (list, tuple)) or not 1 <= len(dash) <= 4:
+            raise ValueError("series dash must be a list of one to four lengths, in px")
+        out["dash"] = [_number(d, "series dash", 0, 100) for d in dash]
+    return out
+
+
+def _axis_range(value: Any, name: str) -> list[float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        raise ValueError(f"{name} must be a pair [low, high]")
+    lo, hi = (_number(v, name, -1e15, 1e15) for v in value)
+    if hi <= lo:
+        raise ValueError(f"{name} must have high greater than low, got {list(value)!r}")
+    return [lo, hi]
+
+
+def _rules(rules: Any) -> list[dict[str, Any]]:
+    """Horizontal reference lines: ``[{"y": 31, "label": "optimal 31", "color": "var(--ok)"}]``."""
+    out: list[dict[str, Any]] = []
+    for rule in rules or []:
+        if not isinstance(rule, dict) or "y" not in rule:
+            raise ValueError(
+                "a rule is a dict with a 'y' value, such as {'y': 31, 'label': 'best'}"
+            )
+        item: dict[str, Any] = {"y": _number(rule["y"], "rule y", -1e15, 1e15)}
+        if rule.get("label"):
+            item["label"] = str(rule["label"])[:60]
+        if rule.get("color"):
+            item["color"] = _color(rule["color"], "rule color")
+        if rule.get("dash") is False:
+            item["dash"] = False
+        out.append(item)
+    if len(out) > 12:
+        raise ValueError("a chart takes at most 12 rules")
+    return out
+
+
+def _opt_number(value: Any) -> float | None:
+    return None if value is None else _number(value, "value", -1e15, 1e15)
+
+
+def _is_source(value: Any) -> bool:
+    return isinstance(value, (Signal, Computed)) or callable(value)
 
 
 def _to_rows(value: Any) -> list[list[Any]]:
@@ -1532,12 +1610,35 @@ class Chart(Component):
         y_label: str = "",
         height: int | str = 240,
         points: bool = False,
+        x_range: tuple[float, float] | None = None,
+        y_range: tuple[float, float] | None = None,
+        playhead: Source = None,
+        shade_after: bool = False,
+        rules: list[dict[str, Any]] | None = None,
+        highlight: Source = None,
+        highlight_color: str | None = None,
+        legend: str = "auto",
     ) -> None:
         super().__init__()
+        if legend not in ("auto", "labels", "off"):
+            raise ValueError(f"Chart legend must be 'auto', 'labels' or 'off', got {legend!r}")
+        self._legend = legend
         self._reactive = data is not None
         self._data = data
         self._buffer: list[list[Any]] = []
         self._series = [_normalise_series(s) for s in (series or [])]
+        self._x_range = _axis_range(x_range, "x_range")
+        self._y_range = _axis_range(y_range, "y_range")
+        for name, source in (("playhead", playhead), ("highlight", highlight)):
+            if source is not None and not _is_source(source):
+                _number(source, name, -1e15, 1e15)  # a fixed value is checked now, not on first use
+        self._playhead = playhead
+        self._shade_after = bool(shade_after)
+        self._rules = _rules(rules)
+        self._highlight = highlight
+        self._highlight_color = (
+            _color(highlight_color, "highlight_color") if highlight_color else None
+        )
         self._title = title
         self._x_label = x_label
         self._y_label = y_label
@@ -1558,6 +1659,21 @@ class Chart(Component):
             "height": self._height,
             "points": self._points,
         }
+        if self._legend != "auto":
+            props["legend"] = self._legend
+        if self._x_range:
+            props["xRange"] = self._x_range
+        if self._y_range:
+            props["yRange"] = self._y_range
+        if self._shade_after:
+            props["shadeAfter"] = True
+        if self._rules:
+            props["rules"] = self._rules
+        if self._highlight_color:
+            props["highlightColor"] = self._highlight_color
+        for name, source in (("playhead", self._playhead), ("highlight", self._highlight)):
+            if source is not None and not _is_source(source):
+                props[name] = _number(source, name, -1e15, 1e15)
         if not self._reactive:
             # Streaming mode: carry the accumulated data in the snapshot so a fresh
             # connect / resume re-renders the full curve.
@@ -1565,9 +1681,14 @@ class Chart(Component):
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {}
         if self._reactive:
-            return {"data": lambda: _to_rows(_read(self._data))}
-        return {}
+            props["data"] = lambda: _to_rows(_read(self._data))
+        if self._playhead is not None and _is_source(self._playhead):
+            props["playhead"] = lambda: _opt_number(_read(self._playhead))
+        if self._highlight is not None and _is_source(self._highlight):
+            props["highlight"] = lambda: _opt_number(_read(self._highlight))
+        return props
 
     # -- streaming API (only when data= is unset) ----------------------------
 

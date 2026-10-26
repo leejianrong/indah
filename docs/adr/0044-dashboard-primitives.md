@@ -30,7 +30,18 @@ CSS indah does not expose.
    (the title and legend are measured and subtracted), so a card in a frame is filled rather than
    padded.
 
-All three are additive: a new component type or prop, with no `protocol_version` bump (ADR-0005).
+4. **Chart kinds and markers.** A series has a `kind` (`line`, `scatter` for dots only, `bars`) and
+   `width`, `dash`, `alpha`, `size`. A chart takes fixed `x_range` and `y_range`, a reactive `playhead`
+   (a vertical line; `shade_after` dims everything after it, drawn above the series so bars behind it
+   dim too), a reactive `highlight` (redraws the bar at that x in `highlight_color`), horizontal
+   `rules`, and `legend` (`auto`, `labels` for names and swatches without live values, `off`).
+   Moving the playhead or highlight redraws the canvas; it never rebuilds the plot.
+5. **Theme-aware colours.** A colour written `var(--token)` (series strokes, rules, highlight) is
+   resolved in the browser against the element and the plot is rebuilt when the light/dark switch
+   changes `data-theme`, so charts follow the theme without the app recolouring them. Colours are
+   checked in Python (`url(` and anything that is not a colour is refused).
+
+All of these are additive: a new component type or prop, with no `protocol_version` bump (ADR-0005).
 
 ## Alternatives considered
 
@@ -46,5 +57,7 @@ All three are additive: a new component type or prop, with no `protocol_version`
   no scrollbar. Text scales with the box, so very small windows give small text; that is the trade.
 - With the default fit the page's own footer (the "live" badge) is hidden, because there is no room
   for it.
+- A bar chart with hundreds of bars (the Hanoi dashboard draws 655 in about 870px) cannot show gaps
+  between them; the bars read as an area, and the highlight and playhead are what pick one out.
 - `Frame` measures its own top edge and the page's bottom padding, so it assumes it is laid out
   once in the page flow; two stacked frames each fit the whole remaining height.
