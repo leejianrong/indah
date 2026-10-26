@@ -227,8 +227,8 @@
       /* Collapse multi-column layouts to a single column on a phone. !important
          beats the inline grid-template-columns set from the columns prop. */
       @media (max-width: 560px) {
-        .grid { grid-template-columns: 1fr !important; }
-        .sidebar-layout { flex-direction: column; }
+        .grid { grid-template-columns: minmax(0, 1fr) !important; }
+        .sidebar-layout { flex-direction: column; align-items: stretch; }
         .sidebar-layout > .sidebar-aside { flex: none; width: 100%; }
       }
 
@@ -512,7 +512,7 @@
       a.download:hover { border-color: var(--primary); }
       .download.disabled { color: var(--muted); opacity: 0.6; }
 
-      .image { max-width: 100%; border-radius: var(--radius-sm); display: block; }
+      .image { max-width: 100%; max-height: 70vh; object-fit: contain; border-radius: var(--radius-sm); display: block; margin-inline: auto; }
       .map { width: 100%; border-radius: var(--radius-sm); overflow: hidden; }
       .audio { max-width: 100%; width: 100%; display: block; }
       .audio-empty {
@@ -565,14 +565,18 @@
       }
       /* Client chart (uPlot, ADR-0018). Draw it on a surface and pull uPlot's
          chrome onto the Studio tokens so it reads in light and dark. */
-      .chart { width: 100%; }
+      .chart { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
+      .field:has(> .chart) { min-width: 0; }
       .chart .u-title {
         font-family: var(--font-display); font-size: 0.95rem; color: var(--text);
       }
       .chart .u-legend { font-family: var(--font-body); font-size: 0.8rem; color: var(--muted); }
       .chart .u-legend .u-value { color: var(--text); }
+      .chart:not(.hovering) .u-legend .u-value,
+      .chart:not(.hovering) .u-legend .u-series:first-child { display: none; }
       /* Client heatmap / 2-D field (ADR-0019). */
       .heatmap { width: 100%; display: flex; flex-direction: column; gap: 0.3rem; }
+      .heatmap-empty { color: var(--muted); font-style: italic; font-size: 0.85rem; }
       .heatmap-title { font-family: var(--font-display); font-size: 0.95rem; color: var(--text); }
       .heatmap canvas {
         width: 100%; display: block; border-radius: var(--radius-sm);

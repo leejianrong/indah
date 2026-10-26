@@ -143,7 +143,14 @@ def build() -> indah.Session:
         ],
     )
 
-    preview = indah.Card(children=[indah.Image(lambda: _data_uri(svg()), alt="poster preview")])
+    preview = indah.Card(
+        children=[
+            indah.Image(lambda: _data_uri(svg()), alt="poster preview"),
+            indah.Text(
+                lambda: f"Density {density.value}, seed {seed.value}. Download the SVG above."
+            ),
+        ]
+    )
 
     intro = indah.Text(
         "# Poster generator\n\n"

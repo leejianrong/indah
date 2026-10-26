@@ -11,6 +11,15 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Changed
+
+- Shell: on a phone-width screen a `Chart` (and anything in a `Grid` or `Sidebar`) no longer pushes the
+  page wider than the screen (IND-221).
+- Shell: `Image` and `Plot` are capped at 70% of the viewport height and centred, so a square poster no
+  longer runs below the fold (IND-222). The poster and map-poster demos gain a caption.
+- Shell: a `Chart` legend shows values only while the pointer is over the plot (no more `Value: --`), and
+  an empty `Heatmap` says "Nothing to show yet." (IND-227).
+
 ## [0.9.1] - 2026-10-26
 
 A gallery patch. The public gallery has four new demos, its cards come from one catalog file, and the

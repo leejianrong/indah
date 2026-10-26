@@ -2736,7 +2736,17 @@ def build() -> indah.Session:
         ],
     )
 
-    preview = indah.Card(children=[indah.Plot(poster, alt="map poster")])
+    preview = indah.Card(
+        children=[
+            indah.Plot(poster, alt="map poster"),
+            indah.Text(
+                lambda: (
+                    f"{LOCATIONS[location.value]} - {theme.value} theme. "
+                    "Map data from OpenStreetMap contributors."
+                )
+            ),
+        ]
+    )
 
     intro = indah.Text(
         "# Map poster\n\n"
