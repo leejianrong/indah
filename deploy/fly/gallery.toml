@@ -176,3 +176,15 @@ module = "gpx_viewer"
 thumbnail = "gpx-viewer.png"
 tags = ["maps", "charts"]
 added = "2026-09-22"
+
+[[app]]
+slug = "markov-poet"
+title = "Markov poet"
+emoji = "🪶"
+blurb = "A word-level Markov chain writes new verse from public-domain poems, word by word."
+author = "indah"
+kind = "hosted"
+module = "markov_poet"
+thumbnail = "markov-poet.png"
+tags = ["text", "streaming"]
+added = "2026-10-26"
