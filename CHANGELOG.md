@@ -54,6 +54,9 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   phone-width stat tiles; the expense tracker shows a currency and a labelled category table
   instead of unlabelled bars; the cellular automaton opens on a busier "garden" with square
   cells on desktop; the Markov poet ends on a full stop and keeps its notes in the poem card.
+- GRC map demo: the colourbar ticks read "50k, 100k, 150k" instead of running together, the ramp has
+  mid stops so the middle is no longer muddy, divisions with no data are hatched and named in a legend
+  (they used to read as the lowest count), and the outlines are pale hairlines (IND-231).
 
 ### Fixed
 
