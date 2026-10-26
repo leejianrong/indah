@@ -36,7 +36,6 @@ SLUGS = [
     "charts",
     "stocks",
     "dataframe-explorer",
-    "prettymap",
     "map-poster",
     "grc-map",
     "audio-analysis",

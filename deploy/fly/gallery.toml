@@ -118,18 +118,6 @@ tags = ["data", "tables"]
 added = "2026-10-24"
 
 [[app]]
-slug = "prettymap"
-title = "Pretty map"
-emoji = "🗺️"
-blurb = "Restyle a generated city map and download it as SVG."
-author = "indah"
-kind = "hosted"
-module = "prettymap"
-thumbnail = "prettymap.png"
-tags = ["maps"]
-added = "2026-09-16"
-
-[[app]]
 slug = "map-poster"
 title = "Map poster"
 emoji = "🗾"

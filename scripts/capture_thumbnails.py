@@ -40,7 +40,6 @@ DEMOS = [
     ("charts", "charts", None),
     ("stocks", "stocks", None),
     ("dataframe-explorer", "dataframe_explorer", None),
-    ("prettymap", "prettymap", None),
     ("map-poster", "map_poster", None),
     ("grc-map", "grc_map", None),
     ("gpx-viewer", "gpx_viewer", None),
