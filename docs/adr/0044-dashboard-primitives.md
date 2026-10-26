@@ -47,6 +47,12 @@ CSS indah does not expose.
    `col_groups` draw labels in the canvas; `mark_x` and `mark_y` (reactive) spotlight a column and
    ring a cell. The canvas is drawn at the device pixel ratio so its text stays sharp.
 
+7. **`Pie`**: slices (reactive; `{label, value, color?}`) and `active`, the lit slice (reactive). The lit
+   slice is pulled out and glows while the rest dim, with a CSS transition so it stays smooth however
+   often it is patched. Note for apps that need it to follow a browser-side clock (the Hanoi
+   dashboard): a `Pie` follows server signals, so it trails a client clock by one round trip; that
+   app keeps its pie inside its own bridge module until indah has a client clock.
+
 All of these are additive: a new component type or prop, with no `protocol_version` bump (ADR-0005).
 
 ## Alternatives considered

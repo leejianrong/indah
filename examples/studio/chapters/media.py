@@ -200,6 +200,43 @@ def chart_kinds(ctx: indah.Context) -> indah.Component:
     )
 
 
+def pie_lit(ctx: indah.Context) -> indah.Component:
+    lit = indah.Signal(1)
+    epsilon = 0.127
+    return indah.Column(
+        children=[
+            indah.Pie(
+                [
+                    {"label": "explore", "value": epsilon, "color": "var(--warn)"},
+                    {"label": "exploit", "value": 1 - epsilon, "color": "var(--primary)"},
+                ],
+                active=lit,
+                height=170,
+            ),
+            indah.Row(
+                children=[
+                    indah.Button("Explore", lambda: lit.set(0), variant="ghost"),
+                    indah.Button("Exploit", lambda: lit.set(1), variant="ghost"),
+                    indah.Button("None", lambda: lit.set(None), variant="ghost"),
+                ]
+            ),
+        ]
+    )
+
+
+def pie_lit_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".pie svg path").first).to_be_visible()
+    expect(page.get_by_text("87.3%")).to_be_visible()
+    page.get_by_role("button", name="Explore").click()
+    page.wait_for_function(
+        "() => { const p = document.querySelectorAll('.pie-slice');"
+        " return p.length === 2 && p[0].style.opacity === '1' && p[1].style.opacity === '0.3'; }"
+    )
+
+
 def heatmap_marks(ctx: indah.Context) -> indah.Component:
     state = indah.Signal(12)
     action = indah.Signal(2)
@@ -552,6 +589,19 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(44,),
             check=chart_kinds_check,
+        ),
+        Page(
+            slug="pie",
+            title="Pie with a lit slice",
+            summary=(
+                "A pie that lights one slice: it is pulled out and glows while the others dim. "
+                "Use it to show which of several outcomes just happened."
+            ),
+            build=pie_lit,
+            covers=("Pie",),
+            docs="components.md",
+            adr=(44,),
+            check=pie_lit_check,
         ),
         Page(
             slug="heatmap-marks",

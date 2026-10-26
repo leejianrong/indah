@@ -1770,6 +1770,74 @@ def _col_groups(groups: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _to_slices(value: Any) -> list[dict[str, Any]]:
+    """Pie slices: ``[{"label": "explore", "value": 0.1, "color": "var(--x-explore)"}, ...]``."""
+    if value is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict) or "value" not in item:
+            raise ValueError(
+                "a pie slice is a dict with a 'value', such as {'label': 'a', 'value': 3}"
+            )
+        slice_: dict[str, Any] = {
+            "label": str(item.get("label", ""))[:40],
+            "value": _number(item["value"], "slice value", 0, 1e15),
+        }
+        if item.get("color"):
+            slice_["color"] = _color(item["color"], "slice color")
+        out.append(slice_)
+    if len(out) > 24:
+        raise ValueError("a pie takes at most 24 slices")
+    return out
+
+
+class Pie(Component):
+    """A pie chart with one slice lit (ADR-0044).
+
+    ``slices`` is a source of ``[{"label", "value", "color"?}, ...]`` (values are shares of the
+    total; a colour may be ``var(--token)``). ``active`` is a source of the index of the slice to
+    light, or ``None`` for none: the lit slice is pulled out and glows while the rest dim, so it
+    answers "which of these just happened". ``show_labels`` writes each slice's label and share
+    beside the pie. Both sources are reactive, and the lit slice moves with a short transition.
+    """
+
+    type = "pie"
+
+    def __init__(
+        self,
+        slices: Source,
+        *,
+        active: Source = None,
+        height: int = 180,
+        show_labels: bool = True,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._slices = slices
+        self._active = active
+        self._height = int(_number(height, "Pie height", 60, 800))
+        self._show_labels = bool(show_labels)
+        self._label = label
+        if not _is_source(slices):
+            _to_slices(slices)  # a fixed list is checked now, not on first render
+        if active is not None and not _is_source(active):
+            _number(active, "active", 0, 1e6)
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"height": self._height, "showLabels": self._show_labels}
+        if self._label:
+            props["label"] = self._label
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {"slices": lambda: _to_slices(_read(self._slices))}
+        props["active"] = lambda: (
+            _opt_number(_read(self._active)) if self._active is not None else None
+        )
+        return props
+
+
 class Heatmap(Component):
     """A client-side heatmap / 2-D field (ADR-0019): spectrograms, heatmaps, maps.
 

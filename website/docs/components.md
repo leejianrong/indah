@@ -126,6 +126,7 @@ pieces out once at a design size, say 1920 by 1080, and indah scales the whole t
 | `Map` | an interactive client-side map (Leaflet): pan/zoom, markers, polygons, polylines |
 | `DataFrame` | a pandas frame, a `{columns, rows}` dict, or record dicts |
 | `Table` | an interactive table: sort, page, and select |
+| `Pie` | a pie chart with one slice lit: pulled out and glowing while the rest dim |
 | `Stat` | a metric / KPI card: a big value with a label and optional delta |
 | `BarStrip` | a small activity strip: one bar per interval (calls per minute), optionally stacked, with a tooltip per bar |
 | `InfoTip` | a small focusable info icon that shows a short note on hover, focus or tap |

@@ -57,6 +57,7 @@ BUILTIN_TYPES = frozenset(
         "audio",
         "chart",
         "heatmap",
+        "pie",
         "map",
         "dataframe",
         "table",

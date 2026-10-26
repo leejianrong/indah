@@ -33,6 +33,8 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   no value is blank instead of the lowest colour, `origin="top"`, `row_labels`, `col_groups` (labelled
   brackets over runs of columns), and a spotlit column with a ringed cell (`mark_x`, `mark_y`, reactive)
   (ADR-0044).
+- `Pie`: a pie chart with one slice lit (`active=`): pulled out and glowing while the others dim, with the
+  slices and the lit one reactive and colours that may be `var(--token)` (ADR-0044).
 - A gallery policy page on the docs site (`website/docs/gallery-policy.md`), linked from the gallery's
   footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
   ask for removal. No community submissions are open yet (IND-193).

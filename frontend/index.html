@@ -581,6 +581,14 @@
          chrome onto the Studio tokens so it reads in light and dark. */
       .chart { width: 100%; }
       /* height="fill": the plot takes whatever height its container (a card in a frame) gives. */
+      .pie { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
+      .pie svg { overflow: visible; flex: 0 0 auto; }
+      .pie-slice { transition: opacity 150ms, transform 150ms; }
+      .pie-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; }
+      .pie-legend li { display: flex; align-items: center; gap: 0.5rem; transition: opacity 150ms; }
+      .pie-legend li.lit { font-weight: 600; }
+      .pie-swatch { width: 0.7rem; height: 0.7rem; border-radius: 3px; flex: 0 0 auto; }
+      .pie-pct { font-family: var(--font-mono); color: var(--muted); margin-left: auto; padding-left: 0.5rem; }
       .field.fill { flex: 1 1 0; min-height: 0; }
       .field.fill > .chart, .field.fill > .heatmap { flex: 1 1 0; min-height: 0; overflow: hidden; }
       .chart .u-title {

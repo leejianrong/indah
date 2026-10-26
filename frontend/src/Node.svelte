@@ -9,6 +9,7 @@
   import Steps from "./Steps.svelte";
   import Chart from "./Chart.svelte";
   import Heatmap from "./Heatmap.svelte";
+  import Pie from "./Pie.svelte";
   import Frame from "./Frame.svelte";
   import MapView from "./Map.svelte";
   import Table from "./Table.svelte";
@@ -706,6 +707,11 @@
   <div class="field" class:fill={props.height === "fill"}>
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}
     <Heatmap {props} />
+  </div>
+{:else if node.type === "pie"}
+  <div class="field">
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    <Pie {props} />
   </div>
 {:else if node.type === "map"}
   <div class="field">
