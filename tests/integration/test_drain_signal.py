@@ -9,7 +9,15 @@ import time
 import httpx
 import pytest
 
-from indah.launch import find_free_port
+
+def _free_port() -> int:
+    """An OS-chosen port. ``find_free_port()`` always starts at 8000, so under a loaded machine
+    (or a second test run, or a leaked server from an earlier run) two of these tests race for
+    the same port and one talks to the other's process (IND-232)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
 
 pytestmark = [
     pytest.mark.integration,
@@ -47,6 +55,8 @@ def _start(tmp_path, kind: str, port: int) -> subprocess.Popen:
     proc = subprocess.Popen(argv, cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
+        if proc.poll() is not None:  # it died (e.g. the port was taken): do not ask the squatter
+            raise AssertionError("the server exited: " + proc.stderr.read().decode())
         try:
             if httpx.get(f"http://127.0.0.1:{port}/health", timeout=1).status_code == 200:
                 time.sleep(
@@ -57,6 +67,30 @@ def _start(tmp_path, kind: str, port: int) -> subprocess.Popen:
             time.sleep(0.1)
     proc.kill()
     raise AssertionError("the server did not start: " + proc.stderr.read().decode())
+
+
+def test_launch_has_its_sigterm_handler_before_it_serves(monkeypatch):
+    """The handler must be in place before the first request can be answered: a SIGTERM that
+    lands in the window after startup would otherwise kill the process with no drain (a flake
+    under load, when the test's fixed pause was shorter than that window)."""
+    import uvicorn
+
+    from indah import create_app, launch
+
+    seen: dict[str, object] = {}
+    previous = signal.getsignal(signal.SIGTERM)
+
+    def fake_run(self, sockets=None):
+        seen["handler"] = signal.getsignal(signal.SIGTERM)
+        self.started = True
+
+    monkeypatch.setattr(uvicorn.Server, "run", fake_run)
+    try:
+        launch(create_app(), port=_free_port(), open_inline=False, block=True)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+    assert seen["handler"] is not previous
+    assert callable(seen["handler"])
 
 
 def _clean(code: int, proc: subprocess.Popen) -> bool:
@@ -90,7 +124,7 @@ def _read_until(s: socket.socket, needle: bytes, seconds: float = 6.0) -> bytes:
 
 @pytest.mark.parametrize("kind", ["launch", "uvicorn"])
 def test_sigterm_tells_an_open_tab_to_reconnect_then_exits_once_it_is_gone(tmp_path, kind):
-    port = find_free_port()
+    port = _free_port()
     proc = _start(tmp_path, kind, port)
     tab = _open_stream(port)
     try:
@@ -115,7 +149,7 @@ def test_sigterm_tells_an_open_tab_to_reconnect_then_exits_once_it_is_gone(tmp_p
 
 @pytest.mark.parametrize("kind", ["launch", "uvicorn"])
 def test_sigterm_with_no_tab_open_exits_promptly(tmp_path, kind):
-    port = find_free_port()
+    port = _free_port()
     proc = _start(tmp_path, kind, port)
     try:
         started = time.monotonic()
@@ -129,7 +163,7 @@ def test_sigterm_with_no_tab_open_exits_promptly(tmp_path, kind):
 
 @pytest.mark.parametrize("kind", ["launch", "uvicorn"])
 def test_a_tab_that_never_leaves_is_ended_at_the_deadline(tmp_path, kind):
-    port = find_free_port()
+    port = _free_port()
     proc = _start(tmp_path, kind, port)
     tab = _open_stream(port)
     try:
