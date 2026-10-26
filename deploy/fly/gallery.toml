@@ -200,3 +200,15 @@ module = "sorting"
 thumbnail = "sorting.png"
 tags = ["algorithms", "charts"]
 added = "2026-10-26"
+
+[[app]]
+slug = "expenses"
+title = "Expense tracker"
+emoji = "🧾"
+blurb = "Log expenses, see totals by category; your list survives a reload, thanks to ctx.persist."
+author = "indah"
+kind = "hosted"
+module = "expenses"
+thumbnail = "expenses.png"
+tags = ["finance", "state"]
+added = "2026-10-26"

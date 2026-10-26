@@ -14,7 +14,7 @@ app="${FLY_APP:-indah-demos}"
 region="${FLY_REGION:-sin}"
 
 # Example modules the gallery mounts (must cover every hosted entry's module in gallery.toml).
-examples=(chatbot training_dashboard diffusion poster upload_classify object_detection charts stocks dataframe_explorer prettymap map_poster grc_map audio_analysis gpx_viewer markov_poet sorting)
+examples=(chatbot training_dashboard diffusion poster upload_classify object_detection charts stocks dataframe_explorer prettymap map_poster grc_map audio_analysis gpx_viewer markov_poet sorting expenses)
 
 # Install the published wheel from PyPI (the python:3.12-slim base has no git, and a
 # PyPI install is what a user would run). It is pinned to this checkout's version, not a

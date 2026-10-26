@@ -20,6 +20,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- An "Expense tracker" demo in the public gallery (`examples/expenses.py`): add expenses, see a table with
+  delete, the total, a per-category bar strip and a running-total chart, and clear all behind a confirm
+  dialog. The list is kept with `ctx.persist`, so it comes back after a reload; in the gallery the state
+  lives in memory for the visit only. The data is bounded to 50 rows (IND-220).
+
 - A "Markov poet" demo in the public gallery (`examples/markov_poet.py`): a word-level Markov chain
   trained on small public-domain sources (Shakespeare's sonnets, Emily Dickinson, Lewis Carroll's verse),
   streaming each word into a `StreamText` as it is chosen. It has a chain order from 1 to 3, a length, a

@@ -41,6 +41,7 @@ SLUGS = [
     "grc-map",
     "audio-analysis",
     "gpx-viewer",
+    "expenses",
     "markov-poet",
     "sorting",
 ]
