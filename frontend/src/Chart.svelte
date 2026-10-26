@@ -57,6 +57,11 @@
       axes: [{ ...axis, label: props.xLabel ?? "" }, { ...axis, label: props.yLabel ?? "" }],
       legend: { show: ySeries().length > 1 },
       cursor: { drag: { x: true, y: false } }, // drag-to-zoom on x
+      hooks: {
+        // Until the pointer is over the plot the legend would read "Value: --"; hide the
+        // placeholders and show values only while hovering (IND-227).
+        setCursor: [(self) => el && el.classList.toggle("hovering", self.cursor.idx != null)],
+      },
     };
   }
 

@@ -116,4 +116,5 @@
 <div class="heatmap" bind:this={el}>
   {#if props.title}<span class="heatmap-title">{props.title}</span>{/if}
   <canvas bind:this={canvas}></canvas>
+  {#if !(props.z ?? []).length}<span class="heatmap-empty">Nothing to show yet.</span>{/if}
 </div>
