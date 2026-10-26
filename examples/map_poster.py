@@ -1,6 +1,6 @@
 """Map poster: a styled poster rendered from real OpenStreetMap geometry.
 
-The "pretty map" idea (see ``prettymap.py``) done with **real** street/building/water/
+The "pretty map" idea done with **real** street/building/water/
 green data instead of generated art. This deliberately does **not** depend on
 `prettymaps` or `prettymapp` - both wrap the same idea but `prettymaps` is AGPL-3.0
 (and `prettymapp` a derivative), a strong network-copyleft license that would attach
