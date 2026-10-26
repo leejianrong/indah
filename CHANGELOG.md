@@ -44,6 +44,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   instead of unlabelled bars; the cellular automaton opens on a busier "garden" with square
   cells on desktop; the Markov poet ends on a full stop and keeps its notes in the poem card.
 
+### Fixed
+
+- `launch()` (blocking) now installs its SIGTERM drain handler before the server starts answering, so a
+  SIGTERM right after startup drains instead of killing the process (IND-232).
+
 ## [0.9.1] - 2026-10-26
 
 A gallery patch. The public gallery has four new demos, its cards come from one catalog file, and the

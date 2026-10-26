@@ -139,6 +139,12 @@ def launch(
     server = uvicorn.Server(config)
 
     thread = threading.Thread(target=server.run, daemon=True)
+    handle = LaunchHandle(url="", port=port, _server=server, _thread=thread, _app=app)
+    if block is None:
+        block = not _in_notebook()
+    # The SIGTERM handler goes in before the first request can be answered: a SIGTERM in the
+    # window after startup would otherwise kill the process with no drain (IND-232).
+    previous = _drain_on_sigterm(handle) if block else None
     thread.start()
     while not server.started:  # wait for uvicorn startup to complete
         time.sleep(0.05)
@@ -147,16 +153,11 @@ def launch(
     # flush so the URL shows immediately even when stdout is a pipe (e.g. make demo).
     print(f"indah is running at {url}", flush=True)
 
-    notebook = _in_notebook()
-    if notebook and open_inline:
+    handle.url = url
+    if open_inline and _in_notebook():
         _display_iframe(url)
 
-    if block is None:
-        block = not notebook
-
-    handle = LaunchHandle(url=url, port=port, _server=server, _thread=thread, _app=app)
     if block:
-        previous = _drain_on_sigterm(handle)
         try:
             thread.join()
         except KeyboardInterrupt:
