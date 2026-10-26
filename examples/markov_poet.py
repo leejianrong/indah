@@ -3,7 +3,8 @@
 Pick a small public-domain source, a chain order and a length, and press Generate. The poet
 learns, for every run of ``order`` words in the source, which words follow it, then walks
 that table one word at a time and streams each word into a `StreamText` as it is chosen.
-Line breaks are tokens too, so the output keeps the shape of verse.
+Line breaks are tokens too, so the output keeps the shape of verse. A poem runs a few words
+past the chosen length, if it must, to end on a full stop rather than mid-sentence.
 
 Controls:
 
@@ -39,6 +40,7 @@ import indah
 NEWLINE = "\n"
 MAX_WORDS = 200  # hard cap on one poem, whatever the slider or a caller asks for
 FIXED_SEED = 42
+FINISH_EXTRA_WORDS = 30  # how far past the length a poem may run to end on a full stop
 WORD_DELAY = 0.04  # seconds between words, so the streaming is visible
 _PUNCTUATION = " ,.;:!?\"'()-_"
 
@@ -403,17 +405,13 @@ def opening_state(chain: Chain, seed_word: str, rng: random.Random) -> tuple[tup
     return rng.choice(chain.starts), not wanted
 
 
-def generate(
-    chain: Chain,
-    *,
-    length: int,
-    seed_word: str = "",
-    temperature: float = 1.0,
-    rng: random.Random | None = None,
+def _ends_sentence(token: str) -> bool:
+    return token.rstrip("\"')").endswith((".", "!", "?", ";", ":"))
+
+
+def _walk(
+    chain: Chain, *, length: int, seed_word: str, temperature: float, rng: random.Random
 ) -> Iterator[str]:
-    """Yield tokens until ``length`` words (NEWLINE tokens do not count) have been produced."""
-    rng = rng or random.Random()
-    length = min(max(int(length), 1), MAX_WORDS)
     state, _ = opening_state(chain, seed_word, rng)
     words = 0
     for token in state:
@@ -428,6 +426,61 @@ def generate(
         if token != NEWLINE:
             words += 1
         yield token
+
+
+def generate(
+    chain: Chain,
+    *,
+    length: int,
+    seed_word: str = "",
+    temperature: float = 1.0,
+    finish_sentence: bool = False,
+    rng: random.Random | None = None,
+) -> Iterator[str]:
+    """Yield tokens until ``length`` words (NEWLINE tokens do not count) have been produced.
+
+    With ``finish_sentence`` the poem keeps going past ``length`` (by at most
+    ``FINISH_EXTRA_WORDS`` words) until a word ends a sentence, and if none does it is cut
+    back to the last one, so it never stops on a dangling "And".
+    """
+    rng = rng or random.Random()
+    length = min(max(int(length), 1), MAX_WORDS)
+    if not finish_sentence:
+        yield from _walk(
+            chain, length=length, seed_word=seed_word, temperature=temperature, rng=rng
+        )
+        return
+    tokens = list(
+        _walk(
+            chain,
+            length=length + FINISH_EXTRA_WORDS,
+            seed_word=seed_word,
+            temperature=temperature,
+            rng=rng,
+        )
+    )
+    words = 0
+    cut = None  # the end of the first sentence that closes at or after `length` words
+    last = None  # else the end of the last sentence there is
+    line_end = None  # else the end of the last line
+    for i, token in enumerate(tokens):
+        if token == NEWLINE:
+            if i and tokens[i - 1] != NEWLINE:
+                line_end = i
+            continue
+        words += 1
+        if _ends_sentence(token):
+            last = i + 1
+            if words >= length and cut is None:
+                cut = i + 1
+    end = cut or last or line_end or len(tokens)
+    out = tokens[:end]
+    while out and out[-1] == NEWLINE:
+        out.pop()
+    if out and not out[-1].rstrip("\"')").endswith((".", "!", "?")):
+        # a verse line ends in a comma or a semicolon: close the poem with a full stop
+        out[-1] = out[-1].rstrip("\"')").rstrip(",;:-") + "."
+    yield from out
 
 
 def pieces(tokens: Iterator[str]) -> Iterator[str]:
@@ -456,7 +509,14 @@ def write_poem(
     rng = random.Random(seed)
     return "".join(
         pieces(
-            generate(chain, length=length, seed_word=seed_word, temperature=temperature, rng=rng)
+            generate(
+                chain,
+                length=length,
+                seed_word=seed_word,
+                temperature=temperature,
+                finish_sentence=True,
+                rng=rng,
+            )
         )
     ).strip()
 
@@ -494,6 +554,7 @@ def build() -> indah.Session:
                     length=int(length.value),
                     seed_word=word,
                     temperature=float(temperature.value),
+                    finish_sentence=True,
                     rng=rng,
                 )
             ):
@@ -521,9 +582,9 @@ def build() -> indah.Session:
             indah.Spinner(active=running, label="writing..."),
         ],
     )
-    workspace = indah.Column(
+    workspace = indah.Card(
         children=[
-            indah.Card(children=[poem]),
+            poem,
             indah.Text(note),
             indah.Text(lambda: status.value),
             indah.Text(lambda: SOURCES[source.value].credit),

@@ -120,3 +120,21 @@ def test_low_temperature_prefers_the_common_continuation(mp):
 def test_pieces_join_into_clean_lines(mp):
     text = "".join(mp.pieces(iter(["a", "b", "\n", "c"])))
     assert text == "a b\nc"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("source", ["sonnets", "dickinson", "carroll"])
+@pytest.mark.parametrize("order", [1, 2, 3])
+def test_a_poem_ends_on_a_sentence_ending_token(mp, source, order):
+    for seed in range(12):
+        poem = mp.write_poem(source, order=order, length=40, seed=seed)
+        assert poem.rstrip("\"')").endswith((".", "!", "?")), poem[-40:]
+        words = len(poem.split())
+        assert 20 <= words <= 40 + mp.FINISH_EXTRA_WORDS
+
+
+@pytest.mark.unit
+def test_finishing_the_sentence_can_be_switched_off(mp):
+    chain = mp.get_chain("dickinson", 2)
+    tokens = list(mp.generate(chain, length=25, finish_sentence=False, rng=random.Random(1)))
+    assert sum(t != mp.NEWLINE for t in tokens) == 25

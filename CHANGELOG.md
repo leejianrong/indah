@@ -15,6 +15,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 - The "Pretty map" gallery demo (`examples/prettymap.py`, its Colab notebook and thumbnail); the Map poster demo supersedes it (IND-230).
 
+### Changed
+
+- Gallery apps: the sorting visualiser fills its card, with a visible unsorted colour and
+  phone-width stat tiles; the expense tracker shows a currency and a labelled category table
+  instead of unlabelled bars; the cellular automaton opens on a busier "garden" with square
+  cells on desktop; the Markov poet ends on a full stop and keeps its notes in the poem card.
+
 ## [0.9.1] - 2026-10-26
 
 A gallery patch. The public gallery has four new demos, its cards come from one catalog file, and the

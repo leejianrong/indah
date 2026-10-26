@@ -26,7 +26,7 @@ from collections.abc import Iterator
 
 import indah
 
-MIN_SIZE, MAX_SIZE, DEFAULT_SIZE = 10, 100, 30
+MIN_SIZE, MAX_SIZE, DEFAULT_SIZE = 10, 100, 50  # a bar is at most 16px wide: 50 fill the card
 MAX_STEPS = 20_000  # a hard cap per run; bubble sort on 100 items needs under 10,000
 # (steps replayed per frame, seconds per frame) at speed 1..10: one UI update per frame, however
 # many steps. The shell eases a bar's colour change over 0.2 s, so the slow speeds pause long
@@ -161,7 +161,7 @@ def run(name: str, values: list[int], max_steps: int | None = None) -> Iterator[
 
 
 # Segments of a bar, bottom to top: only one is ever non-zero, so the bar's colour is its state.
-TONES = ["neutral", "warn", "err", "ok"]
+TONES = ["info", "warn", "err", "ok"]
 NAMES = ["unsorted", "compared", "swapped or written", "sorted"]
 PLAIN, COMPARED, MOVED, DONE = range(4)
 
@@ -282,10 +282,9 @@ def build() -> indah.Session:
         ],
     )
 
-    counters = indah.Grid(
-        columns=3,
+    counters = indah.Row(
         children=[
-            indah.Stat(value=lambda: f"{s.comparisons.value:,}", label="Comparisons"),
+            indah.Stat(value=lambda: f"{s.comparisons.value:,}", label="Compares"),
             indah.Stat(value=lambda: f"{s.swaps.value:,}", label="Swaps / writes"),
             indah.Stat(value=lambda: f"{s.steps.value:,}", label="Steps"),
         ],
@@ -302,8 +301,9 @@ def build() -> indah.Session:
 
     intro = indah.Text(
         "# Sorting visualiser\n\n"
-        "Pick an algorithm and watch it work. Amber bars are being compared, red bars "
-        "have just been swapped (or written, for merge sort), and green means sorted. "
+        "Pick an algorithm and watch it work. Pink bars are waiting, amber bars are being "
+        "compared, red bars have just been swapped (or written, for merge sort), and green means "
+        "sorted. "
         "Runs stop at a fixed step limit.",
         markdown=True,
     )
@@ -311,7 +311,12 @@ def build() -> indah.Session:
         indah.Column(
             children=[
                 intro,
-                indah.Sidebar(children=[controls, indah.Column(children=[counters, strip])]),
+                indah.Sidebar(
+                    children=[
+                        controls,
+                        indah.Column(children=[counters, indah.Card(children=[strip])]),
+                    ]
+                ),
             ]
         )
     )
