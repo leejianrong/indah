@@ -20,6 +20,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- A "Markov poet" demo in the public gallery (`examples/markov_poet.py`): a word-level Markov chain
+  trained on small public-domain sources (Shakespeare's sonnets, Emily Dickinson, Lewis Carroll's verse),
+  streaming each word into a `StreamText` as it is chosen. It has a chain order from 1 to 3, a length, a
+  randomness control, an optional start word and a fixed-seed switch for repeatable poems (IND-219).
+
 - A gallery policy page on the docs site (`website/docs/gallery-policy.md`), linked from the gallery's
   footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
   ask for removal. No community submissions are open yet (IND-193).

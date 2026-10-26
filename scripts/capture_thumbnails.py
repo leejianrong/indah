@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "examples"))
 OUT = ROOT / "deploy" / "fly" / "thumbnails"
 
-# slug, example module, optional nudge ("train" / "generate" / "chat" / "sample" / None).
+# slug, example module, optional nudge ("train" / "generate" / "chat" / "sample" / "poem" / None).
 DEMOS = [
     ("chatbot", "chatbot", "chat"),
     ("training-dashboard", "training_dashboard", "train"),
@@ -44,6 +44,7 @@ DEMOS = [
     ("map-poster", "map_poster", None),
     ("grc-map", "grc_map", None),
     ("gpx-viewer", "gpx_viewer", None),
+    ("markov-poet", "markov_poet", "poem"),
 ]
 
 VIEWPORT = {"width": 900, "height": 640}  # ~14:10, matches the card's aspect ratio
@@ -81,6 +82,9 @@ def _nudge(page, kind: str | None) -> None:
             box.fill("What can indah do?", timeout=2000)
             page.get_by_role("button", name="Send").click(timeout=2000)
             page.wait_for_timeout(1500)
+        elif kind == "poem":
+            page.get_by_role("button", name="Generate").click(timeout=2000)
+            page.wait_for_timeout(2500)  # ~40 words at 40 ms each
         elif kind == "sample":
             # Click a bundled real sample photo -- a real classifier's bars over a
             # generic synthetic image would be meaningless.
