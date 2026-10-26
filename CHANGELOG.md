@@ -35,6 +35,8 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   the socket origin to the strict CSP `connect-src` only when live is on. Off by default, never offered on
   Colab, where `Camera` falls back to one snapshot a second over the upload route. `protocol_version` stays 1.
 
+- A Studio page for `Camera` (Media and files chapter), covering `Camera`, `Frame` and `Live` (IND-235).
+
 ### Changed
 
 - Shell: on a phone-width screen a `Chart` (and anything in a `Grid` or `Sidebar`) no longer pushes the
