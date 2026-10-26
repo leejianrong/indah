@@ -20,6 +20,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 - Shell: a `Chart` legend shows values only while the pointer is over the plot (no more `Value: --`), and
   an empty `Heatmap` says "Nothing to show yet." (IND-227).
 
+### Removed
+
+- The "Pretty map" gallery demo (`examples/prettymap.py`, its Colab notebook and thumbnail); the Map poster demo supersedes it (IND-230).
+
 ## [0.9.1] - 2026-10-26
 
 A gallery patch. The public gallery has four new demos, its cards come from one catalog file, and the
