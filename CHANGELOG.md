@@ -48,6 +48,7 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 - `launch()` (blocking) now installs its SIGTERM drain handler before the server starts answering, so a
   SIGTERM right after startup drains instead of killing the process (IND-232).
+- The Markov poet streaming test no longer depends on an unseeded random poem length (IND-234).
 
 ## [0.9.1] - 2026-10-26
 
