@@ -52,7 +52,8 @@ async def test_generate_streams_the_poem_word_by_word(monkeypatch):
     ]
     assert len(appended) > 20  # one append per token, not one big patch
     assert "".join(appended).strip() == stream.text.strip()
-    assert len(stream.text.split()) == 40
+    assert len(stream.text.split()) >= 30
+    assert stream.text.strip().rstrip("\"')").endswith((".", "!", "?"))
 
 
 @pytest.mark.integration

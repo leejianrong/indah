@@ -42,7 +42,21 @@ PATTERNS: dict[str, list[tuple[int, int]]] = {
     "acorn": [(0, 1), (1, 3), (2, 0), (2, 1), (2, 4), (2, 5), (2, 6)],
     "blinkers": [(0, 1), (1, 1), (2, 1), (0, 5), (0, 6), (0, 7), (4, 2), (4, 3), (4, 4)],
 }
+# The opening board: several of the patterns above spread over the grid, so the first
+# frame is a busy scene rather than a speck. (name, row fraction, column fraction) of the
+# pattern's top-left corner; the interactions begin once the patterns grow into each other.
+GARDEN: list[tuple[str, float, float]] = [
+    ("acorn", 0.12, 0.12),
+    ("r-pentomino", 0.15, 0.62),
+    ("blinkers", 0.45, 0.08),
+    ("glider", 0.50, 0.45),
+    ("acorn", 0.72, 0.60),
+    ("glider", 0.78, 0.12),
+    ("r-pentomino", 0.40, 0.80),
+]
+
 PATTERN_LABELS = {
+    "garden": "Life: garden (a few patterns)",
     "glider": "Life: glider",
     "r-pentomino": "Life: R-pentomino (long-lived)",
     "acorn": "Life: acorn (long-lived)",
@@ -53,7 +67,7 @@ PATTERN_LABELS = {
     "rule-110": "1-D rule 110 (Turing complete)",
     "rule": "1-D custom rule (use Rule number)",
 }
-DEFAULT_MODE = "r-pentomino"
+DEFAULT_MODE = "garden"
 DEFAULT_RULE = 30
 
 Grid = list[list[int]]
@@ -70,13 +84,21 @@ def seed_life(name: str, size: int, rng: random.Random | None = None) -> Grid:
     if name == "random":
         rng = rng or random.Random(7)
         return [[1 if rng.random() < 0.33 else 0 for _ in range(size)] for _ in range(size)]
+    if name == "garden":
+        for part, row_frac, col_frac in GARDEN:
+            _stamp(grid, PATTERNS[part], int(size * row_frac), int(size * col_frac))
+        return grid
     cells = PATTERNS[name]
     height = max(r for r, _ in cells) + 1
     width = max(c for _, c in cells) + 1
-    top, left = (size - height) // 2, (size - width) // 2
-    for r, c in cells:
-        grid[top + r][left + c] = 1
+    _stamp(grid, cells, (size - height) // 2, (size - width) // 2)
     return grid
+
+
+def _stamp(grid: Grid, cells: list[tuple[int, int]], top: int, left: int) -> None:
+    n = len(grid)
+    for r, c in cells:
+        grid[(top + r) % n][(left + c) % n] = 1
 
 
 def step_life(grid: Grid) -> Grid:
@@ -286,15 +308,31 @@ def build() -> indah.Session:
         ]
     )
 
+    # Heatmap cells are square only when the canvas is as wide as it is tall, so the grid
+    # takes the left half of the card (about 375px at desktop width) at a matching height.
     grid = indah.Card(
         children=[
-            indah.Heatmap(
-                lambda: m.field.value,
-                colormap="magma",
-                zmin=0,
-                zmax=1,
-                title="Grid",
-                height=380,
+            indah.Grid(
+                columns=2,
+                children=[
+                    indah.Heatmap(
+                        lambda: m.field.value,
+                        colormap="magma",
+                        zmin=0,
+                        zmax=1,
+                        title="Grid",
+                        height=376,
+                    ),
+                    indah.Column(
+                        children=[
+                            stats,
+                            indah.Text(
+                                "Bright cells are alive. Press Play, or pick another "
+                                "pattern or a 1-D rule (30, 90 and 110 are the famous ones)."
+                            ),
+                        ]
+                    ),
+                ],
             )
         ]
     )
@@ -313,7 +351,7 @@ def build() -> indah.Session:
                 indah.Sidebar(
                     children=[
                         indah.Column(children=[controls, run]),
-                        indah.Column(children=[stats, grid]),
+                        grid,
                     ]
                 ),
             ]

@@ -45,7 +45,7 @@ def test_it_opens_with_sample_rows_and_adds_and_deletes():
     _fill(s, "Coffee", 3.5)
     s.dispatch(_button(s, "Add expense").id, "click", {})
     assert _rows(s)[-1]["description"] == "Coffee"
-    assert _find(s, "stat").reactive_props()["value"]() == "236.45"
+    assert _find(s, "stat").reactive_props()["value"]() == "$236.45"
 
     table = _find(s, "table", lambda c: c._key == "id")
     s.dispatch(table.id, "action", {"action": "a0", "key": _rows(s)[-1]["id"]})
@@ -87,3 +87,11 @@ def test_the_rows_come_back_when_the_session_is_rebuilt():
     again = _tab(app, "tab-1")
     assert _rows(again)[-1]["description"] == "Taxi" and len(_rows(again)) == 7
     assert len(_rows(_tab(app, "tab-2"))) == len(ex.SAMPLE)  # another tab starts from the sample
+
+
+@pytest.mark.integration
+def test_the_category_breakdown_is_a_labelled_table_not_unlabelled_bars():
+    s = _tab(ex.app, "cats")
+    assert not [c for c in s._by_id.values() if c.type == "barstrip"]
+    table = _find(s, "table", lambda c: c._key == "category")
+    assert [col.title for col in table._columns] == ["Category", "Total ($)"]

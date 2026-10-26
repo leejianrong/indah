@@ -142,3 +142,13 @@ def test_parse_mode_maps_the_pattern_choices():
     assert A.parse_mode("rule", 77) == ("rule", 77)
     assert A.parse_mode("glider", 77) == ("glider", 77)
     assert set(A.PATTERN_LABELS) >= {"rule-30", "rule-90", "rule-110", "rule"}
+
+
+@pytest.mark.unit
+def test_the_default_start_is_a_rich_garden_that_fits_every_size():
+    assert A.DEFAULT_MODE == "garden" and "garden" in A.PATTERN_LABELS
+    for size in (A.MIN_SIZE, A.DEFAULT_SIZE, A.MAX_SIZE):
+        grid = A.seed_life("garden", size)
+        assert len(grid) == size
+        assert len(_live(grid)) >= 25  # not a lonely five-cell speck on black
+    assert A.seed_life("garden", A.DEFAULT_SIZE) == A.seed_life("garden", A.DEFAULT_SIZE)

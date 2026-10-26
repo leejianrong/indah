@@ -115,3 +115,13 @@ async def test_shuffle_aborts_a_run_in_progress():
     await task
     assert not sorter.running.value and not sorter.done.value
     assert sorter.steps.value == 0
+
+
+@pytest.mark.integration
+def test_the_bars_are_legible_and_sit_in_a_card_that_they_fill():
+    ex = _load_example()
+    session = ex.build()
+    (strip,) = _by_type(session, "barstrip")
+    assert ex.TONES[0] != "neutral"  # unsorted bars are a real colour, not low-contrast grey
+    assert ex.DEFAULT_SIZE * 16 >= 700  # a bar is at most 16px wide: the default fills the card
+    assert any(strip in c.children for c in _by_type(session, "card"))

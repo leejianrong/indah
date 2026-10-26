@@ -1,7 +1,7 @@
 """Expense tracker: a small ledger that survives a reload, built on ``ctx.persist``.
 
 Add an expense (description, amount, category), see the entries in a ``Table`` with a
-delete button per row, the total, a per-category ``BarStrip`` and a running-total
+delete button per row, the total, a per-category totals table and a running-total
 ``Chart``. "Clear all" asks first, in a ``Modal``.
 
 The point is **restorable sessions** (0.9.0): the list of expenses is one ``Signal`` that
@@ -154,7 +154,7 @@ def build(ctx: indah.Context) -> indah.Session:
         title="Add an expense",
         children=[
             indah.TextInput(description, placeholder="e.g. Coffee", label="Description"),
-            indah.Number(amount, min=0, max=MAX_AMOUNT, step=0.5, label="Amount"),
+            indah.Number(amount, min=0, max=MAX_AMOUNT, step=0.5, label="Amount ($)"),
             indah.Select(category, options=CATEGORIES, label="Category"),
             indah.Button("Add expense", on_click=on_add),
             indah.Text(lambda: message.value),
@@ -167,7 +167,7 @@ def build(ctx: indah.Context) -> indah.Session:
         columns=[
             indah.Col("description", "Description"),
             indah.Col("category", "Category", kind="badge"),
-            indah.Col("amount", "Amount", kind="number"),
+            indah.Col("amount", "Amount ($)", kind="number"),
         ],
         actions=[indah.RowAction("Delete", on_delete)],
         height="20rem",
@@ -177,15 +177,9 @@ def build(ctx: indah.Context) -> indah.Session:
     summary = indah.Grid(
         columns=2,
         children=[
-            indah.Stat(lambda: f"{total(rows.value):,.2f}", label="Total spent"),
+            indah.Stat(lambda: f"${total(rows.value):,.2f}", label="Total spent"),
             indah.Stat(lambda: str(len(rows.value)), label=f"Entries (max {MAX_ROWS})"),
         ],
-    )
-    by_category = indah.BarStrip(
-        lambda: totals_by_category(rows.value),
-        labels=CATEGORIES,
-        height=96,
-        label="Spending by category",
     )
     category_table = indah.Table(
         rows=lambda: [
@@ -193,7 +187,7 @@ def build(ctx: indah.Context) -> indah.Session:
             for c, t in zip(CATEGORIES, totals_by_category(rows.value), strict=True)
         ],
         key="category",
-        columns=[indah.Col("category", "Category"), indah.Col("total", "Total", kind="number")],
+        columns=[indah.Col("category", "Category"), indah.Col("total", "Total ($)", kind="number")],
     )
     running = indah.Chart(
         lambda: running_total(rows.value),
@@ -239,7 +233,7 @@ def build(ctx: indah.Context) -> indah.Session:
         children=[
             indah.Card(children=[summary]),
             indah.Card(children=[table]),
-            indah.Card(title="By category", children=[by_category, category_table]),
+            indah.Card(title="By category", children=[category_table]),
             indah.Card(children=[running]),
         ]
     )
