@@ -13,6 +13,9 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- A stepped video detection example, `examples/video_detect.py` (IND-62): upload a short video (decoded
+  with `av`, the demo's own dependency) or images, the same SSD-MobileNetV1 detector boxes up to 24
+  frames up front, and a `Slider` scrubs through them. Plain Tier 0, so it works on Colab as it is.
 - A `Microphone` component and `AudioChunk` (ADR-0045, IND-65): the live socket now also carries 16-bit
   mono PCM from an AudioWorklet to an `on_audio` handler, in order, with a bounded queue that drops the
   oldest audio past `Live.audio_buffer_seconds` and reports `dropped_before`. The worklet is served from

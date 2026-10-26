@@ -218,4 +218,5 @@ node types go in the built-ins like any component, and the socket has its own `v
   `"recording"` or `"off"`.
 - Demo: `examples/mic_transcribe.py` (Whisper tiny through `transformers`, the user's dependency).
   Not listed in the public gallery, pending the owner's decision above.
-- IND-62 (stepped video detection) needed nothing from this ADR, as planned: Tier 0.
+- IND-62 (stepped video detection, `examples/video_detect.py`) needed nothing from this ADR, as planned:
+  Tier 0 upload, detection of up to 24 frames up front, then a `Slider` over the cached boxes.
