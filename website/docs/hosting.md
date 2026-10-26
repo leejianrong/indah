@@ -460,6 +460,16 @@ changes when it is on:
   `await asyncio.to_thread(model, frame.data)`.
 - The browser only gives out the camera on `https://` pages or `localhost`.
 
+### Live microphone
+
+A `Microphone` rides the same socket and the same switches: `live=True` turns it on, and nothing is
+added for an app that does not. Its handler gets an `AudioChunk` of 16-bit mono PCM (about 100 ms),
+in order. If the handler is slower than speech, audio waits up to `Live.audio_buffer_seconds` (2 s),
+then the oldest is dropped and the next chunk says so in `dropped_before`. The page loads a small
+AudioWorklet from `/api/live-audio.js` on your own origin, which the strict CSP already allows. On
+Colab, or wherever the socket is unavailable, the browser records and sends one WAV take when you
+press Stop. See `examples/mic_transcribe.py`.
+
 ## Logging in with OpenID Connect
 
 indah ships no login, on purpose: your identity provider and your app already own that. The recipe

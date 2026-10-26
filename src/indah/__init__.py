@@ -57,6 +57,7 @@ from .components import (
     MasterDetail,
     Menu,
     MenuItem,
+    Microphone,
     Modal,
     MultiSelect,
     NavItem,
@@ -97,7 +98,7 @@ from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
 from .hardening import Limits, Rate
 from .launch import LaunchHandle, launch
-from .live import Frame, Live
+from .live import AudioChunk, Frame, Live
 from .push import Topic
 from .reactive import Computed, Signal, batch, computed, effect
 from .session import DispatchResult, Session
@@ -196,6 +197,8 @@ __all__ = [
     "UploadedFile",
     # live media, Tier 1 (ADR-0045)
     "Camera",
+    "Microphone",
+    "AudioChunk",
     "Frame",
     "Live",
     "Diff",

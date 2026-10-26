@@ -76,6 +76,7 @@ from .components import (
     Grid,
     Image,
     List,
+    Microphone,
     MultiSelect,
     Number,
     Plot,
@@ -129,6 +130,8 @@ from .live import (
     KINDS,
     LIVE_PATH,
     LIVE_PROTOCOL_VERSION,
+    AudioChunk,
+    AudioQueue,
     ByteBudget,
     Frame,
     Live,
@@ -940,6 +943,11 @@ def create_app(
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
             *([WebSocketRoute("/api/live", _live)] if live_options is not None else []),
+            *(
+                [Route("/api/live-audio.js", _live_audio_js, methods=["GET"])]
+                if live_options
+                else []
+            ),
             Route("/api/editor.js", _editor_js, methods=["GET"]),
             Route("/api/map.js", _map_js, methods=["GET"]),
             Route("/api/components/{name}.js", _component_js, methods=["GET"]),
@@ -1218,6 +1226,7 @@ def _lazy_module(filename: str) -> Callable[[Request], Awaitable[Response]]:
 
 _editor_js = _lazy_module("editor.js")
 _map_js = _lazy_module("map.js")
+_live_audio_js = _lazy_module("live-audio.js")  # the Microphone AudioWorklet (ADR-0045)
 
 
 _COMPONENT_NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
@@ -1682,21 +1691,29 @@ async def _live_serve(ws: WebSocket, live: Live) -> None:
         status = denied.status_code if denied is not None else 403
         await _live_close(ws, _LIVE_DENIAL_CODES.get(status, CLOSE_FORBIDDEN))
         return
-    if not isinstance(
-        handle.session.find(cid), Camera
-    ):  # a socket drives a Camera and nothing else
+    target = handle.session.find(cid)
+    audio = hello["kind"] == "audio"
+    # a socket drives one Camera (video) or one Microphone (audio) and nothing else
+    if not isinstance(target, Microphone if audio else Camera):
         await _live_close(ws, CLOSE_FORBIDDEN)
         return
     await ws.send_json({"type": "ready"})
     _audit(ws, handle, principal, cid, "live_open", {"kind": hello["kind"]})
-    mailbox = Mailbox()
+    mailbox: Mailbox | AudioQueue
+    if audio:
+        rate = target.sample_rate
+        mailbox = AudioQueue(max(2, int(live.audio_buffer_seconds * rate * 2)))
+    else:
+        mailbox = Mailbox()
     budget = ByteBudget(live.max_bytes_per_second)
 
     async def worker() -> None:
         while (frame := await mailbox.get()) is not None:
             task: asyncio.Task[Any] | None = None
             with authz_scope(principal, state.policy):
-                result = handle.session.dispatch(cid, "frame", {"frame": frame})
+                result = handle.session.dispatch(
+                    cid, "audio" if audio else "frame", {"chunk" if audio else "frame": frame}
+                )
                 if result is not None and not result.forbidden and result.coro is not None:
                     task = handle.session.spawn(result.coro)
             if result is None or result.forbidden:
@@ -1740,7 +1757,10 @@ async def _live_serve(ws: WebSocket, live: Live) -> None:
             except ValueError:
                 await _live_close(ws, CLOSE_POLICY)
                 break
-            mailbox.put(Frame(payload, "image/jpeg", seq, time.time()))
+            if audio:
+                mailbox.put(AudioChunk(payload, "audio/pcm", seq, time.time(), target.sample_rate))
+            else:
+                mailbox.put(Frame(payload, "image/jpeg", seq, time.time()))
     finally:
         mailbox.close()
         for task in (stats_task, worker_task):

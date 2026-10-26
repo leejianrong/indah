@@ -283,25 +283,32 @@ sends snapshots over `POST /api/upload` instead (about one a second), so the sam
 Colab. The socket carries client → server binary frames only; everything the server says to the page
 still goes over SSE.
 
-One socket serves one `camera` node, so one stream never blocks another.
+One socket serves one `camera` or `microphone` node, so one stream never blocks another.
 
 1. The client sends a JSON text frame first:
-   `{"type":"hello","v":1,"sid":"<session id, or the signed token on a secure app>","component":"<camera id>","kind":"video"}`.
+   `{"type":"hello","v":1,"sid":"<session id, or the signed token on a secure app>","component":"<node id>","kind":"video"|"audio"}`.
    The session id is sent here, never in the URL. The session must already exist (the SSE stream
    makes it); the socket never creates one.
 2. The server answers `{"type":"ready"}`, or closes with a code.
-3. The client then sends **binary** frames: a 4-byte big-endian unsigned `seq`, then the JPEG bytes.
+3. The client then sends **binary** frames: a 4-byte big-endian unsigned `seq`, then the payload: JPEG bytes for `kind` `video` (a `camera`), or
+   16-bit little-endian mono PCM at the node's `sampleRate`, about 100 ms per frame, for `kind` `audio`
+   (a `microphone`). The `kind` must match the node, or the socket is closed `4403`.
 4. About once a second the server sends `{"type":"stats","dropped":<n>,"processed":<n>}`.
 
 **Backpressure.** Latest frame wins. The shell skips a capture tick when `bufferedAmount` is over
 256 KiB. The server keeps one waiting frame per socket and runs one handler at a time, so a frame
-that arrives while the handler is busy replaces the waiting one (counted in `dropped`).
+that arrives while the handler is busy replaces the waiting one (counted in `dropped`). Audio is
+queued in order instead, up to `Live.audio_buffer_seconds` (2 s); past that the oldest chunks are
+dropped (counted in `dropped`) and the next chunk handed to the handler reports `dropped_before`.
+The AudioWorklet that produces the PCM is served from `GET /api/live-audio.js` (same origin, so
+`script-src 'self'` covers it), only when live is on. Without a socket a `microphone` records in
+the browser and, on stop, posts one WAV take to `POST /api/upload`.
 
 **Close codes.** `1001` draining; `1008` policy (a frame that is not `seq` + payload, or more bytes per
 second than `Live.max_bytes_per_second`); `1009` a frame over `Live.max_frame_bytes` (1 MiB); `4400`
 bad or missing hello, a `v` other than 1, or silence past `Live.hello_timeout`; `4401` not
 authenticated; `4403` forbidden (a forged or foreign token, a denied role, or a component that is not a
-`camera`); `4409` unknown session (reconnect the stream first); `4429` more than
+`camera` or, for `kind` `audio`, not a `microphone`); `4409` unknown session (reconnect the stream first); `4429` more than
 `Live.max_sockets_per_address` (4) sockets from one address.
 
 **Security.** The `Origin` is checked before the upgrade is accepted, on every app (secure or not),
@@ -345,6 +352,7 @@ stays 1.
 | `chips` | input | `value` (or `[...]` with `multi:true`), `options:[{value,label,count?,tone?}]`, `multi?`, `label` | `change` `{value}` or `{value:[...]}` |
 | `segmented` | input | `value`, `options:[{value,label,count?,tone?}]`, `label` | `change` `{value}` |
 | `date` | input | `value` (ISO `YYYY-MM-DD`), `label` | `change` `{value}` |
+| `microphone` | input | `label`, `sampleRate` | PCM over `WebSocket /api/live` (`kind` `audio`), or one WAV take via `POST /api/upload`; `transport` event `{value: "live"|"recording"|"off"}` |
 | `camera` | input | `label`, `fps`, `maxWidth`, `quality` | JPEG frames over `WebSocket /api/live`, or snapshots via `POST /api/upload`; `transport` event `{value: "live"|"snapshot"|"off"}` |
 | `upload` | input | `label`, `accept`, `multiple` | file(s) via `POST /api/upload` (not the event path) |
 | `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |

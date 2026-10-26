@@ -5,7 +5,16 @@ import asyncio
 import pytest
 
 from indah.components import Camera, UploadedFile
-from indah.live import ByteBudget, Frame, Live, Mailbox, pack_frame, parse_frame
+from indah.live import (
+    AudioChunk,
+    AudioQueue,
+    ByteBudget,
+    Frame,
+    Live,
+    Mailbox,
+    pack_frame,
+    parse_frame,
+)
 
 
 @pytest.mark.unit
@@ -121,3 +130,47 @@ def test_camera_props():
         Camera(fps=0)
     with pytest.raises(ValueError):
         Camera(quality=2)
+
+
+@pytest.mark.unit
+async def test_the_audio_queue_keeps_order_and_drops_the_oldest_when_over_budget():
+    q = AudioQueue(250)
+    for seq in range(1, 6):
+        q.put(AudioChunk(b"x" * 100, seq=seq))
+    assert q.dropped == 3  # only the two newest fit in 250 bytes
+    first = await q.get()
+    second = await q.get()
+    assert (first.seq, first.dropped_before) == (4, 3)
+    assert (second.seq, second.dropped_before) == (5, 0)
+    q.close()
+    assert await q.get() is None
+
+
+@pytest.mark.unit
+def test_live_audio_budget_must_be_positive():
+    with pytest.raises(ValueError):
+        Live(audio_buffer_seconds=0)
+
+
+@pytest.mark.unit
+def test_microphone_validates_and_exposes_its_props():
+    from indah.components import Microphone
+
+    mic = Microphone(lambda c: None, sample_rate=8000, label="Speak")
+    assert mic.static_props()["sampleRate"] == 8000
+    assert mic.transport.value == "off"
+    with pytest.raises(ValueError):
+        Microphone(sample_rate=100)
+
+
+@pytest.mark.unit
+def test_a_microphone_handler_gets_a_chunk_and_a_recorded_upload():
+    from indah.components import Microphone
+
+    seen = []
+    mic = Microphone(seen.append, sample_rate=16000)
+    mic.handle("audio", {"chunk": AudioChunk(b"ab", seq=1)})
+    mic.handle("audio", {"chunk": "forged"})  # only the socket builds a chunk
+    mic.handle("upload", {"files": [UploadedFile("a.wav", "audio/wav", b"RIFF")]})
+    assert [c.content_type for c in seen] == ["audio/pcm", "audio/wav"]
+    assert seen[1].data == b"RIFF" and seen[1].sample_rate == 16000

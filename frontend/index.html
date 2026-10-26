@@ -500,6 +500,12 @@
       .camera-preview { width: 100%; max-width: 640px; background: #000; border-radius: 6px; }
       .camera-bar { display: flex; align-items: center; gap: 0.75rem; }
       .camera-status, .camera-message { font-size: 0.85rem; color: var(--muted); }
+      .mic { display: flex; flex-direction: column; gap: 0.4rem; max-width: 100%; }
+      .mic-label { font-size: 0.85rem; color: var(--muted); }
+      .mic-bar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+      .mic-meter { width: 80px; height: 6px; border-radius: 3px; background: var(--border, #8884); overflow: hidden; }
+      .mic-meter span { display: block; height: 100%; background: var(--accent, #3b82f6); }
+      .mic-status, .mic-message { font-size: 0.85rem; color: var(--muted); }
 
       a.download {
         display: inline-flex;
