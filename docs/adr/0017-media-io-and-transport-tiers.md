@@ -1,6 +1,6 @@
 # ADR-0017: Media I/O and transport tiers
 
-- Status: Accepted (media I/O built in Slice D, 2026-09-16; Tier 1 still deferred)
+- Status: Accepted (media I/O built in Slice D, 2026-09-16; Tier 1 designed in ADR-0045)
 - Date: 2026-09-15
 - Deciders: Jian (owner)
 
