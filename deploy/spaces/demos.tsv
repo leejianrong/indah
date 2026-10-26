@@ -17,3 +17,4 @@ audio-analysis	audio_analysis.py	Audio analysis	🎧	numpy
 gpx-viewer	gpx_viewer.py	GPX viewer	🥾	-
 markov-poet	markov_poet.py	Markov poet	🪶	-
 sorting	sorting.py	Sorting visualiser	📶	-
+expenses	expenses.py	Expense tracker	🧾	-

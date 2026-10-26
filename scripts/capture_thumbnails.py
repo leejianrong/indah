@@ -44,6 +44,7 @@ DEMOS = [
     ("map-poster", "map_poster", None),
     ("grc-map", "grc_map", None),
     ("gpx-viewer", "gpx_viewer", None),
+    ("expenses", "expenses", None),
     ("markov-poet", "markov_poet", "poem"),
     ("sorting", "sorting", "sort"),
 ]
@@ -99,6 +100,7 @@ def _nudge(page, kind: str | None) -> None:
 
 
 def main() -> None:
+    only = set(sys.argv[1:])  # optional: capture just these slugs
     OUT.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch()
