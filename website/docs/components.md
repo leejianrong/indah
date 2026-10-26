@@ -150,7 +150,19 @@ area says so and the rest of the page keeps working.
 
 <indah-live page="media/chart"></indah-live>
 
+A series can be bars or dots, a playhead dims what has not happened yet, a highlight picks out one bar, and a rule marks a target:
+
+<indah-live page="media/chart-kinds"></indah-live>
+
 <indah-live page="media/heatmap"></indah-live>
+
+A heatmap can take its own colour stops, leave a cell with no value blank, label rows and runs of columns, and spotlight one cell:
+
+<indah-live page="media/heatmap-marks"></indah-live>
+
+A `Pie` lights one slice, pulled out and glowing while the rest dim:
+
+<indah-live page="media/pie"></indah-live>
 
 <indah-live page="media/map"></indah-live>
 
