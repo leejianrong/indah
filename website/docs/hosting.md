@@ -440,7 +440,8 @@ pip install "indah[live]"
 ```
 
 ```python
-app = indah.create_app(session_factory=build, live=True)  # live=indah.Live(max_sockets_per_address=2) to tune
+# live=indah.Live(max_sockets_per_address=2) tunes the caps
+app = indah.create_app(session_factory=build, live=True)
 ```
 
 Live is off unless you ask for it, and indah never turns it on for you. Colab's proxy blocks
