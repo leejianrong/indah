@@ -13,6 +13,9 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Added
 
+- A live webcam detection example, `examples/webcam_detect.py` (IND-64): the Tier 1 `Camera` feeding the
+  same SSD-MobileNetV1 detector as the object detection demo, with each frame shown with its boxes. It runs on
+  a laptop or your own server; on Colab it falls back to snapshots.
 - Tier 1 live media transport (ADR-0045, IND-74): `create_app(live=True)` (or `live=Live(...)`, with
   `pip install "indah[live]"`) serves an opt-in `WebSocket /api/live` that carries binary frames from the
   browser, and a `Camera` component whose handler receives each JPEG as a `Frame`. Latest frame wins at
