@@ -1188,6 +1188,54 @@ def test_open_tab_reinitialises_after_the_server_restarts():
 
 
 @pytest.mark.e2e
+def test_a_stream_refused_several_times_in_a_row_is_retried_until_it_opens():
+    """IND-236: a gateway that still names a dead machine answers the stream open 502 now and
+    then. EventSource gives up on a refused open, and the shell used to retry twice at once
+    and then stop, so one unlucky run left the tab on a dead page. It must keep retrying."""
+    from indah.app import create_app
+    from indah.components import Button, Column, Text
+    from indah.reactive import Signal
+    from indah.session import Session
+
+    def factory() -> Session:
+        n = Signal(0)
+        return Session(
+            Column(
+                children=[
+                    Button("tick", on_click=lambda: n.set(n.value + 1)),
+                    Text(lambda: f"count {n.value}"),
+                ]
+            )
+        )
+
+    handle = launch(create_app(session_factory=factory), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            refused = []
+
+            def gateway(route):
+                if len(refused) < 5:
+                    refused.append(route.request.url)
+                    route.fulfill(status=502, body="bad gateway")
+                else:
+                    route.continue_()
+
+            page.route("**/api/stream*", gateway)
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator("div.text", has_text="count 0")).to_be_visible(timeout=30_000)
+                assert len(refused) == 5
+                page.get_by_role("button", name="tick").click()
+                expect(page.locator("div.text", has_text="count 1")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
 def test_mounted_app_opens_and_stays_live_on_a_deep_link():
     """IND-86: indah mounted at /ui under a parent app, opened directly on an in-app
     path. The shell must render and its api/* calls must resolve to the app root, so a

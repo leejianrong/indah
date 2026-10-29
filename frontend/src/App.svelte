@@ -208,9 +208,14 @@
           }
           return;
         }
-        // CLOSED means the server refused the stream (401/403), not a dropped connection
-        // (which EventSource retries itself): get a session again, once or twice, then give up.
-        if (source.readyState === EventSource.CLOSED && restarts++ < 2) start();
+        // CLOSED means the server refused the stream (401/403, or a gateway 502/503 while it
+        // still names a machine that is gone, IND-236), not a dropped connection (which
+        // EventSource retries itself): get a session again twice at once, then keep trying
+        // with a growing delay for a while before giving up.
+        if (source.readyState === EventSource.CLOSED) {
+          if (restarts++ < 2) start();
+          else if (attempts++ < 12) retryIn(Math.min(1000 * attempts, 5000));
+        }
       };
     }
 

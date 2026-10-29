@@ -13,6 +13,7 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ### Fixed
 
+- The shell keeps retrying a refused stream open (a gateway answering 502 or 503 while it still names a gone machine) with a growing delay, instead of giving up after two quick retries and leaving the tab on a dead page (IND-236).
 - Shell: a long `Select` label wraps in the closed control instead of clipping to "a serene mou..." (Chromium;
   other browsers keep the native select), an empty `Chat` shows "No messages yet." again, and the gpx-viewer
   elevation trace is a clean line with one position dot instead of a hollow marker on every point (IND-233).
