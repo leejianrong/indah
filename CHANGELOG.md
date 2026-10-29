@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Fixed
+
+- The shell keeps retrying a refused stream open (a gateway answering 502 or 503 while it still names a gone machine) with a growing delay, instead of giving up after two quick retries and leaving the tab on a dead page (IND-236).
+
 ## [0.10.0] - 2026-10-29
 
 Live media and dashboards. indah can now take a webcam or a microphone as input over an opt-in WebSocket
