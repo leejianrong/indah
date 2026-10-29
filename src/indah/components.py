@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .csp import register_img_host
 from .diff import compute_diff
 from .keys import normalize_keys
-from .live import AudioChunk, Frame
+from .live import AudioChunk, CameraFrame
 from .markdown import to_blocks
 from .protocol import RenderSpec
 from .reactive import Computed, Signal, effect
@@ -3126,8 +3126,8 @@ class Camera(Component):
     """A live webcam input (ADR-0045).
 
     The shell asks the browser for the camera, shows a preview and sends one JPEG per tick to
-    ``on_frame``, a plain handler (ADR-0009) that receives a :class:`~indah.live.Frame`. It may be
-    sync or ``async def``; a slow handler sees a lower frame rate, always on the newest frame
+    ``on_frame``, a plain handler (ADR-0009) that receives a :class:`~indah.live.CameraFrame`. It
+    may be sync or ``async def``; a slow handler sees a lower frame rate, always on the newest frame
     (late frames are dropped, never queued). Run a heavy model with
     ``await asyncio.to_thread(model, frame.data)`` so the event loop stays free. Set results on
     signals as usual, for example ``ImageOverlay(boxes=...)``.
@@ -3146,7 +3146,7 @@ class Camera(Component):
 
     def __init__(
         self,
-        on_frame: Callable[[Frame], Any] | None = None,
+        on_frame: Callable[[CameraFrame], Any] | None = None,
         *,
         label: str = "",
         fps: float = 5,
@@ -3176,16 +3176,16 @@ class Camera(Component):
         }
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
-        frame: Frame | None = None
+        frame: CameraFrame | None = None
         if event == "frame":
-            # Only the live socket builds a Frame; a JSON POST cannot, so one is ignored.
+            # Only the live socket builds a CameraFrame; a JSON POST cannot, so one is ignored.
             candidate = payload.get("frame")
-            frame = candidate if isinstance(candidate, Frame) else None
+            frame = candidate if isinstance(candidate, CameraFrame) else None
         elif event == "upload":  # the Tier 0 snapshot fallback posts a JPEG to the upload route
             files = payload.get("files") or []
             if files:
                 first = files[0]
-                frame = Frame(first.data, first.content_type or "image/jpeg", 0, time.time())
+                frame = CameraFrame(first.data, first.content_type or "image/jpeg", 0, time.time())
         elif event == "transport":
             value = payload.get("value")
             if value in ("live", "snapshot", "off"):

@@ -24,7 +24,7 @@ import importlib.util
 from pathlib import Path
 
 import indah
-from indah import Camera, Card, Column, Frame, ImageOverlay, Session, Signal, Text, create_app
+from indah import Camera, CameraFrame, Card, Column, ImageOverlay, Session, Signal, Text, create_app
 
 _detector = None
 
@@ -56,7 +56,7 @@ def build_session() -> Session:
     status: Signal[str] = Signal("_Press Start camera._")
     frames: Signal[int] = Signal(0)
 
-    async def on_frame(frame: Frame) -> None:
+    async def on_frame(frame: CameraFrame) -> None:
         found = await asyncio.to_thread(detect, frame.data)
         uri = f"data:{frame.content_type};base64,{base64.b64encode(frame.data).decode()}"
         # One batch, so the picture and its boxes arrive together and never disagree.

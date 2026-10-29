@@ -564,7 +564,7 @@ def camera(ctx: indah.Context) -> indah.Component:
     seen = indah.Signal(0)
     last = indah.Signal("no frame yet")
 
-    def on_frame(frame: indah.Frame) -> None:  # a plain handler; it may be `async def` too
+    def on_frame(frame: indah.CameraFrame) -> None:  # a plain handler; it may be `async def` too
         seen.set(seen.value + 1)
         last.set(f"{frame.size // 1024} KiB {frame.content_type}, frame {frame.seq}")
 
@@ -679,11 +679,11 @@ CHAPTER = Chapter(
             slug="camera",
             title="Camera",
             summary=(
-                "A webcam preview whose frames reach a Python handler as a `Frame`. Press "
+                "A webcam preview whose frames reach a Python handler as a `CameraFrame`. Press "
                 "**Start camera** and allow it; the counts below update as frames arrive."
             ),
             build=camera,
-            covers=("Camera", "Frame", "Live"),
+            covers=("Camera", "CameraFrame", "Live"),
             docs="hosting.md#live-camera",
             adr=(45,),
             check=camera_check,

@@ -48,7 +48,7 @@ and multi-tab behaviour exactly as they are.
   WASM, no Node).
 - `Microphone(on_audio=handler, sample_rate=16000)`: 16-bit mono PCM chunks from an AudioWorklet.
   A later slice (IND-65); the wire format below already reserves it.
-- The handler gets `Frame(data: bytes, content_type: str, seq: int, ts: float)` (or `AudioChunk`).
+- The handler gets `CameraFrame(data: bytes, content_type: str, seq: int, ts: float)` (or `AudioChunk`).
   It is an ordinary handler (ADR-0009): it runs in the sender's session under `authz_scope`, may be
   `async`, and a sync one runs in a worker thread so a slow model never blocks the event loop.
   Results are set on signals as usual and reach the page as SSE patches, for example

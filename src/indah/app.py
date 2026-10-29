@@ -133,7 +133,7 @@ from .live import (
     AudioChunk,
     AudioQueue,
     ByteBudget,
-    Frame,
+    CameraFrame,
     Live,
     Mailbox,
     parse_frame,
@@ -1760,7 +1760,7 @@ async def _live_serve(ws: WebSocket, live: Live) -> None:
             if audio:
                 mailbox.put(AudioChunk(payload, "audio/pcm", seq, time.time(), target.sample_rate))
             else:
-                mailbox.put(Frame(payload, "image/jpeg", seq, time.time()))
+                mailbox.put(CameraFrame(payload, "image/jpeg", seq, time.time()))
     finally:
         mailbox.close()
         for task in (stats_task, worker_task):

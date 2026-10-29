@@ -24,7 +24,7 @@ def _app(**kw):
         count = Signal(0)
         last = Signal(0)
 
-        def on_frame(frame: indah.Frame) -> None:
+        def on_frame(frame: indah.CameraFrame) -> None:
             count.set(count.value + 1)
             last.set(frame.size)
 
