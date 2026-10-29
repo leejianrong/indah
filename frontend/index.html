@@ -608,8 +608,9 @@
       }
       .chart .u-legend { font-family: var(--font-body); font-size: 0.8rem; color: var(--muted); }
       .chart .u-legend .u-value { color: var(--text); }
-      .chart:not(.hovering) .u-legend .u-value,
-      .chart:not(.hovering) .u-legend .u-series:first-child { display: none; }
+      .chart:not(.hovering) .u-legend .u-value { display: none; }
+      /* A live legend leads with the x series ("Value: --"); a labels-only legend has no such row. */
+      .chart:not(.hovering):not(.legend-labels) .u-legend .u-series:first-child { display: none; }
       /* Client heatmap / 2-D field (ADR-0019). */
       .heatmap { width: 100%; display: flex; flex-direction: column; gap: 0.3rem; }
       .heatmap-empty { color: var(--muted); font-style: italic; font-size: 0.85rem; }

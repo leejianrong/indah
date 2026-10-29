@@ -255,4 +255,4 @@
   });
 </script>
 
-<div class="chart" bind:this={el}></div>
+<div class="chart" class:legend-labels={props.legend === "labels"} bind:this={el}></div>
