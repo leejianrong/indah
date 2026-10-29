@@ -359,8 +359,9 @@ stays 1.
 | `image` | display | `src`, `alt` | — |
 | `imageoverlay` | display | `src`, `alt`, `boxes:[{x,y,w,h,label?,color?,score?}]`, `points:[{x,y,label?,color?}]`, `masks:[{src,opacity}]` (coords in `[0,1]`) | — |
 | `audio` | display | `src` (a URL or `data:` URI) | — |
-| `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?}]`, `title`, `xLabel`, `yLabel`, `height`, `points`, `label` | — (grows via `append` patches) |
-| `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height`, `label` | — (grows via `append` patches) |
+| `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?,kind?,width?,dash?,alpha?,size?}]`, `title`, `xLabel`, `yLabel`, `height` (px or `"fill"`), `points`, `label`; optional `xRange`, `yRange` (`[low, high]`), `playhead`, `highlight` (an x value; reactive), `shadeAfter`, `highlightColor`, `rules:[{y,label?,color?,dash?}]`, `legend` (`labels` / `off`; absent = auto) | — (grows via `append` patches) |
+| `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height` (px or `"fill"`), `label`; `colormap` may also be a list of colour stops; optional `nullColor`, `origin` (`top`; absent = bottom), `rowLabels`, `colGroups:[{start,end,label}]`, `markX`, `markY` (reactive), `markColor` | — (grows via `append` patches) |
+| `pie` | display | `slices:[{label,value,color?}]` (reactive), `active` (index of the lit slice or null; reactive), `height`, `showLabels`, `label` | — |
 | `map` | display | `center:[lat,lon]`, `zoom`, `markers:[{lat,lon,label?,color?,radius?}]`, `polygons:[{points:[[lat,lon],...],label?,color?,fillOpacity?}]`, `polylines:[{points:[[lat,lon],...],label?,color?,weight?}]`, `tileUrl`, `attribution`, `height`, `label` | — (pan/zoom is client-side only, not reported back) |
 | `dataframe` | display | `data:{columns:[...],rows:[[...]]}`, `label` | — |
 | `table` | display/input | classic: `data:{columns,rows}`, `pageSize`, `selectable`, `value` (selected row index). Rich: `columns:[{field,title,kind,width?,sortable,tones?,timeFormat?,render?,sortKey?,truncate?,maxWidth?,wrap?}]`, `rows:[{...}]`, `rowKey`, `height`, `search`, `columnToggle`, `follow`, `pageSize`, `selectable`, `value` (selected row key) | `select` `{index}` or, in rich mode, `{key}` |
@@ -374,7 +375,9 @@ stays 1.
 | `chat` | display | `messages:[{role,content}]`, `pending`, `label` | — |
 | `gallery` | display | `images:[{src,alt,caption}]`, `columns`, `label` | — |
 | `row` | container | `gap`, `wrap`, `align`; optional `justify` (`start` / `center` / `end` / `between` / `around`) | — |
-| `grid` | container | `columns`, `gap` | — |
+| `grid` | container | `gap`, and `columns` (a count) or `tracks` (a CSS track list such as `760px 1fr`); optional `rows` (a track list) | — |
+| `cell` | container | optional `columns` and `rows` (spans, default 1); its child fills it | — |
+| `frame` | container | `width`, `height` (the design box, px), `tracks`, `gap`, `padding`; optional `rows`, `fit` (`shrink` / `width`; absent = contain) and `kiosk` | — |
 | `tabs` | container | `labels:[...]`, `active` (index) | `select` `{index}` |
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
 | `appshell` | container | optional `railWidth` (a CSS length, default `256px`), `hasTop` (children are `[rail, main]`, plus the top bar third when `hasTop`) | — (the drawer is client-side) |

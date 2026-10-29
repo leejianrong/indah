@@ -23,6 +23,7 @@ from .components import (
     Button,
     Camera,
     Card,
+    Cell,
     Chart,
     Chat,
     Checkbox,
@@ -43,6 +44,7 @@ from .components import (
     Drawer,
     Empty,
     Expander,
+    Frame,
     Gallery,
     Grid,
     Heatmap,
@@ -62,6 +64,7 @@ from .components import (
     MultiSelect,
     NavItem,
     Number,
+    Pie,
     Plot,
     Progress,
     Radio,
@@ -98,7 +101,7 @@ from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
 from .hardening import Limits, Rate
 from .launch import LaunchHandle, launch
-from .live import AudioChunk, Frame, Live
+from .live import AudioChunk, CameraFrame, Live
 from .push import Topic
 from .reactive import Computed, Signal, batch, computed, effect
 from .session import DispatchResult, Session
@@ -154,6 +157,8 @@ __all__ = [
     "Component",
     "Column",
     "Card",
+    "Cell",
+    "Frame",
     "Text",
     "Button",
     "Slider",
@@ -177,6 +182,7 @@ __all__ = [
     "Badge",
     "BarStrip",
     "SecretReveal",
+    "Pie",
     "Plot",
     "Chart",
     "Heatmap",
@@ -199,7 +205,7 @@ __all__ = [
     "Camera",
     "Microphone",
     "AudioChunk",
-    "Frame",
+    "CameraFrame",
     "Live",
     "Diff",
     "Download",

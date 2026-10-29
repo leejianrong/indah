@@ -80,12 +80,19 @@ Try it live. Nothing downloads until you press **Run it**.
 | `Row` | a horizontal flex row that wraps; children share the width, unless `align=` is set to anything but `"stretch"` (buttons and badges size to their content) or `justify=` (`"start"`, `"center"`, `"end"`, `"between"`, `"around"`) is set (every child sizes to its content) |
 | `Spacer` | free space that grows to fill a `Row`, pushing what follows to the far end; `Spacer(size="2rem")` is a fixed gap |
 | `Divider` | a thin rule; `Divider(vertical=True)` between the children of a `Row` |
-| `Grid` | an N-column grid that collapses to one column on phones |
+| `Grid` | an N-column grid (or a track list such as `"760px 1fr"`, with optional `rows`) that collapses to one column on phones |
+| `Cell` | a grid child that spans several columns or rows |
+| `Frame` | a fixed design-size stage (say 1920 by 1080) scaled to fit the window, so a dashboard never scrolls |
 | `Card` | a titled surface panel; `variant="flat"` drops the frame, `"tonal"` tints it, `padding=` sets the inner space |
 | `Tabs` | a tabbed container, one panel at a time |
 | `Sidebar` | a persistent side region plus a main region |
 | `AppShell` | the app frame: a rail that stays put while the page scrolls, an optional top bar and the main region (`rail=`, `main=`, `top=`, `rail_width=`); a drawer behind a menu button on a narrow screen |
 | `Expander` | a collapsible labelled section |
+
+A `Frame` is for a dashboard that has to fit one screen, such as one you will screen-record. Lay the
+pieces out once at a design size, say 1920 by 1080, and indah scales the whole thing to the window:
+
+<indah-live page="layout/frame"></indah-live>
 | `SplitPane` | two panels with a draggable divider |
 | `MasterDetail` | a list beside its detail, a drawer on a narrow screen |
 | `Router` / `Link` | pages chosen by the URL, and links between them |
@@ -119,6 +126,7 @@ Try it live. Nothing downloads until you press **Run it**.
 | `Map` | an interactive client-side map (Leaflet): pan/zoom, markers, polygons, polylines |
 | `DataFrame` | a pandas frame, a `{columns, rows}` dict, or record dicts |
 | `Table` | an interactive table: sort, page, and select |
+| `Pie` | a pie chart with one slice lit: pulled out and glowing while the rest dim |
 | `Stat` | a metric / KPI card: a big value with a label and optional delta |
 | `BarStrip` | a small activity strip: one bar per interval (calls per minute), optionally stacked, with a tooltip per bar |
 | `InfoTip` | a small focusable info icon that shows a short note on hover, focus or tap |
@@ -142,7 +150,19 @@ area says so and the rest of the page keeps working.
 
 <indah-live page="media/chart"></indah-live>
 
+A series can be bars or dots, a playhead dims what has not happened yet, a highlight picks out one bar, and a rule marks a target:
+
+<indah-live page="media/chart-kinds"></indah-live>
+
 <indah-live page="media/heatmap"></indah-live>
+
+A heatmap can take its own colour stops, leave a cell with no value blank, label rows and runs of columns, and spotlight one cell:
+
+<indah-live page="media/heatmap-marks"></indah-live>
+
+A `Pie` lights one slice, pulled out and glowing while the rest dim:
+
+<indah-live page="media/pie"></indah-live>
 
 <indah-live page="media/map"></indah-live>
 

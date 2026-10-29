@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .csp import register_img_host
 from .diff import compute_diff
 from .keys import normalize_keys
-from .live import AudioChunk, Frame
+from .live import AudioChunk, CameraFrame
 from .markdown import to_blocks
 from .protocol import RenderSpec
 from .reactive import Computed, Signal, effect
@@ -1466,14 +1466,92 @@ def _figure_src(value: Any) -> str:
     return _image_src(value)
 
 
+_SERIES_KINDS = ("line", "scatter", "bars")
+_COLOR_OK = re.compile(r"[A-Za-z0-9 #%.,()\-_/]{1,80}")
+
+
+def _color(value: Any, name: str) -> str:
+    """A CSS colour or ``var(--token)``: the characters a colour needs and nothing that could
+    fetch a resource (the token form lets a plot follow the light/dark switch, ADR-0046)."""
+    text = str(value).strip()
+    if not _COLOR_OK.fullmatch(text) or "url(" in text.lower() or "expression" in text.lower():
+        raise ValueError(f"{name} must be a CSS colour such as '#2ec4b6' or 'var(--x-exploit)'")
+    return text
+
+
+def _number(value: Any, name: str, lo: float, hi: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not lo <= value <= hi:
+        raise ValueError(f"{name} must be a number from {lo} to {hi}, got {value!r}")
+    return value
+
+
 def _normalise_series(spec: Any) -> dict[str, Any]:
-    """A series descriptor: ``"loss"`` or ``{"label","stroke"}`` -> a wire dict."""
-    if isinstance(spec, dict):
-        out: dict[str, Any] = {"label": str(spec.get("label", ""))}
-        if spec.get("stroke"):
-            out["stroke"] = str(spec["stroke"])
-        return out
-    return {"label": str(spec)}
+    """A series descriptor: ``"loss"`` or a dict -> a wire dict.
+
+    A dict takes ``label``, ``stroke`` (a colour), ``kind`` (``"line"``, ``"scatter"`` for dots
+    only, ``"bars"``), ``width``, ``dash`` (``[dash, gap]`` in px), ``alpha`` (0 to 1) and ``size``
+    (a scatter dot's diameter, px)."""
+    if not isinstance(spec, dict):
+        return {"label": str(spec)}
+    out: dict[str, Any] = {"label": str(spec.get("label", ""))}
+    if spec.get("stroke"):
+        out["stroke"] = _color(spec["stroke"], "series stroke")
+    if "kind" in spec and spec["kind"] != "line":
+        if spec["kind"] not in _SERIES_KINDS:
+            raise ValueError(f"series kind must be one of {_SERIES_KINDS}, got {spec['kind']!r}")
+        out["kind"] = spec["kind"]
+    if "width" in spec:
+        out["width"] = _number(spec["width"], "series width", 0, 20)
+    if "alpha" in spec:
+        out["alpha"] = _number(spec["alpha"], "series alpha", 0, 1)
+    if "size" in spec:
+        out["size"] = _number(spec["size"], "series size", 1, 30)
+    if "dash" in spec and spec["dash"]:
+        dash = spec["dash"]
+        if not isinstance(dash, (list, tuple)) or not 1 <= len(dash) <= 4:
+            raise ValueError("series dash must be a list of one to four lengths, in px")
+        out["dash"] = [_number(d, "series dash", 0, 100) for d in dash]
+    return out
+
+
+def _axis_range(value: Any, name: str) -> list[float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        raise ValueError(f"{name} must be a pair [low, high]")
+    lo, hi = (_number(v, name, -1e15, 1e15) for v in value)
+    if hi <= lo:
+        raise ValueError(f"{name} must have high greater than low, got {list(value)!r}")
+    return [lo, hi]
+
+
+def _rules(rules: Any) -> list[dict[str, Any]]:
+    """Horizontal reference lines: ``[{"y": 31, "label": "optimal 31", "color": "var(--ok)"}]``."""
+    out: list[dict[str, Any]] = []
+    for rule in rules or []:
+        if not isinstance(rule, dict) or "y" not in rule:
+            raise ValueError(
+                "a rule is a dict with a 'y' value, such as {'y': 31, 'label': 'best'}"
+            )
+        item: dict[str, Any] = {"y": _number(rule["y"], "rule y", -1e15, 1e15)}
+        if rule.get("label"):
+            item["label"] = str(rule["label"])[:60]
+        if rule.get("color"):
+            item["color"] = _color(rule["color"], "rule color")
+        if rule.get("dash") is False:
+            item["dash"] = False
+        out.append(item)
+    if len(out) > 12:
+        raise ValueError("a chart takes at most 12 rules")
+    return out
+
+
+def _opt_number(value: Any) -> float | None:
+    return None if value is None else _number(value, "value", -1e15, 1e15)
+
+
+def _is_source(value: Any) -> bool:
+    return isinstance(value, (Signal, Computed)) or callable(value)
 
 
 def _to_rows(value: Any) -> list[list[Any]]:
@@ -1532,18 +1610,41 @@ class Chart(Component):
         title: str = "",
         x_label: str = "",
         y_label: str = "",
-        height: int = 240,
+        height: int | str = 240,
         points: bool = False,
+        x_range: tuple[float, float] | None = None,
+        y_range: tuple[float, float] | None = None,
+        playhead: Source = None,
+        shade_after: bool = False,
+        rules: list[dict[str, Any]] | None = None,
+        highlight: Source = None,
+        highlight_color: str | None = None,
+        legend: str = "auto",
     ) -> None:
         super().__init__()
+        if legend not in ("auto", "labels", "off"):
+            raise ValueError(f"Chart legend must be 'auto', 'labels' or 'off', got {legend!r}")
+        self._legend = legend
         self._reactive = data is not None
         self._data = data
         self._buffer: list[list[Any]] = []
         self._series = [_normalise_series(s) for s in (series or [])]
+        self._x_range = _axis_range(x_range, "x_range")
+        self._y_range = _axis_range(y_range, "y_range")
+        for name, source in (("playhead", playhead), ("highlight", highlight)):
+            if source is not None and not _is_source(source):
+                _number(source, name, -1e15, 1e15)  # a fixed value is checked now, not on first use
+        self._playhead = playhead
+        self._shade_after = bool(shade_after)
+        self._rules = _rules(rules)
+        self._highlight = highlight
+        self._highlight_color = (
+            _color(highlight_color, "highlight_color") if highlight_color else None
+        )
         self._title = title
         self._x_label = x_label
         self._y_label = y_label
-        self._height = int(height)
+        self._height = _plot_height(height)
         self._points = bool(points)
         self._session: Session | None = None
 
@@ -1560,6 +1661,21 @@ class Chart(Component):
             "height": self._height,
             "points": self._points,
         }
+        if self._legend != "auto":
+            props["legend"] = self._legend
+        if self._x_range:
+            props["xRange"] = self._x_range
+        if self._y_range:
+            props["yRange"] = self._y_range
+        if self._shade_after:
+            props["shadeAfter"] = True
+        if self._rules:
+            props["rules"] = self._rules
+        if self._highlight_color:
+            props["highlightColor"] = self._highlight_color
+        for name, source in (("playhead", self._playhead), ("highlight", self._highlight)):
+            if source is not None and not _is_source(source):
+                props[name] = _number(source, name, -1e15, 1e15)
         if not self._reactive:
             # Streaming mode: carry the accumulated data in the snapshot so a fresh
             # connect / resume re-renders the full curve.
@@ -1567,9 +1683,14 @@ class Chart(Component):
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {}
         if self._reactive:
-            return {"data": lambda: _to_rows(_read(self._data))}
-        return {}
+            props["data"] = lambda: _to_rows(_read(self._data))
+        if self._playhead is not None and _is_source(self._playhead):
+            props["playhead"] = lambda: _opt_number(_read(self._playhead))
+        if self._highlight is not None and _is_source(self._highlight):
+            props["highlight"] = lambda: _opt_number(_read(self._highlight))
+        return props
 
     # -- streaming API (only when data= is unset) ----------------------------
 
@@ -1615,6 +1736,110 @@ def _to_columns(value: Any) -> list[list[Any]]:
     return cols
 
 
+_NAMED_COLORMAPS = ("magma", "viridis", "gray")
+
+
+def _colormap(value: Any) -> Any:
+    """A built-in colormap name, or two to nine colour stops (hex, rgb(), or ``var(--token)``)."""
+    if isinstance(value, (list, tuple)):
+        if not 2 <= len(value) <= 9:
+            raise ValueError("a colormap given as stops needs two to nine colours")
+        return [_color(c, "colormap stop") for c in value]
+    return value
+
+
+def _row_labels(labels: Any) -> list[str]:
+    if not labels:
+        return []
+    if len(labels) > 64:
+        raise ValueError("a heatmap takes at most 64 row labels")
+    return [str(label)[:12] for label in labels]
+
+
+def _col_groups(groups: Any) -> list[dict[str, Any]]:
+    """Labelled brackets over runs of columns: ``[{"start": 0, "end": 80, "label": "rod 0"}]``."""
+    out: list[dict[str, Any]] = []
+    for group in groups or []:
+        if not isinstance(group, dict) or not {"start", "end", "label"} <= set(group):
+            raise ValueError("a column group is a dict with 'start', 'end' and 'label'")
+        start = int(_number(group["start"], "group start", 0, 1e6))
+        end = int(_number(group["end"], "group end", 0, 1e6))
+        if end < start:
+            raise ValueError("a column group's end must not be before its start")
+        out.append({"start": start, "end": end, "label": str(group["label"])[:40]})
+    if len(out) > 24:
+        raise ValueError("a heatmap takes at most 24 column groups")
+    return out
+
+
+def _to_slices(value: Any) -> list[dict[str, Any]]:
+    """Pie slices: ``[{"label": "explore", "value": 0.1, "color": "var(--x-explore)"}, ...]``."""
+    if value is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict) or "value" not in item:
+            raise ValueError(
+                "a pie slice is a dict with a 'value', such as {'label': 'a', 'value': 3}"
+            )
+        slice_: dict[str, Any] = {
+            "label": str(item.get("label", ""))[:40],
+            "value": _number(item["value"], "slice value", 0, 1e15),
+        }
+        if item.get("color"):
+            slice_["color"] = _color(item["color"], "slice color")
+        out.append(slice_)
+    if len(out) > 24:
+        raise ValueError("a pie takes at most 24 slices")
+    return out
+
+
+class Pie(Component):
+    """A pie chart with one slice lit (ADR-0046).
+
+    ``slices`` is a source of ``[{"label", "value", "color"?}, ...]`` (values are shares of the
+    total; a colour may be ``var(--token)``). ``active`` is a source of the index of the slice to
+    light, or ``None`` for none: the lit slice is pulled out and glows while the rest dim, so it
+    answers "which of these just happened". ``show_labels`` writes each slice's label and share
+    beside the pie. Both sources are reactive, and the lit slice moves with a short transition.
+    """
+
+    type = "pie"
+
+    def __init__(
+        self,
+        slices: Source,
+        *,
+        active: Source = None,
+        height: int = 180,
+        show_labels: bool = True,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._slices = slices
+        self._active = active
+        self._height = int(_number(height, "Pie height", 60, 800))
+        self._show_labels = bool(show_labels)
+        self._label = label
+        if not _is_source(slices):
+            _to_slices(slices)  # a fixed list is checked now, not on first render
+        if active is not None and not _is_source(active):
+            _number(active, "active", 0, 1e6)
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"height": self._height, "showLabels": self._show_labels}
+        if self._label:
+            props["label"] = self._label
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {"slices": lambda: _to_slices(_read(self._slices))}
+        props["active"] = lambda: (
+            _opt_number(_read(self._active)) if self._active is not None else None
+        )
+        return props
+
+
 class Heatmap(Component):
     """A client-side heatmap / 2-D field (ADR-0019): spectrograms, heatmaps, maps.
 
@@ -1645,25 +1870,44 @@ class Heatmap(Component):
         self,
         z: Source = None,
         *,
-        colormap: str = "magma",
+        colormap: str | list[str] = "magma",
         zmin: float | None = None,
         zmax: float | None = None,
         title: str = "",
         x_label: str = "",
         y_label: str = "",
-        height: int = 240,
+        height: int | str = 240,
+        null_color: str | None = None,
+        origin: str = "bottom",
+        row_labels: list[str] | None = None,
+        col_groups: list[dict[str, Any]] | None = None,
+        mark_x: Source = None,
+        mark_y: Source = None,
+        mark_color: str | None = None,
     ) -> None:
         super().__init__()
         self._reactive = z is not None
         self._z = z
+        self._colormap = _colormap(colormap)
+        if origin not in ("bottom", "top"):
+            raise ValueError(f"Heatmap origin must be 'bottom' or 'top', got {origin!r}")
+        self._origin = origin
+        self._null_color = _color(null_color, "null_color") if null_color else None
+        self._row_labels = _row_labels(row_labels)
+        self._col_groups = _col_groups(col_groups)
+        for name, source in (("mark_x", mark_x), ("mark_y", mark_y)):
+            if source is not None and not _is_source(source):
+                _number(source, name, 0, 1e9)
+        self._mark_x = mark_x
+        self._mark_y = mark_y
+        self._mark_color = _color(mark_color, "mark_color") if mark_color else None
         self._buffer: list[list[Any]] = []
-        self._colormap = colormap
         self._zmin = zmin
         self._zmax = zmax
         self._title = title
         self._x_label = x_label
         self._y_label = y_label
-        self._height = int(height)
+        self._height = _plot_height(height)
         self._session: Session | None = None
 
     def bind(self, session: Session) -> None:
@@ -1680,14 +1924,32 @@ class Heatmap(Component):
             "yLabel": self._y_label,
             "height": self._height,
         }
+        if self._origin != "bottom":
+            props["origin"] = self._origin
+        if self._null_color:
+            props["nullColor"] = self._null_color
+        if self._row_labels:
+            props["rowLabels"] = self._row_labels
+        if self._col_groups:
+            props["colGroups"] = self._col_groups
+        if self._mark_color:
+            props["markColor"] = self._mark_color
+        for name, source in (("markX", self._mark_x), ("markY", self._mark_y)):
+            if source is not None and not _is_source(source):
+                props[name] = source
         if not self._reactive:
             props["z"] = [list(col) for col in self._buffer]
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {}
         if self._reactive:
-            return {"z": lambda: _to_columns(_read(self._z))}
-        return {}
+            props["z"] = lambda: _to_columns(_read(self._z))
+        if self._mark_x is not None and _is_source(self._mark_x):
+            props["markX"] = lambda: _opt_number(_read(self._mark_x))
+        if self._mark_y is not None and _is_source(self._mark_y):
+            props["markY"] = lambda: _opt_number(_read(self._mark_y))
+        return props
 
     # -- streaming API (only when z= is unset) -------------------------------
 
@@ -2864,8 +3126,8 @@ class Camera(Component):
     """A live webcam input (ADR-0045).
 
     The shell asks the browser for the camera, shows a preview and sends one JPEG per tick to
-    ``on_frame``, a plain handler (ADR-0009) that receives a :class:`~indah.live.Frame`. It may be
-    sync or ``async def``; a slow handler sees a lower frame rate, always on the newest frame
+    ``on_frame``, a plain handler (ADR-0009) that receives a :class:`~indah.live.CameraFrame`. It
+    may be sync or ``async def``; a slow handler sees a lower frame rate, always on the newest frame
     (late frames are dropped, never queued). Run a heavy model with
     ``await asyncio.to_thread(model, frame.data)`` so the event loop stays free. Set results on
     signals as usual, for example ``ImageOverlay(boxes=...)``.
@@ -2884,7 +3146,7 @@ class Camera(Component):
 
     def __init__(
         self,
-        on_frame: Callable[[Frame], Any] | None = None,
+        on_frame: Callable[[CameraFrame], Any] | None = None,
         *,
         label: str = "",
         fps: float = 5,
@@ -2914,16 +3176,16 @@ class Camera(Component):
         }
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
-        frame: Frame | None = None
+        frame: CameraFrame | None = None
         if event == "frame":
-            # Only the live socket builds a Frame; a JSON POST cannot, so one is ignored.
+            # Only the live socket builds a CameraFrame; a JSON POST cannot, so one is ignored.
             candidate = payload.get("frame")
-            frame = candidate if isinstance(candidate, Frame) else None
+            frame = candidate if isinstance(candidate, CameraFrame) else None
         elif event == "upload":  # the Tier 0 snapshot fallback posts a JPEG to the upload route
             files = payload.get("files") or []
             if files:
                 first = files[0]
-                frame = Frame(first.data, first.content_type or "image/jpeg", 0, time.time())
+                frame = CameraFrame(first.data, first.content_type or "image/jpeg", 0, time.time())
         elif event == "transport":
             value = payload.get("value")
             if value in ("live", "snapshot", "off"):
@@ -3205,8 +3467,54 @@ class Skeleton(Component):
         return props
 
 
+def _plot_height(value: int | str) -> int | str:
+    """A plot's height: pixels, or ``"fill"`` to take the height its container gives it."""
+    if value == "fill":
+        return "fill"
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 40:
+        raise ValueError(f"height must be a number of pixels (40 or more) or 'fill', got {value!r}")
+    return int(value)
+
+
+_TRACK_TOKEN = re.compile(
+    r"auto|min-content|max-content|\d+(?:\.\d+)?(?:px|rem|em|%|fr)|minmax\([a-z0-9.%, -]{1,40}\)"
+)
+_LENGTH = re.compile(r"\d+(?:\.\d+)?(?:px|rem|em|%)?")
+
+
+def _tracks(value: str, name: str) -> str:
+    """A CSS track list (``"760px 1fr"``, ``"minmax(0, 1fr) auto"``), checked token by token so
+    nothing else can ride in on the style attribute."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be a non-empty track list such as '760px 1fr'")
+    rest = value.strip()
+    count = 0
+    while rest:
+        match = re.match(r"minmax\([^()]*\)|\S+", rest)
+        token = match.group(0)
+        if not _TRACK_TOKEN.fullmatch(token):
+            raise ValueError(f"{name}: {token!r} is not a track size (px, rem, em, %, fr, auto)")
+        rest = rest[match.end() :].lstrip()
+        count += 1
+        if count > 24:
+            raise ValueError(f"{name} has too many tracks")
+    return " ".join(value.split())
+
+
+def _length(value: str, name: str) -> str:
+    text = str(value).strip()
+    if not _LENGTH.fullmatch(text):
+        raise ValueError(f"{name} must be a CSS length such as '16px' or '1rem', got {value!r}")
+    return text
+
+
 class Grid(Component):
-    """An N-column grid of children that collapses to one column at phone width."""
+    """A grid of children that collapses to one column at phone width.
+
+    ``columns`` is a count (``3`` is three equal columns) or a track list (``"760px 1fr"``).
+    ``rows`` is an optional track list (``"auto 1fr"``); without it rows size to their content.
+    Inside a :class:`Frame` the grid never collapses, because a frame is a fixed design size.
+    """
 
     type = "grid"
 
@@ -3214,15 +3522,118 @@ class Grid(Component):
         self,
         children: list[Component] | None = None,
         *,
-        columns: int = 2,
+        columns: int | str = 2,
+        rows: str | None = None,
         gap: str = "1rem",
     ) -> None:
         super().__init__(children)
         self._columns = columns
+        self._rows = _tracks(rows, "Grid rows") if rows is not None else None
         self._gap = gap
+        if isinstance(columns, str):
+            self._tracks: str | None = _tracks(columns, "Grid columns")
+        else:
+            self._tracks = None
 
     def static_props(self) -> dict[str, Any]:
-        return {"columns": int(self._columns), "gap": self._gap}
+        props: dict[str, Any] = {"gap": self._gap}
+        if self._tracks is not None:
+            props["tracks"] = self._tracks
+        else:
+            props["columns"] = int(self._columns)
+        if self._rows is not None:
+            props["rows"] = self._rows
+        return props
+
+
+class Cell(Component):
+    """A grid cell that spans more than one column or row: ``Cell([chart], columns=2)``.
+
+    A plain child of a ``Grid`` takes one cell. Wrap it in a ``Cell`` to stretch it across
+    ``columns`` or ``rows``; the child fills the cell."""
+
+    type = "cell"
+
+    def __init__(
+        self, children: list[Component] | None = None, *, columns: int = 1, rows: int = 1
+    ) -> None:
+        super().__init__(children)
+        for name, value in (("columns", columns), ("rows", rows)):
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 24:
+                raise ValueError(f"Cell {name} must be an integer from 1 to 24, got {value!r}")
+        self._columns = columns
+        self._rows = rows
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if self._columns != 1:
+            props["columns"] = self._columns
+        if self._rows != 1:
+            props["rows"] = self._rows
+        return props
+
+
+class Frame(Component):
+    """A fixed-size stage that scales to fit the window: a dashboard that never scrolls.
+
+    The children are laid out once, inside a ``width`` by ``height`` design box (pixels), and the
+    whole box is scaled uniformly to the space available, centred, so the layout is the same at
+    1280 by 720 as at 4K and (with the default fit) never produces a scrollbar. It is what a
+    screen recording wants: design at 1920 by 1080, record at any size.
+
+    ``columns`` and ``rows`` are CSS track lists for the grid the children fill, in order (so
+    ``columns="1fr", rows="56px 1fr 200px"`` is a header, a body and a footer). ``fit="contain"``
+    (the default) scales to the width the parent gives and the height left in the window below
+    the frame, up as well as down; ``fit="shrink"`` only ever scales down; ``fit="width"`` fits
+    the width only and lets the height follow the aspect ratio, for a compact frame inside a
+    card. ``kiosk=True`` covers the whole window, hiding indah's own header, for recording.
+    """
+
+    type = "frame"
+
+    def __init__(
+        self,
+        children: list[Component] | None = None,
+        *,
+        width: int = 1920,
+        height: int = 1080,
+        columns: str = "1fr",
+        rows: str | None = None,
+        gap: str = "1rem",
+        padding: str = "1.25rem",
+        fit: str = "contain",
+        kiosk: bool = False,
+    ) -> None:
+        super().__init__(children)
+        for name, value in (("width", width), ("height", height)):
+            if isinstance(value, bool) or not isinstance(value, int) or not 200 <= value <= 8000:
+                raise ValueError(f"Frame {name} must be an integer from 200 to 8000, got {value!r}")
+        if fit not in ("contain", "shrink", "width"):
+            raise ValueError(f"Frame fit must be 'contain', 'shrink' or 'width', got {fit!r}")
+        self._width = width
+        self._height = height
+        self._columns = _tracks(columns, "Frame columns")
+        self._rows = _tracks(rows, "Frame rows") if rows is not None else None
+        self._gap = _length(gap, "Frame gap")
+        self._padding = _length(padding, "Frame padding")
+        self._fit = fit
+        self._kiosk = bool(kiosk)
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {
+            "width": self._width,
+            "height": self._height,
+            "tracks": self._columns,
+            "gap": self._gap,
+            "padding": self._padding,
+        }
+        if self._rows is not None:
+            props["rows"] = self._rows
+        if self._fit != "contain":
+            props["fit"] = self._fit
+        if self._kiosk:
+            props["kiosk"] = True
+        return props
 
 
 class Shortcuts(Component):

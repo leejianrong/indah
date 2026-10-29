@@ -66,7 +66,7 @@ class Live:
 
 
 @dataclass(frozen=True)
-class Frame:
+class CameraFrame:
     """One captured video frame handed to a ``Camera`` handler.
 
     ``data`` is the encoded image (JPEG from the live socket, or whatever the browser sent on the
@@ -136,13 +136,13 @@ class Mailbox:
     """
 
     def __init__(self) -> None:
-        self._item: Frame | None = None
+        self._item: CameraFrame | None = None
         self._event = asyncio.Event()
         self._closed = False
         self.dropped = 0
         self.processed = 0
 
-    def put(self, frame: Frame) -> bool:
+    def put(self, frame: CameraFrame) -> bool:
         """Store ``frame``; ``True`` when it replaced one that had not been taken."""
         replaced = self._item is not None
         if replaced:
@@ -155,7 +155,7 @@ class Mailbox:
         self._closed = True
         self._event.set()
 
-    async def get(self) -> Frame | None:
+    async def get(self) -> CameraFrame | None:
         """The waiting frame, or ``None`` once closed and empty."""
         while True:
             if self._item is not None:

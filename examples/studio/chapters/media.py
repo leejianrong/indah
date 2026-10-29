@@ -156,6 +156,143 @@ def live_chart_check(pw) -> None:
     page.wait_for_function("() => document.querySelector('.chart').__uplot.data[0].length === 20")
 
 
+def chart_kinds(ctx: indah.Context) -> indah.Component:
+    rng = random.Random(3)
+    n = 60
+    decay = [[i, round(0.97**i, 4)] for i in range(1, n + 1)]
+    dots = [
+        [i, round(40 + 55 * (1 - 0.97**i) + rng.uniform(-12, 12), 1), None] for i in range(1, n + 1)
+    ]
+    for row in dots[::7]:
+        row[1], row[2] = None, row[1] - 25  # a few runs that did badly
+    at = indah.Signal(30)
+
+    return indah.Column(
+        children=[
+            indah.Slider(at, min=1, max=n, step=1, label="Current episode"),
+            indah.Chart(
+                decay,
+                series=[{"label": "decay", "kind": "bars", "stroke": "var(--primary)"}],
+                title="Bars, with a playhead, the future dimmed and the current bar highlighted",
+                x_range=(0.5, n + 0.5),
+                y_range=(0, 1),
+                playhead=at,
+                shade_after=True,
+                highlight=at,
+                highlight_color="var(--ok)",
+                legend="off",
+                height=170,
+            ),
+            indah.Chart(
+                dots,
+                series=[
+                    {"label": "good", "kind": "scatter", "stroke": "var(--primary)", "size": 6},
+                    {"label": "poor", "kind": "scatter", "stroke": "var(--muted)", "size": 6},
+                ],
+                title="Scatter dots and a dashed reference rule",
+                x_range=(0.5, n + 0.5),
+                y_range=(0, 110),
+                rules=[{"y": 90, "label": "target 90", "color": "var(--ok)"}],
+                legend="labels",
+                height=170,
+            ),
+        ]
+    )
+
+
+def pie_lit(ctx: indah.Context) -> indah.Component:
+    lit = indah.Signal(1)
+    epsilon = 0.127
+    return indah.Column(
+        children=[
+            indah.Pie(
+                [
+                    {"label": "explore", "value": epsilon, "color": "var(--warn)"},
+                    {"label": "exploit", "value": 1 - epsilon, "color": "var(--primary)"},
+                ],
+                active=lit,
+                height=170,
+            ),
+            indah.Row(
+                children=[
+                    indah.Button("Explore", lambda: lit.set(0), variant="ghost"),
+                    indah.Button("Exploit", lambda: lit.set(1), variant="ghost"),
+                    indah.Button("None", lambda: lit.set(None), variant="ghost"),
+                ]
+            ),
+        ]
+    )
+
+
+def pie_lit_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".pie svg path").first).to_be_visible()
+    expect(page.get_by_text("87.3%")).to_be_visible()
+    page.get_by_role("button", name="Explore").click()
+    page.wait_for_function(
+        "() => { const p = document.querySelectorAll('.pie-slice');"
+        " return p.length === 2 && p[0].style.opacity === '1' && p[1].style.opacity === '0.3'; }"
+    )
+
+
+def heatmap_marks(ctx: indah.Context) -> indah.Component:
+    state = indah.Signal(12)
+    action = indah.Signal(2)
+    cols = 24
+    field = [
+        [None if (x * 5 + y * 3) % 7 < 2 else round(math.sin(x / 3 + y), 2) for y in range(4)]
+        for x in range(cols)
+    ]  # None is a cell with no value, drawn blank rather than as the lowest colour
+    return indah.Column(
+        children=[
+            indah.Row(
+                children=[
+                    indah.Slider(state, min=0, max=cols - 1, step=1, label="State"),
+                    indah.Slider(action, min=0, max=3, step=1, label="Action"),
+                ]
+            ),
+            indah.Heatmap(
+                field,
+                colormap=["var(--err)", "var(--surface-2)", "var(--ok)"],
+                zmin=-1,
+                zmax=1,
+                null_color="var(--surface)",
+                origin="top",
+                row_labels=["up", "down", "left", "right"],
+                col_groups=[
+                    {"start": 0, "end": 11, "label": "first half"},
+                    {"start": 12, "end": 23, "label": "second half"},
+                ],
+                mark_x=state,
+                mark_y=action,
+                height=190,
+                title="Blank cells, labels, groups and a marked cell",
+            ),
+        ]
+    )
+
+
+def heatmap_marks_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".heatmap canvas").first).to_be_visible()
+    page.wait_for_function("() => document.querySelector('.heatmap').__heatmap.ncols === 24")
+
+
+def chart_kinds_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".chart canvas").nth(1)).to_be_visible()
+    expect(page.get_by_text("good", exact=True)).to_be_visible()  # the labels-only legend
+    page.wait_for_function(
+        "() => document.querySelectorAll('.chart')[1].__uplot.data[0].length === 60"
+    )
+
+
 # ---- heatmap ----------------------------------------------------------------------------------
 
 
@@ -427,7 +564,7 @@ def camera(ctx: indah.Context) -> indah.Component:
     seen = indah.Signal(0)
     last = indah.Signal("no frame yet")
 
-    def on_frame(frame: indah.Frame) -> None:  # a plain handler; it may be `async def` too
+    def on_frame(frame: indah.CameraFrame) -> None:  # a plain handler; it may be `async def` too
         seen.set(seen.value + 1)
         last.set(f"{frame.size // 1024} KiB {frame.content_type}, frame {frame.seq}")
 
@@ -477,6 +614,46 @@ CHAPTER = Chapter(
             check=live_chart_check,
         ),
         Page(
+            slug="chart-kinds",
+            title="Bars, dots and markers",
+            summary=(
+                "A series can be bars or dots. A playhead dims what has not happened yet, a "
+                "highlight picks out one bar, and a rule marks a target. Colours written as "
+                "`var(--token)` follow the light and dark switch."
+            ),
+            build=chart_kinds,
+            covers=(),
+            docs="components.md",
+            adr=(44,),
+            check=chart_kinds_check,
+        ),
+        Page(
+            slug="pie",
+            title="Pie with a lit slice",
+            summary=(
+                "A pie that lights one slice: it is pulled out and glows while the others dim. "
+                "Use it to show which of several outcomes just happened."
+            ),
+            build=pie_lit,
+            covers=("Pie",),
+            docs="components.md",
+            adr=(44,),
+            check=pie_lit_check,
+        ),
+        Page(
+            slug="heatmap-marks",
+            title="Heatmap labels and marks",
+            summary=(
+                "A colormap can be your own colour stops, a cell with no value stays blank, rows and "
+                "runs of columns can be labelled, and one cell can be spotlit (`mark_x`, `mark_y`)."
+            ),
+            build=heatmap_marks,
+            covers=(),
+            docs="components.md",
+            adr=(44,),
+            check=heatmap_marks_check,
+        ),
+        Page(
             slug="heatmap",
             title="Heatmap",
             summary="A 2-D field drawn on a canvas. Move the slider and the whole field is replaced.",
@@ -502,11 +679,11 @@ CHAPTER = Chapter(
             slug="camera",
             title="Camera",
             summary=(
-                "A webcam preview whose frames reach a Python handler as a `Frame`. Press "
+                "A webcam preview whose frames reach a Python handler as a `CameraFrame`. Press "
                 "**Start camera** and allow it; the counts below update as frames arrive."
             ),
             build=camera,
-            covers=("Camera", "Frame", "Live"),
+            covers=("Camera", "CameraFrame", "Live"),
             docs="hosting.md#live-camera",
             adr=(45,),
             check=camera_check,

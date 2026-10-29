@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from indah.live import Frame
+from indah.live import CameraFrame
 
 _EXAMPLE = Path(__file__).resolve().parents[2] / "examples" / "webcam_detect.py"
 BOX = {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4, "label": "cup", "score": 0.9}
@@ -34,7 +34,7 @@ async def test_a_frame_becomes_a_picture_with_boxes(monkeypatch):
     session = example.build_session()
     camera = _node(session, "camera")
 
-    result = session.dispatch(camera.id, "frame", {"frame": Frame(b"jpeg", seq=1)})
+    result = session.dispatch(camera.id, "frame", {"frame": CameraFrame(b"jpeg", seq=1)})
     assert result is not None and result.coro is not None
     await result.coro
 
@@ -51,7 +51,7 @@ async def test_an_empty_frame_clears_the_boxes(monkeypatch):
     session = example.build_session()
     camera = _node(session, "camera")
     for seq in (1, 2):
-        result = session.dispatch(camera.id, "frame", {"frame": Frame(b"x", seq=seq)})
+        result = session.dispatch(camera.id, "frame", {"frame": CameraFrame(b"x", seq=seq)})
         await result.coro
     assert _node(session, "imageoverlay").to_json()["props"]["boxes"] == []
     await asyncio.sleep(0)

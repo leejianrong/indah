@@ -43,6 +43,8 @@ BUILTIN_TYPES = frozenset(
     {
         "column",
         "card",
+        "frame",
+        "cell",
         "text",
         "button",
         "slider",
@@ -57,6 +59,7 @@ BUILTIN_TYPES = frozenset(
         "audio",
         "chart",
         "heatmap",
+        "pie",
         "map",
         "dataframe",
         "table",

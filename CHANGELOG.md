@@ -29,13 +29,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   a laptop or your own server; on Colab it falls back to snapshots.
 - Tier 1 live media transport (ADR-0045, IND-74): `create_app(live=True)` (or `live=Live(...)`, with
   `pip install "indah[live]"`) serves an opt-in `WebSocket /api/live` that carries binary frames from the
-  browser, and a `Camera` component whose handler receives each JPEG as a `Frame`. Latest frame wins at
+  browser, and a `Camera` component whose handler receives each JPEG as a `CameraFrame`. Latest frame wins at
   both ends, so a slow model sees a lower rate and never a growing delay. The upgrade checks `Origin` on
   every app, goes through the same session identity checks as an event, honours trusted proxies, and adds
   the socket origin to the strict CSP `connect-src` only when live is on. Off by default, never offered on
   Colab, where `Camera` falls back to one snapshot a second over the upload route. `protocol_version` stays 1.
 
-- A Studio page for `Camera` (Media and files chapter), covering `Camera`, `Frame` and `Live` (IND-235).
+- A Studio page for `Camera` (Media and files chapter), covering `Camera`, `CameraFrame` and `Live` (IND-235).
 
 ### Changed
 
@@ -81,6 +81,22 @@ matches the demos it serves. `protocol_version` is still 1.
   disagree (IND-196).
 
 ### Added
+
+- `Frame`: a fixed design-size stage (default 1920 by 1080) that scales to fit the window, so a
+  dashboard has no scrollbar at any window size; `fit="width"` for a compact one inside a card and
+  `kiosk=True` for a full-window recording. `Grid` takes a track list (`columns="760px 1fr"`) and
+  `rows`, the new `Cell` spans columns or rows, and `Chart` and `Heatmap` accept `height="fill"` to
+  take the height their card gives them (ADR-0046).
+- `Chart` series can be `kind="bars"` or `"scatter"` (dots only), with `width`, `dash`, `alpha` and `size`; and
+  a chart takes fixed `x_range` / `y_range`, a reactive `playhead` (a vertical line, with `shade_after` dimming
+  what comes after it), a reactive `highlight` bar, horizontal `rules`, and `legend="labels"`. Colours written
+  as `var(--token)` follow the light and dark switch (ADR-0046).
+- `Heatmap` takes its own colour stops (`colormap=[...]`, hex or `var(--token)`), `null_color` so a cell with
+  no value is blank instead of the lowest colour, `origin="top"`, `row_labels`, `col_groups` (labelled
+  brackets over runs of columns), and a spotlit column with a ringed cell (`mark_x`, `mark_y`, reactive)
+  (ADR-0046).
+- `Pie`: a pie chart with one slice lit (`active=`): pulled out and glowing while the others dim, with the
+  slices and the lit one reactive and colours that may be `var(--token)` (ADR-0046).
 
 - An "Expense tracker" demo in the public gallery (`examples/expenses.py`): add expenses, see a table with
   delete, the total, a per-category bar strip and a running-total chart, and clear all behind a confirm

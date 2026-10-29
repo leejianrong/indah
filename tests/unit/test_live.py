@@ -9,7 +9,7 @@ from indah.live import (
     AudioChunk,
     AudioQueue,
     ByteBudget,
-    Frame,
+    CameraFrame,
     Live,
     Mailbox,
     pack_frame,
@@ -42,9 +42,9 @@ def test_live_rejects_nonsense_caps():
 @pytest.mark.unit
 async def test_the_mailbox_keeps_only_the_latest_frame():
     box = Mailbox()
-    assert box.put(Frame(b"a", seq=1)) is False
-    assert box.put(Frame(b"b", seq=2)) is True
-    assert box.put(Frame(b"c", seq=3)) is True
+    assert box.put(CameraFrame(b"a", seq=1)) is False
+    assert box.put(CameraFrame(b"b", seq=2)) is True
+    assert box.put(CameraFrame(b"c", seq=3)) is True
     got = await box.get()
     assert got is not None and got.seq == 3
     assert (box.dropped, box.processed) == (2, 1)
@@ -56,7 +56,7 @@ async def test_the_mailbox_waits_then_wakes_and_ends_on_close():
     task = asyncio.create_task(box.get())
     await asyncio.sleep(0)
     assert not task.done()
-    box.put(Frame(b"x", seq=1))
+    box.put(CameraFrame(b"x", seq=1))
     assert (await task).seq == 1
     ender = asyncio.create_task(box.get())
     await asyncio.sleep(0)
@@ -67,7 +67,7 @@ async def test_the_mailbox_waits_then_wakes_and_ends_on_close():
 @pytest.mark.unit
 async def test_a_frame_put_before_close_is_still_delivered():
     box = Mailbox()
-    box.put(Frame(b"x", seq=9))
+    box.put(CameraFrame(b"x", seq=9))
     box.close()
     assert (await box.get()).seq == 9
     assert await box.get() is None
@@ -87,7 +87,7 @@ def test_the_byte_budget_refills_each_second():
 def test_camera_handler_gets_frames_and_snapshot_uploads():
     seen = []
     cam = Camera(seen.append)
-    assert cam.handle("frame", {"frame": Frame(b"1", seq=1)}) is True
+    assert cam.handle("frame", {"frame": CameraFrame(b"1", seq=1)}) is True
     up = UploadedFile(filename="snap.jpg", content_type="image/jpeg", data=b"2")
     assert cam.handle("upload", {"files": [up]}) is True
     assert [f.data for f in seen] == [b"1", b"2"]
@@ -98,7 +98,7 @@ def test_camera_handler_gets_frames_and_snapshot_uploads():
 def test_camera_ignores_a_frame_that_a_client_posted_as_json():
     seen = []
     cam = Camera(seen.append)
-    assert cam.handle("frame", {"frame": "not a Frame"}) is True
+    assert cam.handle("frame", {"frame": "not a frame"}) is True
     assert seen == []
 
 
@@ -117,7 +117,7 @@ async def test_an_async_camera_handler_comes_back_as_a_coroutine():
     async def on_frame(frame):
         return frame
 
-    result = Camera(on_frame).handle("frame", {"frame": Frame(b"1")})
+    result = Camera(on_frame).handle("frame", {"frame": CameraFrame(b"1")})
     assert asyncio.iscoroutine(result)
     await result
 
