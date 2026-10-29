@@ -11,6 +11,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Fixed
+
+- Shell: a long `Select` label wraps in the closed control instead of clipping to "a serene mou..." (Chromium;
+  other browsers keep the native select), an empty `Chat` shows "No messages yet." again, and the gpx-viewer
+  elevation trace is a clean line with one position dot instead of a hollow marker on every point (IND-233).
+
 ## [0.10.0] - 2026-10-29
 
 Live media and dashboards. indah can now take a webcam or a microphone as input over an opt-in WebSocket
