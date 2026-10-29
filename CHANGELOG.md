@@ -11,8 +11,31 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-29
+
+Live media and dashboards. indah can now take a webcam or a microphone as input over an opt-in WebSocket
+(`create_app(live=True)`, `pip install "indah[live]"`), with a `Camera` and a `Microphone` component. It also
+gains the primitives for a dashboard that fits one screen: `Frame`, `Cell`, track-list grids, new chart kinds,
+richer heatmaps and `Pie`. Everything new is additive and off by default; a phone-width overflow in `Chart`
+is fixed. `protocol_version` is still 1.
+
 ### Added
 
+- `Frame`: a fixed design-size stage (default 1920 by 1080) that scales to fit the window, so a
+  dashboard has no scrollbar at any window size; `fit="width"` for a compact one inside a card and
+  `kiosk=True` for a full-window recording. `Grid` takes a track list (`columns="760px 1fr"`) and
+  `rows`, the new `Cell` spans columns or rows, and `Chart` and `Heatmap` accept `height="fill"` to
+  take the height their card gives them (ADR-0046).
+- `Chart` series can be `kind="bars"` or `"scatter"` (dots only), with `width`, `dash`, `alpha` and `size`; and
+  a chart takes fixed `x_range` / `y_range`, a reactive `playhead` (a vertical line, with `shade_after` dimming
+  what comes after it), a reactive `highlight` bar, horizontal `rules`, and `legend="labels"`. Colours written
+  as `var(--token)` follow the light and dark switch (ADR-0046).
+- `Heatmap` takes its own colour stops (`colormap=[...]`, hex or `var(--token)`), `null_color` so a cell with
+  no value is blank instead of the lowest colour, `origin="top"`, `row_labels`, `col_groups` (labelled
+  brackets over runs of columns), and a spotlit column with a ringed cell (`mark_x`, `mark_y`, reactive)
+  (ADR-0046).
+- `Pie`: a pie chart with one slice lit (`active=`): pulled out and glowing while the others dim, with the
+  slices and the lit one reactive and colours that may be `var(--token)` (ADR-0046).
 - A stepped video detection example, `examples/video_detect.py` (IND-62): upload a short video (decoded
   with `av`, the demo's own dependency) or images, the same SSD-MobileNetV1 detector boxes up to 24
   frames up front, and a `Slider` scrubs through them. Plain Tier 0, so it works on Colab as it is.
@@ -34,7 +57,6 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   every app, goes through the same session identity checks as an event, honours trusted proxies, and adds
   the socket origin to the strict CSP `connect-src` only when live is on. Off by default, never offered on
   Colab, where `Camera` falls back to one snapshot a second over the upload route. `protocol_version` stays 1.
-
 - A Studio page for `Camera` (Media and files chapter), covering `Camera`, `CameraFrame` and `Live` (IND-235).
 
 ### Changed
@@ -45,13 +67,6 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   longer runs below the fold (IND-222). The poster and map-poster demos gain a caption.
 - Shell: a `Chart` legend shows values only while the pointer is over the plot (no more `Value: --`), and
   an empty `Heatmap` says "Nothing to show yet." (IND-227).
-
-### Removed
-
-- The "Pretty map" gallery demo (`examples/prettymap.py`, its Colab notebook and thumbnail); the Map poster demo supersedes it (IND-230).
-
-### Changed
-
 - Gallery apps: the sorting visualiser fills its card, with a visible unsorted colour and
   phone-width stat tiles; the expense tracker shows a currency and a labelled category table
   instead of unlabelled bars; the cellular automaton opens on a busier "garden" with square
@@ -60,11 +75,30 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   mid stops so the middle is no longer muddy, divisions with no data are hatched and named in a legend
   (they used to read as the lowest count), and the outlines are pale hairlines (IND-231).
 
+### Removed
+
+- The "Pretty map" gallery demo (`examples/prettymap.py`, its Colab notebook and thumbnail); the Map poster demo supersedes it (IND-230).
+
 ### Fixed
 
 - `launch()` (blocking) now installs its SIGTERM drain handler before the server starts answering, so a
   SIGTERM right after startup drains instead of killing the process (IND-232).
 - The Markov poet streaming test no longer depends on an unseeded random poem length (IND-234).
+
+### Upgrading
+
+- The live-media frame object is named `CameraFrame`, not `Frame`: `indah.Frame` is the dashboard stage. Both
+  are new in this release, so no existing code changes.
+- Gallery: the "Pretty map" demo is gone (Map poster replaces it). Anyone linking to `/prettymap` on the
+  public gallery gets a not-found.
+
+### Known limitations
+
+- The live socket is not yet routed to the replica that owns the session when you run several replicas
+  (ADR-0045 "As built"); use one replica, or session affinity, for `live=True`.
+- The webcam, microphone and video demos were tested with stub models and a fake camera and microphone; they
+  are not in the public gallery.
+- On a phone the cellular automaton's cells are not square (the heatmap height is fixed).
 
 ## [0.9.1] - 2026-10-26
 
@@ -81,22 +115,6 @@ matches the demos it serves. `protocol_version` is still 1.
   disagree (IND-196).
 
 ### Added
-
-- `Frame`: a fixed design-size stage (default 1920 by 1080) that scales to fit the window, so a
-  dashboard has no scrollbar at any window size; `fit="width"` for a compact one inside a card and
-  `kiosk=True` for a full-window recording. `Grid` takes a track list (`columns="760px 1fr"`) and
-  `rows`, the new `Cell` spans columns or rows, and `Chart` and `Heatmap` accept `height="fill"` to
-  take the height their card gives them (ADR-0046).
-- `Chart` series can be `kind="bars"` or `"scatter"` (dots only), with `width`, `dash`, `alpha` and `size`; and
-  a chart takes fixed `x_range` / `y_range`, a reactive `playhead` (a vertical line, with `shade_after` dimming
-  what comes after it), a reactive `highlight` bar, horizontal `rules`, and `legend="labels"`. Colours written
-  as `var(--token)` follow the light and dark switch (ADR-0046).
-- `Heatmap` takes its own colour stops (`colormap=[...]`, hex or `var(--token)`), `null_color` so a cell with
-  no value is blank instead of the lowest colour, `origin="top"`, `row_labels`, `col_groups` (labelled
-  brackets over runs of columns), and a spotlit column with a ringed cell (`mark_x`, `mark_y`, reactive)
-  (ADR-0046).
-- `Pie`: a pie chart with one slice lit (`active=`): pulled out and glowing while the others dim, with the
-  slices and the lit one reactive and colours that may be `var(--token)` (ADR-0046).
 
 - An "Expense tracker" demo in the public gallery (`examples/expenses.py`): add expenses, see a table with
   delete, the total, a per-category bar strip and a running-total chart, and clear all behind a confirm
