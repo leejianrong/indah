@@ -232,12 +232,12 @@ def build() -> indah.Session:
 
     elevation = indah.Chart(
         elevation_data,
-        series=["Elevation (m)", "Position"],
+        # A clean line, plus one dot for the marker (points=True put a hollow dot on every point).
+        series=["Elevation (m)", {"label": "Position", "kind": "scatter", "size": 9}],
         title="Elevation profile",
         x_label="Distance (km)",
         y_label="Elevation (m)",
         height=200,
-        points=True,
     )
 
     scrubber = indah.Slider(progress, min=0, max=100, step=0.5, label="Progress along the trail")

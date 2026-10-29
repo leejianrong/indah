@@ -390,6 +390,9 @@
   <div class="field">
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}
     <div class="chat" use:autoscroll={[props.messages, props.pending]}>
+      {#if !(props.messages ?? []).length && !props.pending}
+        <div class="chat-empty">No messages yet.</div>
+      {/if}
       {#each props.messages ?? [] as m, i (i)}
         <div class="bubble role-{m.role}">
           <span class="bubble-role">{m.role}</span>
@@ -672,6 +675,9 @@
       value={props.value ?? ""}
       onchange={(e) => postEvent(node.id, "change", { value: e.currentTarget.value })}
     >
+      <!-- base-select (Chromium): the closed control wraps a long label instead of clipping it;
+           other browsers ignore the button and keep the native select (IND-233). -->
+      <button type="button"><selectedcontent></selectedcontent></button>
       {#each props.options ?? [] as option (option.value)}
         <option value={option.value}>{option.label}</option>
       {/each}

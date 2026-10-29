@@ -326,7 +326,7 @@
         border: 1px solid var(--outline);
         border-radius: var(--radius-sm);
       }
-      .chat:empty::after { content: "No messages yet."; color: var(--muted); font-style: italic; }
+      .chat-empty { color: var(--muted); font-style: italic; font-size: 0.9rem; padding: 0.35rem 0.4rem; }
       .bubble { display: flex; flex-direction: column; gap: 0.2rem; max-width: 85%; }
       .bubble-role {
         font-size: 0.68rem;
@@ -413,6 +413,26 @@
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
       }
       select[multiple] { min-height: 5.5rem; }
+      /* A long option label wraps in the closed control instead of clipping to "a serene mou..."
+         (IND-233). Chromium only (base-select); elsewhere the native select is unchanged. */
+      @supports (appearance: base-select) {
+        select:not([multiple]), select:not([multiple])::picker(select) { appearance: base-select; }
+        select:not([multiple]) {
+          display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+          white-space: normal; text-align: left; cursor: pointer;
+        }
+        select:not([multiple]) > button {
+          all: unset; flex: 1; min-width: 0; font: inherit; color: inherit;
+          white-space: normal; text-align: left; cursor: pointer;
+        }
+        select:not([multiple])::picker(select) {
+          background: var(--surface); color: var(--text);
+          border: 1px solid var(--outline); border-radius: var(--radius-sm);
+          padding: 0.25rem;
+        }
+        select:not([multiple]) option { padding: 0.45rem 0.6rem; white-space: normal; border-radius: 6px; }
+        select:not([multiple]) option:hover, select:not([multiple]) option:checked { background: var(--primary-container); }
+      }
       .check {
         display: flex;
         align-items: center;
