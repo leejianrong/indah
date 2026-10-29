@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-30
+
+A patch for shell fixes found after 0.10.0 (a stream-reconnect bug behind a flaky failover test, and three small UI problems). The library API is unchanged and `protocol_version` is still 1.
+
 ### Fixed
 
 - The shell keeps retrying a refused stream open (a gateway answering 502 or 503 while it still names a gone machine) with a growing delay, instead of giving up after two quick retries and leaving the tab on a dead page (IND-236).
