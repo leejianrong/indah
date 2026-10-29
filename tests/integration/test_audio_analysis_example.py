@@ -1,9 +1,8 @@
-"""The audio-analysis example (examples/audio_analysis.py) stays runnable, and its
-synthesized samples are physically/acoustically sane - real formant structure per
-vowel, real inharmonicity in the synthesized piano, real odd-harmonic emphasis in
-the synthesized saxophone. Nothing here is a recording (see the module docstring
-for why); ``numpy`` is this demo's own dependency, not indah's, so every test is
-skipped (not failed) when it isn't installed, same pattern as
+"""The audio-analysis example (examples/audio_analysis.py) stays runnable. Its
+instruments and its one speech clip are real recordings (examples/audio_samples/,
+credited in ATTRIBUTION.txt and in the app); its vowels are a synthesised textbook
+model with real formant structure. ``numpy`` is this demo's own dependency, not
+indah's, so every test is skipped (not failed) when it isn't installed, same pattern as
 ``test_upload_classify_example.py`` (onnxruntime) and ``test_map_poster_example.py``
 (matplotlib).
 
@@ -13,6 +12,8 @@ physics they're meant to demonstrate still holds.
 """
 
 import importlib.util
+import io
+import json
 import sys
 import wave
 from pathlib import Path
@@ -43,17 +44,17 @@ def _by_type(session, type_name):
     return [c for c in session._by_id.values() if c.type == type_name]
 
 
-# -- synthesis sanity ---------------------------------------------------------
+# -- samples sanity -----------------------------------------------------------
 
 
 @pytest.mark.integration
 def test_every_sample_is_generated_with_sane_waveform_and_spectrogram_data():
     example = _load_example()
-    assert len(example.SAMPLES) == 8  # 5 vowels + 3 instruments
+    assert len(example.SAMPLES) == 9  # 5 synthesised vowels + 3 instruments + 1 speech clip
     for sample in example.SAMPLES.values():
         # A real, bounded, non-silent waveform.
         assert sample.samples.ndim == 1
-        assert sample.samples.size > example.SR  # at least a second of audio
+        assert sample.samples.size > sample.sr  # at least a second of audio
         assert np.all(np.abs(sample.samples) <= 1.0 + 1e-9)
         assert np.sqrt(np.mean(sample.samples**2)) > 0.01  # not near-silent
 
@@ -66,19 +67,103 @@ def test_every_sample_is_generated_with_sane_waveform_and_spectrogram_data():
         assert cols.max() > example.FLOOR_DB  # some real signal, not just the floor
 
         # WAV bytes round-trip through the stdlib `wave` module as real 16-bit PCM.
-        import io
-
         with wave.open(io.BytesIO(sample.wav_bytes)) as w:
             assert w.getnchannels() == 1
             assert w.getsampwidth() == 2
-            assert w.getframerate() == example.SR
+            assert w.getframerate() == sample.sr
             assert w.getnframes() == sample.samples.size
 
 
 @pytest.mark.integration
+def test_recordings_are_real_files_and_the_synthesised_vowels_say_so():
+    example = _load_example()
+    kinds = {k: s.kind for k, s in example.SAMPLES.items()}
+    assert sorted(k for k, v in kinds.items() if v == "vowel") == [f"vowel:{v}" for v in "aeiou"]
+    assert sorted(k for k, v in kinds.items() if v == "instrument") == [
+        "instrument:piano",
+        "instrument:saxophone",
+        "instrument:violin",
+    ]
+    assert [k for k, v in kinds.items() if v == "speech"] == ["speech:librivox"]
+    for key, sample in example.SAMPLES.items():
+        if sample.kind == "vowel":
+            assert "synthesi" in sample.credit.lower() and "textbook" in sample.credit.lower()
+            assert "(textbook model)" in sample.label
+        else:
+            assert "synthesi" not in sample.credit.lower(), key
+
+
+@pytest.mark.integration
+def test_recordings_are_not_clipped_and_have_sensible_length():
+    example = _load_example()
+    for key, sample in example.SAMPLES.items():
+        if sample.kind == "vowel":
+            continue
+        assert np.max(np.abs(sample.samples)) < 0.99, f"{key} is clipped"
+        seconds = sample.samples.size / sample.sr
+        if sample.kind == "speech":
+            assert 5.0 <= seconds <= 10.0
+        else:
+            assert 1.5 <= seconds <= 2.5
+        # a real recording has a noise floor between harmonics, unlike additive synthesis
+        assert np.array(sample.spectrogram).mean() > example.FLOOR_DB + 3
+
+
+@pytest.mark.integration
+def test_bundled_audio_is_small_and_every_file_is_attributed():
+    example = _load_example()
+    folder = example.AUDIO_DIR
+    wavs = sorted(folder.glob("*.wav"))
+    assert [w.name for w in wavs] == ["piano.wav", "saxophone.wav", "speech.wav", "violin.wav"]
+    assert sum(w.stat().st_size for w in wavs) < 600_000
+    attribution = (folder / "ATTRIBUTION.txt").read_text()
+    for w in wavs:
+        assert w.name in attribution
+    for url in (
+        "https://theremin.music.uiowa.edu/MIS.html",
+        "https://librivox.org/a-gift-by-amy-lowell/",
+    ):
+        assert url in attribution
+
+
+@pytest.mark.integration
+def test_every_recording_has_a_credit_with_name_source_link_and_licence():
+    example = _load_example()
+    for key, sample in example.SAMPLES.items():
+        if sample.kind == "vowel":
+            continue
+        credit = sample.credit
+        assert "](https://" in credit, key  # a source link
+        assert "licence" in credit.lower(), key
+    assert "Lawrence Fritts" in example.SAMPLES["instrument:violin"].credit
+    assert "public domain" in example.SAMPLES["speech:librivox"].credit.lower()
+    assert "Algy Pug" in example.SAMPLES["speech:librivox"].credit
+
+
+@pytest.mark.integration
+def test_a_missing_recordings_folder_is_fetched_and_a_failed_fetch_degrades_to_vowels(tmp_path):
+    example = _load_example()
+    seen: list[str] = []
+
+    def failing_fetch(url: str) -> bytes:
+        seen.append(url)
+        raise OSError("offline")
+
+    found = example.load_recordings(tmp_path / "nope", fetch=failing_fetch)
+    assert found == {} and seen  # tried to download, did not raise
+
+    real = {p.name: p.read_bytes() for p in example.AUDIO_DIR.glob("*.wav")}
+    found = example.load_recordings(
+        tmp_path / "cache", fetch=lambda url: real[url.rsplit("/", 1)[1]]
+    )
+    assert len(found) == 4  # downloaded into the cache folder, then read like local files
+    assert (tmp_path / "cache" / "speech.wav").exists()
+
+
+@pytest.mark.integration
 def test_vowel_spectrograms_show_distinct_formant_structure():
-    """The actual teaching point: /i/ (a documented low F1 ~270 Hz) and /a/ (a
-    documented high F1 ~730 Hz) should show that contrast in their spectrograms -
+    """The textbook model's teaching point: /i/ (a documented low F1 ~270 Hz) and /a/
+    (a documented high F1 ~730 Hz) should show that contrast in their spectrograms -
     the low-frequency energy in /a/ sits meaningfully higher than in /i/."""
     example = _load_example()
 
@@ -99,67 +184,30 @@ def test_vowel_spectrograms_show_distinct_formant_structure():
 
 
 @pytest.mark.integration
-def test_piano_partials_are_stretched_sharp_by_inharmonicity():
-    """A struck piano string's partials land a little sharp of an exact integer
-    multiple of the fundamental (f_n ~= n*f0*sqrt(1+B*n^2)) - a real, documented
-    physical property. Higher partials should drift further from their nominal
-    (perfectly harmonic) frequency than lower ones."""
+def test_recorded_notes_have_the_expected_pitch_and_envelopes():
+    """The recordings are the notes they claim to be, and a struck piano note decays
+    while a bowed violin note holds."""
     example = _load_example()
-    f0 = 261.63
-    signal = example.synth_piano(f0=f0, duration=1.0)
-    frame = signal[:8192]  # early in the note, before high partials decay away
-    window = np.hanning(len(frame))
-    freqs = np.fft.rfftfreq(len(frame), d=1.0 / example.SR)
-    magnitude = np.abs(np.fft.rfft(frame * window))
 
-    def peak_shift(harmonic: int) -> float:
-        nominal = harmonic * f0
-        band = (freqs >= nominal - 60) & (freqs <= nominal + 60)
-        peak_freq = freqs[band][np.argmax(magnitude[band])]
-        return peak_freq - nominal
+    def peak_hz(key: str, lo: float, hi: float) -> float:
+        s = example.SAMPLES[key]
+        mag = np.abs(np.fft.rfft(s.samples[: s.sr] * np.hanning(s.sr)))
+        freqs = np.fft.rfftfreq(s.sr, d=1.0 / s.sr)
+        band = (freqs >= lo) & (freqs <= hi)
+        return float(freqs[band][np.argmax(mag[band])])
 
-    shift_2 = peak_shift(2)
-    shift_5 = peak_shift(5)
-    shift_10 = peak_shift(10)
-    assert shift_2 >= -5.0  # the low partials are ~harmonic (negligible stretch)
-    assert 0 < shift_5 < shift_10  # stretch grows with partial number
-    assert shift_10 > 20.0  # the 10th partial is clearly, not just numerically, sharp
+    assert abs(peak_hz("instrument:violin", 400, 480) - 440.0) < 8  # A4
+    assert abs(peak_hz("instrument:saxophone", 230, 300) - 264.0) < 8
+    assert abs(peak_hz("instrument:piano", 240, 290) - 261.6) < 8  # C4 (first partial)
 
+    def late_over_early(key: str) -> float:
+        s = example.SAMPLES[key]
+        sr = s.sr
+        early = np.sqrt(np.mean(s.samples[int(0.1 * sr) : int(0.4 * sr)] ** 2))
+        late = np.sqrt(np.mean(s.samples[int(1.2 * sr) : int(1.6 * sr)] ** 2))
+        return float(late / early)
 
-@pytest.mark.integration
-def test_saxophone_emphasizes_odd_harmonics():
-    """A real saxophone (like other single-reed instruments) favours odd harmonics
-    over even ones - the fundamental should carry more energy than the 2nd
-    harmonic, on average across the note."""
-    example = _load_example()
-    f0 = 233.08
-    sample = example._build_sample("test", "test", "instrument", example.synth_saxophone(f0=f0))
-    freqs = np.array(sample.freqs)
-    avg_db = np.array(sample.spectrogram).mean(axis=0)
-
-    def energy_near(target_hz: float) -> float:
-        idx = int(np.argmin(np.abs(freqs - target_hz)))
-        return float(avg_db[idx])
-
-    assert energy_near(f0) > energy_near(2 * f0)
-
-
-@pytest.mark.integration
-def test_piano_attack_is_much_faster_than_violins_bowed_attack():
-    """A struck piano note reaches full amplitude almost instantly; a bowed violin
-    note swells in - the synthesized envelopes should reflect that contrast."""
-    example = _load_example()
-    piano = example.synth_piano(duration=1.0)
-    violin = example.synth_violin(duration=1.0)
-
-    def onset_ratio(signal: np.ndarray, sr: int) -> float:
-        onset_rms = np.sqrt(np.mean(signal[: int(0.01 * sr)] ** 2))
-        sustain_rms = np.sqrt(np.mean(signal[int(0.3 * sr) : int(0.4 * sr)] ** 2))
-        return onset_rms / sustain_rms if sustain_rms > 0 else 0.0
-
-    piano_ratio = onset_ratio(piano, example.SR)
-    violin_ratio = onset_ratio(violin, example.SR)
-    assert piano_ratio > violin_ratio  # piano is already loud at 10ms; violin isn't yet
+    assert late_over_early("instrument:piano") < 0.5 < late_over_early("instrument:violin")
 
 
 # -- demo wiring ---------------------------------------------------------------
@@ -180,6 +228,10 @@ async def test_streaming_pushes_one_heatmap_column_per_spectrogram_frame_and_upd
     hub = Hub()
     session.bind_hub(hub)
 
+    # An instrument clip: the hub keeps only a bounded history of recent messages,
+    # and the 7 s speech clip has more columns than that.
+    select = _by_type(session, "select")[0]
+    session.dispatch(select.id, "change", {"value": "instrument:violin"})
     button = _by_type(session, "button")[0]
     stats = _by_type(session, "stat")
     result = session.dispatch(button.id, "click", {})
@@ -193,7 +245,7 @@ async def test_streaming_pushes_one_heatmap_column_per_spectrogram_frame_and_upd
         if "append" in change and "z" in change["append"]
         for col in change["append"]["z"]
     ]
-    default_sample = example.SAMPLES[example.DEFAULT_KEY]
+    default_sample = example.SAMPLES["instrument:violin"]
     assert len(appended_columns) == len(default_sample.spectrogram)
     assert all(len(col) == len(default_sample.freqs) for col in appended_columns)
 
@@ -217,3 +269,29 @@ async def test_changing_the_sample_selects_a_different_clip():
     assert before.startswith("data:audio/wav;base64,")
     assert after.startswith("data:audio/wav;base64,")
     assert before != after
+
+
+@pytest.mark.integration
+async def test_a_visible_credit_line_follows_the_picked_sample():
+    example = _load_example()
+    session = example.build()
+    select = _by_type(session, "select")[0]
+
+    def credit_text() -> str:
+        out = []
+        for c in _by_type(session, "text"):
+            props = c.reactive_props()
+            key = "blocks" if "blocks" in props else "text"
+            out.append(json.dumps(props[key](), ensure_ascii=False))
+        return "\n".join(out)
+
+    session.dispatch(select.id, "change", {"value": "instrument:violin"})
+    violin = credit_text()
+    assert "University of Iowa" in violin and "theremin.music.uiowa.edu" in violin
+
+    session.dispatch(select.id, "change", {"value": "speech:librivox"})
+    speech = credit_text()
+    assert "LibriVox" in speech and "librivox.org" in speech and "public domain" in speech.lower()
+
+    session.dispatch(select.id, "change", {"value": "vowel:a"})
+    assert "textbook" in credit_text().lower()

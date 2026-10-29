@@ -42,6 +42,7 @@ DEMOS = [
     ("dataframe-explorer", "dataframe_explorer", None),
     ("map-poster", "map_poster", None),
     ("grc-map", "grc_map", None),
+    ("audio-analysis", "audio_analysis", "spectrogram"),
     ("gpx-viewer", "gpx_viewer", None),
     ("expenses", "expenses", None),
     ("markov-poet", "markov_poet", "poem"),
@@ -93,6 +94,13 @@ def _nudge(page, kind: str | None) -> None:
         elif kind == "play":
             page.get_by_role("button", name="Play").click(timeout=2000)
             page.wait_for_timeout(3500)  # a few dozen generations of the R-pentomino
+        elif kind == "spectrogram":
+            # The default clip is the real speech recording; stream it to the end.
+            page.get_by_role("button", name="Stream spectrogram").click(timeout=2000)
+            page.wait_for_function("document.body.innerText.includes('Done - ')", timeout=20000)
+            page.wait_for_timeout(400)
+            # The spectrogram is the point of this demo, and it sits below the fold.
+            page.evaluate("window.scrollTo(0, 300)")
         elif kind == "sample":
             # Click a bundled real sample photo -- a real classifier's bars over a
             # generic synthetic image would be meaningless.
@@ -127,7 +135,8 @@ def main() -> None:
                 page.wait_for_timeout(900)  # settle: first paint + fonts
                 _nudge(page, nudge)
                 page.wait_for_timeout(300)
-                page.evaluate("window.scrollTo(0, 0)")  # every thumb shows the header
+                if nudge != "spectrogram":  # every other thumb shows the header
+                    page.evaluate("window.scrollTo(0, 0)")
                 page.wait_for_timeout(150)
                 dest = OUT / f"{slug}.png"
                 page.screenshot(path=str(dest))  # viewport crop

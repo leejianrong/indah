@@ -62,6 +62,8 @@ cp -r "$here/thumbnails" "$out/"  # real per-demo screenshots for the gallery ca
 for mod in "${examples[@]}"; do
   cp "$repo/examples/$mod.py" "$out/$mod.py"
 done
+# audio_analysis.py reads its recordings (and their ATTRIBUTION.txt) from audio_samples/ beside it.
+cp -r "$repo/examples/audio_samples" "$out/"
 
 {
   echo "$INDAH_REQ"
