@@ -1,4 +1,4 @@
-// Colours that follow the theme (ADR-0044). A canvas cannot read CSS variables, so a value such
+// Colours that follow the theme (ADR-0046). A canvas cannot read CSS variables, so a value such
 // as "var(--x-explore)" is resolved against the element it is drawn in, and the drawing is
 // redone when the light/dark switch changes the page's data-theme.
 

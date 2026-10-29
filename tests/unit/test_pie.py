@@ -1,4 +1,4 @@
-"""Pie (ADR-0044)."""
+"""Pie (ADR-0046)."""
 
 import pytest
 

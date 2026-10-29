@@ -1470,7 +1470,7 @@ _COLOR_OK = re.compile(r"[A-Za-z0-9 #%.,()\-_/]{1,80}")
 
 def _color(value: Any, name: str) -> str:
     """A CSS colour or ``var(--token)``: the characters a colour needs and nothing that could
-    fetch a resource (the token form lets a plot follow the light/dark switch, ADR-0044)."""
+    fetch a resource (the token form lets a plot follow the light/dark switch, ADR-0046)."""
     text = str(value).strip()
     if not _COLOR_OK.fullmatch(text) or "url(" in text.lower() or "expression" in text.lower():
         raise ValueError(f"{name} must be a CSS colour such as '#2ec4b6' or 'var(--x-exploit)'")
@@ -1793,7 +1793,7 @@ def _to_slices(value: Any) -> list[dict[str, Any]]:
 
 
 class Pie(Component):
-    """A pie chart with one slice lit (ADR-0044).
+    """A pie chart with one slice lit (ADR-0046).
 
     ``slices`` is a source of ``[{"label", "value", "color"?}, ...]`` (values are shares of the
     total; a colour may be ``var(--token)``). ``active`` is a source of the index of the slice to

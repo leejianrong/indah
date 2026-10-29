@@ -1,4 +1,4 @@
-# ADR-0044: Dashboard primitives: a fixed frame, track grids, fill heights
+# ADR-0046: Dashboard primitives: a fixed frame, track grids, fill heights
 
 - Status: **Accepted** 2026-10-26 (built on `agent/dashboard-primitives`)
 - Date: 2026-10-26

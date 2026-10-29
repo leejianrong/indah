@@ -1,5 +1,5 @@
 <script>
-  // Pie (ADR-0044): slices as shares of a total, one slice lit. The lit slice is pulled out and
+  // Pie (ADR-0046): slices as shares of a total, one slice lit. The lit slice is pulled out and
   // glows while the others dim; the change eases over a short transition (CSS, so it stays
   // smooth however often the prop is patched). Colours may be var(--token) and so follow the
   // theme with no code.

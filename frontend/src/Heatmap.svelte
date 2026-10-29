@@ -1,11 +1,11 @@
 <script>
-  // Client-side heatmap / 2-D field (ADR-0019, KAN-1461; ADR-0044). Draws a column-major field
+  // Client-side heatmap / 2-D field (ADR-0019, KAN-1461; ADR-0046). Draws a column-major field
   // z (z[x][y]) to a canvas through a colormap - spectrograms, heatmaps, attention
   // maps. Streaming appends a column (a time slice) via the append op (App.svelte
   // concatenates arrays), so a live spectrogram grows at O(column). No dependency:
   // the render is a small ImageData fill scaled to the canvas.
   //
-  // ADR-0044 adds, all optional: a `colormap` given as a list of colour stops (hex or
+  // ADR-0046 adds, all optional: a `colormap` given as a list of colour stops (hex or
   // var(--token), so the scale follows the theme); `nullColor` for cells with no value (a masked
   // cell, rather than the lowest colour); `origin="top"` to put row 0 at the top; `rowLabels` in a
   // left gutter; `colGroups` as labelled brackets over runs of columns; and a spotlight (`markX`)
@@ -111,7 +111,7 @@
     if (!canvas || !ctx || !offctx) return;
     const dpr = window.devicePixelRatio || 1;
     const w = el?.clientWidth || 400;
-    // height="fill" (ADR-0044): the container's height, less the title row above the canvas.
+    // height="fill" (ADR-0046): the container's height, less the title row above the canvas.
     const h =
       props.height === "fill"
         ? Math.max(40, Math.floor((el?.clientHeight || 0) - (titleEl ? titleEl.offsetHeight + 5 : 0)))

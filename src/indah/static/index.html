@@ -221,10 +221,10 @@
       .divider-vertical { width: 1px; align-self: stretch; }
       .row > .divider-vertical { flex: 0 0 1px; }
       .grid { display: grid; gap: 1rem; }
-      /* Cell (ADR-0044): a grid child that spans columns or rows; its child fills it. */
+      /* Cell (ADR-0046): a grid child that spans columns or rows; its child fills it. */
       .cell { display: flex; flex-direction: column; gap: 1rem; min-width: 0; min-height: 0; }
       .cell > * { flex: 1 1 0; min-height: 0; }
-      /* Frame (ADR-0044): a fixed design-size stage scaled to the window, never scrolling. */
+      /* Frame (ADR-0046): a fixed design-size stage scaled to the window, never scrolling. */
       .frame-viewport { position: relative; width: 100%; overflow: hidden; }
       .frame-viewport.kiosk { position: fixed; inset: 0; z-index: 50; background: var(--bg); }
       /* A frame that fills the window leaves no room for the page's own footer. */

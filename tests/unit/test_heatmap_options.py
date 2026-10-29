@@ -1,4 +1,4 @@
-"""Heatmap colour stops, blank cells, origin, labels, groups and marks (ADR-0044)."""
+"""Heatmap colour stops, blank cells, origin, labels, groups and marks (ADR-0046)."""
 
 import pytest
 

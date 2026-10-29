@@ -1,5 +1,5 @@
 <script>
-  // Frame (ADR-0044): a fixed design-size stage scaled to fit. Children are laid out once
+  // Frame (ADR-0046): a fixed design-size stage scaled to fit. Children are laid out once
   // inside a width x height box and the box is scaled uniformly, centred, so the layout is
   // identical at any window size.
   //   contain (default)  fit the width its parent gives and the height left in the window

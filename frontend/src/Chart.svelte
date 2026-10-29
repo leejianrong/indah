@@ -1,5 +1,5 @@
 <script>
-  // Client-side chart (ADR-0018, KAN-1423; ADR-0044). uPlot is bundled into the shell at
+  // Client-side chart (ADR-0018, KAN-1423; ADR-0046). uPlot is bundled into the shell at
   // build time (a devDependency of frontend/, inlined by the singlefile build) --
   // it is NOT a Python runtime dep and adds no Node at install or runtime.
   //
@@ -9,7 +9,7 @@
   // curve grows at O(point) on the wire; uPlot redraws in the browser. Zoom (drag)
   // and hover run client-side.
   //
-  // ADR-0044 adds, all optional: a series `kind` (line, scatter, bars), `dash`, `width`,
+  // ADR-0046 adds, all optional: a series `kind` (line, scatter, bars), `dash`, `width`,
   // `alpha`; fixed `xRange` / `yRange`; a `playhead` (a vertical line, with the region after it
   // shaded when `shadeAfter`); horizontal `rules`; a `highlight` bar; and colours written as
   // var(--token) that follow the light/dark switch.
@@ -67,7 +67,7 @@
     return cols;
   }
 
-  // height="fill" (ADR-0044): the plot takes the height its container gives it, less the title
+  // height="fill" (ADR-0046): the plot takes the height its container gives it, less the title
   // and legend uPlot adds around the plot area (measured once the plot exists).
   function plotHeight() {
     if (props.height !== "fill") return props.height ?? 240;

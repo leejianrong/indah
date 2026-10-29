@@ -1,4 +1,4 @@
-"""Chart series kinds, ranges, playhead, rules, highlight and legend (ADR-0044)."""
+"""Chart series kinds, ranges, playhead, rules, highlight and legend (ADR-0046)."""
 
 import pytest
 
