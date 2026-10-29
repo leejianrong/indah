@@ -17,7 +17,7 @@
 | 0.7.0 | Command palette, built-in visuals, the docs runtime | 24 | IND-165, 157, 162, 163, 176 (83a, done), 183, 184, 175 | 1 |
 | 0.8.0 (about to release) | Live docs, deploy basics and size, in one release | about 70 | IND-181, 185, 169, 83, 61, 159, 186 to 190, 199 to 206, 214, 215, 177 to 180, 195 | 1 |
 | 0.9.0 (released) | Multi-replica (ADR-0043) | 17 | IND-197, 208, 210, 211, 212, 216 | 1 |
-| 0.10.0 (provisional) | Live media and annotation, plus the gallery cards | 22 + 8 | IND-74 (split 3 ways), 64, 65, 71, 56, 62; gallery: IND-191, 192, 193, 196 | 1, decided in the ADR |
+| 0.10.0 (released) | Live media and dashboard primitives, plus UI fixes | n/a | IND-74, 64, 65, 62; dashboard primitives (ADR-0046); UI cards IND-221 to 227, 231; flakes IND-232, 234 | 1 |
 | Later | Needs a decision or has no demand yet | 11 | IND-57, 81, 66 | - |
 | Superseded | The hosted Studio (ADR-0041 option B replaced it) | 6 | IND-173, 174 | - |
 | Closed as folded | | 1 | IND-155 (into IND-166) | - |
@@ -250,7 +250,12 @@ decided.
 Owner decides: what fronts the k3s (Traefik or ingress-nginx talking to pods, or a Cloudflare Tunnel to a
 Service; this decides whether IND-209 is built at all); Redis or Postgres for the first store; accept ADR-0043.
 
-## 0.10.0 (provisional): live media and annotation, 22 points, plus the gallery cards
+## 0.10.0 (released 2026-10-29): live media and dashboard primitives
+
+Shipped: IND-74 (ADR-0045 transport, `Camera`), IND-64 webcam detection, IND-65 `Microphone` and streaming
+ASR, IND-62 stepped video detection, the dashboard primitives (`Frame`, `Cell`, `Pie`, chart kinds, heatmap
+marks; ADR-0046), and the UI fixes from the visual check. Not done and moved on: IND-71 annotation and IND-56
+segmentation. The plan as written before the release follows.
 
 Theme: the deferred live-media boundary (ADR-0017), only if the owner wants it.
 
