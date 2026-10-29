@@ -54,6 +54,8 @@ BUILTIN_TYPES = frozenset(
         "select",
         "image",
         "imageoverlay",
+        "camera",
+        "microphone",
         "audio",
         "chart",
         "heatmap",

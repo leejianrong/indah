@@ -175,7 +175,12 @@
       padding: [8, 8, 0, 0],
       legend: legendOptions(),
       cursor: { drag: { x: true, y: false } }, // drag-to-zoom on x
-      hooks: { draw: [drawOverlays] },
+      hooks: {
+        draw: [drawOverlays],
+        // Until the pointer is over the plot the legend would read "Value: --"; hide the
+        // placeholders and show values only while hovering (IND-227).
+        setCursor: [(self) => el && el.classList.toggle("hovering", self.cursor.idx != null)],
+      },
     };
   }
 

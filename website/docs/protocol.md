@@ -20,6 +20,8 @@ HTTP POSTs. Both ride one port so Colab's and Runpod's proxies pass them
 - `POST /api/event` — one UI event (client → server).
 - `POST /api/upload` — a multipart file upload (client → server); see
   [File upload and download](#file-upload-and-download).
+- `WebSocket /api/live` — Tier 1 live media (client → server binary only), present only with
+  `create_app(live=True)`; see [Live media (Tier 1)](#live-media-tier-1).
 - `GET /api/file/{sid}/{token}` — download a file the app handed back (server →
   client); see [File upload and download](#file-upload-and-download).
 - `GET /api/editor.js` — the code editor module (ADR-0032), an ES module the shell
@@ -69,11 +71,10 @@ indah declares two transport tiers (ADR-0017); everything shipped today is Tier 
   tier Colab's proxy supports (it blocks WebSockets, ADR-0002), so **everything in
   this document runs on Tier 0.** Upload and record-*snapshot* media (a single
   frame, a recorded clip) fit here.
-- **Tier 1 — an optional streaming upgrade (WebSocket), not built.** Reserved for
-  continuous high-frequency binary (live webcam, real-time detection), enabled only
-  where the environment supports it (non-Colab). It is declared to keep that door
-  open without weakening Tier 0; nothing here depends on it, and it does not change
-  the Tier 0 contract.
+- **Tier 1 — an optional streaming upgrade (WebSocket), opt-in (ADR-0045).** Carries continuous
+  client → server binary (live webcam frames) where the environment passes WebSockets. It is off
+  unless `create_app(live=True)` is set, never offered on Colab, and changes nothing on Tier 0: the
+  server still answers over SSE. See [Live media (Tier 1)](#live-media-tier-1).
 
 ## Nodes
 
@@ -273,6 +274,53 @@ reachable only through that session (an unknown `sid` or `token` is `404`). The 
 is document-relative, so it resolves behind Colab/Runpod proxy base paths. With the route hint on
 (see "Route hint") the URL ends in `?r=<machine id>`; the owner ignores it.
 
+## Live media (Tier 1)
+
+Optional and off by default (ADR-0045). With `create_app(live=True)` (needs `pip install "indah[live]"`),
+the server mounts `WebSocket /api/live` and tells the shell with `"live": {"path": "api/live", "v": 1}`
+in `window.__INDAH_CHROME__`. Without that flag the shell never opens a socket, and a `camera` node
+sends snapshots over `POST /api/upload` instead (about one a second), so the same handler runs on
+Colab. The socket carries client → server binary frames only; everything the server says to the page
+still goes over SSE.
+
+One socket serves one `camera` or `microphone` node, so one stream never blocks another.
+
+1. The client sends a JSON text frame first:
+   `{"type":"hello","v":1,"sid":"<session id, or the signed token on a secure app>","component":"<node id>","kind":"video"|"audio"}`.
+   The session id is sent here, never in the URL. The session must already exist (the SSE stream
+   makes it); the socket never creates one.
+2. The server answers `{"type":"ready"}`, or closes with a code.
+3. The client then sends **binary** frames: a 4-byte big-endian unsigned `seq`, then the payload: JPEG bytes for `kind` `video` (a `camera`), or
+   16-bit little-endian mono PCM at the node's `sampleRate`, about 100 ms per frame, for `kind` `audio`
+   (a `microphone`). The `kind` must match the node, or the socket is closed `4403`.
+4. About once a second the server sends `{"type":"stats","dropped":<n>,"processed":<n>}`.
+
+**Backpressure.** Latest frame wins. The shell skips a capture tick when `bufferedAmount` is over
+256 KiB. The server keeps one waiting frame per socket and runs one handler at a time, so a frame
+that arrives while the handler is busy replaces the waiting one (counted in `dropped`). Audio is
+queued in order instead, up to `Live.audio_buffer_seconds` (2 s); past that the oldest chunks are
+dropped (counted in `dropped`) and the next chunk handed to the handler reports `dropped_before`.
+The AudioWorklet that produces the PCM is served from `GET /api/live-audio.js` (same origin, so
+`script-src 'self'` covers it), only when live is on. Without a socket a `microphone` records in
+the browser and, on stop, posts one WAV take to `POST /api/upload`.
+
+**Close codes.** `1001` draining; `1008` policy (a frame that is not `seq` + payload, or more bytes per
+second than `Live.max_bytes_per_second`); `1009` a frame over `Live.max_frame_bytes` (1 MiB); `4400`
+bad or missing hello, a `v` other than 1, or silence past `Live.hello_timeout`; `4401` not
+authenticated; `4403` forbidden (a forged or foreign token, a denied role, or a component that is not a
+`camera` or, for `kind` `audio`, not a `microphone`); `4409` unknown session (reconnect the stream first); `4429` more than
+`Live.max_sockets_per_address` (4) sockets from one address.
+
+**Security.** The `Origin` is checked before the upgrade is accepted, on every app (secure or not),
+with the same rule as the cross-origin guard (`allowed_origins` applies); a refused upgrade is an
+HTTP `403`. On a secure app the hello token goes through the same checks as an event. Trusted proxy
+headers (`X-Forwarded-For`, `-Proto`, `-Host`, `-Prefix`) are honoured for the upgrade as for HTTP.
+With the strict CSP and live on, `connect-src` is `'self'` plus this response's `ws://host` or
+`wss://host`; with live off the policy is unchanged.
+
+The live socket has its own version (`v` in the hello). It adds no SSE message, so `protocol_version`
+stays 1.
+
 ## Built-in component types
 
 | `type` | Kind | Key props | Events (payload) |
@@ -304,6 +352,8 @@ is document-relative, so it resolves behind Colab/Runpod proxy base paths. With 
 | `chips` | input | `value` (or `[...]` with `multi:true`), `options:[{value,label,count?,tone?}]`, `multi?`, `label` | `change` `{value}` or `{value:[...]}` |
 | `segmented` | input | `value`, `options:[{value,label,count?,tone?}]`, `label` | `change` `{value}` |
 | `date` | input | `value` (ISO `YYYY-MM-DD`), `label` | `change` `{value}` |
+| `microphone` | input | `label`, `sampleRate` | PCM over `WebSocket /api/live` (`kind` `audio`), or one WAV take via `POST /api/upload`; `transport` event `{value: "live"|"recording"|"off"}` |
+| `camera` | input | `label`, `fps`, `maxWidth`, `quality` | JPEG frames over `WebSocket /api/live`, or snapshots via `POST /api/upload`; `transport` event `{value: "live"|"snapshot"|"off"}` |
 | `upload` | input | `label`, `accept`, `multiple` | file(s) via `POST /api/upload` (not the event path) |
 | `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |
 | `image` | display | `src`, `alt` | — |

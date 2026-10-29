@@ -670,10 +670,14 @@ _CACHE: dict[str, str] = {
 YEARS: list[str] = sorted(_CACHE)
 DEFAULT_YEAR = YEARS[-1] if YEARS else ""
 
-NO_DATA_COLOR = "#d8d2c8"  # a neutral Studio muted tone
+NO_DATA_COLOR = "#e9e4dc"  # drawn hatched, so it never reads as "the lowest count"
+NO_DATA_EDGE = "#9a928a"
 INK = "#2b2320"
-RAMP_LOW = "#eef5f2"  # pale teal tint
-RAMP_HIGH = "#173d35"  # deep teal, darker than the Studio accent for more range
+BACKGROUND = "#fdf6ee"
+RAMP_LOW = "#d3e9e0"  # light teal, still visible against the page background
+RAMP_MID = ("#92cbb9", "#45998a")  # two mid stops so the middle of the range is not muddy grey
+RAMP_HIGH = "#0f3a31"  # deep teal, darker than the Studio accent for more range
+RAMP = [RAMP_LOW, *RAMP_MID, RAMP_HIGH]
 
 _decoded: dict[str, dict[str, Any]] = {}
 
@@ -698,15 +702,6 @@ def _global_domain() -> tuple[int, int]:
     return (min(values), max(values)) if values else (0, 1)
 
 
-def _lerp_color(t: float) -> tuple[float, float, float]:
-    def hex_to_rgb(h: str) -> tuple[float, float, float]:
-        h = h.lstrip("#")
-        return tuple(int(h[i : i + 2], 16) / 255 for i in (0, 2, 4))
-
-    lo, hi = hex_to_rgb(RAMP_LOW), hex_to_rgb(RAMP_HIGH)
-    return tuple(lo[i] + (hi[i] - lo[i]) * t for i in range(3))
-
-
 def render_choropleth(year: str):
     """Render one year's divisions as a styled matplotlib Figure, colored by
     registered electors on the fixed global scale."""
@@ -719,33 +714,48 @@ def render_choropleth(year: str):
     from matplotlib.collections import PolyCollection
     from matplotlib.colors import LinearSegmentedColormap, Normalize
     from matplotlib.figure import Figure
+    from matplotlib.patches import Patch
+    from matplotlib.ticker import FuncFormatter, MaxNLocator
 
     data = _load(year)
     vmin, vmax = _global_domain()
-    cmap = LinearSegmentedColormap.from_list("indah_teal", [RAMP_LOW, RAMP_HIGH])
+    cmap = LinearSegmentedColormap.from_list("indah_teal", RAMP)
     norm = Normalize(vmin=vmin, vmax=vmax)
 
     rings: list[list[list[float]]] = []
-    colors: list[tuple[float, float, float]] = []
+    colors: list[tuple[float, ...]] = []
+    missing: list[list[list[float]]] = []
     all_lat: list[float] = []
     for division in data["divisions"]:
         count = division["electors"]
-        color = _lerp_color(norm(count)) if count is not None else _lerp_color(-1)
         for ring in division["rings"]:
-            rings.append(ring)
-            colors.append(color if count is not None else None)
+            if count is None:
+                missing.append(ring)
+            else:
+                rings.append(ring)
+                colors.append(cmap(norm(count)))
             all_lat.extend(y for _x, y in ring)
-    # `None` placeholders (no-data divisions) render as the neutral gray, not the ramp.
-    face_colors = [c if c is not None else NO_DATA_COLOR for c in colors]
 
     lat0 = sum(all_lat) / len(all_lat) if all_lat else 1.35
 
     fig = Figure(figsize=(6, 4.6), dpi=150)
     ax = fig.add_subplot(111)
-    fig.patch.set_facecolor("#fdf6ee")
-    ax.set_facecolor("#fdf6ee")
-    coll = PolyCollection(rings, facecolors=face_colors, edgecolors=INK, linewidths=0.5)
-    ax.add_collection(coll)
+    fig.patch.set_facecolor(BACKGROUND)
+    ax.set_facecolor(BACKGROUND)
+    # Pale hairlines between the fills, not heavy ink outlines.
+    ax.add_collection(
+        PolyCollection(rings, facecolors=colors, edgecolors=BACKGROUND, linewidths=0.3)
+    )
+    if missing:
+        ax.add_collection(
+            PolyCollection(
+                missing,
+                facecolors=NO_DATA_COLOR,
+                edgecolors=NO_DATA_EDGE,
+                linewidths=0.3,
+                hatch="//////",
+            )
+        )
     ax.autoscale_view()
     ax.set_aspect(1 / math.cos(math.radians(lat0)))
     ax.axis("off")
@@ -755,6 +765,27 @@ def render_choropleth(year: str):
     cbar = fig.colorbar(sm, ax=ax, orientation="horizontal", fraction=0.05, pad=0.03, shrink=0.6)
     cbar.set_label("Registered electors", fontsize=8, color=INK)
     cbar.ax.tick_params(labelsize=7, color=INK, labelcolor=INK)
+    cbar.locator = MaxNLocator(nbins=5, steps=[1, 2, 5, 10])
+    cbar.formatter = FuncFormatter(lambda x, _pos: f"{x / 1000:.0f}k")  # "100k", not "100000"
+    cbar.update_ticks()
+    cbar.outline.set_edgecolor(INK)
+    cbar.outline.set_linewidth(0.5)
+    if missing:
+        ax.legend(
+            handles=[
+                Patch(
+                    facecolor=NO_DATA_COLOR,
+                    edgecolor=NO_DATA_EDGE,
+                    hatch="//////",
+                    linewidth=0.3,
+                    label="No data (not in the electors table)",
+                )
+            ],
+            loc="lower right",
+            fontsize=7,
+            frameon=False,
+            labelcolor=INK,
+        )
 
     ax.set_title(f"Singapore electoral divisions - {year}", fontsize=12, color=INK, pad=10)
     fig.text(

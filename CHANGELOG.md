@@ -11,6 +11,68 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+
+- A stepped video detection example, `examples/video_detect.py` (IND-62): upload a short video (decoded
+  with `av`, the demo's own dependency) or images, the same SSD-MobileNetV1 detector boxes up to 24
+  frames up front, and a `Slider` scrubs through them. Plain Tier 0, so it works on Colab as it is.
+- A `Microphone` component and `AudioChunk` (ADR-0045, IND-65): the live socket now also carries 16-bit
+  mono PCM from an AudioWorklet to an `on_audio` handler, in order, with a bounded queue that drops the
+  oldest audio past `Live.audio_buffer_seconds` and reports `dropped_before`. The worklet is served from
+  `/api/live-audio.js` only when `live=True`. Without a socket (Colab) it records and sends one WAV take on
+  Stop. Opt-in, off by default, no change to the default CSP or routes. A live transcription example,
+  `examples/mic_transcribe.py`, streams the mic through Whisper. The Python source size limit in
+  `docs/size-budget.json` goes from 540000 to 560000 bytes to make room for it (the live layer is ordinary
+  Python source, not a new dependency).
+- A live webcam detection example, `examples/webcam_detect.py` (IND-64): the Tier 1 `Camera` feeding the
+  same SSD-MobileNetV1 detector as the object detection demo, with each frame shown with its boxes. It runs on
+  a laptop or your own server; on Colab it falls back to snapshots.
+- Tier 1 live media transport (ADR-0045, IND-74): `create_app(live=True)` (or `live=Live(...)`, with
+  `pip install "indah[live]"`) serves an opt-in `WebSocket /api/live` that carries binary frames from the
+  browser, and a `Camera` component whose handler receives each JPEG as a `Frame`. Latest frame wins at
+  both ends, so a slow model sees a lower rate and never a growing delay. The upgrade checks `Origin` on
+  every app, goes through the same session identity checks as an event, honours trusted proxies, and adds
+  the socket origin to the strict CSP `connect-src` only when live is on. Off by default, never offered on
+  Colab, where `Camera` falls back to one snapshot a second over the upload route. `protocol_version` stays 1.
+
+- A Studio page for `Camera` (Media and files chapter), covering `Camera`, `Frame` and `Live` (IND-235).
+
+### Changed
+
+- Shell: on a phone-width screen a `Chart` (and anything in a `Grid` or `Sidebar`) no longer pushes the
+  page wider than the screen (IND-221).
+- Shell: `Image` and `Plot` are capped at 70% of the viewport height and centred, so a square poster no
+  longer runs below the fold (IND-222). The poster and map-poster demos gain a caption.
+- Shell: a `Chart` legend shows values only while the pointer is over the plot (no more `Value: --`), and
+  an empty `Heatmap` says "Nothing to show yet." (IND-227).
+
+### Removed
+
+- The "Pretty map" gallery demo (`examples/prettymap.py`, its Colab notebook and thumbnail); the Map poster demo supersedes it (IND-230).
+
+### Changed
+
+- Gallery apps: the sorting visualiser fills its card, with a visible unsorted colour and
+  phone-width stat tiles; the expense tracker shows a currency and a labelled category table
+  instead of unlabelled bars; the cellular automaton opens on a busier "garden" with square
+  cells on desktop; the Markov poet ends on a full stop and keeps its notes in the poem card.
+- GRC map demo: the colourbar ticks read "50k, 100k, 150k" instead of running together, the ramp has
+  mid stops so the middle is no longer muddy, divisions with no data are hatched and named in a legend
+  (they used to read as the lowest count), and the outlines are pale hairlines (IND-231).
+
+### Fixed
+
+- `launch()` (blocking) now installs its SIGTERM drain handler before the server starts answering, so a
+  SIGTERM right after startup drains instead of killing the process (IND-232).
+- The Markov poet streaming test no longer depends on an unseeded random poem length (IND-234).
+
+## [0.9.1] - 2026-10-26
+
+A gallery patch. The public gallery has four new demos, its cards come from one catalog file, and the
+Colab notebooks are current again. The `indah` package itself is unchanged since 0.9.0 (no change under
+`src/`), so there is nothing to upgrade; the new version number lets the gallery deploy pin a release that
+matches the demos it serves. `protocol_version` is still 1.
+
 ### Fixed
 
 - The Colab notebooks in `examples/colab/` had drifted from the demo sources (ten of fourteen embedded old
@@ -35,6 +97,29 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   (ADR-0046).
 - `Pie`: a pie chart with one slice lit (`active=`): pulled out and glowing while the others dim, with the
   slices and the lit one reactive and colours that may be `var(--token)` (ADR-0046).
+
+- An "Expense tracker" demo in the public gallery (`examples/expenses.py`): add expenses, see a table with
+  delete, the total, a per-category bar strip and a running-total chart, and clear all behind a confirm
+  dialog. The list is kept with `ctx.persist`, so it comes back after a reload; in the gallery the state
+  lives in memory for the visit only. The data is bounded to 50 rows (IND-220).
+
+- A "Markov poet" demo in the public gallery (`examples/markov_poet.py`): a word-level Markov chain
+  trained on small public-domain sources (Shakespeare's sonnets, Emily Dickinson, Lewis Carroll's verse),
+  streaming each word into a `StreamText` as it is chosen. It has a chain order from 1 to 3, a length, a
+  randomness control, an optional start word and a fixed-seed switch for repeatable poems (IND-219).
+
+- A sorting visualiser for the public gallery (`examples/sorting.py`): pick bubble, insertion, selection,
+  merge or quick sort, an array size from 10 to 100 and a speed, and watch the bars rearrange with live
+  comparison and swap counts. The algorithms are plain generators that yield one step at a time, and each
+  run stops at a fixed step limit. It uses `BarStrip`, with a bar's colour showing whether it is being
+  compared, swapped or sorted.
+
+- A cellular automata demo for the gallery (`examples/automaton.py`): Conway's Game of Life and the
+  one-dimensional rules (30, 90, 110, or any rule number), streamed generation by generation onto a
+  `Heatmap`. It has pattern, rule, speed and grid-size controls (up to 64 x 64), play, pause, step and
+  reset, a generation counter, and a cap of 600 generations per run. Pure Python, no extra dependency
+  (IND-217).
+
 - A gallery policy page on the docs site (`website/docs/gallery-policy.md`), linked from the gallery's
   footer: what is listed, what an entry needs, what listing does and does not mean, and how to report or
   ask for removal. No community submissions are open yet (IND-193).
@@ -52,6 +137,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   (opens with `rel="noopener noreferrer"`, never an iframe). A fast-layer test checks the file: unique
   slugs, https only, plain text, blurb length, and that each thumbnail exists and is small. The
   gallery looks as before (IND-191).
+
+### Known limitations
+
+- The link check has not run on GitHub yet and has only seen an empty catalog, so no real URL has been
+  fetched. The status it records reaches the live gallery only on the next deploy.
+- The Markov poet's verses were typed from memory, not diffed against Project Gutenberg, so a word or two may
+  differ from the standard text.
 
 ## [0.9.0] - 2026-10-25
 

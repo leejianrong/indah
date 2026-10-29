@@ -10,8 +10,11 @@ object-detection	object_detection.py	Object detection	🎯	onnxruntime pillow hu
 charts	charts.py	Hybrid charting	📊	matplotlib
 stocks	stocks.py	Stock peer analysis	💹	-
 dataframe-explorer	dataframe_explorer.py	DataFrame explorer	🔎	-
-prettymap	prettymap.py	Pretty map	🗺️	-
 map-poster	map_poster.py	Map poster	🗾	matplotlib
 grc-map	grc_map.py	GRC map	🇸🇬	matplotlib
 audio-analysis	audio_analysis.py	Audio analysis	🎧	numpy
 gpx-viewer	gpx_viewer.py	GPX viewer	🥾	-
+markov-poet	markov_poet.py	Markov poet	🪶	-
+sorting	sorting.py	Sorting visualiser	📶	-
+expenses	expenses.py	Expense tracker	🧾	-
+automaton	automaton.py	Cellular automata	🧬	-

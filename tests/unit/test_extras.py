@@ -26,6 +26,7 @@ def test_the_feature_extras_hold_what_the_adr_says():
     assert _names(EXTRAS["plot"]) == {"matplotlib"}
     assert _names(EXTRAS["data"]) == {"pandas", "numpy"}
     assert _names(EXTRAS["redis"]) == {"redis"}
+    assert _names(EXTRAS["live"]) == {"websockets"}  # ADR-0045
     assert _names(EXTRAS["demos"]) == {
         "numpy",
         "pillow",

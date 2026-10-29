@@ -98,6 +98,8 @@ EXEMPT: dict[str, str] = {
     "__version__": "a string",
     "build_demo_session": "the old built-in demo; the Studio replaces it",
     "mock_llm": "a test double used by the chatbot demos",
+    "Microphone": "needs a microphone and a live-enabled server; examples/mic_transcribe.py covers it",
+    "AudioChunk": "the value a Microphone handler receives; shown by the same demo",
     "SessionStore": "an extension seam (ADR-0010), documented in the docs",
     "SessionHandle": "an extension seam (ADR-0010)",
     "InMemorySessionStore": "internal default store",

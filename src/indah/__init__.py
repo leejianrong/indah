@@ -21,6 +21,7 @@ from .components import (
     Badge,
     BarStrip,
     Button,
+    Camera,
     Card,
     Cell,
     Chart,
@@ -58,6 +59,7 @@ from .components import (
     MasterDetail,
     Menu,
     MenuItem,
+    Microphone,
     Modal,
     MultiSelect,
     NavItem,
@@ -99,6 +101,7 @@ from .custom import CustomComponent, custom, register_component
 from .env import Environment, detect_environment, public_url
 from .hardening import Limits, Rate
 from .launch import LaunchHandle, launch
+from .live import AudioChunk, Frame, Live
 from .push import Topic
 from .reactive import Computed, Signal, batch, computed, effect
 from .session import DispatchResult, Session
@@ -112,7 +115,7 @@ from .state import MemoryStateStore, SqliteStateStore, StateStore
 from .stream import Stream
 from .theme import Theme
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 
 __all__ = [
     "__version__",
@@ -198,6 +201,12 @@ __all__ = [
     # file upload / download (ADR-0017)
     "Upload",
     "UploadedFile",
+    # live media, Tier 1 (ADR-0045)
+    "Camera",
+    "Microphone",
+    "AudioChunk",
+    "Frame",
+    "Live",
     "Diff",
     "Download",
     "DownloadFile",

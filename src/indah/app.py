@@ -33,14 +33,15 @@ from pydantic import ValidationError
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware import Middleware
-from starlette.requests import Request
+from starlette.requests import HTTPConnection, Request
 from starlette.responses import (
     HTMLResponse,
     JSONResponse,
     Response,
     StreamingResponse,
 )
-from starlette.routing import Route
+from starlette.routing import Route, WebSocketRoute
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 try:  # python-multipart raises this on a malformed / over-limit multipart body
     from starlette.datastructures import UploadFile
@@ -62,6 +63,7 @@ from .authz import Policy, authz_scope
 from .components import (
     DENSITIES,
     Button,
+    Camera,
     Card,
     Chat,
     Checkbox,
@@ -74,6 +76,7 @@ from .components import (
     Grid,
     Image,
     List,
+    Microphone,
     MultiSelect,
     Number,
     Plot,
@@ -105,14 +108,36 @@ from .doctor import PATH as DOCTOR_PATH
 from .doctor import Counter, DoctorTap, make_gate
 from .doctor import handler as _doctor
 from .drain import Drain, chain_sigterm
+from .env import Environment, detect_environment
 from .envconfig import UNSET, EnvConfig
-from .guard import OriginGuard, normalize_origins
+from .guard import OriginGuard, normalize_origins, origin_allowed
 from .hardening import (
     Limits,
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
     StreamLimiter,
     peer_address,
+)
+from .live import (
+    CLOSE_BAD_HELLO,
+    CLOSE_FORBIDDEN,
+    CLOSE_GOING_AWAY,
+    CLOSE_POLICY,
+    CLOSE_TOO_BIG,
+    CLOSE_TOO_MANY,
+    CLOSE_UNAUTHENTICATED,
+    CLOSE_UNKNOWN_SESSION,
+    KINDS,
+    LIVE_PATH,
+    LIVE_PROTOCOL_VERSION,
+    AudioChunk,
+    AudioQueue,
+    ByteBudget,
+    Frame,
+    Live,
+    Mailbox,
+    parse_frame,
+    websocket_support,
 )
 from .metrics import PATH as METRICS_PATH
 from .metrics import PERMISSION as METRICS_PERMISSION
@@ -586,6 +611,7 @@ def create_app(
     state_namespace: str = UNSET,
     persist_ttl: float = UNSET,
     persist_max_bytes: int = UNSET,
+    live: bool | Live = False,
 ) -> Starlette:
     """Build the ASGI app.
 
@@ -781,6 +807,7 @@ def create_app(
         "INDAH_PERSIST_MAX_BYTES", persist_max_bytes, DEFAULT_MAX_BYTES
     )
     compress = env.boolean("INDAH_COMPRESS", compress, True)
+    live_options = _live_options(live)
     node_header = env.boolean("INDAH_NODE_HEADER", node_header, False)
     node = resolve_node()
     route = resolve_route_hint(route_hint, cluster_secret)
@@ -915,6 +942,12 @@ def create_app(
             Route("/api/stream", _stream, methods=["GET"]),
             Route("/api/event", _event, methods=["POST"]),
             Route("/api/upload", _upload, methods=["POST"]),
+            *([WebSocketRoute("/api/live", _live)] if live_options is not None else []),
+            *(
+                [Route("/api/live-audio.js", _live_audio_js, methods=["GET"])]
+                if live_options
+                else []
+            ),
             Route("/api/editor.js", _editor_js, methods=["GET"]),
             Route("/api/map.js", _map_js, methods=["GET"]),
             Route("/api/components/{name}.js", _component_js, methods=["GET"]),
@@ -970,6 +1003,10 @@ def create_app(
     app.state.csp_media_hosts = tuple(csp_media_hosts)
     app.state.csp_violations = deque(maxlen=100)
     app.state.stream_limiter = StreamLimiter(limits.max_streams_per_ip)
+    app.state.live = live_options
+    app.state.live_limiter = StreamLimiter(
+        live_options.max_sockets_per_address if live_options else None
+    )
     if hasattr(store, "app"):
         store.app = app  # so each session's Context can reach its ASGI app
     app.state.heartbeat_seconds = heartbeat_seconds
@@ -1048,6 +1085,9 @@ def _chrome_html(state: Any, base_href: str | None = None) -> str:
         "logoDarkUrl": "api/brand/logo?scheme=dark" if getattr(state, "logo_dark", None) else None,
         "brandName": title if getattr(state, "logo", None) else None,
         "secure": True if getattr(state, "secure", False) else None,
+        "live": {"path": LIVE_PATH, "v": LIVE_PROTOCOL_VERSION}
+        if getattr(state, "live", None) is not None
+        else None,
     }
     if getattr(state, "density", "comfortable") != "comfortable":
         html_text = html_text.replace(
@@ -1102,6 +1142,7 @@ async def _index(request: Request) -> Response:
             nonce,
             img_hosts=[*known_img_hosts(), *state.csp_media_hosts],
             report_uri=f"{base or ''}api/csp-report",
+            connect_extra=_live_connect_sources(request),
         )
     else:
         policy = render_custom(state.csp, nonce)
@@ -1185,6 +1226,7 @@ def _lazy_module(filename: str) -> Callable[[Request], Awaitable[Response]]:
 
 _editor_js = _lazy_module("editor.js")
 _map_js = _lazy_module("map.js")
+_live_audio_js = _lazy_module("live-audio.js")  # the Microphone AudioWorklet (ADR-0045)
 
 
 _COMPONENT_NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
@@ -1449,7 +1491,7 @@ async def sse_events(
 
 
 def _audit(
-    request: Request,
+    request: HTTPConnection,
     handle: SessionHandle,
     principal: Principal | None,
     component_id: str,
@@ -1486,7 +1528,7 @@ def _denied(status: int, error: str) -> JSONResponse:
 
 
 async def _open_session(
-    request: Request, sid: str | None, app_path: str | None = None, *, create: bool = True
+    request: HTTPConnection, sid: str | None, app_path: str | None = None, *, create: bool = True
 ) -> tuple[SessionHandle | None, JSONResponse | None, Principal | None]:
     """The session this request is allowed to use, or the refusal to send (ADR-0033).
 
@@ -1529,6 +1571,209 @@ async def _open_session(
     else:
         handle = store.get_or_create(sid or DEFAULT_SESSION_ID, info)
     return handle, None, principal
+
+
+# -- Tier 1 live media (ADR-0045) ---------------------------------------------------------------
+
+_LIVE_HOST = re.compile(r"[A-Za-z0-9.\-]+(:\d{1,5})?")
+_LIVE_DENIAL_CODES = {
+    401: CLOSE_UNAUTHENTICATED,
+    403: CLOSE_FORBIDDEN,
+    409: CLOSE_UNKNOWN_SESSION,
+    503: CLOSE_GOING_AWAY,
+}
+
+
+def _live_options(live: bool | Live) -> Live | None:
+    """The live options to serve with, or ``None`` when the route stays off: not asked for, or
+    on Colab, whose proxy blocks WebSockets (the page falls back to snapshots, ADR-0045)."""
+    if not live:
+        return None
+    options = live if isinstance(live, Live) else Live()
+    if detect_environment() is Environment.COLAB:
+        logger.warning(
+            "live=True is ignored on Colab: its proxy does not pass WebSockets, so a Camera "
+            "falls back to about one snapshot a second over HTTP (ADR-0045)."
+        )
+        return None
+    if not websocket_support():
+        raise ImportError(
+            'create_app(live=True) needs a WebSocket library for uvicorn: pip install "indah[live]"'
+        )
+    return options
+
+
+def _live_connect_sources(request: Request) -> list[str]:
+    """The ``connect-src`` entry for the live socket: this response's own ws(s) origin, built from
+    the believed scheme and host (``'self'`` matching WebSocket schemes is not reliable)."""
+    if getattr(request.app.state, "live", None) is None:
+        return []
+    host = request.headers.get("host", "")
+    if not _LIVE_HOST.fullmatch(host):
+        return []
+    return [f"{'wss' if request.url.scheme == 'https' else 'ws'}://{host}"]
+
+
+async def _live_close(ws: WebSocket, code: int) -> None:
+    try:
+        await ws.close(code=code)
+    except (RuntimeError, WebSocketDisconnect):  # already closed by the other side or task
+        pass
+
+
+async def _live_hello(ws: WebSocket, live: Live) -> dict[str, Any] | None:
+    """Read and validate the first message; close and return ``None`` if it is not a hello."""
+    try:
+        message = await asyncio.wait_for(ws.receive(), live.hello_timeout)
+    except asyncio.TimeoutError:
+        await _live_close(ws, CLOSE_BAD_HELLO)
+        return None
+    if message["type"] == "websocket.disconnect":
+        return None
+    try:
+        hello = json.loads(message.get("text") or "")
+    except ValueError:
+        hello = None
+    if (
+        not isinstance(hello, dict)
+        or hello.get("type") != "hello"
+        or hello.get("v") != LIVE_PROTOCOL_VERSION
+        or hello.get("kind") not in KINDS
+        or not isinstance(hello.get("sid"), str)
+        or not 0 < len(hello["sid"]) <= 200
+        or not isinstance(hello.get("component"), str)
+        or not 0 < len(hello["component"]) <= 64
+    ):
+        await _live_close(ws, CLOSE_BAD_HELLO)
+        return None
+    return hello
+
+
+async def _live(ws: WebSocket) -> None:
+    """``WebSocket api/live`` (ADR-0045): client to server binary frames for one ``Camera``.
+
+    The origin is checked before the upgrade is accepted, whether or not the app is secure: a
+    browser does not apply the same-origin policy to a WebSocket. Then the per-address socket
+    cap, then the hello, which names the session and the component and goes through the same
+    identity checks as an event (``_open_session``)."""
+    state = ws.app.state
+    live: Live = state.live
+    headers = ws.headers
+    own = f"{'https' if ws.url.scheme == 'wss' else 'http'}://{headers.get('host', '')}"
+    if not origin_allowed(
+        sec_fetch_site=headers.get("sec-fetch-site"),
+        origin=headers.get("origin"),
+        own_origin=own,
+        allowed=state.allowed_origins,
+    ):
+        await ws.close(code=CLOSE_POLICY)  # before accept: the browser sees an HTTP 403
+        return
+    await ws.accept()
+    address = peer_address(ws.scope)
+    limiter: StreamLimiter = state.live_limiter
+    if not limiter.acquire(address):
+        await _live_close(ws, CLOSE_TOO_MANY)
+        return
+    try:
+        await _live_serve(ws, live)
+    finally:
+        limiter.release(address)
+
+
+async def _live_serve(ws: WebSocket, live: Live) -> None:
+    state = ws.app.state
+    hello = await _live_hello(ws, live)
+    if hello is None:
+        return
+    cid: str = hello["component"]
+    handle, denied, principal = await _open_session(ws, hello["sid"], create=False)
+    if handle is None:
+        status = denied.status_code if denied is not None else 403
+        await _live_close(ws, _LIVE_DENIAL_CODES.get(status, CLOSE_FORBIDDEN))
+        return
+    target = handle.session.find(cid)
+    audio = hello["kind"] == "audio"
+    # a socket drives one Camera (video) or one Microphone (audio) and nothing else
+    if not isinstance(target, Microphone if audio else Camera):
+        await _live_close(ws, CLOSE_FORBIDDEN)
+        return
+    await ws.send_json({"type": "ready"})
+    _audit(ws, handle, principal, cid, "live_open", {"kind": hello["kind"]})
+    mailbox: Mailbox | AudioQueue
+    if audio:
+        rate = target.sample_rate
+        mailbox = AudioQueue(max(2, int(live.audio_buffer_seconds * rate * 2)))
+    else:
+        mailbox = Mailbox()
+    budget = ByteBudget(live.max_bytes_per_second)
+
+    async def worker() -> None:
+        while (frame := await mailbox.get()) is not None:
+            task: asyncio.Task[Any] | None = None
+            with authz_scope(principal, state.policy):
+                result = handle.session.dispatch(
+                    cid, "audio" if audio else "frame", {"chunk" if audio else "frame": frame}
+                )
+                if result is not None and not result.forbidden and result.coro is not None:
+                    task = handle.session.spawn(result.coro)
+            if result is None or result.forbidden:
+                await _live_close(ws, CLOSE_FORBIDDEN)
+                return
+            _publish_result(handle.hub, result)
+            if task is not None:
+                await task  # one handler at a time: frames that arrive meanwhile replace each other
+
+    async def stats() -> None:
+        while True:
+            await asyncio.sleep(live.stats_seconds)
+            if state.drain.draining:
+                await _live_close(ws, CLOSE_GOING_AWAY)
+                return
+            try:
+                await ws.send_json(
+                    {"type": "stats", "dropped": mailbox.dropped, "processed": mailbox.processed}
+                )
+            except (RuntimeError, WebSocketDisconnect):
+                return
+
+    worker_task = asyncio.create_task(worker())
+    stats_task = asyncio.create_task(stats())
+    try:
+        while True:
+            message = await ws.receive()
+            if message["type"] == "websocket.disconnect":
+                break
+            raw = message.get("bytes")
+            if raw is None:
+                continue  # the client has nothing else to say; text is ignored
+            if len(raw) > live.max_frame_bytes:
+                await _live_close(ws, CLOSE_TOO_BIG)
+                break
+            if not budget.allow(len(raw)):
+                await _live_close(ws, CLOSE_POLICY)
+                break
+            try:
+                seq, payload = parse_frame(raw)
+            except ValueError:
+                await _live_close(ws, CLOSE_POLICY)
+                break
+            if audio:
+                mailbox.put(AudioChunk(payload, "audio/pcm", seq, time.time(), target.sample_rate))
+            else:
+                mailbox.put(Frame(payload, "image/jpeg", seq, time.time()))
+    finally:
+        mailbox.close()
+        for task in (stats_task, worker_task):
+            task.cancel()
+        await asyncio.gather(stats_task, worker_task, return_exceptions=True)
+        _audit(
+            ws,
+            handle,
+            principal,
+            cid,
+            "live_close",
+            {"dropped": mailbox.dropped, "processed": mailbox.processed},
+        )
 
 
 async def _session(request: Request) -> JSONResponse:
