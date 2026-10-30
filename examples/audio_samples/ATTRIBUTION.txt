@@ -1,0 +1,31 @@
+Audio samples used by examples/audio_analysis.py
+================================================
+
+All four files are mono, 16-bit PCM WAV, trimmed and resampled from the sources
+below (peak-normalised to 0.9, a short fade at the ends). Nothing else in this
+folder is a recording. The demo's synthesised vowels are generated in code and
+are labelled as a textbook model in the app.
+
+violin.wav, piano.wav, saxophone.wav (2 s each, 22.05 kHz)
+  Source:   University of Iowa Electronic Music Studios, Musical Instrument
+            Samples (MIS), recorded by Lawrence Fritts
+            https://theremin.music.uiowa.edu/MIS.html
+  Licence:  "freely available ... may be downloaded and used for any projects,
+            without restrictions" (the MIS page; the creator asks to be told of
+            uses, which is a request, not a condition).
+  Originals (the first note of each file, one note cut from it):
+    violin.wav     Violin.arco.mf.sulA.A4B4.aiff  (A4, arco, mf)
+                   https://theremin.music.uiowa.edu/MISviolin.html
+    piano.wav      Piano.mf.C4.aiff               (C4, mf)
+                   https://theremin.music.uiowa.edu/MISpiano.html
+    saxophone.wav  AltoSax.NoVib.mf.C4B4.aiff     (alto saxophone, ~264 Hz, no vibrato, mf)
+                   https://theremin.music.uiowa.edu/MISaltosaxophone.html
+
+speech.wav (7.3 s, 16 kHz)
+  Source:   LibriVox, "A Gift" by Amy Lowell (1914), read by Algy Pug (LibriVox
+            reader 4705); the clip is 7.65 s to 14.95 s of the recording.
+            https://librivox.org/a-gift-by-amy-lowell/
+            https://www.archive.org/download/a_gift_1602.poem_librivox/gift_lowell_alp_64kb.mp3
+  Licence:  Public domain (LibriVox recordings are donated to the public domain;
+            https://librivox.org/pages/public-domain/). Credit is not required but
+            is preferred, hence this file and the credit line in the app.

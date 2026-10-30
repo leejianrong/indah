@@ -145,11 +145,11 @@ added = "2026-09-20"
 slug = "audio-analysis"
 title = "Audio analysis"
 emoji = "🎧"
-blurb = "Synthesized vowels and instrument notes, streamed into a live spectrogram."
+blurb = "Real violin, piano, sax and speech recordings, streamed into a live spectrogram."
 author = "indah"
 kind = "hosted"
 module = "audio_analysis"
-thumbnail = ""
+thumbnail = "audio-analysis.png"
 tags = ["audio", "streaming"]
 added = "2026-09-22"
 

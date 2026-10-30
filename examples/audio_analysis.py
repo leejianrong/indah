@@ -1,33 +1,25 @@
-"""Audio analysis: pick a vowel or an instrument note and watch its spectrogram
-stream in, next to its waveform and a live level meter.
+"""Audio analysis: pick a vowel, an instrument note or a spoken phrase and watch its
+spectrogram stream in, next to its waveform and a live level meter.
 
-Every sample here is **synthesized, not recorded** - there is no audio file
-anywhere in this repo. Bundling real recorded speech or instrument audio into a
-public Apache-2.0 demo raises licensing questions (whose voice, whose performance,
-under what terms) this project has deliberately stayed out of (see
-docs/DEMOS-DOCS-REVAMP.md / docs/DEMOS-DOCS-ROUND2.md's licensing sections, and
-map_poster.py's AGPL note for the same instinct applied to a different demo). So
-instead of a recording, each sample is built from real published acoustic data:
+The instruments and the speech are **real recordings**, bundled in
+``examples/audio_samples/`` (about 500 KB), each credited in the app and in
+``examples/audio_samples/ATTRIBUTION.txt``:
 
-- **Vowels** (/i/ /e/ /a/ /o/ /u/) use a source-filter model - a harmonic buzz
-  excitation shaped by resonant "formant" peaks at the classic Peterson & Barney
-  (1952) average adult formant frequencies (F1/F2/F3). Those numbers are
-  well-documented phonetics facts, not copyrightable audio, and shaping a buzz with
-  them is *how real vowels work*: the vocal folds produce a harmonic-rich buzz, the
-  vocal tract's resonances (formants) shape which harmonics come through loud. The
-  resulting spectrograms show the same formant-band structure a spectrogram of a
-  real human vowel shows - that's the teaching point.
-- **Instruments** (violin, piano, saxophone) use additive synthesis built around
-  each instrument's real, well-documented spectral character: a violin's rich
-  harmonic series with a slight bowed vibrato (frequency modulation); a piano's
-  fast attack, per-harmonic exponential decay, and *inharmonicity* - a real
-  physical property of a struck string, where partials land a little sharp of an
-  exact integer multiple of the fundamental (``f_n ~= n*f0*sqrt(1 + B*n^2)``); a
-  saxophone's emphasis on odd harmonics, a formant-like resonance peak, and a
-  reed-buzz attack transient.
+- **Violin, piano, alto saxophone**: one note each (about 2 s) from the University of
+  Iowa Musical Instrument Samples by Lawrence Fritts
+  (https://theremin.music.uiowa.edu/MIS.html), free to use without restrictions.
+- **Speech**: about 7 s of "A Gift" by Amy Lowell, read by Algy Pug for LibriVox
+  (https://librivox.org/a-gift-by-amy-lowell/), public domain.
 
-These are physically-motivated approximations, not samples of a real violin or a
-real voice - please don't mistake them for recordings.
+The five **vowels** (/i/ /e/ /a/ /o/ /u/) stay synthesised, and are labelled as a
+textbook model: a harmonic buzz shaped by resonant "formant" peaks at the classic
+Peterson & Barney (1952) average adult formant frequencies. That is how real vowels
+work (the vocal folds make a harmonic-rich buzz, the vocal tract's resonances shape
+which harmonics come through loud), but it is a model, not a voice.
+
+The recordings are found next to this file (``audio_samples/``). Where the file has no
+folder beside it (a Colab notebook, a single-file Space) they are downloaded once from
+GitHub into a temp folder; if that fails the demo still runs, with the vowels only.
 
 ``indah.Audio`` renders a native browser ``<audio controls>`` element, and there is
 no way for Python to read back its playhead position today - so the spectrogram
@@ -43,16 +35,20 @@ from __future__ import annotations
 import asyncio
 import io
 import math
+import tempfile
 import urllib.parse
+import urllib.request
 import wave
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
 
 import indah
 
-SR = 22_050  # mono sample rate, Hz - plenty for speech/instrument formant structure
+SR = 22_050  # sample rate of the synthesised vowels, Hz
 
 # -- Peterson & Barney (1952)-style average adult formant frequencies (Hz) ---------
 # F1/F2/F3 per vowel. These are the classic textbook numbers repeated in every
@@ -66,20 +62,125 @@ _VOWEL_FORMANTS: dict[str, tuple[float, float, float]] = {
 }
 
 _VOWEL_LABELS = {
-    "i": "/i/ (heed)",
-    "e": "/e/ (head)",
-    "a": "/a/ (hod)",
-    "o": "/o/ (hawed)",
-    "u": "/u/ (who'd)",
+    "i": "Vowel /i/ (heed) (textbook model)",
+    "e": "Vowel /e/ (head) (textbook model)",
+    "a": "Vowel /a/ (hod) (textbook model)",
+    "o": "Vowel /o/ (hawed) (textbook model)",
+    "u": "Vowel /u/ (who'd) (textbook model)",
 }
 
-# -- instrument notes ----------------------------------------------------------
-_INSTRUMENT_F0 = {"violin": 440.0, "piano": 261.63, "saxophone": 233.08}  # A4, C4, Bb3
-_INSTRUMENT_LABELS = {
-    "violin": "Violin (A4)",
-    "piano": "Piano (C4)",
-    "saxophone": "Saxophone (Bb3)",
+_VOWEL_CREDIT = (
+    "**Synthesised, not a recording.** A textbook source-filter model: a harmonic buzz "
+    "shaped by the average adult formants of Peterson & Barney (1952)."
+)
+
+# -- the real recordings -------------------------------------------------------
+
+AUDIO_DIR = Path(__file__).resolve().parent / "audio_samples" if "__file__" in globals() else None
+_RAW_URL = "https://raw.githubusercontent.com/leejianrong/indah/main/examples/audio_samples/"
+
+_MIS = (
+    "University of Iowa Musical Instrument Samples, recorded by Lawrence Fritts - "
+    "[theremin.music.uiowa.edu/{page}](https://theremin.music.uiowa.edu/{page}). "
+    "Licence: free to use without restrictions."
+)
+_LIBRIVOX = (
+    '"A Gift" by Amy Lowell, read by Algy Pug for LibriVox - '
+    "[librivox.org/a-gift-by-amy-lowell](https://librivox.org/a-gift-by-amy-lowell/). "
+    "Licence: public domain."
+)
+
+
+@dataclass(frozen=True)
+class Recording:
+    file: str
+    label: str
+    kind: Literal["instrument", "speech"]
+    credit: str
+    frame_size: int  # FFT window (samples): 512 at 16 kHz is a speech-style 32 ms window
+
+
+RECORDINGS: dict[str, Recording] = {
+    "instrument:violin": Recording(
+        "violin.wav",
+        "Violin (A4)",
+        "instrument",
+        "**Recording.** Violin, A4, arco, mf. " + _MIS.format(page="MISviolin.html"),
+        1024,
+    ),
+    "instrument:piano": Recording(
+        "piano.wav",
+        "Piano (C4)",
+        "instrument",
+        "**Recording.** Piano, C4, mf. " + _MIS.format(page="MISpiano.html"),
+        1024,
+    ),
+    "instrument:saxophone": Recording(
+        "saxophone.wav",
+        "Alto saxophone (C4)",
+        "instrument",
+        "**Recording.** Alto saxophone, about 264 Hz, no vibrato, mf. "
+        + _MIS.format(page="MISaltosaxophone.html"),
+        1024,
+    ),
+    "speech:librivox": Recording(
+        "speech.wav",
+        'Speech: "A Gift" (LibriVox)',
+        "speech",
+        "**Recording.** " + _LIBRIVOX,
+        512,
+    ),
 }
+
+
+def _fetch(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=20) as r:  # noqa: S310 - a fixed https URL
+        return r.read()
+
+
+def load_recordings(
+    folder: Path | None, fetch: Callable[[str], bytes] = _fetch
+) -> dict[str, tuple[np.ndarray, int]]:
+    """Read each recording as ``(float samples, sample rate)``, keyed like ``RECORDINGS``.
+
+    ``folder`` is the bundled ``audio_samples/`` directory; a file missing from it is
+    downloaded from GitHub into it (or, when there is no such folder or it cannot be
+    written, into a temp folder). A file that cannot be had is left out - the demo then
+    runs with fewer samples rather than failing.
+    """
+    found: dict[str, tuple[np.ndarray, int]] = {}
+    cache = folder
+    for key, rec in RECORDINGS.items():
+        path = (cache / rec.file) if cache else None
+        if path is None or not path.exists():
+            try:
+                data = fetch(_RAW_URL + rec.file)
+                if cache is None or not _writable(cache):
+                    cache = Path(tempfile.gettempdir()) / "indah-audio-samples"
+                cache.mkdir(parents=True, exist_ok=True)
+                path = cache / rec.file
+                path.write_bytes(data)
+            except Exception:  # noqa: BLE001 - offline: skip this clip, keep the demo up
+                continue
+        try:
+            with wave.open(str(path)) as w:
+                sr = w.getframerate()
+                pcm = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2")
+            found[key] = (pcm.astype(np.float64) / 32768.0, sr)
+        except Exception:  # noqa: BLE001 - a corrupt download: skip it
+            continue
+    return found
+
+
+def _writable(folder: Path) -> bool:
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        probe = folder / ".probe"
+        probe.write_bytes(b"")
+        probe.unlink()
+        return True
+    except OSError:
+        return False
 
 
 def _envelope(n: int, sr: int, *, attack: float, release: float) -> np.ndarray:
@@ -123,73 +224,6 @@ def synth_vowel(
         gain = max(gain, 0.02)  # a small floor so between-formant harmonics aren't silent
         signal += source_amp * gain * np.sin(2 * np.pi * freq * t)
     signal *= _envelope(n, sr, attack=0.03, release=0.15)
-    return _normalize(signal)
-
-
-def synth_violin(*, f0: float = 440.0, duration: float = 1.8, sr: int = SR) -> np.ndarray:
-    """A rich odd+even harmonic series with a bowed attack and a slight vibrato
-    (frequency modulation ~5.5 Hz) - the FM is applied via a phase integral so the
-    frequency actually wobbles, not just the amplitude."""
-    n = int(duration * sr)
-    t = np.arange(n) / sr
-    vibrato = 1.0 + 0.006 * np.sin(2 * np.pi * 5.5 * t)
-    n_harmonics = int((sr / 2) / f0)
-    signal = np.zeros(n, dtype=np.float64)
-    for k in range(1, n_harmonics + 1):
-        inst_freq = f0 * k * vibrato
-        if float(np.max(inst_freq)) >= sr / 2:
-            break
-        phase = 2 * np.pi * np.cumsum(inst_freq) / sr
-        amp = 1.0 / (k**1.2)
-        signal += amp * np.sin(phase)
-    signal *= _envelope(n, sr, attack=0.08, release=0.2)
-    return _normalize(signal)
-
-
-def synth_piano(
-    *, f0: float = 261.63, duration: float = 2.2, sr: int = SR, inharmonicity: float = 0.0004
-) -> np.ndarray:
-    """A fast-attack, per-harmonic exponentially-decaying tone with inharmonicity -
-    a struck string's partials land a little sharp of an exact integer multiple of
-    the fundamental: ``f_n ~= n*f0*sqrt(1 + B*n^2)`` (a real, well-documented
-    property of piano strings, B here a small stretch coefficient)."""
-    n = int(duration * sr)
-    t = np.arange(n) / sr
-    signal = np.zeros(n, dtype=np.float64)
-    for k in range(1, 21):
-        freq = k * f0 * math.sqrt(1 + inharmonicity * k**2)
-        if freq >= sr / 2:
-            break
-        decay = 2.5 + 0.55 * k  # higher partials die out faster
-        amp = (1.0 / k) * np.exp(-decay * t)
-        signal += amp * np.sin(2 * np.pi * freq * t)
-    signal *= _envelope(n, sr, attack=0.005, release=0.05)
-    return _normalize(signal)
-
-
-def synth_saxophone(*, f0: float = 233.08, duration: float = 1.8, sr: int = SR) -> np.ndarray:
-    """Strong odd-harmonic emphasis (a reed instrument's clarinet-like character),
-    a formant-like resonance bump around 1 kHz, and a short reed-buzz (noise)
-    attack transient."""
-    n = int(duration * sr)
-    t = np.arange(n) / sr
-    formant_center, formant_bw = 1000.0, 500.0
-    n_harmonics = int((sr / 2) / f0)
-    signal = np.zeros(n, dtype=np.float64)
-    for k in range(1, n_harmonics + 1):
-        freq = f0 * k
-        if freq >= sr / 2:
-            break
-        odd_emphasis = 1.0 if k % 2 else 0.35
-        base_amp = odd_emphasis / k
-        formant_gain = 1.0 + 1.5 * math.exp(-0.5 * ((freq - formant_center) / formant_bw) ** 2)
-        signal += base_amp * formant_gain * np.sin(2 * np.pi * freq * t)
-    rng = np.random.default_rng(42)  # deterministic - a fixed "reed" for reproducible builds
-    attack_len = int(0.015 * sr)
-    noise_env = np.zeros(n, dtype=np.float64)
-    noise_env[:attack_len] = np.linspace(1.0, 0.0, attack_len)
-    signal += 0.15 * rng.normal(0.0, 1.0, n) * noise_env
-    signal *= _envelope(n, sr, attack=0.04, release=0.12)
     return _normalize(signal)
 
 
@@ -286,8 +320,10 @@ def _waveform_svg(samples: np.ndarray, *, width: int = 640, height: int = 160) -
 class Sample:
     key: str
     label: str
-    kind: Literal["vowel", "instrument"]
+    kind: Literal["vowel", "instrument", "speech"]
     samples: np.ndarray
+    sr: int
+    credit: str  # Markdown shown under the player: who made this and under what licence
     wav_bytes: bytes = field(repr=False)
     waveform_svg: str = field(repr=False)
     spectrogram: list[list[float]] = field(repr=False)
@@ -296,15 +332,24 @@ class Sample:
 
 
 def _build_sample(
-    key: str, label: str, kind: Literal["vowel", "instrument"], samples: np.ndarray
+    key: str,
+    label: str,
+    kind: Literal["vowel", "instrument", "speech"],
+    samples: np.ndarray,
+    *,
+    sr: int = SR,
+    credit: str = "",
+    frame_size: int = FRAME_SIZE,
 ) -> Sample:
-    cols, levels, freqs = spectrogram_columns(samples)
+    cols, levels, freqs = spectrogram_columns(samples, sr=sr, frame_size=frame_size)
     return Sample(
         key=key,
         label=label,
         kind=kind,
         samples=samples,
-        wav_bytes=to_wav_bytes(samples),
+        sr=sr,
+        credit=credit,
+        wav_bytes=to_wav_bytes(samples, sr),
         waveform_svg=_waveform_svg(samples),
         spectrogram=cols,
         levels=levels,
@@ -313,23 +358,25 @@ def _build_sample(
 
 
 def build_samples() -> dict[str, Sample]:
-    """Synthesize every sample once (audio + waveform SVG + spectrogram columns) -
-    the "at import/build time" generation step. Streaming later just replays the
-    precomputed spectrogram columns; nothing is recomputed per click."""
+    """Load the recordings and synthesise the vowels once (audio + waveform SVG +
+    spectrogram columns) - the "at import/build time" step. Streaming later just
+    replays the precomputed spectrogram columns; nothing is recomputed per click."""
     samples: dict[str, Sample] = {}
+    recorded = load_recordings(AUDIO_DIR)
+    for key, rec in RECORDINGS.items():
+        if key in recorded:
+            audio, sr = recorded[key]
+            samples[key] = _build_sample(
+                key, rec.label, rec.kind, audio, sr=sr, credit=rec.credit, frame_size=rec.frame_size
+            )
     for vowel, label in _VOWEL_LABELS.items():
         key = f"vowel:{vowel}"
-        samples[key] = _build_sample(key, label, "vowel", synth_vowel(vowel))
-    synths = {"violin": synth_violin, "piano": synth_piano, "saxophone": synth_saxophone}
-    for name, label in _INSTRUMENT_LABELS.items():
-        samples[f"instrument:{name}"] = _build_sample(
-            f"instrument:{name}", label, "instrument", synths[name](f0=_INSTRUMENT_F0[name])
-        )
+        samples[key] = _build_sample(key, label, "vowel", synth_vowel(vowel), credit=_VOWEL_CREDIT)
     return samples
 
 
 SAMPLES: dict[str, Sample] = build_samples()
-DEFAULT_KEY = "vowel:a"
+DEFAULT_KEY = "speech:librivox" if "speech:librivox" in SAMPLES else "vowel:a"
 
 
 def _fmt_db(value: float | None) -> str:
@@ -392,8 +439,9 @@ def build() -> indah.Session:
     controls = indah.Card(
         title="Sample",
         children=[
-            indah.Select(m.picker, options=options, label="Vowel or instrument"),
+            indah.Select(m.picker, options=options, label="Recording or vowel"),
             indah.Audio(lambda: m.current().wav_bytes, media_type="audio/wav"),
+            indah.Text(lambda: m.current().credit, markdown=True),
             indah.Button("Stream spectrogram", on_click=m.analyze),
             indah.Spinner(active=m.running, label="streaming..."),
             indah.Text(lambda: m.status.value),
@@ -419,11 +467,10 @@ def build() -> indah.Session:
     )
 
     intro = indah.Text(
-        "# Audio analysis: spectrograms of synthesized speech and instruments\n\n"
-        "Every clip here is **synthesized from real acoustic data** (published vowel "
-        "formant frequencies, and well-documented instrument harmonic structure) - "
-        "there are no recordings in this demo, by design (see the module docstring "
-        "for why). Pick a sample, then stream its spectrogram in column by column "
+        "# Audio analysis: spectrograms of real recordings\n\n"
+        "Violin, piano and saxophone notes and a spoken phrase are **real recordings**, "
+        "credited under the player; the vowels are a **synthesised textbook model** of "
+        "speech formants. Pick one, then stream its spectrogram in column by column "
         "via a manual sliding-window FFT (`numpy.fft`, no scipy/librosa).",
         markdown=True,
     )

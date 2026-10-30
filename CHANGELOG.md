@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Changed
+
+- The audio-analysis demo uses real recordings: violin, piano and alto saxophone notes from the University of Iowa Musical Instrument Samples and a spoken phrase from LibriVox (public domain), about 500 KB under `examples/audio_samples/`, each credited in the app and in `ATTRIBUTION.txt`. The vowels stay synthesised and are labelled as a textbook model (IND-229).
+
 ## [0.10.1] - 2026-10-30
 
 A patch for shell fixes found after 0.10.0 (a stream-reconnect bug behind a flaky failover test, and three small UI problems). The library API is unchanged and `protocol_version` is still 1.
