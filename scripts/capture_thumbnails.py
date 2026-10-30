@@ -50,6 +50,7 @@ DEMOS = [
     ("automaton", "automaton", "play"),
 ]
 
+TALL_VIEWPORT = {"width": 1350, "height": 960}  # whole audio-analysis app; scaled to 900x640
 VIEWPORT = {"width": 900, "height": 640}  # ~14:10, matches the card's aspect ratio
 
 
@@ -99,8 +100,6 @@ def _nudge(page, kind: str | None) -> None:
             page.get_by_role("button", name="Stream spectrogram").click(timeout=2000)
             page.wait_for_function("document.body.innerText.includes('Done - ')", timeout=20000)
             page.wait_for_timeout(400)
-            # The spectrogram is the point of this demo, and it sits below the fold.
-            page.evaluate("window.scrollTo(0, 300)")
         elif kind == "sample":
             # Click a bundled real sample photo -- a real classifier's bars over a
             # generic synthetic image would be meaningless.
@@ -122,7 +121,9 @@ def main() -> None:
             port = _free_port()
             app = importlib.import_module(module).app
             server = _serve(app, port)
-            page = browser.new_page(viewport=VIEWPORT, device_scale_factor=1)
+            # The spectrogram sits low on this page, so it gets a taller window (same 14:10).
+            viewport = TALL_VIEWPORT if nudge == "spectrogram" else VIEWPORT
+            page = browser.new_page(viewport=viewport, device_scale_factor=1)
             try:
                 page.goto(f"http://127.0.0.1:{port}/", wait_until="domcontentloaded")
                 page.wait_for_selector(".shell", timeout=8000)
@@ -135,11 +136,16 @@ def main() -> None:
                 page.wait_for_timeout(900)  # settle: first paint + fonts
                 _nudge(page, nudge)
                 page.wait_for_timeout(300)
-                if nudge != "spectrogram":  # every other thumb shows the header
-                    page.evaluate("window.scrollTo(0, 0)")
+                page.evaluate("window.scrollTo(0, 0)")  # every thumb shows the header
                 page.wait_for_timeout(150)
                 dest = OUT / f"{slug}.png"
                 page.screenshot(path=str(dest))  # viewport crop
+                if viewport is not VIEWPORT:  # same size as every other card
+                    from PIL import Image
+
+                    Image.open(dest).convert("RGB").resize(
+                        (VIEWPORT["width"], VIEWPORT["height"]), Image.LANCZOS
+                    ).save(dest, optimize=True)
                 print(f"  wrote {dest.relative_to(ROOT)}")
             finally:
                 page.close()
