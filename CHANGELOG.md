@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-10-30
+
+A gallery patch. The audio-analysis demo now plays real recordings (instruments from the University of Iowa Musical Instrument Samples, a spoken phrase from LibriVox) instead of synthesised sounds. The `indah` package itself is unchanged since 0.10.1 (no change under `src/`); the new version number lets the gallery deploy pin a release that matches the demos it serves. `protocol_version` is still 1.
+
 ### Changed
 
 - The audio-analysis demo uses real recordings: violin, piano and alto saxophone notes from the University of Iowa Musical Instrument Samples and a spoken phrase from LibriVox (public domain), about 500 KB under `examples/audio_samples/`, each credited in the app and in `ATTRIBUTION.txt`. The vowels stay synthesised and are labelled as a textbook model (IND-229).
