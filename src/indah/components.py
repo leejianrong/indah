@@ -2325,18 +2325,45 @@ class RowAction:
     """A per-row button on a rich ``Table`` (IND-99). ``on_click(key)`` runs (sync or
     async) with the row's key; ``confirm`` makes the shell ask first, like
     ``Button(confirm=)`` -- a UX guard, not authorization. Rows can be stale by the time
-    a click lands, so a handler must tolerate a key that no longer exists."""
+    a click lands, so a handler must tolerate a key that no longer exists.
 
-    label: str
+    ``label`` may be a function of the row (``lambda row: "Make editor" if row["role"] ==
+    "viewer" else "Make viewer"``) and ``when`` a bool or a function of the row; a row where
+    ``when`` is false has no button. ``row`` is that row's dict. The shell gets the resolved
+    label and visibility with each row (IND-240), so a plain string label sends nothing extra.
+    ``when`` only hides the button: the click is still dispatched to ``on_click``, so keep the
+    real check there (or in your authorization layer). A function that raises hides the button
+    for that row instead of failing the page."""
+
+    label: str | Callable[[dict[str, Any]], str]
     on_click: Callable[[Any], Any]
     confirm: str | None = None
     variant: str = "ghost"
+    when: bool | Callable[[dict[str, Any]], bool] = True
+
+    @property
+    def per_row(self) -> bool:
+        return callable(self.label) or callable(self.when) or self.when is not True
 
     def wire(self, index: int) -> dict[str, Any]:
-        out: dict[str, Any] = {"id": f"a{index}", "label": self.label, "variant": self.variant}
+        label = self.label if isinstance(self.label, str) else ""
+        out: dict[str, Any] = {"id": f"a{index}", "label": label, "variant": self.variant}
         if self.confirm:
             out["confirm"] = self.confirm
         return out
+
+    def for_row(self, row: dict[str, Any]) -> dict[str, Any] | None:
+        """What differs for this row: ``{"hide": True}``, ``{"label": ...}`` or ``None``."""
+        try:
+            shown = self.when(row) if callable(self.when) else bool(self.when)
+            if not shown:
+                return {"hide": True}
+            if callable(self.label):
+                return {"label": str(self.label(row))}
+        except Exception:
+            logger.exception("a RowAction label or when function raised; hiding it for that row")
+            return {"hide": True}
+        return None
 
 
 class Table(Component):
@@ -2514,6 +2541,21 @@ class Table(Component):
             raise ValueError("pass columns= when the rows are empty")
         return [Col(name) for name in records[0]]
 
+    def _records(self, source: Any) -> list[dict[str, Any]]:
+        """The rows as records, each with its per-row action state under ``__a`` (IND-240)."""
+        records = _to_records(source, self._key)
+        dynamic = [(f"a{i}", a) for i, a in enumerate(self._actions) if a.per_row]
+        if dynamic:
+            for record in records:
+                state = {}
+                for action_id, action in dynamic:
+                    change = action.for_row(record)
+                    if change is not None:
+                        state[action_id] = change
+                if state:
+                    record["__a"] = state
+        return records
+
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {
             "pageSize": self._page_size,
@@ -2552,7 +2594,7 @@ class Table(Component):
         elif self._loader is not None:
             props = {"window": lambda: self._window.value}
         else:
-            props = {"rows": lambda: _to_records(_read(self._rows), self._key)}
+            props = {"rows": lambda: self._records(_read(self._rows))}
         if self._selected is not None:
             if self._columns is None:
                 props["value"] = lambda: (
@@ -2573,7 +2615,7 @@ class Table(Component):
 
     def stream_props(self) -> dict[str, tuple[Stream, Callable[[list[Any]], list[Any]]]]:
         if self._columns is not None and isinstance(self._rows, Stream):
-            return {"rows": (self._rows, lambda rows: _to_records(rows, self._key))}
+            return {"rows": (self._rows, self._records)}
         return {}
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
@@ -2668,7 +2710,7 @@ class Table(Component):
                 return
         self._window.set(
             {
-                "rows": _to_records(rows, self._key),
+                "rows": self._records(rows),
                 "total": total,
                 "offset": query.offset,
                 "seq": query.seq,

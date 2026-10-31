@@ -40,6 +40,7 @@ from indah.components import (
     walk,
 )
 from indah.reactive import Signal
+from indah.stream import Stream
 
 
 @pytest.mark.unit
@@ -724,6 +725,82 @@ def test_row_actions_serialise_and_dispatch_with_the_row_key():
     assert got == [("del", "b"), ("pin", "a")]
     assert t.handle("action", {"action": "a9", "key": "a"}) is False
     assert t.handle("action", {"action": "a0"}) is False  # no key
+
+
+def _members(**kw):
+    rows = [
+        {"id": "u1", "role": "viewer"},
+        {"id": "u2", "role": "editor"},
+        {"id": "u3", "role": "admin"},
+    ]
+    return Table(rows=rows, columns=[Col("id"), Col("role")], key="id", **kw)
+
+
+def _row_meta(table):
+    return [r.get("__a") for r in table.reactive_props()["rows"]()]
+
+
+@pytest.mark.unit
+def test_a_row_action_label_and_visibility_can_depend_on_the_row():
+    t = _members(
+        actions=[
+            RowAction(
+                lambda row: "Make editor" if row["role"] == "viewer" else "Make viewer",
+                lambda key: None,
+                when=lambda row: row["role"] != "admin",  # the last admin cannot be changed
+            ),
+            RowAction("Remove", lambda key: None),
+        ]
+    )
+    assert t.static_props()["actions"][1] == {"id": "a1", "label": "Remove", "variant": "ghost"}
+    assert _row_meta(t) == [
+        {"a0": {"label": "Make editor"}},
+        {"a0": {"label": "Make viewer"}},
+        {"a0": {"hide": True}},
+    ]
+
+
+@pytest.mark.unit
+def test_a_string_label_and_no_when_send_nothing_extra_per_row():
+    t = _members(actions=[RowAction("Pin", lambda key: None)])
+    assert t.static_props()["actions"] == [{"id": "a0", "label": "Pin", "variant": "ghost"}]
+    assert _row_meta(t) == [None, None, None]
+    assert all("__a" not in r for r in t.reactive_props()["rows"]())
+
+
+@pytest.mark.unit
+def test_a_static_when_false_hides_the_action_on_every_row():
+    t = _members(actions=[RowAction("Pin", lambda key: None, when=False)])
+    assert _row_meta(t) == [{"a0": {"hide": True}}] * 3
+
+
+@pytest.mark.unit
+def test_a_raising_label_or_when_hides_that_action_instead_of_failing_the_tree():
+    def boom(row):
+        raise RuntimeError("bad row")
+
+    t = _members(
+        actions=[
+            RowAction(boom, lambda key: None),
+            RowAction("Ok", lambda key: None, when=boom),
+        ]
+    )
+    meta = _row_meta(t)
+    assert meta[0] == {"a0": {"hide": True}, "a1": {"hide": True}}
+
+
+@pytest.mark.unit
+def test_a_streamed_row_gets_its_action_state_too():
+    stream = Stream(limit=10)
+    t = Table(
+        rows=stream,
+        columns=[Col("id"), Col("role")],
+        key="id",
+        actions=[RowAction("Go", lambda key: None, when=lambda row: row["role"] != "admin")],
+    )
+    transform = t.stream_props()["rows"][1]
+    out = transform([{"id": "x", "role": "admin"}, {"id": "y", "role": "viewer"}])
+    assert out[0]["__a"] == {"a0": {"hide": True}} and "__a" not in out[1]
 
 
 @pytest.mark.unit

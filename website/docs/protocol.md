@@ -507,7 +507,9 @@ client-side (no event): a case-insensitive filter over every column (so streamed
 filtered as they land), a column picker remembered in the browser, and follow-the-tail
 that pauses when the viewer scrolls up. `actions:[{id,label,variant,confirm?}]` adds a button
 per row that posts `action` `{action,key}` (a `confirm` text asks in a dialog first, a UX
-guard only); `checkable` adds a checkbox column whose full set of checked keys is posted as
+guard only); a row whose action label or visibility depends on the row carries `__a:
+{"<action id>": {"label": "..."} | {"hide": true}}` in its record, which overrides the action's
+`label` or hides its button for that row (additive, so `protocol_version` stays 1); `checkable` adds a checkbox column whose full set of checked keys is posted as
 `check` `{keys:[...]}` (and, on a remote table, `check_all` `{}`, which makes the server tick every row matching the current query up to the advertised `checkAllMax`) and echoed back in the reactive `checked` prop. Neither changes
 `select`. **Remote mode** (`remote: true`, no `rows`): the shell debounces (150 ms) search, sort
 and paging into `query` `{search, filters, sort:[field,"asc"|"desc"]|null, offset, limit, seq}`

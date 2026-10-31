@@ -2053,6 +2053,68 @@ def test_table_row_actions_with_confirm_and_multi_select():
 
 
 @pytest.mark.e2e
+def test_row_action_label_and_visibility_follow_the_row():
+    """IND-240: a members table shows "Make editor" on a viewer and "Make viewer" on an editor,
+    and no button on the last admin; the confirm dialog uses the row's label; a role change
+    relabels the row."""
+    from indah import Col, RowAction, Session, Signal, Table, create_app
+
+    members = Signal(
+        [
+            {"id": "u1", "role": "viewer"},
+            {"id": "u2", "role": "editor"},
+            {"id": "u3", "role": "admin"},
+        ]
+    )
+
+    def toggle(key):
+        members.set(
+            [
+                {**m, "role": "editor" if m["role"] == "viewer" else "viewer"}
+                if m["id"] == key
+                else m
+                for m in members.value
+            ]
+        )
+
+    table = Table(
+        rows=members,
+        columns=[Col("id", "ID"), Col("role", "Role")],
+        key="id",
+        actions=[
+            RowAction(
+                lambda row: "Make editor" if row["role"] == "viewer" else "Make viewer",
+                toggle,
+                confirm="Change this role?",
+                when=lambda row: row["role"] != "admin",
+            )
+        ],
+    )
+    handle = launch(create_app(session=Session(table)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                rows = page.locator("tbody tr")
+                expect(rows).to_have_count(3)
+                expect(rows.nth(0).get_by_role("button", name="Make editor")).to_be_visible()
+                expect(rows.nth(1).get_by_role("button", name="Make viewer")).to_be_visible()
+                expect(rows.nth(2).get_by_role("button")).to_have_count(0)  # the admin
+
+                rows.nth(0).get_by_role("button", name="Make editor").click()
+                dialog = page.get_by_role("dialog", name="Change this role?")
+                expect(dialog).to_be_visible()
+                dialog.get_by_role("button", name="Make editor", exact=True).click()
+                expect(rows.nth(0).get_by_role("button", name="Make viewer")).to_be_visible()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
 def test_pending_queue_release_in_one_tab_clears_the_row_in_both():
     import importlib.util
     import sys

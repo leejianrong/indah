@@ -177,8 +177,25 @@ table = Table(
 )
 ```
 
-- `RowAction(label, on_click, confirm=)` calls `on_click(key)`. A row can be stale by the time
-  the click lands, so the handler must tolerate a key that no longer exists.
+- `RowAction(label, on_click, confirm=, when=)` calls `on_click(key)`. A row can be stale by the
+  time the click lands, so the handler must tolerate a key that no longer exists. `label` may be
+  a function of the row and `when` a bool or a function of the row; see "A members table" below.
+- A members table: the button reads "Make editor" on a viewer and "Make viewer" on an editor, and
+  the last admin has none.
+
+  ```python
+  RowAction(
+      lambda row: "Make editor" if row["role"] == "viewer" else "Make viewer",
+      change_role,  # on_click(key)
+      confirm="Change this role?",
+      when=lambda row: row["id"] != last_admin_id(),  # no button on this row
+  )
+  ```
+
+  `row` is that row's dict. The label and visibility are worked out on the server and sent with
+  each row, so a plain string label sends nothing extra. `when` hides the button; it does not
+  stop a crafted click, so keep the real check in `change_role` (or your authorization layer).
+  A function that raises hides the button for that row.
 - `Col(kind="cell", render=spec, sort_key="field")` draws a composite cell from the row's fields,
   with the same spec vocabulary as a `List` item (`text` and `bind` name row fields). It is
   display only, and it sorts and is searched by `sort_key`. Keep a cell to one line in a
