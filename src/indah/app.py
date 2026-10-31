@@ -12,6 +12,7 @@ Everything is served from one Starlette app to survive the Colab/Runpod proxies
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import json
 import logging
@@ -33,7 +34,7 @@ from pydantic import ValidationError
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware import Middleware
-from starlette.requests import HTTPConnection, Request
+from starlette.requests import ClientDisconnect, HTTPConnection, Request
 from starlette.responses import (
     HTMLResponse,
     JSONResponse,
@@ -1154,6 +1155,21 @@ async def _index(request: Request) -> Response:
     )
 
 
+def _quiet_disconnect(handler: Any) -> Any:
+    """A browser that navigates away mid-request is not an error: answer nobody, log nothing,
+    instead of letting Starlette's ``ClientDisconnect`` surface as a traceback (IND-242)."""
+
+    @functools.wraps(handler)
+    async def wrapper(request: Request) -> Response:
+        try:
+            return await handler(request)
+        except ClientDisconnect:
+            return Response(status_code=499)
+
+    return wrapper
+
+
+@_quiet_disconnect
 async def _csp_report(request: Request) -> Response:
     """Collect a browser's CSP violation report (``report-uri``). Untrusted input: capped,
     parsed leniently, kept in a bounded deque, and always answered ``204``."""
@@ -1776,6 +1792,7 @@ async def _live_serve(ws: WebSocket, live: Live) -> None:
         )
 
 
+@_quiet_disconnect
 async def _session(request: Request) -> JSONResponse:
     """``POST api/session {resume}``: trade the caller's login for a signed session token.
 
@@ -1925,6 +1942,7 @@ def _is_json(request: Request) -> bool:
     return media == "application/json" or media.endswith("+json")
 
 
+@_quiet_disconnect
 async def _event(request: Request) -> JSONResponse:
     if not _is_json(request):
         return _denied(415, "content type must be application/json")

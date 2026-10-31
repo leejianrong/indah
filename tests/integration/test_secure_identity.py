@@ -387,3 +387,45 @@ async def test_signed_out_user_gets_a_fresh_empty_session_not_the_old_one():
         await _click(client, token, headers={"X-User": "alice"})
     text = store.get(token.split(".")[0]).session.snapshot()["children"][1]["props"]["text"]
     assert text == "alice:1"  # one click on the rebuilt session, not two
+
+
+async def _post_then_disconnect(asgi, path):
+    """Drive the ASGI app by hand: send the start of a body, then the browser leaves."""
+    messages = iter(
+        [
+            {"type": "http.request", "body": b'{"resu', "more_body": True},
+            {"type": "http.disconnect"},
+        ]
+    )
+    sent: list = []
+
+    async def receive():
+        return next(messages)
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"content-type", b"application/json"), (b"x-user", b"alice")],
+        "client": ("127.0.0.1", 1234),
+        "server": ("test", 80),
+    }
+    await asgi(scope, receive, send)
+    return sent
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("path", ["/api/session", "/api/event", "/api/csp-report"])
+async def test_a_browser_that_leaves_mid_post_raises_nothing(path):
+    """A navigation mid-request must not surface a ``ClientDisconnect`` traceback (IND-242)."""
+    _, asgi, _ = _app(secure=True, csp="strict")
+    await _post_then_disconnect(asgi, path)
