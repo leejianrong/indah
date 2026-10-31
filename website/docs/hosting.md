@@ -420,7 +420,10 @@ origin only. Browsers report violations to `POST api/csp-report`, kept in
 `app.state.csp_violations` and logged.
 
 Images and audio may come from your origin, `data:` and `blob:` URLs, and the tile host of any
-`Map` (OpenStreetMap by default). For images or audio from anywhere else, list the host:
+`Map` (OpenStreetMap by default); an app with no `Map` allows no third-party image host. A `Map`
+that a session builds after the page has loaded is allowed from the next load, and indah logs a
+warning, so for a first-load map list its tile host as well. For images or audio from anywhere
+else, list the host:
 
 ```python
 indah.create_app(..., csp="strict", csp_media_hosts=["https://cdn.example.com"])

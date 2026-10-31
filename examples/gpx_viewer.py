@@ -277,7 +277,8 @@ def build() -> indah.Session:
     return indah.Session(page)
 
 
-app = indah.create_app(session_factory=build)
+# The Map is built when a session opens, after the page is served, so declare its tile host.
+app = indah.create_app(session_factory=build, csp_media_hosts=["https://tile.openstreetmap.org"])
 
 if __name__ == "__main__":
     indah.launch(app)

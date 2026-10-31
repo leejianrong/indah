@@ -81,8 +81,24 @@ async def test_violation_reports_are_recorded_and_capped_not_trusted():
     assert app.state.csp_violations[0]["violated-directive"] == "script-src-elem"
 
 
+@pytest.fixture
+def empty_registry(monkeypatch):
+    from indah import csp
+
+    monkeypatch.setattr(csp, "_registered", {})
+    monkeypatch.setattr(csp, "_served", None)
+
+
 @pytest.mark.integration
-async def test_extra_image_hosts_and_a_maps_tile_host_are_allowed():
+async def test_an_app_with_no_map_allows_no_third_party_images(empty_registry):
+    app = create_app(session_factory=_build, csp="strict")
+    async with _client(app) as client:
+        policy = (await client.get("/")).headers["content-security-policy"]
+    assert re.search(r"img-src ([^;]+)", policy).group(1) == "'self' data: blob:"
+
+
+@pytest.mark.integration
+async def test_extra_image_hosts_and_a_maps_tile_host_are_allowed(empty_registry):
     Map(center=(1, 1), tile_url="https://tiles.maps-test.example/{z}/{x}/{y}.png")
     app = create_app(
         session_factory=_build, csp="strict", csp_media_hosts=["https://img.cdn-test.example"]
@@ -92,7 +108,7 @@ async def test_extra_image_hosts_and_a_maps_tile_host_are_allowed():
     img = re.search(r"img-src ([^;]+)", policy).group(1)
     assert "https://img.cdn-test.example" in img
     assert "https://tiles.maps-test.example" in img
-    assert "https://tile.openstreetmap.org" in img
+    assert "https://tile.openstreetmap.org" not in img  # no default-tile Map was built
 
 
 @pytest.mark.integration
