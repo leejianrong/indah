@@ -241,3 +241,41 @@ async def test_route_params_drive_a_computed_entry_across_navigation():
     patches = [c for _, m in handle.hub.history() if m["type"] == "patch" for c in m["changes"]]
     texts = [c["props"]["text"] for c in patches if "text" in c["props"]]
     assert texts == ["entry: logout reply (auth)", "entry: doc (docs)", "entry: missing (x)"]
+
+
+def _dyn_factory(ctx):
+    return Session(
+        Column(
+            children=[
+                Link(ctx, "Log", to=lambda: f"/projects/{ctx.params.value.get('project')}/log"),
+                Router(
+                    ctx,
+                    routes={"/": Text("home"), "/projects/{project}/log": Text("log page")},
+                    not_found=Text("404"),
+                ),
+            ]
+        )
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("param", ["%0a", "a%20b", "a%5Cb", "a%3Fb", "a%23b"])
+async def test_a_link_built_from_a_malformed_route_param_degrades(param):
+    app = create_app(session_factory=_dyn_factory, spa=True)
+    # The query is decoded once on the way in and the route matcher decodes each segment
+    # again, so a doubly-encoded param reaches ``ctx.params`` as the raw bad character.
+    path = f"/projects/{param.replace('%', '%25')}/log"
+    resp = await _stream(_request(app, f"bad-{param}", path))
+    assert resp.status_code == 200
+    init = await _init(resp)
+    link = init["root"]["children"][0]
+    assert link["props"]["active"] is False
+    assert link["props"]["to"] == "/"
+
+
+@pytest.mark.integration
+async def test_a_dynamic_link_still_follows_a_good_param():
+    app = create_app(session_factory=_dyn_factory, spa=True)
+    init = await _init(await _stream(_request(app, "good", "/projects/auth/log")))
+    link = init["root"]["children"][0]
+    assert link["props"] == {"label": "Log", "to": "/projects/auth/log", "active": True}
