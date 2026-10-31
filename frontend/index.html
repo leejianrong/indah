@@ -386,6 +386,11 @@
       }
 
       .field { display: flex; flex-direction: column; gap: 0.3rem; }
+      .field-error { font-size: 0.8rem; color: var(--err); }
+      .field input[aria-invalid="true"], .field select[aria-invalid="true"] {
+        border-color: var(--err);
+      }
+      button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
       .field label, .stream-label {
         font-size: 0.8rem;
         font-weight: 500;

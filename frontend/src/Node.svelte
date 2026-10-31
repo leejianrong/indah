@@ -456,6 +456,7 @@
   <button
     class:tonal={props.variant === "tonal"}
     class:ghost={props.variant === "ghost"}
+    disabled={props.disabled ? true : null}
     onclick={() => (props.confirm ? (confirming = true) : postEvent(node.id, "click"))}
     >{props.label ?? ""}</button
   >
@@ -483,10 +484,13 @@
       type={props.password ? "password" : "text"}
       autocomplete={props.password ? "off" : null}
       placeholder={props.placeholder ?? ""}
+      aria-invalid={props.error ? "true" : null}
+      aria-describedby={props.error ? `${node.id}-error` : null}
       oninput={(e) => postEvent(node.id, "input", { value: e.currentTarget.value })}
       onkeydown={(e) => { if (e.key === "Enter") postEvent(node.id, "submit"); }}
       onblur={syncFromServer}
     />
+    {#if props.error}<span class="field-error" id={`${node.id}-error`} role="alert">{props.error}</span>{/if}
   </div>
 {:else if node.type === "textarea"}
   <div class="field">
@@ -673,6 +677,8 @@
     <select
       id={`${node.id}-input`}
       value={props.value ?? ""}
+      aria-invalid={props.error ? "true" : null}
+      aria-describedby={props.error ? `${node.id}-error` : null}
       onchange={(e) => postEvent(node.id, "change", { value: e.currentTarget.value })}
     >
       <!-- base-select (Chromium): the closed control wraps a long label instead of clipping it;
@@ -682,6 +688,7 @@
         <option value={option.value}>{option.label}</option>
       {/each}
     </select>
+    {#if props.error}<span class="field-error" id={`${node.id}-error`} role="alert">{props.error}</span>{/if}
   </div>
 {:else if node.type === "upload"}
   <div class="field upload">
