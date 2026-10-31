@@ -18,6 +18,7 @@
 | 0.8.0 (about to release) | Live docs, deploy basics and size, in one release | about 70 | IND-181, 185, 169, 83, 61, 159, 186 to 190, 199 to 206, 214, 215, 177 to 180, 195 | 1 |
 | 0.9.0 (released) | Multi-replica (ADR-0043) | 17 | IND-197, 208, 210, 211, 212, 216 | 1 |
 | 0.10.0 (released) | Live media and dashboard primitives, plus UI fixes | n/a | IND-74, 64, 65, 62; dashboard primitives (ADR-0046); UI cards IND-221 to 227, 231; flakes IND-232, 234 | 1 |
+| 0.11.0 | The semula security-review requests, a form helper and per-row table actions (ADR-0047) | 18 | IND-237 to 242 | 1 |
 | Later | Needs a decision or has no demand yet | 11 | IND-57, 81, 66 | - |
 | Superseded | The hosted Studio (ADR-0041 option B replaced it) | 6 | IND-173, 174 | - |
 | Closed as folded | | 1 | IND-155 (into IND-166) | - |

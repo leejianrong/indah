@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-01
+
+The requests from semula's security review of its public hosted dashboard (IND-237 to IND-242). The session id leaves the stream URL, the strict CSP stops allowing a map host the app never uses, and a crafted address can no longer fail a stream or log a traceback. There is also a form helper (`Form`, `validators`) and per-row table actions that depend on the row. The wire changes are additive, so `protocol_version` is still 1; two defaults change, both for apps that opt into hardening, and are listed under "Upgrading".
+
 ### Changed
 
 - The strict CSP no longer allows `https://tile.openstreetmap.org` in `img-src` by default. A `Map` registers its tile host (the OpenStreetMap default included) when it is built, so an app with no `Map` sends `img-src 'self' data: blob:`. In a per-session app a `Map` is built after the page is served, so its tiles are allowed from the next load and indah logs a warning naming the host; declare it up front with `create_app(csp_media_hosts=[...])` for a map on the first load. The `gpx_viewer` example and the Studio media chapter do (IND-239).
@@ -26,6 +30,19 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 - A `Link` whose callable `to=` returns something that is not an in-app path (a route param holding a newline, space or backslash) no longer raises while the tree is built, which made `/api/stream` answer 500. It points at `/` and is never active; `normalize_path` and `ctx.navigate` still raise (IND-237).
 - A browser that leaves in the middle of `POST /api/session`, `/api/event` or `/api/csp-report` no longer logs a `ClientDisconnect` traceback (IND-242).
 - The `python_source_bytes` size budget goes from 560000 to 580000 (ADR-0042).
+
+### Upgrading
+
+- **`?sid=` on the stream is refused on a hardened app.** An app that sets `limits` or `security_headers` now answers `GET api/stream?sid=...` with 400. The shell no longer sends it (it uses the cookie `indah_sid_<key>` and `api/stream?k=<key>`). A custom client or test helper that opens the stream with `?sid=` should send `Cookie: indah_sid_<k>=<sid>` with `?k=<k>` (8 to 64 characters of `A-Za-z0-9_-`), or the app can pass `create_app(allow_sid_in_url=True)` for one more release; a shell cached from before this release also needs it. `?sid=` stays accepted on every other app, and it will not be removed in this release.
+- **The strict CSP has no map host unless a `Map` is built.** `img-src` was `'self' data: blob: https://tile.openstreetmap.org`; with no `Map` it is now `'self' data: blob:`. In a per-session app a `Map` is built after the page is served, so its tiles are blocked on the first load of a fresh process and indah logs a warning naming the host. Declare the host with `create_app(csp_media_hosts=[...])` to avoid that.
+- `RowAction.label` may now be a function and `RowAction` has a new `when`; a string label and no `when` behave exactly as before.
+
+### Known limitations
+
+- File download URLs (`api/file/<sid>/<token>`) still carry the session id in their path; only the stream URL is covered.
+- `RowAction(when=)` and `Button(disabled=)` hide or grey a button but are not authorization: keep the real check in the handler.
+- A `Form` validates text boxes and selects only, on the server, on every change. Other controls can sit beside it but are not part of it.
+- The Python source size budget (580000 bytes) has about 5 KB left.
 
 ## [0.10.2] - 2026-10-30
 
