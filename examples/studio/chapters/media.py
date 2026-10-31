@@ -596,6 +596,8 @@ def camera_check(pw) -> None:
 
 CHAPTER = Chapter(
     slug="media",
+    # The chapter's Map is built when a session opens, after the page (and its CSP) is served.
+    app_kwargs={"csp_media_hosts": ["https://tile.openstreetmap.org"]},
     title="Media and files",
     order=70,
     blurb=(

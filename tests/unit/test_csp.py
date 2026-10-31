@@ -95,26 +95,56 @@ def test_a_custom_policy_gets_the_nonce_substituted():
     assert csp.render_custom("script-src 'nonce-{nonce}'", "ABC") == "script-src 'nonce-ABC'"
 
 
+@pytest.fixture
+def empty_registry(monkeypatch):
+    monkeypatch.setattr(csp, "_registered", {})
+    monkeypatch.setattr(csp, "_served", None)
+
+
 @pytest.mark.unit
-def test_a_map_registers_its_tile_host_and_the_default_host_is_always_known():
+def test_no_image_host_is_known_until_a_map_is_built(empty_registry):
+    assert csp.known_img_hosts() == []
+
+
+@pytest.mark.unit
+def test_a_map_registers_its_tile_host_default_included(empty_registry):
     Map(center=(0, 0), zoom=2, tile_url="https://tiles.example.org/{z}/{x}/{y}.png")
-    hosts = csp.known_img_hosts()
-    assert "https://tiles.example.org" in hosts
-    assert "https://tile.openstreetmap.org" in hosts
+    assert csp.known_img_hosts() == ["https://tiles.example.org"]
+    Map(center=(0, 0), zoom=2)
+    assert "https://tile.openstreetmap.org" in csp.known_img_hosts()
+
+
+@pytest.mark.unit
+def test_a_host_first_registered_after_the_policy_was_served_is_warned_about(
+    empty_registry, caplog
+):
+    csp.known_img_hosts()  # a page is served
+    with caplog.at_level("WARNING", logger="indah.csp"):
+        Map(center=(0, 0), zoom=2)
+    assert "csp_media_hosts" in caplog.text
+    assert "https://tile.openstreetmap.org" in caplog.text
+
+
+@pytest.mark.unit
+def test_a_host_registered_before_the_first_page_is_not_warned_about(empty_registry, caplog):
+    with caplog.at_level("WARNING", logger="indah.csp"):
+        Map(center=(0, 0), zoom=2)
+        csp.known_img_hosts()
+    assert caplog.text == ""
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
     "url", ["javascript:alert(1)", "not a url", "data:text/plain,x", "//no-scheme.example/{z}"]
 )
-def test_an_unusable_tile_url_registers_nothing(url):
+def test_an_unusable_tile_url_registers_nothing(url, empty_registry):
     before = set(csp.known_img_hosts())
     csp.register_img_host(url)
     assert set(csp.known_img_hosts()) == before
 
 
 @pytest.mark.unit
-def test_a_host_with_policy_syntax_cannot_inject_a_directive():
+def test_a_host_with_policy_syntax_cannot_inject_a_directive(empty_registry):
     before = set(csp.known_img_hosts())
     csp.register_img_host("https://a.example.com; script-src *")
     csp.register_img_host("https://a.example.com'")

@@ -34,10 +34,11 @@ script on a hosted dashboard, so it needs to be tested rather than hoped for.
   - CodeMirror creates `<style>` elements at run time, so the editor reads the page's nonce and
     passes it to `EditorView.cspNonce`.
 - **Image hosts.** A `Map` registers its `tile_url` host in a process-wide registry at
-  construction; the stock OpenStreetMap host is always allowed. `create_app(csp_media_hosts=[...])`
-  declares others up front. The registry has a limit worth knowing: the page's policy is fixed
-  when it is served, so in a per-session app a `Map` with a custom tile host that is first
-  constructed *after* the first page load is allowed from the next load. Declare it with
+  construction, the stock OpenStreetMap host included; with no `Map` the policy carries no third-party
+  image host (IND-239). `create_app(csp_media_hosts=[...])` declares hosts up front. The registry
+  has a limit worth knowing: the page's policy is fixed when it is served, so in a per-session app
+  a `Map` first constructed *after* the first page load (its session opens after the page) is
+  allowed from the next load, and indah logs a warning naming the host. Declare it with
   `csp_media_hosts` to avoid that. A host is only accepted if it is a plain `http(s)://host[:port]`,
   so a hostile `tile_url` cannot inject a directive.
 - **Violations are reported and counted.** `POST api/csp-report` (mounted only for `"strict"`) is

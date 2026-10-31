@@ -8,8 +8,8 @@
 
 ``style-src-attr 'unsafe-inline'`` is the one concession: Svelte writes ``style="..."``
 attributes, and an inline *attribute* cannot run script. Everything that can run code is
-nonce-or-same-origin only. A ``Map`` registers its tile host so tiles keep loading; images
-from other hosts need ``create_app(csp_img_hosts=[...])``.
+nonce-or-same-origin only. ``img-src`` starts with no third-party host: a ``Map`` registers its
+tile host when it is built, and images from other hosts need ``create_app(csp_media_hosts=[...])``.
 
 The policy is off by default and in ``launch()``: Colab and similar hosts frame the app and
 supply their own origins, which a fixed policy would break.
@@ -17,16 +17,18 @@ supply their own origins, which a fixed policy would break.
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 from collections.abc import Iterable
 from urllib.parse import urlsplit
 
-# The one host a stock ``Map`` talks to; always allowed, so a default Map just works.
-DEFAULT_IMG_HOSTS = ("https://tile.openstreetmap.org",)
+log = logging.getLogger(__name__)
 
 _HOST = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::\d{1,5})?")
 _registered: dict[str, None] = {}  # insertion-ordered set of ``scheme://host[:port]``
+# The hosts the last served page's policy carried; ``None`` until a page is served.
+_served: set[str] | None = None
 _TAG = re.compile(r"<(script|style)(?=[\s>])", re.IGNORECASE)
 
 
@@ -71,12 +73,24 @@ def host_source(url: str) -> str | None:
 def register_img_host(url: str) -> None:
     """Allow images (map tiles) from ``url``'s host in the policy. Unusable URLs are ignored."""
     source = host_source(url)
-    if source is not None:
-        _registered[source] = None
+    if source is None:
+        return
+    if source not in _registered and _served is not None and source not in _served:
+        log.warning(
+            "image host %s was registered after a page was served, so that page's CSP blocks "
+            "it until the next load; declare it up front with create_app(csp_media_hosts=[%r])",
+            source,
+            source,
+        )
+    _registered[source] = None
 
 
 def known_img_hosts() -> list[str]:
-    return [*DEFAULT_IMG_HOSTS, *(h for h in _registered if h not in DEFAULT_IMG_HOSTS)]
+    """The registered hosts, for the policy of a page about to be served."""
+    global _served
+    hosts = list(_registered)
+    _served = set(hosts) | (_served or set())
+    return hosts
 
 
 def build_csp(
