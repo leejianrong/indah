@@ -20,9 +20,10 @@ makes one submit button that is disabled while the form is invalid. It builds or
 components, so layout is the app's own and nothing about standalone inputs changes.
 
 ```python
-form = indah.Form(on_submit=invite)               # invite(values) -> None | {field: message}
-email = form.text("email", label="Email", validate=[indah.validators.required(),
-                                                    indah.validators.email()])
+form = indah.Form(on_submit=invite)  # invite(values) -> None | {field: message}
+email = form.text(
+    "email", label="Email", validate=[indah.validators.required(), indah.validators.email()]
+)
 role = form.select("role", options=["viewer", "editor"], initial="viewer")
 page = indah.Column(children=[email, role, form.submit("Send invite")])
 ```
