@@ -3848,10 +3848,20 @@ class Link(Component):
         self._static_to = normalize_path(to) if isinstance(to, str) else None
         self._match = match
 
-    def _to(self) -> str:
+    def _target(self) -> str | None:
+        """The in-app path to link to, or ``None`` when a callable ``to`` produced something
+        that is not one (a route param holding a newline, say). That must not raise while the
+        tree is built, or a crafted URL would fail the whole stream."""
         if self._static_to is not None:
             return self._static_to
-        return normalize_path(self._to_source())  # type: ignore[operator]
+        try:
+            return normalize_path(self._to_source())  # type: ignore[operator]
+        except ValueError:
+            return None
+
+    def _to(self) -> str:
+        # An unusable target links home and is never active.
+        return self._target() or "/"
 
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {"label": self._label}
@@ -3860,7 +3870,9 @@ class Link(Component):
         return props
 
     def _active(self) -> bool:
-        path, to = self._ctx.path.value, self._to()
+        path, to = self._ctx.path.value, self._target()
+        if to is None:
+            return False
         if path == to:
             return True
         # ``prefix`` also lights up for the pages under it (whole segments; "/" is exact).
@@ -3873,8 +3885,9 @@ class Link(Component):
         return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
-        if event == "navigate" and payload.get("path") == self._to():
-            self._ctx._client_navigated(self._to())
+        target = self._target()
+        if event == "navigate" and target is not None and payload.get("path") == target:
+            self._ctx._client_navigated(target)
             return True
         return False
 
