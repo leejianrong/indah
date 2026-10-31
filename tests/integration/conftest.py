@@ -6,8 +6,8 @@ that posts an event straight to ``/api/event`` would now be refused. So, unless 
 ``raw_events``, a ``post`` to ``/api/event`` or ``/api/upload`` first opens the stream for that
 ``sid`` (a short ``GET /api/stream`` with the same headers and the id in the tab cookie, which is
 what builds the session, its owner and ``ctx.conn`` exactly as a real connection would), and only
-when the process does not hold the session yet. The stream is cancelled right away; the session stays, as it does after a
-real tab disconnects.
+when the process does not hold the session yet. The stream is cancelled right away; the session
+stays, as it does after a real tab disconnects.
 
 Mark a test ``raw_events`` to see the bare behaviour (see ``test_unknown_session.py``).
 """
