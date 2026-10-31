@@ -56,7 +56,9 @@ not a protocol message, so `protocol_version` is unaffected.
 
 Each browser tab drives its own isolated server-side session (its own signals and
 its own patch stream, ADR-0010). The shell mints a per-tab **session id** and sends
-it on both endpoints: as `?sid=<id>` on the stream URL and as a `sid` field in the
+it on both endpoints: in a per-tab cookie `indah_sid_<key>` on the stream open (the URL
+carries only `?k=<key>`, so the id stays out of access logs; the older `?sid=<id>` is still
+accepted unless the app sets `limits` or `security_headers`) and as a `sid` field in the
 event body (below). Requests that carry the same id share one session; distinct ids
 are isolated. An id-less request (a hand-written client, a curl) falls back to a
 single default session. The `sid` is a transport detail, not a UI message — it does

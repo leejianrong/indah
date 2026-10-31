@@ -104,6 +104,19 @@ the tab re-initialises cleanly; `ctx.persist` can bring its small state back (se
 sessions" below). Sessions themselves are not shared, so **run one process** unless
 your gateway can send a tab's requests to the process that holds its session.
 
+The shell keeps the stream's session id out of the URL, so it is not in your access logs, a proxy's
+logs or the browser history. It sets a cookie `indah_sid_<key>` (one per tab, `Path=` the stream
+route, `SameSite=Strict`, `Secure` on https, refreshed while the page is open) and opens
+`api/stream?k=<key>`. A request for another person's token is still `403`: the cookie holds the same
+signed token, checked against the current principal. Events and uploads carry the id in their JSON
+body, which is not logged. The old `?sid=<id>` still works for one more release, except on an app
+that sets `limits` or `security_headers`, which answers `400` to it; pass
+`create_app(allow_sid_in_url=True)` to accept it there too (a shell cached from before this change
+needs it), or `False` to refuse it everywhere. When the page is framed by another site (a Colab or
+Jupyter output) or the browser blocks the cookie, the stream is refused before it opens and the shell
+falls back to `?sid=`, so a hardened app that is framed needs `allow_sid_in_url=True`. File URLs (`api/file/<sid>/<token>`) still carry the
+id in their path.
+
 An event for a session the process does not hold is refused: `409` with
 `{"ok": false, "error": "unknown_session"}`, and nothing is created, because the stream is what makes
 a session. The shell then opens its stream again for a fresh page and shows "Reconnected. Your last
@@ -116,9 +129,9 @@ clicks land on the wrong process keeps reconnecting and losing its state, so **r
 unless your gateway can pin a tab.
 
 What can pin a tab depends on what the browser sends on every request. indah finds a session by the
-`sid` in the stream URL and in the JSON body of each event, not by a cookie or a header, so a gateway
-that would have to *read* the `sid` (Fly's replay cache, a hash on a header you do not send) has
-nothing to key on. A gateway that **sets its own cookie** on the first page load does not need the
+`sid` in a cookie the shell sets for the stream and in the JSON body of each event, not by a header
+you can route on, so a gateway that would have to *read* the `sid` (Fly's replay cache, a hash on a
+header you do not send) has nothing to key on. A gateway that **sets its own cookie** on the first page load does not need the
 `sid`: the browser sends that cookie on the stream and on every event, and the gateway keeps routing
 to the same process. That works today on an ingress such as Traefik: on two replicas, 20 of 20 events
 stayed on the stream's pod with the cookie and 10 of 20 without it (see [Run on

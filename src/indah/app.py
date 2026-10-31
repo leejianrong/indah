@@ -596,6 +596,7 @@ def create_app(
     csp: str | None = UNSET,
     csp_media_hosts: Sequence[str] = (),
     security_headers: bool | Mapping[str, str] = False,
+    allow_sid_in_url: bool | None = None,
     logo: str | os.PathLike[str] | bytes | tuple[Any, Any] | None = None,
     favicons: Mapping[str, str | os.PathLike[str] | bytes] | None = None,
     factory_timeout: float = UNSET,
@@ -693,6 +694,11 @@ def create_app(
     ``nosniff``, a ``Referrer-Policy`` and ``X-Frame-Options: DENY`` to every response (a mapping
     replaces individual ones, ``""`` drops one). The address used is the socket peer, so behind a
     gateway also set ``trusted_proxies`` (ADR-0037).
+
+    The shell keeps the stream's session id in a per-tab cookie, not the URL, so it stays out of
+    access and proxy logs. ``allow_sid_in_url`` still accepts the old ``?sid=`` (for a shell that
+    predates it); it defaults to on, and to off for an app that sets ``limits`` or
+    ``security_headers`` (IND-238).
 
     ``csp="strict"`` serves the shell with a Content-Security-Policy: a per-response nonce on
     its inline ``<script>``/``<style>`` tags and nothing else allowed to run (ADR-0038). Images
@@ -797,6 +803,8 @@ def create_app(
             )
     allowed_origins = env.allowed_origins(allowed_origins)
     limits = env.limits(limits)
+    if allow_sid_in_url is None:  # IND-238: a hardened app does not accept the id in the URL
+        allow_sid_in_url = limits is None and not security_headers
     factory_timeout = env.number(
         "INDAH_FACTORY_TIMEOUT", factory_timeout, DEFAULT_FACTORY_TIMEOUT, positive=True
     )
@@ -1002,6 +1010,7 @@ def create_app(
     app.state.allowed_origins = normalize_origins(allowed_origins)
     app.state.env_used = env.report()
     app.state.csp_media_hosts = tuple(csp_media_hosts)
+    app.state.allow_sid_in_url = allow_sid_in_url
     app.state.csp_violations = deque(maxlen=100)
     app.state.stream_limiter = StreamLimiter(limits.max_streams_per_ip)
     app.state.live = live_options
@@ -1845,18 +1854,47 @@ async def _stream(request: Request) -> Response:
     return response
 
 
+SID_COOKIE = "indah_sid_"
+_TAB_KEY = re.compile(r"[A-Za-z0-9_-]{8,64}")
+
+
+def _stream_sid(request: Request) -> tuple[str | None, JSONResponse | None]:
+    """The session id for a stream open, or the refusal to send (IND-238).
+
+    The shell names its tab with ``?k=<key>`` and keeps the id in the cookie
+    ``indah_sid_<key>``, so the id is not in the URL (access logs, proxy logs, history). One
+    cookie per tab key keeps two tabs apart. ``?sid=`` still works for one release, except on
+    an app that set ``limits`` or ``security_headers`` (``allow_sid_in_url``)."""
+    key = request.query_params.get("k")
+    if key and _TAB_KEY.fullmatch(key):
+        sid = request.cookies.get(SID_COOKIE + key)
+        if sid and len(sid) <= 200:
+            return sid, None
+    sid = request.query_params.get("sid")
+    if sid and not request.app.state.allow_sid_in_url:
+        return None, _denied(400, "the session id must not be sent in the url")
+    if not sid and key and _TAB_KEY.fullmatch(key) and not request.app.state.secure:
+        # A tab that names its cookie but has none (it lapsed): never fall back to the shared
+        # default session; the shell sets the cookie again and reopens. (A secure app already
+        # answers an id-less request with 401.)
+        return None, _denied(400, "session cookie missing")
+    return sid, None
+
+
 async def _open_stream(request: Request, release: Callable[[], None]) -> Response:
     app = request.app
     if app.state.drain.draining:
         # A tab whose stream ended during a drain comes back here: refuse before any session is
         # built or resumed, so it retries (``Retry-After``) and lands on another process.
         return _draining()
-    # One session per browser tab, keyed by the id the shell sends (?sid=...).
-    # An id-less connection shares the default session (ADR-0010), unless the app is secure.
+    # One session per browser tab, keyed by the id the shell sends in its cookie (``?k=`` names
+    # the tab's cookie; ``?sid=`` is the old way, IND-238). An id-less connection shares the
+    # default session (ADR-0010), unless the app is secure.
     # The in-app page the tab is on (``&path=``), so a deep link or reload starts there.
-    handle, denied, principal = await _open_session(
-        request, request.query_params.get("sid"), request.query_params.get("path")
-    )
+    sid, refusal = _stream_sid(request)
+    if refusal is not None:
+        return refusal
+    handle, denied, principal = await _open_session(request, sid, request.query_params.get("path"))
     if handle is None:
         return denied
     hub = handle.hub

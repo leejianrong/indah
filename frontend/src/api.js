@@ -86,17 +86,60 @@ export function sessionId() {
   return _sid;
 }
 
-// The SSE stream URL carries the session id as a query param -- EventSource cannot
-// set request headers, and it preserves the URL (and resends Last-Event-Id) across
-// its native reconnects, so a resume lands on the same session.
+// The session id stays out of the stream URL (access logs, proxy logs, history; IND-238).
+// EventSource cannot set request headers, but the browser sends cookies on it, and resends
+// them on its native reconnects, so a resume lands on the same session. The URL names this
+// page's cookie with a random key (`?k=`), so two tabs never share one.
+// Kept in sessionStorage like the session id, so a reload overwrites the tab's cookie
+// instead of leaving a second one.
+function tabKey() {
+  try {
+    let key = sessionStorage.getItem("indah-tab");
+    if (!key) {
+      key = "t" + newId().replace(/[^A-Za-z0-9]/g, "").slice(0, 24);
+      sessionStorage.setItem("indah-tab", key);
+    }
+    return key;
+  } catch (e) {
+    return "t" + newId().replace(/[^A-Za-z0-9]/g, "").slice(0, 24); // storage blocked: this load only
+  }
+}
+const TAB_KEY = tabKey();
+let _cookieTimer = 0;
+let _urlSid = typeof window !== "undefined" && !!window.__INDAH_LIVE__; // in-browser docs: no server
+
+// Where cookies are not honoured for the stream (a page framed by another site, as in a
+// Colab or Jupyter output; third-party cookies blocked), the id goes in the URL as before.
+export function useUrlSid() {
+  _urlSid = true;
+}
+
+// Sets this tab's cookie. Framed by another site, a cookie must be SameSite=None (and Secure)
+// to be sent at all; otherwise Strict. The cookie is scoped to the stream route, so the page
+// cannot read it back to check: a stream refused before it opens makes the shell fall back.
+function setSessionCookie() {
+  const path = appBase().pathname + "api/stream";
+  let framed = false;
+  try {
+    framed = window.top !== window;
+  } catch (e) {
+    framed = true; // a cross-origin top refuses the access
+  }
+  const secure = location.protocol === "https:" || framed ? "; secure" : "";
+  const same = framed ? "none" : "strict";
+  const name = "indah_sid_" + TAB_KEY;
+  document.cookie =
+    name + "=" + sessionId() + "; path=" + path + "; max-age=1800; samesite=" + same + secure;
+}
+
 export function streamUrl() {
-  return (
-    apiUrl("api/stream") +
-    "?sid=" +
-    encodeURIComponent(sessionId()) +
-    "&path=" +
-    encodeURIComponent(appPath())
-  );
+  const tail = "&path=" + encodeURIComponent(appPath());
+  if (!_urlSid) {
+    setSessionCookie();
+    if (!_cookieTimer) _cookieTimer = setInterval(setSessionCookie, 60000); // outlive a long stream
+    return apiUrl("api/stream") + "?k=" + TAB_KEY + tail;
+  }
+  return apiUrl("api/stream") + "?sid=" + encodeURIComponent(sessionId()) + tail;
 }
 
 // -- In-app routing (ADR-0029). The app may be mounted under a prefix (/ui/), so an

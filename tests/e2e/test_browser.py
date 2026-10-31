@@ -4076,3 +4076,99 @@ def test_appshell_with_router_and_spa_keeps_its_rail_and_closes_the_drawer_on_a_
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_no_request_url_carries_the_session_id_and_a_hardened_app_still_works():
+    """IND-238: the stream is opened with a per-tab key and the session id rides in a cookie,
+    so it is in no URL (access logs, proxy logs, history). The app sets security_headers, so
+    the old ``?sid=`` is refused: if the shell still used it, nothing would render."""
+    app, asgi = _secure_counter_app(security_headers=True)
+    handle = launch(asgi, block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            context = browser.new_context(extra_http_headers={"X-User": "alice"})
+            page = context.new_page()
+            urls: list[str] = []
+            page.on("request", lambda r: urls.append(r.url))
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("alice:0")).to_be_visible()
+                page.get_by_role("button", name="inc").click()
+                expect(page.get_by_text("alice:1")).to_be_visible()
+                page.reload(wait_until="domcontentloaded")  # resumes: the token is reused
+                expect(page.get_by_text("alice:1")).to_be_visible()
+
+                token = page.evaluate("sessionStorage.getItem('indah-sid')")
+                sid = token.split(".")[0]
+                assert token and sid
+                assert any("api/stream" in u for u in urls)
+                assert [u for u in urls if sid in u or token in u or "sid=" in u] == []
+                cookies = {c["name"]: c for c in context.cookies()}
+                (name,) = [n for n in cookies if n.startswith("indah_sid_")]
+                assert cookies[name]["value"] == token
+                assert cookies[name]["sameSite"] == "Strict"
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("block_third_party_cookies", [False, True])
+def test_a_page_framed_by_another_site_still_connects(block_third_party_cookies):
+    """IND-238: a Colab or Jupyter output frames the app, so the stream's cookie is cross-site.
+    Where the browser will not keep or send it, the shell falls back to the id in the URL
+    instead of failing to connect."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from indah import Button, Column, Session, Signal, TextInput, create_app
+
+    sig = Signal("")
+    root = Column(
+        children=[
+            TextInput(sig, label="Prompt"),
+            Button("set-from-server", on_click=lambda: sig.set("STALE")),
+        ]
+    )
+    # csp=None: a strict policy forbids framing (frame-ancestors), as launch() leaves it off.
+    handle = launch(create_app(session=Session(root), csp=None), block=False, open_inline=False)
+    # The app is on 127.0.0.1; the framing page is on localhost, a different site.
+    framed_url = handle.url
+
+    class Outer(BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = f'<iframe src="{framed_url}" width="900" height="600"></iframe>'.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    outer = HTTPServer(("127.0.0.1", 0), Outer)
+    threading.Thread(target=outer.serve_forever, daemon=True).start()
+    args = ["--test-third-party-cookie-phaseout"] if block_third_party_cookies else []
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=args)
+            page = browser.new_page()
+            try:
+                page.goto(f"http://localhost:{outer.server_port}/")
+                framed = page.frame_locator("iframe")
+                box = framed.locator("input[type=text]").first
+                expect(box).to_be_visible()
+                box.fill("hello")  # an event round-trips, so the stream is really live
+                expect(box).to_have_value("hello")
+                framed.get_by_role("button", name="set-from-server").dispatch_event("click")
+                box.blur()  # a focused box ignores a server echo until editing ends
+                expect(box).to_have_value("STALE")
+            finally:
+                browser.close()
+    finally:
+        outer.shutdown()
+        handle.stop()
