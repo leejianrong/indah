@@ -4,21 +4,23 @@ An event or an upload for a session this process does not hold is ``409 unknown_
 stream is what makes a session. Browsers always open the stream first, but an in-process test
 that posts an event straight to ``/api/event`` would now be refused. So, unless a test is marked
 ``raw_events``, a ``post`` to ``/api/event`` or ``/api/upload`` first opens the stream for that
-``sid`` (a short ``GET /api/stream`` with the same headers, which is what builds the session, its
-owner and ``ctx.conn`` exactly as a real connection would), and only when the process does not
-hold the session yet. The stream is cancelled right away; the session stays, as it does after a
-real tab disconnects.
+``sid`` (a short ``GET /api/stream`` with the same headers and the id in the tab cookie, which is
+what builds the session, its owner and ``ctx.conn`` exactly as a real connection would), and only
+when the process does not hold the session yet. The stream is cancelled right away; the session
+stays, as it does after a real tab disconnects.
 
 Mark a test ``raw_events`` to see the bare behaviour (see ``test_unknown_session.py``).
 """
 
 import asyncio
 import json
+import re
 
 import httpx
 import pytest
 
 _EVENT_SUFFIXES = ("/api/event", "/api/upload")  # also under a mount prefix, like /ui/api/event
+_COOKIE_SAFE = re.compile(r"[A-Za-z0-9._~-]{1,200}")
 
 
 def _app_of(client: httpx.AsyncClient):
@@ -66,10 +68,16 @@ def the_tab_connects_first(request, monkeypatch):
                 real_sid = sid.split(".")[0] if getattr(app.state, "secure", False) else sid
                 if store is None or store.get(real_sid) is None:
                     stream = path[: -len(suffix)] + "/api/stream"
+                    headers = dict(kwargs.get("headers") or {})
+                    params = {"sid": sid}
+                    if _COOKIE_SAFE.fullmatch(sid):
+                        # as the shell does (IND-238): the id rides in the tab's cookie, so a
+                        # hardened app, which refuses ``?sid=``, still builds the session
+                        params = {"k": "testtab0123456789"}
+                        headers["Cookie"] = f"indah_sid_testtab0123456789={sid}"
                     try:
                         await asyncio.wait_for(
-                            self.get(stream, params={"sid": sid}, headers=kwargs.get("headers")),
-                            0.3,
+                            self.get(stream, params=params, headers=headers or None), 0.3
                         )
                     except (asyncio.TimeoutError, TimeoutError):
                         pass  # the stream is open: the session is held

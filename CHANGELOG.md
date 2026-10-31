@@ -15,6 +15,8 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 - The strict CSP no longer allows `https://tile.openstreetmap.org` in `img-src` by default. A `Map` registers its tile host (the OpenStreetMap default included) when it is built, so an app with no `Map` sends `img-src 'self' data: blob:`. In a per-session app a `Map` is built after the page is served, so its tiles are allowed from the next load and indah logs a warning naming the host; declare it up front with `create_app(csp_media_hosts=[...])` for a map on the first load. The `gpx_viewer` example and the Studio media chapter do (IND-239).
 
+- The session id is no longer in the stream URL. The shell sets a short-lived per-tab cookie `indah_sid_<key>` and opens `api/stream?k=<key>`, so the id stays out of access logs, proxy logs and browser history; another person's cookie is still `403`. **Migration:** nothing to do for most apps. `?sid=` still works for one release, except on an app that sets `limits` or `security_headers`, which now answers `400` to it; pass `create_app(allow_sid_in_url=True)` to accept it there (a shell cached from before this change, or a hardened app framed by another site) or `False` to refuse it everywhere. A custom client that opens `api/stream?sid=` should move to the cookie. File download URLs still carry the id in their path (IND-238).
+
 ### Fixed
 
 - A `Link` whose callable `to=` returns something that is not an in-app path (a route param holding a newline, space or backslash) no longer raises while the tree is built, which made `/api/stream` answer 500. It points at `/` and is never active; `normalize_path` and `ctx.navigate` still raise (IND-237).

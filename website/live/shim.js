@@ -55,6 +55,7 @@
   FakeEventSource.OPEN = 1;
   FakeEventSource.CLOSED = 2;
   window.EventSource = FakeEventSource;
+  window.__INDAH_LIVE__ = true; // no server, no logs: the shell keeps the id in the stream URL here (IND-238)
 
   const realFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {

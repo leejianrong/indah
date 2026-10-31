@@ -3,6 +3,7 @@
   import {
     apiUrl,
     streamUrl,
+    useUrlSid,
     ensureSession,
     pushPath,
     appPath,
@@ -154,6 +155,7 @@
     let leaving = false;
     let attempts = 0;
     let timer = null;
+    let everOpen = false; // a stream refused before it ever opened may be a cookie that never arrived
 
     function retryIn(ms) {
       clearTimeout(timer);
@@ -176,6 +178,7 @@
     function connect() {
       source = new EventSource(streamUrl());
       source.onopen = () => {
+        everOpen = true;
         leaving = false;
         attempts = 0;
         status.set({ live: true, text: "live" });
@@ -213,6 +216,7 @@
         // EventSource retries itself): get a session again twice at once, then keep trying
         // with a growing delay for a while before giving up.
         if (source.readyState === EventSource.CLOSED) {
+          if (!everOpen) useUrlSid(); // the cookie may not be sent here (framed, blocked): use the URL
           if (restarts++ < 2) start();
           else if (attempts++ < 12) retryIn(Math.min(1000 * attempts, 5000));
         }

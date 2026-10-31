@@ -82,3 +82,26 @@ amplification is gone. `_SSE_FLUSH_PAD` doubles as the on/off knob (setting it t
 `""` disables padding, which the negative proxy-buffering e2e relies on). Guarded by
 the coalesce/boundary unit tests in `tests/unit/test_sse_events.py` and the
 unchanged proxy-buffering e2e.
+
+## Amendment: the stream's session id travels in a cookie (IND-238)
+
+`?sid=<signed session id>` put the id in every access log, proxy log and browser history, so every
+app on indah had to know to scrub it. The shell now sets a cookie `indah_sid_<key>` (one per tab:
+the key is random and kept in `sessionStorage` next to the id; `Path` is the stream route,
+`SameSite=Strict`, `Secure` on https, 30 minutes, refreshed every minute while the page is open)
+and opens `api/stream?k=<key>`. `EventSource` cannot set a header but the browser sends cookies on
+it, and resends them on its own reconnects, which is why this beats a single-use stream ticket:
+a ticket would not survive an automatic reconnect, and a signed reusable one needs a secret that
+every replica shares (a plain app has none). The cookie is stateless, so ADR-0043 is unaffected
+(any replica reads it; routing still uses the hint on events). In a secure app it holds the same
+signed token ADR-0033 already verifies against the current principal, so another person's cookie is
+`403` and creates nothing.
+
+- A tab that names a cookie it does not have (it lapsed) is refused with `400`, never attached
+  to the shared `default` session.
+- `?sid=` still works for one release. `create_app(allow_sid_in_url=)` controls it: on by default,
+  off for an app that sets `limits` or `security_headers`.
+- A page framed by another site (a Colab or Jupyter output) cannot rely on a `Strict` cookie, so the
+  shell sets `SameSite=None; Secure` there. Where the browser still does not send it, the stream is
+  refused before it ever opened and the shell falls back to `?sid=` for that load.
+- Not covered: `api/file/<sid>/<token>` download URLs still carry the id in their path.

@@ -117,7 +117,11 @@ def test_session_bounds_in_limits_reach_the_store():
 def _open_stream(port, sid):
     s = socket.create_connection(("127.0.0.1", port))
     s.settimeout(5)
-    request = f"GET /api/stream?sid={sid} HTTP/1.1\r\nHost: x\r\nAccept: text/event-stream\r\n\r\n"
+    # the id rides in the tab cookie, as the shell sends it (a limited app refuses ?sid=, IND-238)
+    request = (
+        "GET /api/stream?k=tabkey0123 HTTP/1.1\r\nHost: x\r\nAccept: text/event-stream\r\n"
+        f"Cookie: indah_sid_tabkey0123={sid}\r\n\r\n"
+    )
     s.sendall(request.encode())
     return s, s.recv(64)
 
