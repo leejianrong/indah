@@ -275,8 +275,13 @@
 
   // Row actions: one with `confirm` asks first, the rest post straight away.
   let pending = $state(null); // {action, key}
+  // A row can relabel or hide an action: its record carries `__a: {a0: {label|hide}}` (IND-240).
+  function actionState(action, row) {
+    return row.r?.__a?.[action.id];
+  }
   function runAction(action, row) {
-    if (action.confirm) pending = { action, key: row.k };
+    const label = actionState(action, row)?.label ?? action.label;
+    if (action.confirm) pending = { action: { ...action, label }, key: row.k };
     else postEvent(nodeId, "action", { action: action.id, key: row.k });
   }
 
@@ -520,11 +525,14 @@
         {#if props.actions?.length}
           <td class="actions-col" onclick={(e) => e.stopPropagation()}>
             {#each props.actions as action (action.id)}
-              <button
-                type="button"
-                class="row-action {action.variant ?? 'ghost'}"
-                onclick={() => runAction(action, row)}>{action.label}</button
-              >
+              {@const state = actionState(action, row)}
+              {#if !state?.hide}
+                <button
+                  type="button"
+                  class="row-action {action.variant ?? 'ghost'}"
+                  onclick={() => runAction(action, row)}>{state?.label ?? action.label}</button
+                >
+              {/if}
             {/each}
           </td>
         {/if}
