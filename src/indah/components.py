@@ -260,11 +260,15 @@ class Button(Component):
         *,
         variant: str = "filled",
         confirm: str | None = None,
+        disabled: Source = False,
     ) -> None:
         super().__init__()
         self._label = label
         self._on_click = on_click
         self._variant = variant
+        # ``disabled`` (a bool, Signal or callable) greys the button and drops its clicks. Like
+        # ``confirm`` it is a UX guard, not authorization; ``Form`` (ADR-0047) uses it.
+        self._disabled = disabled
         # ``confirm`` makes the shell ask first; the click is only posted once the
         # user accepts. It is a UX guard, not authorization: the server still runs
         # any click it receives (ADR-0030).
@@ -280,10 +284,15 @@ class Button(Component):
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"label": lambda: str(_read(self._label))}
+        props: dict[str, Callable[[], Any]] = {"label": lambda: str(_read(self._label))}
+        if self._disabled is not False:  # a plain Button stays minimal on the wire
+            props["disabled"] = lambda: bool(_read(self._disabled))
+        return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "click" and self._on_click is not None:
+            if self._disabled is not False and _read(self._disabled):
+                return True  # a click that raced the greying-out: ignored, not an error
             result = self._on_click()
             if inspect.iscoroutine(result):
                 return result  # async handler: the session awaits it in the background
@@ -339,11 +348,13 @@ class TextInput(Component):
         label: str = "",
         password: bool = False,
         on_submit: Callable[[], Any] | None = None,
+        error: Source = None,
     ) -> None:
         super().__init__()
         self._value = value
         self._placeholder = placeholder
         self._label = label
+        self._error = error  # a message shown under the box (a Signal or callable), ADR-0047
         # ``password`` masks the field (``<input type=password>``) for secrets like an
         # API key. It is only display masking - the value still round-trips to the
         # server like any input, so keep it in session state and never log it.
@@ -362,7 +373,10 @@ class TextInput(Component):
         }
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"value": lambda: self._value.value}
+        props: dict[str, Callable[[], Any]] = {"value": lambda: self._value.value}
+        if self._error is not None:
+            props["error"] = lambda: _read(self._error) or None
+        return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "input" and "value" in payload:
@@ -1039,17 +1053,25 @@ class Select(Component):
         *,
         options: list[Any],
         label: str = "",
+        error: Source = None,
     ) -> None:
         super().__init__()
         self._value = value
         _wire_options(self, options, _normalise_option)
         self._label = label
+        self._error = error  # a message shown under the control (a Signal or callable), ADR-0047
 
     def static_props(self) -> dict[str, Any]:
         return {**_options_static(self), "label": self._label}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"value": lambda: self._value.value, **_options_reactive(self)}
+        props: dict[str, Callable[[], Any]] = {
+            "value": lambda: self._value.value,
+            **_options_reactive(self),
+        }
+        if self._error is not None:
+            props["error"] = lambda: _read(self._error) or None
+        return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event in ("change", "input") and "value" in payload:

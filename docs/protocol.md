@@ -333,12 +333,12 @@ stays 1.
 | `divider` | layout | optional `vertical` | — |
 | `skeleton` | display | optional `lines` (default 3), `height` (a CSS length, default 1rem): grey placeholder bars, the last one shorter; announced as busy | — |
 | `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree); optional `variant` (plain text only: `title` / `label` / `caption` / `mono` / `readout`; absent = body text, ADR-0040) | — |
-| `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`), `confirm` (text: the shell asks first and posts `click` only once accepted) | `click` |
+| `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`), `confirm` (text: the shell asks first and posts `click` only once accepted), `disabled` (optional bool, reactive: greys the button; the server also drops a click while it is true) | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
-| `textinput` | input | `value`, `placeholder`, `label` | `input` `{value}` |
+| `textinput` | input | `value`, `placeholder`, `label`, `error` (optional text shown under the box, `null` for none) | `input` `{value}` |
 | `textarea` | input | `value`, `placeholder`, `label`, `rows` | `input` `{value}` (debounced 150 ms, flushed on blur) |
 | `codeeditor` | input | `value`, `language` (`json`/`yaml`/`text`), `readOnly`, `lint`, `height`, `label`, `placeholder`, `format` (a Format button), `save` (Ctrl/Cmd-S) | `input` `{value}` (debounced 150 ms, flushed on blur), `format` `{value}` (JSON re-indent, key order kept), `save` `{value}` |
-| `select` | input | `value`, `options:[{value,label}]`, `label` | `change` `{value}` |
+| `select` | input | `value`, `options:[{value,label}]`, `label`, `error` (optional text shown under the control) | `change` `{value}` |
 | `checkbox` | input | `checked`, `label` | `change` `{value}` |
 | `switch` | input | `checked`, `label` (a `role=switch` toggle) | `change` `{value}` |
 | `shortcuts` | invisible | `keys:[{keys,label}]` (canonical key specs, see `indah.keys`) | `press` `{keys}` |

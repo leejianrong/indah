@@ -322,6 +322,60 @@ def first_app_check(pw) -> None:
     expect(page.get_by_text("n = 2")).to_be_visible()
 
 
+def form_demo(ctx: indah.Context) -> indah.Component:
+    invited = {"ada@example.org"}  # pretend this address is taken
+    done = indah.Signal("")
+
+    def invite(values: dict[str, str]):
+        if values["email"] in invited:
+            return {"email": "Already invited"}  # a server-side error, beside the field
+        invited.add(values["email"])
+        done.set(f"Invited {values['email']} as {values['role']}")
+
+    form = indah.Form(on_submit=invite)
+    email = form.text(
+        "email",
+        label="Email",
+        placeholder="name@example.org",
+        validate=[indah.validators.required(), indah.validators.email()],
+    )
+    role = form.select("role", label="Role", options=["viewer", "editor", "admin"])
+    return indah.Column(
+        children=[
+            email,
+            role,
+            form.submit("Send invite"),
+            indah.Text(
+                lambda: "Ready to send" if form.valid.value else "Not ready yet", variant="caption"
+            ),
+            indah.Text(lambda: done.value),
+        ]
+    )
+
+
+def form_demo_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    send = page.get_by_role("button", name="Send invite")
+    box = page.get_by_label("Email")
+    expect(send).to_be_disabled()  # invalid on load, and no error shouting yet
+    expect(page.get_by_role("alert")).to_have_count(0)
+    box.fill("not-an-email")
+    expect(page.get_by_role("alert")).to_have_text("Enter a valid email address")
+    expect(send).to_be_disabled()
+    box.fill("ada@example.org")
+    expect(page.get_by_role("alert")).to_have_count(0)
+    expect(send).to_be_enabled()
+    send.click()
+    expect(page.get_by_role("alert")).to_have_text("Already invited")  # the server's answer
+    expect(send).to_be_disabled()
+    box.fill("grace@example.org")
+    expect(page.get_by_role("alert")).to_have_count(0)
+    send.click()
+    expect(page.get_by_text("Invited grace@example.org as viewer")).to_be_visible()
+
+
 CHAPTER = Chapter(
     slug="start",
     title="Start here",
@@ -331,6 +385,20 @@ CHAPTER = Chapter(
         "and only the parts of the page that read it update, with no rerun of your script."
     ),
     pages=[
+        Page(
+            slug="form",
+            title="A form: disabled until valid",
+            summary=(
+                "`Form` groups inputs with a validator each. The button stays disabled while the "
+                "form is invalid, an error appears beside the field once it has been touched, and "
+                "`on_submit` can answer with a server-side error (try `ada@example.org`)."
+            ),
+            build=form_demo,
+            covers=("Form", "validators"),
+            docs="components.md#forms",
+            adr=(47,),
+            check=form_demo_check,
+        ),
         Page(
             slug="text-roles",
             title="Text roles",
