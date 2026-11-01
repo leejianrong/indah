@@ -62,15 +62,14 @@ JavaScript off you still see the example's source and summary, without the butto
 
 <indah-live page="start/quickstart"></indah-live>
 
-Try it live. Nothing downloads until you press **Run it**.
-
-<indah-live page="start/reactive"></indah-live>
+Move a slider and the text changes. Only the `Text` that reads `total` is updated; the sliders
+and the layout are not sent again.
 
 ## Launching in each environment
 
 === "Colab / Runpod"
 
-    Run the cell. `launch()` detects the platform, binds the port, and prints the
+    These snippets reuse `page` from the app above. Run the cell. `launch()` detects the platform, binds the port, and prints the
     proxy URL (and embeds the app inline). No tunnel, no WebSocket, no Node.
 
     ```python
@@ -137,7 +136,22 @@ Writing two signals that one effect reads would normally run the effect twice. W
 writes in `indah.batch` to run it once, after both:
 
 ```python
-indah.batch(lambda: (first.set("Ada"), last.set("Lovelace")))
+import indah
+from indah import Signal, effect
+
+first, last = Signal(""), Signal("")
+effect(lambda: print(f"name: {first.value} {last.value}"))
+
+indah.batch(lambda: (first.set("Ada"), last.set("Lovelace")))  # one run, after both
+first.set("Grace")  # outside a batch: one run per write
+```
+
+The effect runs once when it is created, once for the batch, and once for the last write:
+
+```text
+name:  
+name: Ada Lovelace
+name: Grace Lovelace
 ```
 
 You rarely need it in a click or input handler: indah already runs every synchronous handler

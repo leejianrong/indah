@@ -180,7 +180,8 @@ two, the page stays fully responsive while the model works.
     per frame keeps the wire light without any visible loss of the streaming feel.
     A framework-level version of this is a tracked follow-up.
 
-Try it live. Nothing downloads until you press **Run it**.
+Try it live. Nothing downloads until you press **Run it**. The first demo is `StreamText` on
+its own; the second is a chat that uses a stand-in model, so it runs in your browser.
 
 <indah-live page="live/stream-text"></indah-live>
 
