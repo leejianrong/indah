@@ -176,7 +176,9 @@ def build(ctx: indah.Context) -> indah.Session:
             indah.Col("ms", kind="number"),
         ],
     )
-    detail = indah.computed(lambda: f"Selected: {picked.value or 'none'} | rejected: {len(rejected.value)}")
+    detail = indah.computed(
+        lambda: f"Selected: {picked.value or 'none'} | rejected: {len(rejected.value)}"
+    )
     return indah.Session(
         indah.Column(
             children=[
