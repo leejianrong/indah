@@ -128,7 +128,7 @@ That is the starter subset. 0.2.0 also ships layout containers (`Row`, `Grid`, `
 `MultiSelect`, `Date`), charting (`Chart`, `Heatmap`, `Table`, `Stat`, `ImageOverlay`),
 data-driven `List` / `Chat` / `Gallery`, and file `Upload` / `Download`. Building a dashboard
 that sits inside a service (live push, big tables, overlays, routing, editors)? Start with
-[Build a dashboard](https://indah.abangai.dev/docs/dashboards/). The full list is in the
+[Dashboard recipes](https://indah.abangai.dev/docs/dashboards/). The full list is in the
 [Components reference](https://indah.abangai.dev/docs/components/).
 
 Need something the set does not cover? Register a custom component against the

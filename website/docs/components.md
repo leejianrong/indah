@@ -216,7 +216,7 @@ Try it live. Nothing downloads until you press **Run it**.
 
 Every component also takes `tooltip="..."`, and `ctx.toast(message)` shows a transient message in the
 current tab. For the live-data, table, overlay and routing features, see
-[Build a dashboard](dashboards.md).
+[Dashboard recipes](dashboards.md).
 
 ## Display
 

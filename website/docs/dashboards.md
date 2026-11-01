@@ -1,9 +1,14 @@
-# Build a dashboard
+# Dashboard recipes
 
-indah's dashboard features are for apps that live inside a bigger service: a live log, a
-queue people act on, a big table, several pages, forms that edit data. The semula demos in
-the repo (`make demo` serves all of them in the Studio, under Full apps) are the worked examples, and every snippet
-below is taken from them.
+Short recipes for the parts of a dashboard that live inside a bigger service: a live log, a queue
+people act on, a big table, several pages, forms that edit data. If you have not built one yet,
+start with [Your first dashboard](dashboard-tutorial.md), which is a single path from an empty
+file to a working one.
+
+The recipes below are fragments. Each assumes the imports, `build` and `rows` of the ones before
+it, so copy the idea and not the block. The semula demos in the repo (`make demo` serves all of
+them in the Studio, under Full apps) are the complete, runnable versions, and every snippet here
+is taken from them.
 
 ## Mount it under your app
 

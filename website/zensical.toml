@@ -22,7 +22,8 @@ nav = [
   ] },
   { "Guides" = [
     { "Build a chatbot" = "chatbot.md" },
-    { "Build a dashboard" = "dashboards.md" },
+    { "Your first dashboard" = "dashboard-tutorial.md" },
+    { "Dashboard recipes" = "dashboards.md" },
     { "Validate a form" = "forms.md" },
     { "Host an app for real users" = [
       { "Overview" = "hosting.md" },
