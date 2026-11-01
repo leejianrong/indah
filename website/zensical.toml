@@ -23,6 +23,7 @@ nav = [
   { "Guides" = [
     { "Build a chatbot" = "chatbot.md" },
     { "Build a dashboard" = "dashboards.md" },
+    { "Validate a form" = "forms.md" },
     { "Host an app for real users" = [
       { "Overview" = "hosting.md" },
       { "Identity and sessions" = "hosting-identity.md" },

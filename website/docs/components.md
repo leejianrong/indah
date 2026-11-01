@@ -501,37 +501,10 @@ any input, so keep it in per-session state and never log it.
 
 ## Forms
 
-A text box, a select and a button are three unrelated signals. `Form` ties them together: a
-validator per field, a `valid` flag, an error beside the field, and a submit button that is
-disabled while the form is invalid.
-
-```python
-form = indah.Form(on_submit=invite)  # invite(values) -> None, or {field: message}
-email = form.text(
-    "email",
-    label="Email",
-    validate=[indah.validators.required(), indah.validators.email()],
-)
-role = form.select("role", options=["viewer", "editor"], initial="viewer")
-page = indah.Column(children=[email, role, form.submit("Send invite")])
-```
-
-- A validator is a function from the text to a message, or `None` when it is fine. `indah.validators`
-  has `required`, `min_length`, `max_length`, `pattern` and `email`; anything else is a lambda.
-- An error is not shown on load. A field shows it once the person has changed it, so an empty
-  required field is quiet while the button is already disabled.
-- `on_submit(values)` (sync or `async`) gets `{name: text}`. Return `{name: message}` to put a
-  server-side error beside a field (`"Already invited"`); it stays until that field changes.
-  `form.set_error(name, message)` does the same from elsewhere, and `form.reset()` starts over.
-- `form.valid`, `form.values`, `form.errors` and `form.submitting` read like any signal, so a
-  summary line can follow them. The rules run on the server on every change, so keep them cheap.
-- The button is greyed out, and the server also drops a click on an invalid form. A form
-  belongs to one session: build it in the session factory.
-- `TextInput(..., error=)` and `Select(..., error=)` show a message under the control, and
-  `Button(..., disabled=)` greys it, if you want that without a `Form`.
-
-The Studio page "A form: disabled until valid" shows the invalid, valid and server-error states.
-It leaves out a schema-driven form builder, file inputs and multi-step forms (ADR-0047).
+`indah.Form` groups inputs with a validator per field, a `valid` flag, an error beside each
+field and a submit button that is disabled while the form is invalid. The steps are in [How to
+validate a form](forms.md). Without a `Form`, `TextInput(..., error=)`, `Select(..., error=)` and
+`Button(..., disabled=)` take a message or a flag, or a function of signals.
 
 ## Buttons and async handlers
 

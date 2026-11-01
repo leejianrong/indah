@@ -395,7 +395,7 @@ CHAPTER = Chapter(
             ),
             build=form_demo,
             covers=("Form", "validators"),
-            docs="components.md#forms",
+            docs="forms.md",
             adr=(47,),
             check=form_demo_check,
         ),
