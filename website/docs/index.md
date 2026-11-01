@@ -92,6 +92,7 @@ patches; the pre-built shell renders the tree and applies patches by node id.
 
 - [Quickstart](quickstart.md) - install, write your first app, and launch it.
 - [Playground](playground.md) - edit an indah app and run it in your browser, with no install.
+- [How indah works](how-it-works.md) - why a click does not rerun your script.
 - [Components](components.md) - the starter set for a typical AI demo.
 - [Custom components](custom-components.md) - register your own without forking or
   a Node build.

@@ -437,6 +437,8 @@ Try it live. Nothing downloads until you press **Run it**.
 
 ## Several pages with `Router`
 
+The full steps, with a complete file, are in [How to add several pages](routing.md). This is the short version.
+
 ```python
 def build(ctx):
     pages = indah.Router(

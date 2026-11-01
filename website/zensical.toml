@@ -25,6 +25,7 @@ nav = [
     { "Your first dashboard" = "dashboard-tutorial.md" },
     { "Dashboard recipes" = "dashboards.md" },
     { "Validate a form" = "forms.md" },
+    { "Add several pages" = "routing.md" },
     { "Host an app for real users" = [
       { "Overview" = "hosting.md" },
       { "Identity and sessions" = "hosting-identity.md" },
@@ -37,8 +38,12 @@ nav = [
     { "Run on Fly" = "deploy-fly.md" },
     { "Run on Kubernetes" = "deploy-k8s.md" },
   ] },
+  { "Concepts" = [
+    { "How indah works" = "how-it-works.md" },
+  ] },
   { "Reference" = [
     { "Components" = "components.md" },
+    { "Table" = "table.md" },
     { "Custom components" = "custom-components.md" },
     { "Design system" = "design-system.md" },
     { "Protocol" = "protocol.md" },
