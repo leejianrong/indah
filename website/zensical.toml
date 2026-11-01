@@ -23,7 +23,15 @@ nav = [
   { "Guides" = [
     { "Build a chatbot" = "chatbot.md" },
     { "Build a dashboard" = "dashboards.md" },
-    { "Host an app for real users" = "hosting.md" },
+    { "Host an app for real users" = [
+      { "Overview" = "hosting.md" },
+      { "Identity and sessions" = "hosting-identity.md" },
+      { "Roles and secrets" = "hosting-access.md" },
+      { "Gateways, limits, CSP" = "hosting-network.md" },
+      { "Live camera and mic" = "hosting-live.md" },
+      { "Several replicas" = "hosting-scale.md" },
+      { "Configure and operate" = "hosting-config.md" },
+    ] },
     { "Run on Fly" = "deploy-fly.md" },
     { "Run on Kubernetes" = "deploy-k8s.md" },
   ] },

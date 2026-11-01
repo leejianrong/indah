@@ -506,7 +506,7 @@ CHAPTER = Chapter(
             ),
             build=persist,
             covers=("Context", "Signal", "StateStore", "MemoryStateStore", "SqliteStateStore"),
-            docs="hosting.md#restorable-sessions",
+            docs="hosting-scale.md#restorable-sessions",
             adr=(43,),
             check=persist_check,
         ),

@@ -686,7 +686,7 @@ CHAPTER = Chapter(
             ),
             build=camera,
             covers=("Camera", "CameraFrame", "Live"),
-            docs="hosting.md#live-camera",
+            docs="hosting-live.md#live-camera",
             adr=(45,),
             check=camera_check,
             local_only="needs a camera and a server route that receives the frames",

@@ -4,6 +4,8 @@ Every component is a Python object you place in a tree and bind to a signal. The
 sections below walk through the common ones with runnable snippets; this is the full
 set shipped so far.
 
+## The full set
+
 ### Text and display
 
 | Component | Use |
@@ -195,7 +197,7 @@ Try it live. Nothing downloads until you press **Run it**.
 | `Badge` | a small status pill |
 | `Empty` | what to show where there is nothing yet: `Empty(title, body, action=, children=)` |
 | `Code` | a read-only block of code or a command with a Copy button: `Code(text, language=, copy=True)` |
-| `SecretReveal` | shows a secret (a new API token) once, with Copy and dismiss; never replayed on reconnect (see [Host an app](hosting.md#showing-a-secret-once)) |
+| `SecretReveal` | shows a secret (a new API token) once, with Copy and dismiss; never replayed on reconnect (see [Host an app](hosting-access.md#showing-a-secret-once)) |
 
 <details>
 <summary>Try these live (5 examples)</summary>

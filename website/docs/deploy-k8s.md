@@ -68,7 +68,7 @@ database. indah drains first (below), which makes a rollout a reconnect, not an 
 The Deployment has `maxUnavailable: 0`, a `preStop` sleep of 5 s so the ingress stops sending new tabs to the
 old pod, then SIGTERM, then `INDAH_DRAIN_SECONDS` (10 s) of draining, inside a 30 s grace period. Keep
 `terminationGracePeriodSeconds` above `preStop` plus the drain. Readiness is `/ready`, which turns 503 as
-the drain starts. See [Rolling out without losing tabs](hosting.md#rolling-out-without-losing-tabs).
+the drain starts. See [Rolling out without losing tabs](hosting-scale.md#rolling-out-without-losing-tabs).
 
 ## The client address
 

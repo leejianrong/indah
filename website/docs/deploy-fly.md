@@ -44,7 +44,7 @@ kill_timeout = 15              # more than INDAH_DRAIN_SECONDS
 - **One machine.** A tab's state lives in one process, and Fly Proxy routes every request on its own
   with no cookie affinity. With two machines a click can land on a machine that does not hold the tab:
   indah answers it with a 409 (seen on Kubernetes; not re-measured on Fly) and the tab reconnects, but the click is lost. To
-  run several, turn on the [route hint](hosting.md#several-fly-machines) first.
+  run several, turn on the [route hint](hosting-scale.md#several-fly-machines) first.
 
 ## Rolling out
 
@@ -84,5 +84,5 @@ checkout, since the settings above are newer than the 0.7.0 release):
 | `fly machine restart --signal SIGTERM` | the tab got `reconnect` about 2 s later |
 | `fly deploy` (the configured SIGTERM) | the tab got `reconnect` as the old machine was stopped |
 
-Not checked: two machines (see [Sticky sessions](hosting.md#sessions-and-tokens) and the measurements
+Not checked: two machines (see [Sticky sessions](hosting-identity.md#sessions-and-tokens) and the measurements
 in `docs/spikes/proxy-and-sticky.md`), IPv6 visitors, and a Cloudflare Worker in front of the app.
