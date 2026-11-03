@@ -732,7 +732,7 @@
 {:else if node.type === "graph"}
   <div class="field" class:fill={props.height === "fill"}>
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}
-    <Graph {props} />
+    <Graph {props} nodeId={node.id} />
   </div>
 {:else if node.type === "map"}
   <div class="field">

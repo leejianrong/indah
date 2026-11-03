@@ -68,7 +68,7 @@ export function decode(data) {
 }
 
 /** Mount a graph in `el`. Returns a small controller; the shell owns the lifecycle. */
-export function createGraph(el) {
+export function createGraph(el, { onSelect } = {}) {
   const canvas = document.createElement("canvas");
   canvas.className = "graph-canvas";
   el.appendChild(canvas);
@@ -94,6 +94,8 @@ export function createGraph(el) {
   let hlNodes = new Int32Array(0);
   let hlNodeFlag = new Uint8Array(0);
   let hlEdges = new Int32Array(0);
+  let appliedSelected; // the last `selected` / `focus` from Python, so only a change acts
+  let appliedFocus;
 
   function resolveTheme() {
     theme = {
@@ -362,6 +364,8 @@ export function createGraph(el) {
     startedAt = performance.now();
     el.dataset.settled = "false";
     selected = -1;
+    appliedSelected = undefined;
+    appliedFocus = undefined;
     grid = null;
     inWin = new Uint8Array(g.n);
     hlNodes = new Int32Array(0);
@@ -384,6 +388,7 @@ export function createGraph(el) {
         }
         return out;
       },
+      view: () => ({ ...view, w, h }),
       screenOf: (id) => {
         const i = g.idIndex.get(id);
         return [sim.x[i] * view.k + view.tx, sim.y[i] * view.k + view.ty];
@@ -467,14 +472,23 @@ export function createGraph(el) {
     const near = Math.hypot(sim.x[i] * view.k + view.tx - px, sim.y[i] * view.k + view.ty - py);
     if (near <= Math.max(10, radius(i) + 4)) {
       select(i);
-      view = { ...view, tx: w / 2 - sim.x[i] * view.k, ty: h / 2 - sim.y[i] * view.k };
-      touched = true;
-    } else select(-1);
+      centreOn(i);
+      if (onSelect) onSelect(g.ids[i]);
+    } else if (selected >= 0) {
+      select(-1);
+      if (onSelect) onSelect(null);
+    }
     draw();
   }
 
   function select(i) {
     selected = i;
+  }
+
+  // Pan so node i is in the middle of the canvas, which also moves the focus window there.
+  function centreOn(i) {
+    view = { ...view, tx: w / 2 - sim.x[i] * view.k, ty: h / 2 - sim.y[i] * view.k };
+    touched = true;
   }
 
   const offTheme = onThemeChange(() => {
@@ -492,8 +506,24 @@ export function createGraph(el) {
       draw();
     },
     // Options from Python: how many nodes are drawn in full, and a path to emphasise.
-    setOptions({ focusSize: size, highlight }) {
+    setOptions({ focusSize: size, highlight, selected: want, focus }) {
       if (size != null && size !== focusSize) focusSize = size;
+      // Python set `selected` (a node id, or null to clear): select it and centre on it. Only a
+      // change acts, so an unrelated update does not recentre the viewer, and the echo of the
+      // viewer's own click is a no-op.
+      if (want !== undefined && g && want !== appliedSelected) {
+        appliedSelected = want;
+        const i = want == null ? -1 : g.idIndex.get(want);
+        if (i !== undefined && i !== selected) {
+          select(i);
+          if (i >= 0) centreOn(i);
+        }
+      }
+      if (focus !== undefined && g && focus !== appliedFocus) {
+        appliedFocus = focus;
+        const i = focus == null ? undefined : g.idIndex.get(focus);
+        if (i !== undefined) centreOn(i);
+      }
       if (highlight !== undefined && g) {
         const nodes = [];
         for (const id of highlight?.nodes ?? []) if (g.idIndex.has(id)) nodes.push(g.idIndex.get(id));

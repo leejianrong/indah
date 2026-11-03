@@ -4,9 +4,9 @@
   // fetched the first time a graph renders so an app without a graph never downloads it
   // (ADR-0042). A devDependency-free, hand-rolled canvas: no Node at install or runtime.
   import { untrack } from "svelte";
-  import { apiUrl } from "./api.js";
+  import { apiUrl, postEvent } from "./api.js";
 
-  let { props } = $props();
+  let { props, nodeId } = $props();
   let el = $state();
   let mod = $state.raw(null); // the lazily loaded module, once it has arrived
   let failed = $state(false);
@@ -23,8 +23,15 @@
     );
   });
 
-  function load() {
+  // Hand the graph to the controller, but only when the data itself is new: a change to another
+  // prop (the highlight, the selection) must not restart the layout or reset the viewer's pan.
+  let loadedNodes;
+  let loadedEdges;
+  function load(force = false) {
     if (!ctl || !props.nodes) return;
+    if (!force && props.nodes === loadedNodes && props.edges === loadedEdges) return;
+    loadedNodes = props.nodes;
+    loadedEdges = props.edges;
     ctl.setData({ nodes: props.nodes, edges: props.edges });
     options();
     ctl.resize();
@@ -32,7 +39,13 @@
   }
 
   function options() {
-    if (ctl) ctl.setOptions({ focusSize: props.focusSize ?? 300, highlight: props.highlight ?? null });
+    if (!ctl) return;
+    ctl.setOptions({
+      focusSize: props.focusSize ?? 300,
+      highlight: props.highlight ?? null,
+      selected: props.selectable ? (props.selected ?? null) : undefined,
+      focus: props.focus ?? null,
+    });
   }
 
   function destroy() {
@@ -50,8 +63,11 @@
     untrack(() => {
       destroy();
       if (!el || !mod) return;
-      ctl = mod.createGraph(el);
-      load();
+      ctl = mod.createGraph(el, {
+        // The viewer's own click: tell Python (only when a `selected` signal is bound).
+        onSelect: (id) => props.selectable && postEvent(nodeId, "select", { id }),
+      });
+      load(true);
     });
     return destroy;
   });
@@ -67,6 +83,8 @@
   $effect(() => {
     void props.focusSize;
     void props.highlight;
+    void props.selected;
+    void props.focus;
     untrack(options);
   });
 

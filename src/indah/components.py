@@ -2307,6 +2307,13 @@ class Graph(Component):
     far outside the window, and everything else is dimmed. Edge ids come from an edge dict's ``id``;
     an unknown id raises ``ValueError``. ``focus_size`` and ``highlight`` may be signals.
 
+    **Selection.** Bind ``selected`` to a ``Signal[str | None]`` and a click on a node sets it to
+    that node's id (a click on empty canvas sets ``None``); set it from Python and the viewer
+    selects that node and centres on it. A viewer cannot set it to a string that is not a node
+    id; such an event is refused. ``focus`` (a node id, a signal or callable) centres the viewer on
+    a node without selecting it, each time it changes. An unknown id raises ``ValueError``. No
+    signal, no events: a display-only graph sends nothing to Python.
+
     Replace ``nodes`` and ``edges`` together, inside ``indah.batch(...)``, when both are signals:
     set one at a time, an edge can briefly name a node that is not there yet and raises.
     """
@@ -2324,6 +2331,8 @@ class Graph(Component):
         max_nodes: int = GRAPH_DEFAULT_MAX_NODES,
         focus_size: Source = 300,
         highlight: Source = None,
+        selected: Signal[str | None] | None = None,
+        focus: Source = None,
         label: str = "",
     ) -> None:
         super().__init__()
@@ -2343,6 +2352,8 @@ class Graph(Component):
         self._label = label
         self._focus_size = focus_size
         self._highlight = highlight
+        self._selected = selected
+        self._focus = focus
         if not _is_source(focus_size):
             _graph_focus_size(focus_size)
 
@@ -2360,6 +2371,18 @@ class Graph(Component):
             self._static = build()
         if highlight is not None and not _is_source(highlight):
             _graph_highlight(highlight, self._cols())  # a typo fails here, at build time
+        if selected is not None:
+            self._known(selected.value)
+        if focus is not None and not _is_source(focus):
+            self._known(focus)
+
+    def _known(self, node: Any) -> str | None:
+        """``node`` if it is a node id of this graph, ``None`` for none; else a ``ValueError``."""
+        if node is None:
+            return None
+        if not isinstance(node, str) or node not in set(self._cols()["nodes"]["id"]):
+            raise ValueError(f"unknown graph node {node!r}")
+        return node
 
     def _cols(self) -> dict[str, Any]:
         return self._columns.value if self._columns is not None else self._static
@@ -2370,6 +2393,10 @@ class Graph(Component):
             props["legend"] = False
         if self._label:
             props["label"] = self._label
+        if self._selected is not None:
+            props["selectable"] = True  # the shell posts select events only when something listens
+        if self._focus is not None and not _is_source(self._focus):
+            props["focus"] = self._focus
         if not _is_source(self._focus_size):
             props["focusSize"] = self._focus_size
         if self._highlight is not None and not _is_source(self._highlight):
@@ -2388,7 +2415,19 @@ class Graph(Component):
             props["focusSize"] = lambda: _graph_focus_size(_read(self._focus_size))
         if _is_source(self._highlight):
             props["highlight"] = lambda: _graph_highlight(_read(self._highlight), self._cols())
+        if self._selected is not None:
+            props["selected"] = lambda: self._known(self._selected.value)
+        if _is_source(self._focus):
+            props["focus"] = lambda: self._known(_read(self._focus))
         return props
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "select" and self._selected is not None and "id" in payload:
+            node = payload["id"]
+            if node is None or (isinstance(node, str) and node in set(self._cols()["nodes"]["id"])):
+                self._selected.set(node)
+                return True
+        return False
 
 
 class DataFrame(Component):
