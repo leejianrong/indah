@@ -16,6 +16,15 @@ const MAX_DEPTH = 40;
 export function stepsFor(n) {
   return n <= 1000 ? 300 : Math.max(100, Math.round(300 * Math.sqrt(1000 / n)));
 }
+// How far apart group centres sit, as a multiple of the base spacing. Tight enough that groups which
+// are heavily linked to each other stay in one picture, wide enough that they stay distinct: measured
+// over eight seeds on cross-linked graphs, 0.64 keeps the centres further apart than a group is wide
+// (separation above 1), and 0.5 does not (IND-250).
+const GROUP_SPACING = 0.64;
+// Nodes with no or one edge feel only repulsion and the group pull, so they drift far out and shrink
+// the picture. A stronger pull for them keeps the core readable (IND-250).
+const PULL_ISOLATED = 8;
+const PULL_LEAF = 3;
 const GOLDEN = 2.399963229728653;
 
 export function hashString(s) {
@@ -48,7 +57,7 @@ export function initialPositions(n, group, nGroups, seed) {
   const gy = new Float64Array(nGroups);
   const base = LINK_DISTANCE * Math.sqrt(n / nGroups) * 1.2;
   for (let g = 0; g < nGroups && nGroups > 1; g++) {
-    const r = base * Math.sqrt(g + 0.5) * 1.6;
+    const r = base * Math.sqrt(g + 0.5) * GROUP_SPACING;
     gx[g] = r * Math.cos(g * GOLDEN);
     gy[g] = r * Math.sin(g * GOLDEN);
   }
@@ -254,8 +263,9 @@ export function createSimulation({ n, s, t, group, nGroups, seed, given }) {
       // A weak pull to each node's group centre keeps groups together and the graph centred.
       const pull = nGroups > 1 ? 0.05 : 0.03;
       for (let i = 0; i < n; i++) {
-        vx[i] += (sim.gx[group[i]] - x[i]) * pull * a;
-        vy[i] += (sim.gy[group[i]] - y[i]) * pull * a;
+        const k = pull * (deg[i] === 0 ? PULL_ISOLATED : deg[i] === 1 ? PULL_LEAF : 1) * a;
+        vx[i] += (sim.gx[group[i]] - x[i]) * k;
+        vy[i] += (sim.gy[group[i]] - y[i]) * k;
       }
       for (let i = 0; i < n; i++) {
         x[i] += vx[i] *= VELOCITY_DECAY;
