@@ -12,6 +12,7 @@
   import Pie from "./Pie.svelte";
   import Frame from "./Frame.svelte";
   import MapView from "./Map.svelte";
+  import Graph from "./Graph.svelte";
   import Table from "./Table.svelte";
   import ImageOverlay from "./ImageOverlay.svelte";
   import Camera from "./Camera.svelte";
@@ -727,6 +728,11 @@
   <div class="field">
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}
     <Pie {props} />
+  </div>
+{:else if node.type === "graph"}
+  <div class="field" class:fill={props.height === "fill"}>
+    {#if props.label}<span class="stream-label">{props.label}</span>{/if}
+    <Graph {props} />
   </div>
 {:else if node.type === "map"}
   <div class="field">

@@ -13,12 +13,18 @@ try {
   mapHash = createHash("sha1").update(readFileSync("dist-map/map.js")).digest("hex").slice(0, 16);
 } catch {}
 
+// The graph module is loaded the same way (ADR-0048), with its own hash.
+let graphHash = "dev";
+try {
+  graphHash = createHash("sha1").update(readFileSync("dist-graph/graph.js")).digest("hex").slice(0, 16);
+} catch {}
+
 // Bundle everything (JS + CSS) into a single index.html so the Python server
 // serves one self-contained file over one port, with no external asset requests
 // to break behind Colab/Runpod proxy base paths (ADR-0001, ADR-0004).
 export default defineConfig({
   plugins: [svelte(), viteSingleFile()],
-  define: { __MAP_HASH__: JSON.stringify(mapHash) },
+  define: { __MAP_HASH__: JSON.stringify(mapHash), __GRAPH_HASH__: JSON.stringify(graphHash) },
   build: {
     outDir: "dist",
     emptyOutDir: true,

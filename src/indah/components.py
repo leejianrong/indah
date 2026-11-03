@@ -32,7 +32,7 @@ from .keys import normalize_keys
 from .live import AudioChunk, CameraFrame
 from .markdown import to_blocks
 from .protocol import RenderSpec
-from .reactive import Computed, Signal, effect
+from .reactive import Computed, Signal, computed, effect
 from .routes import compile_route, match_routes, normalize_path
 from .stream import Stream
 
@@ -2147,6 +2147,188 @@ class Map(Component):
             "polygons": lambda: _to_polygons(_read(self._polygons)),
             "polylines": lambda: _to_polylines(_read(self._polylines)),
         }
+
+
+GRAPH_DEFAULT_MAX_NODES = 10_000
+GRAPH_MAX_NODES = 20_000  # the hard ceiling for max_nodes (ADR-0048)
+GRAPH_MAX_EDGES = 60_000
+_GRAPH_NODE_KEYS = {"id", "label", "group", "size", "color", "x", "y"}
+_GRAPH_EDGE_KEYS = {"source", "target", "id", "label", "color"}
+
+
+def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> dict[str, Any]:
+    """The columnar wire form of a graph (ADR-0048): node columns, and edges as integer indexes
+    into them. Every mistake a caller can make (a duplicate id, an edge to a node that is not
+    there, too many nodes) raises here, in Python, before anything is sent."""
+    items = list(nodes or [])
+    if len(items) > max_nodes:
+        raise ValueError(
+            f"a Graph holds at most {max_nodes} nodes, got {len(items)}; sample the graph, or "
+            f"raise max_nodes (the ceiling is {GRAPH_MAX_NODES})"
+        )
+    index: dict[str, int] = {}
+    cols: dict[str, list[Any]] = {k: [] for k in ("label", "group", "size", "color", "x", "y")}
+    used: set[str] = set()
+    ids: list[str] = []
+    for item in items:
+        spec = {"id": item} if isinstance(item, str) else item
+        if not isinstance(spec, dict):
+            raise ValueError(f"a graph node is an id or a dict, got {item!r}")
+        unknown = set(spec) - _GRAPH_NODE_KEYS
+        if unknown:
+            raise ValueError(
+                f"unknown graph node keys {sorted(unknown)}; use {sorted(_GRAPH_NODE_KEYS)}"
+            )
+        node_id = spec.get("id")
+        if not isinstance(node_id, str) or not node_id:
+            raise ValueError(f"a graph node needs a non-empty string id, got {node_id!r}")
+        if node_id in index:
+            raise ValueError(f"duplicate graph node id {node_id!r}")
+        index[node_id] = len(ids)
+        ids.append(node_id)
+        for key in cols:
+            value = spec.get(key)
+            if value is not None:
+                if key == "color":
+                    value = _color(value, "node color")
+                elif key == "group":
+                    value = str(value)
+                elif key == "label":
+                    value = str(value)
+                else:
+                    value = _number(value, f"node {key}", -1e9, 1e9)
+                    if key == "size" and value <= 0:
+                        raise ValueError("node size must be positive")
+                used.add(key)
+            cols[key].append(value)
+    if layout == "given" and ids:
+        for key in ("x", "y"):
+            if any(v is None for v in cols[key]):
+                raise ValueError(f"layout='given' needs an {key} for every node")
+    out_nodes: dict[str, list[Any]] = {"id": ids}
+    for key, values in cols.items():
+        if key in used and (key not in ("x", "y") or layout == "given"):
+            out_nodes[key] = values
+
+    max_edges = min(GRAPH_MAX_EDGES, 3 * max_nodes)
+    pairs = list(edges or [])
+    if len(pairs) > max_edges:
+        raise ValueError(f"a Graph holds at most {max_edges} edges, got {len(pairs)}")
+    src: list[int] = []
+    dst: list[int] = []
+    edge_cols: dict[str, list[Any]] = {"id": [], "label": [], "color": []}
+    edge_used: set[str] = set()
+    for k, pair in enumerate(pairs):
+        if isinstance(pair, dict):
+            unknown = set(pair) - _GRAPH_EDGE_KEYS
+            if unknown:
+                raise ValueError(f"unknown graph edge keys {sorted(unknown)}")
+            spec = pair
+            a, b = pair.get("source"), pair.get("target")
+        else:
+            try:
+                a, b = pair
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"edge {k} must be (source, target) or a dict, got {pair!r}"
+                ) from None
+            spec = {}
+        for end in (a, b):
+            if end not in index:
+                raise ValueError(f"edge {k} names unknown node {end!r}")
+        src.append(index[a])
+        dst.append(index[b])
+        for key in edge_cols:
+            value = spec.get(key)
+            if value is not None:
+                value = _color(value, "edge color") if key == "color" else str(value)
+                edge_used.add(key)
+            edge_cols[key].append(value)
+    out_edges: dict[str, list[Any]] = {"s": src, "t": dst}
+    for key, values in edge_cols.items():
+        if key in edge_used:
+            out_edges[key] = values
+    return {"nodes": out_nodes, "edges": out_edges}
+
+
+class Graph(Component):
+    """An interactive node-link graph (ADR-0048): drag to pan, wheel or pinch to zoom.
+
+    ``nodes`` is a list of ids (strings) or dicts ``{id, label?, group?, size?, color?, x?, y?}``;
+    ``edges`` a list of ``(source, target)`` pairs or dicts ``{source, target, id?, label?,
+    color?}``. Either may be a ``Signal`` or callable, in which case a change replaces the graph.
+    ``group`` picks a colour from the shell's palette (shown in a legend, unless ``legend=False``);
+    an explicit ``color`` wins. Positions are computed in the browser (``layout="auto"``), starting
+    clustered by group, so the same graph always lays out the same way; ``layout="given"`` takes an
+    ``x`` and ``y`` for every node and runs no simulation. Above 8,000 nodes the clustered start is
+    the layout.
+
+    The graph ships as columns and edges refer to nodes by index, so every mistake (a duplicate id,
+    an edge to a node that is not there, more than ``max_nodes`` nodes) raises ``ValueError`` here.
+    ``max_nodes`` defaults to 10,000 and can be raised to 20,000; edges are capped at three times
+    that, up to 60,000. The viewer's own pan and zoom are not reported back to Python.
+
+    Replace ``nodes`` and ``edges`` together, inside ``indah.batch(...)``, when both are signals:
+    set one at a time, an edge can briefly name a node that is not there yet and raises.
+    """
+
+    type = "graph"
+
+    def __init__(
+        self,
+        nodes: Source,
+        edges: Source = None,
+        *,
+        height: int | str = 480,
+        layout: Literal["auto", "given"] = "auto",
+        legend: bool = True,
+        max_nodes: int = GRAPH_DEFAULT_MAX_NODES,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        if layout not in ("auto", "given"):
+            raise ValueError(f"Graph layout must be 'auto' or 'given', got {layout!r}")
+        if (
+            isinstance(max_nodes, bool)
+            or not isinstance(max_nodes, int)
+            or not (1 <= max_nodes <= GRAPH_MAX_NODES)
+        ):
+            raise ValueError(
+                f"max_nodes must be between 1 and {GRAPH_MAX_NODES}, got {max_nodes!r}"
+            )
+        self._height = _plot_height(height)
+        self._layout = layout
+        self._legend = bool(legend)
+        self._label = label
+
+        def build() -> dict[str, Any]:
+            return _graph_columns(_read(nodes), _read(edges), layout=layout, max_nodes=max_nodes)
+
+        # Columnarise once. A reactive source is wrapped in a computed so an unrelated signal
+        # change never rebuilds the graph; either way a bad graph raises here, at build time.
+        self._reactive = _is_source(nodes) or _is_source(edges)
+        if self._reactive:
+            self._columns: Computed[dict[str, Any]] | None = computed(build)
+            self._static: dict[str, Any] = {}
+        else:
+            self._columns = None
+            self._static = build()
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"height": self._height, "layout": self._layout}
+        if not self._legend:
+            props["legend"] = False
+        if self._label:
+            props["label"] = self._label
+        if not self._reactive:
+            props.update(self._static)
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        if self._columns is None:
+            return {}
+        columns = self._columns
+        return {"nodes": lambda: columns.value["nodes"], "edges": lambda: columns.value["edges"]}
 
 
 class DataFrame(Component):

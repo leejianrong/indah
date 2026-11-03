@@ -959,6 +959,7 @@ def create_app(
             ),
             Route("/api/editor.js", _editor_js, methods=["GET"]),
             Route("/api/map.js", _map_js, methods=["GET"]),
+            Route("/api/graph.js", _graph_js, methods=["GET"]),
             Route("/api/components/{name}.js", _component_js, methods=["GET"]),
             *([Route("/api/csp-report", _csp_report, methods=["POST"])] if csp == "strict" else []),
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
@@ -1251,6 +1252,7 @@ def _lazy_module(filename: str) -> Callable[[Request], Awaitable[Response]]:
 
 _editor_js = _lazy_module("editor.js")
 _map_js = _lazy_module("map.js")
+_graph_js = _lazy_module("graph.js")
 _live_audio_js = _lazy_module("live-audio.js")  # the Microphone AudioWorklet (ADR-0045)
 
 

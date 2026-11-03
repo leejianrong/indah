@@ -74,6 +74,9 @@ def measure() -> dict[str, int]:
     map_module = STATIC / "map.js"
     out["map_raw_bytes"] = map_module.stat().st_size
     out["map_gzip_bytes"] = _gzip_size(map_module)
+    graph_module = STATIC / "graph.js"
+    out["graph_raw_bytes"] = graph_module.stat().st_size
+    out["graph_gzip_bytes"] = _gzip_size(graph_module)
     sources = (ROOT / "src" / "indah").glob("*.py")
     out["python_source_bytes"] = sum(p.stat().st_size for p in sources)
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
