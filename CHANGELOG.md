@@ -36,6 +36,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   zoom, Escape clears the selection (and tells Python). A "How to draw a graph" guide, a Studio page
   (`media/graph`, runnable in the docs), and the graph module is now copied into the docs build.
 
+- `Graph` lays out a hard graph more readably (IND-250): group centres sit closer together and nodes
+  with no or one edge are pulled harder toward their group, so they no longer drift far out and shrink
+  the picture. Measured over eight seeds on cross-linked graphs, the middle of the graph fills 2.6 times
+  more of the fitted view on a realistic 1,000-entity world (9.6 to 24.8 percent) and 5 times more on a
+  harder synthetic one, and group centres stay further apart than a group is wide. The spacing is the
+  tightest that keeps that true. Layout and spatial-index tests now run under Node in the unit suite.
+
 ### Fixed
 - `Graph` no longer restarts its layout, or resets the viewer's pan and zoom, when a prop other than
   `nodes` or `edges` changes (a highlight, the selection, the focus size). The shell now loads the data
