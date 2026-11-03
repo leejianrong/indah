@@ -100,7 +100,7 @@
   <div
     class="graph-stage"
     style:height={props.height === "fill" ? undefined : `${props.height ?? 480}px`}
-    role="img"
+    role="group"
     aria-label={props.label || "Graph"}
     bind:this={el}
   ></div>

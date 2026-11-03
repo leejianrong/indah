@@ -95,6 +95,18 @@ def test_map_module_ships_in_the_package_and_the_shell_asks_for_its_hash():
 
 
 @pytest.mark.unit
+def test_graph_module_ships_in_the_package_and_the_shell_asks_for_its_hash():
+    """The shell loads api/graph.js?v=<hash of the shipped file> (ADR-0048), like the map."""
+    import hashlib
+
+    static = files("indah.static")
+    module = static.joinpath("graph.js").read_bytes()
+    assert b"createGraph" in module and 5_000 < len(module) < 100_000
+    digest = hashlib.sha1(module).hexdigest()[:16]
+    assert digest.encode() in static.joinpath("index.html").read_bytes()
+
+
+@pytest.mark.unit
 def test_leaflet_is_not_inlined_in_the_shell():
     """Leaflet lives in map.js, so the shell stays small and an app without a map never loads it."""
     shell = files("indah.static").joinpath("index.html").read_bytes()

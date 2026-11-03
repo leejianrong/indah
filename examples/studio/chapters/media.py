@@ -315,6 +315,84 @@ def heatmap(ctx: indah.Context) -> indah.Component:
     )
 
 
+def _demo_graph(n: int = 900, groups: int = 5) -> tuple[list[dict], list[dict]]:
+    """A small community graph, the same every time: nodes in groups, mostly linked within one."""
+    rng = random.Random(7)
+    nodes = [{"id": f"n{i}", "group": f"Team {i % groups + 1}"} for i in range(n)]
+    links: set[tuple[int, int]] = set()
+    while len(links) < int(n * 2.2):
+        a = rng.randrange(n)
+        near = rng.random() < 0.9
+        b = (rng.randrange(n // groups) * groups + a % groups) % n if near else rng.randrange(n)
+        if a != b:
+            links.add((min(a, b), max(a, b)))
+    edges = [
+        {"source": f"n{a}", "target": f"n{b}", "id": f"e{i}"}
+        for i, (a, b) in enumerate(sorted(links))
+    ]
+    return nodes, edges
+
+
+def _longest_path(edges: list[dict], start: str) -> dict[str, list[str]]:
+    """The shortest path from ``start`` to the node farthest from it, as node and edge ids."""
+    around: dict[str, list[tuple[str, str]]] = {}
+    for e in edges:
+        around.setdefault(e["source"], []).append((e["target"], e["id"]))
+        around.setdefault(e["target"], []).append((e["source"], e["id"]))
+    came: dict[str, tuple[str, str] | None] = {start: None}
+    queue, last = [start], start
+    for node in queue:
+        last = node
+        for nxt, edge in around.get(node, []):
+            if nxt not in came:
+                came[nxt] = (node, edge)
+                queue.append(nxt)
+    nodes, links = [last], []
+    while came[nodes[-1]] is not None:
+        prev, edge = came[nodes[-1]]
+        nodes.append(prev)
+        links.append(edge)
+    return {"nodes": nodes[::-1], "edges": links[::-1]}
+
+
+def graph_page(ctx: indah.Context) -> indah.Component:
+    nodes, edges = _demo_graph()
+    path = _longest_path(edges, "n0")
+    selected = indah.Signal(None)
+    window = indah.Signal(120)
+    trace = indah.Signal(False)
+    return indah.Column(
+        children=[
+            indah.Graph(
+                nodes,
+                edges,
+                selected=selected,
+                focus_size=window,
+                highlight=lambda: path if trace.value else None,
+                height=420,
+                label="A community graph of 900 nodes",
+            ),
+            indah.Slider(window, min=20, max=900, step=10, label="Nodes drawn in full"),
+            indah.Switch(trace, label="Highlight the longest path from n0"),
+            indah.Text(lambda: f"Selected {selected.value}" if selected.value else "Click a node"),
+        ]
+    )
+
+
+def graph_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator('.graph-stage[data-settled="true"]')).to_be_visible(timeout=30_000)
+    expect(page.locator(".graph-canvas")).to_be_visible()
+    expect(page.get_by_text("Click a node", exact=True)).to_be_visible()
+    page.locator(".graph-canvas").focus()
+    page.keyboard.press("+")
+    page.get_by_role("switch").click()  # highlight the path; the graph must not reload
+    expect(page.locator('.graph-stage[data-settled="true"]')).to_be_visible()
+    expect(page.get_by_text("Click a node", exact=True)).to_be_visible()
+
+
 def heatmap_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -664,6 +742,19 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(19,),
             check=heatmap_check,
+        ),
+        Page(
+            slug="graph",
+            title="Graph",
+            summary=(
+                "A node-link graph: drag to pan, wheel to zoom, click a node to select it. Only the "
+                "nodes nearest the middle are drawn in full; the rest are dots."
+            ),
+            build=graph_page,
+            covers=("Graph",),
+            docs="graph.md",
+            adr=(48,),
+            check=graph_check,
         ),
         Page(
             slug="map",

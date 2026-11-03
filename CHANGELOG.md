@@ -32,6 +32,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   that node. `focus` centres a node without selecting it. The server refuses a `select` event whose id
   is not a node, or that has no `id`. A graph with no signal bound sends no events.
 
+- `Graph` keyboard, docs and Studio page (IND-248): Tab focuses the canvas, arrow keys pan, `+` and `-`
+  zoom, Escape clears the selection (and tells Python). A "How to draw a graph" guide, a Studio page
+  (`media/graph`, runnable in the docs), and the graph module is now copied into the docs build.
+
 ### Fixed
 - `Graph` no longer restarts its layout, or resets the viewer's pan and zoom, when a prop other than
   `nodes` or `edges` changes (a highlight, the selection, the focus size). The shell now loads the data

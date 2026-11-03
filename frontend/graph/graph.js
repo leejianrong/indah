@@ -71,6 +71,10 @@ export function decode(data) {
 export function createGraph(el, { onSelect } = {}) {
   const canvas = document.createElement("canvas");
   canvas.className = "graph-canvas";
+  canvas.tabIndex = 0;
+  canvas.setAttribute("role", "application");
+  canvas.setAttribute("aria-label", el.getAttribute("aria-label") || "Graph");
+  canvas.setAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight ArrowUp ArrowDown + - Escape");
   el.appendChild(canvas);
   const ctx = canvas.getContext("2d");
   let g = null; // decoded data
@@ -490,6 +494,26 @@ export function createGraph(el, { onSelect } = {}) {
     view = { ...view, tx: w / 2 - sim.x[i] * view.k, ty: h / 2 - sim.y[i] * view.k };
     touched = true;
   }
+
+  // Keyboard (ADR-0048): the canvas takes focus with Tab. Arrow keys pan, plus and minus zoom
+  // about the centre, and Escape clears the selection. Modified keys are left to the browser.
+  const PAN_STEP = 60;
+  canvas.addEventListener("keydown", (ev) => {
+    if (!g || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+    const pan = { ArrowLeft: [PAN_STEP, 0], ArrowRight: [-PAN_STEP, 0], ArrowUp: [0, PAN_STEP], ArrowDown: [0, -PAN_STEP] }[ev.key];
+    if (pan) {
+      view = { ...view, tx: view.tx + pan[0], ty: view.ty + pan[1] };
+      touched = true;
+    } else if (ev.key === "+" || ev.key === "=") zoomAt(w / 2, h / 2, 1.25);
+    else if (ev.key === "-" || ev.key === "_") zoomAt(w / 2, h / 2, 0.8);
+    else if (ev.key === "Escape") {
+      if (selected < 0) return;
+      select(-1);
+      if (onSelect) onSelect(null);
+    } else return;
+    ev.preventDefault();
+    draw();
+  });
 
   const offTheme = onThemeChange(() => {
     resolveTheme();

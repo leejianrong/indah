@@ -126,6 +126,7 @@ pieces out once at a design size, say 1920 by 1080, and indah scales the whole t
 | `Chart` | an interactive client-side chart (zoom, hover, live points) |
 | `Heatmap` | a client-side heatmap / 2-D field |
 | `Map` | an interactive client-side map (Leaflet): pan/zoom, markers, polygons, polylines |
+| `Graph` | an interactive node-link graph: pan/zoom, click to select, a focus window for big graphs ([guide](graph.md)) |
 | `DataFrame` | a pandas frame, a `{columns, rows}` dict, or record dicts |
 | `Table` | an interactive table: sort, page, and select |
 | `Pie` | a pie chart with one slice lit: pulled out and glowing while the rest dim |
