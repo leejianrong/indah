@@ -18,3 +18,4 @@ markov-poet	markov_poet.py	Markov poet	🪶	-
 sorting	sorting.py	Sorting visualiser	📶	-
 expenses	expenses.py	Expense tracker	🧾	-
 automaton	automaton.py	Cellular automata	🧬	-
+yolox-traffic	yolox_traffic.py	Real-time detection on a traffic clip	🚦	onnxruntime pillow huggingface_hub numpy
