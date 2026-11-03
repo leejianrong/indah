@@ -26,8 +26,13 @@
   function load() {
     if (!ctl || !props.nodes) return;
     ctl.setData({ nodes: props.nodes, edges: props.edges });
+    options();
     ctl.resize();
     legend = ctl.legend();
+  }
+
+  function options() {
+    if (ctl) ctl.setOptions({ focusSize: props.focusSize ?? 300, highlight: props.highlight ?? null });
   }
 
   function destroy() {
@@ -56,6 +61,13 @@
     void props.edges;
     void props.layout;
     untrack(load);
+  });
+
+  // The focus size and the highlight change without resending the graph.
+  $effect(() => {
+    void props.focusSize;
+    void props.highlight;
+    untrack(options);
   });
 
   $effect(() => {
