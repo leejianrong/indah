@@ -319,3 +319,167 @@ def test_a_graph_at_the_node_ceiling_stays_interactive_while_panning():
             browser.close()
     finally:
         handle.stop()
+
+
+# -- selection and focus from and to Python (ADR-0048, IND-247) --------------------------------
+
+
+def _bound_app(n=2000, m=4500, groups=5, **kwargs):
+    nodes, edges = _graph(n, m, groups)
+    selected = indah.Signal(None)
+    focus = indah.Signal(None)
+    graph = indah.Graph(nodes, edges, height=520, selected=selected, focus=focus, **kwargs)
+    app = indah.Card(children=[graph])
+    handle = launch(indah.create_app(session=indah.Session(app)), block=False, open_inline=False)
+    return nodes, selected, focus, handle
+
+
+def _centre_offset(page, node_id) -> float:
+    return page.evaluate(
+        """(id) => {
+          const st = document.querySelector('.graph-stage');
+          const [x, y] = st.__graph.screenOf(id);
+          return Math.hypot(x - st.clientWidth / 2, y - st.clientHeight / 2);
+        }""",
+        node_id,
+    )
+
+
+@pytest.mark.e2e
+def test_a_click_sets_the_python_signal_and_empty_canvas_clears_it():
+    nodes, selected, _, handle = _bound_app()
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context(viewport={"width": 1100, "height": 800}).new_page()
+            page.goto(handle.url)
+            _wait_settled(page)
+            target = page.evaluate(
+                """(ids) => {
+                  const st = document.querySelector('.graph-stage');
+                  for (const id of ids) {
+                    const [x, y] = st.__graph.screenOf(id);
+                    if (x > 40 && y > 40 && x < st.clientWidth - 40 && y < st.clientHeight - 40)
+                      return { id, x, y };
+                  }
+                }""",
+                [n["id"] for n in nodes[::11]],
+            )
+            box = page.locator(".graph-canvas").bounding_box()
+            page.mouse.click(box["x"] + target["x"], box["y"] + target["y"])
+            for _ in range(60):
+                if selected.value == target["id"]:
+                    break
+                page.wait_for_timeout(50)
+            assert selected.value == target["id"]
+            page.mouse.click(box["x"] + 3, box["y"] + 3)
+            for _ in range(60):
+                if selected.value is None:
+                    break
+                page.wait_for_timeout(50)
+            assert selected.value is None
+            browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_setting_selected_from_python_selects_and_centres_the_node():
+    nodes, selected, _, handle = _bound_app()
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context(viewport={"width": 1100, "height": 800}).new_page()
+            page.goto(handle.url)
+            _wait_settled(page)
+            wanted = nodes[1500]["id"]
+            assert _centre_offset(page, wanted) > 40  # it is not already in the middle
+            selected.set(wanted)
+            page.wait_for_function(
+                "(id) => document.querySelector('.graph-stage').__graph.selected === id",
+                arg=wanted,
+                timeout=10_000,
+            )
+            page.wait_for_timeout(200)
+            assert _centre_offset(page, wanted) < 3
+            assert selected.value == wanted  # the echo of the viewer's state changed nothing
+            browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_focus_centres_a_node_without_selecting_it():
+    nodes, selected, focus, handle = _bound_app()
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context(viewport={"width": 1100, "height": 800}).new_page()
+            page.goto(handle.url)
+            _wait_settled(page)
+            wanted = nodes[1900]["id"]
+            focus.set(wanted)
+            page.wait_for_function(
+                "(id) => { const st = document.querySelector('.graph-stage');"
+                " const [x, y] = st.__graph.screenOf(id);"
+                " return Math.hypot(x - st.clientWidth / 2, y - st.clientHeight / 2) < 3; }",
+                arg=wanted,
+                timeout=10_000,
+            )
+            assert (
+                page.evaluate("() => document.querySelector('.graph-stage').__graph.selected")
+                is None
+            )
+            assert page.evaluate(
+                "(id) => document.querySelector('.graph-stage').__graph.isDetailed(id)", wanted
+            )
+            assert selected.value is None
+            browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_changing_another_prop_does_not_relayout_or_reset_the_view():
+    """A highlight, focus size or selection change must keep the layout and the viewer's pan."""
+    nodes, edges = _graph(1500, 3500, 5)
+    edges = [{"source": a, "target": b, "id": f"F{i}"} for i, (a, b) in enumerate(edges)]
+    path = indah.Signal(None)
+    size = indah.Signal(300)
+    graph = indah.Graph(nodes, edges, height=520, highlight=path, focus_size=size)
+    app = indah.Card(children=[graph])
+    handle = launch(indah.create_app(session=indah.Session(app)), block=False, open_inline=False)
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context(viewport={"width": 1100, "height": 800}).new_page()
+            page.goto(handle.url)
+            _wait_settled(page)
+            box = page.locator(".graph-canvas").bounding_box()
+            cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+            page.mouse.move(cx, cy)
+            page.mouse.down()
+            page.mouse.move(cx + 90, cy + 40, steps=5)  # the viewer pans
+            page.mouse.up()
+            view = "() => document.querySelector('.graph-stage').__graph.view()"
+            before = page.evaluate(view)
+            marker = page.evaluate("() => document.querySelector('.graph-stage').__graph")
+            path.set({"nodes": [nodes[10]["id"]], "edges": ["F3"]})
+            size.set(80)
+            page.wait_for_function(
+                # the 80 nearest nodes, plus the highlighted node when it lies outside them
+                "() => { const w = document.querySelector('.graph-stage').__graph.windowSize;"
+                " return w >= 80 && w <= 81; }",
+                timeout=10_000,
+            )
+            after = page.evaluate(view)
+            assert (after["k"], after["tx"], after["ty"]) == (
+                before["k"],
+                before["tx"],
+                before["ty"],
+            )
+            assert page.evaluate("() => document.querySelector('.graph-stage').__graph.settled")
+            assert marker["nodes"] == 1500
+            browser.close()
+    finally:
+        handle.stop()

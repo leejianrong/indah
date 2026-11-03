@@ -211,3 +211,67 @@ def test_a_reactive_highlight_and_focus_size_update_without_resending_the_graph(
             changed.update(change["props"])
     assert changed == {"highlight": {"nodes": ["a"], "edges": ["F1"]}, "focusSize": 40}
     assert "nodes" not in changed and "edges" not in changed
+
+
+@pytest.mark.unit
+def test_selected_is_a_two_way_signal_and_the_viewer_cannot_set_an_unknown_id():
+    selected: Signal[str | None] = Signal(None)
+    g = Graph(["a", "b", "c"], [("a", "b")], selected=selected)
+    session = Session(Column(children=[g]))
+    hub = Hub()
+    session.bind_hub(hub)
+    props = session.snapshot()["children"][0]["props"]
+    assert props["selectable"] is True and props["selected"] is None
+
+    assert g.handle("select", {"id": "b"}) is True and selected.value == "b"
+    assert g.handle("select", {"id": None}) is True and selected.value is None
+    selected.set("a")
+    for bad in ({"id": "zzz"}, {"id": 7}, {"id": ["a"]}, {}):
+        assert g.handle("select", bad) is False
+    assert selected.value == "a"  # none of them changed it
+    assert g.handle("select", {"id": "zzz"}) is False
+    assert g.handle("click", {}) is False
+
+    selected.set("c")  # from Python: pushed to the viewer as a prop
+    sent = {}
+    for _, msg in hub.history():
+        for change in msg["changes"]:
+            sent.update(change["props"])
+    assert sent["selected"] == "c"
+
+
+@pytest.mark.unit
+def test_a_graph_without_a_selected_signal_is_display_only():
+    g = Graph(["a", "b"], [])
+    assert "selectable" not in _props(g) and "selected" not in g.reactive_props()
+    assert g.handle("select", {"id": "a"}) is False
+
+
+@pytest.mark.unit
+def test_an_unknown_selected_value_or_focus_raises():
+    with pytest.raises(ValueError, match="unknown graph node 'zz'"):
+        Graph(["a"], [], selected=Signal("zz"))
+    with pytest.raises(ValueError, match="unknown graph node 'zz'"):
+        Graph(["a"], [], focus="zz")
+    sel = Signal(None)
+    g = Graph(["a"], [], selected=sel)
+    Session(Column(children=[g]))
+    with pytest.raises(ValueError, match="unknown graph node"):
+        sel.set("nope")
+
+
+@pytest.mark.unit
+def test_focus_is_a_prop_and_a_reactive_focus_updates_alone():
+    assert _props(Graph(["a", "b"], [], focus="b"))["focus"] == "b"
+    where: Signal[str | None] = Signal("a")
+    g = Graph(["a", "b"], [], focus=where)
+    session = Session(Column(children=[g]))
+    hub = Hub()
+    session.bind_hub(hub)
+    assert session.snapshot()["children"][0]["props"]["focus"] == "a"
+    where.set("b")
+    changed = {}
+    for _, msg in hub.history():
+        for change in msg["changes"]:
+            changed.update(change["props"])
+    assert changed == {"focus": "b"}

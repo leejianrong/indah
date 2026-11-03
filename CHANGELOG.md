@@ -27,6 +27,15 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   outside the window, and dims the rest; unknown ids raise `ValueError`. At the 20,000-node ceiling a
   frame draws in about 2 ms. The lazy module is now 14.7 KB (6.3 KB gzip); the `graph_*` limits are
   re-set from that measurement. A `selected` signal follows in IND-247.
+- `Graph` selection and focus (IND-247): bind `selected` to a `Signal[str | None]` and a click sets it
+  to the node's id (empty canvas sets `None`); set it from Python and the viewer selects and centres
+  that node. `focus` centres a node without selecting it. The server refuses a `select` event whose id
+  is not a node, or that has no `id`. A graph with no signal bound sends no events.
+
+### Fixed
+- `Graph` no longer restarts its layout, or resets the viewer's pan and zoom, when a prop other than
+  `nodes` or `edges` changes (a highlight, the selection, the focus size). The shell now loads the data
+  only when the data itself is new.
 
 - A gallery demo, `examples/yolox_traffic.py`: a quantized YOLOX-Tiny on a bundled traffic clip, as a replay of recorded detections by default and a live run (one visitor at a time, up to 30 s) on request.
 
