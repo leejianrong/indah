@@ -1,5 +1,5 @@
 {
-  "_comment": "Maximums for scripts/size_report.py (ADR-0042). Each is about 15 percent above the number measured on 2026-10-24 (after the lazy Map and the minified editor, IND-186, IND-214, IND-215). The graph limits were set on 2026-11-04 from the measured lazy module (IND-245, ADR-0048); python_source_bytes was raised to 600000 for the Graph component. A pull request that needs more room raises a limit here, in the same diff, and says why in its description and the CHANGELOG. Keys starting with an underscore are ignored.",
+  "_comment": "Maximums for scripts/size_report.py (ADR-0042). Each is about 15 percent above the number measured on 2026-10-24 (after the lazy Map and the minified editor, IND-186, IND-214, IND-215). The graph limits were set on 2026-11-04 from the measured lazy module (IND-245, ADR-0048) and re-measured after the focus window (IND-246: 14.7 KB raw, 6.3 KB gzip); python_source_bytes was raised to 600000 for the Graph component. A pull request that needs more room raises a limit here, in the same diff, and says why in its description and the CHANGELOG. Keys starting with an underscore are ignored.",
   "wheel_bytes": 630000,
   "sdist_bytes": 1740000,
   "shell_raw_bytes": 495000,
@@ -9,8 +9,8 @@
   "editor_gzip_bytes": 155000,
   "map_raw_bytes": 174000,
   "map_gzip_bytes": 50000,
-  "graph_raw_bytes": 11400,
-  "graph_gzip_bytes": 5200,
+  "graph_raw_bytes": 16900,
+  "graph_gzip_bytes": 7300,
   "python_source_bytes": 600000,
   "direct_dependencies": 5,
   "base_install_distributions": 14

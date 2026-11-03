@@ -165,3 +165,49 @@ def test_an_unrelated_signal_does_not_recolumnarise_the_graph(monkeypatch):
     built = len(calls)
     other.set(1)  # g2 reads it and is rebuilt; g never reads it
     assert len(calls) == built + 1
+
+
+@pytest.mark.unit
+def test_focus_size_is_a_prop_and_must_be_a_sensible_whole_number():
+    assert _props(Graph(["a"], []))["focusSize"] == 300
+    assert _props(Graph(["a"], [], focus_size=50))["focusSize"] == 50
+    for bad in (0, -5, 5001, 2.5, True, "300"):
+        with pytest.raises(ValueError, match="focus_size must be"):
+            Graph(["a"], [], focus_size=bad)
+
+
+@pytest.mark.unit
+def test_highlight_is_checked_against_the_graphs_nodes_and_edge_ids():
+    edges = [{"source": "a", "target": "b", "id": "F1"}, ("b", "c")]
+    props = _props(Graph(["a", "b", "c"], edges, highlight={"nodes": ["a", "b"], "edges": ["F1"]}))
+    assert props["highlight"] == {"nodes": ["a", "b"], "edges": ["F1"]}
+    with pytest.raises(ValueError, match="unknown node 'zz'"):
+        Graph(["a"], [], highlight={"nodes": ["zz"]})
+    with pytest.raises(ValueError, match="unknown edge 'F9'; give edges an 'id'"):
+        Graph(["a", "b"], edges[:1], highlight={"edges": ["F9"]})
+    with pytest.raises(ValueError, match="'nodes' and/or 'edges'"):
+        Graph(["a"], [], highlight={"path": []})
+    with pytest.raises(ValueError, match="'nodes' and/or 'edges'"):
+        Graph(["a"], [], highlight=["a"])
+
+
+@pytest.mark.unit
+def test_a_reactive_highlight_and_focus_size_update_without_resending_the_graph():
+    edges = [{"source": "a", "target": "b", "id": "F1"}]
+    path: Signal[dict | None] = Signal(None)
+    size: Signal[int] = Signal(300)
+    g = Graph(["a", "b"], edges, highlight=path, focus_size=size)
+    session = Session(Column(children=[g]))
+    hub = Hub()
+    session.bind_hub(hub)
+    snap = session.snapshot()["children"][0]["props"]
+    assert snap["highlight"] == {"nodes": [], "edges": []} and snap["focusSize"] == 300
+
+    path.set({"nodes": ["a"], "edges": ["F1"]})
+    size.set(40)
+    changed = {}
+    for _, msg in hub.history():
+        for change in msg["changes"]:
+            changed.update(change["props"])
+    assert changed == {"highlight": {"nodes": ["a"], "edges": ["F1"]}, "focusSize": 40}
+    assert "nodes" not in changed and "edges" not in changed

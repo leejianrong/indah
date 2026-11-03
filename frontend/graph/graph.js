@@ -1,9 +1,12 @@
 // The Graph component's renderer (ADR-0048). Its own ES module, fetched lazily by the shell on
 // the first `graph` render (ADR-0042), so an app without a graph does not download it. It draws a
 // node-link graph to a <canvas>: a force layout in time slices, drag to pan, wheel and pinch to
-// zoom. No dependency; the layout is in layout.js and runs under Node too. Output:
+// zoom. The focus window (ADR-0048): only the `focusSize` nodes nearest the viewport centre are
+// drawn in full (labels, edges); the rest are batched dots. No dependency; the layout is in layout.js
+// and the spatial index in spatial.js, and both run under Node too. Output:
 // dist-graph/graph.js (copied to src/indah/static/).
 import { createSimulation, run, bounds, hashString, LAYOUT_LIMIT } from "./layout.js";
+import { buildGrid, nearest } from "./spatial.js";
 import { resolveColor, onThemeChange } from "../src/colors.js";
 
 // Same vivid palette as Chart: it reads on both the light and dark Studio themes. Groups past
@@ -14,6 +17,8 @@ const DRAW_EVERY_MS = 100; // while settling, redraw no more often than this, an
 const DRAW_SHARE = 4; // one draw per DRAW_SHARE times its own cost: drawing stays under a fifth of the time
 const MIN_ZOOM = 0.02;
 const MAX_ZOOM = 40;
+const NEIGHBOUR_ALLOWANCE = 100; // most neighbours a selected node promotes into the window
+const MAX_LABELS = 150;
 
 export function groupColor(index) {
   return index < PALETTE.length ? PALETTE[index] : `hsl(${(index * 137.508) % 360} 55% 50%)`;
@@ -44,12 +49,22 @@ export function decode(data) {
     degree[s[k]]++;
     degree[t[k]]++;
   }
+  const idIndex = new Map();
+  for (let i = 0; i < n; i++) idIndex.set(ids[i], i);
+  const adjStart = new Int32Array(n + 1);
+  for (let i = 0; i < n; i++) adjStart[i + 1] = adjStart[i] + degree[i];
+  const adjEdge = new Int32Array(2 * s.length);
+  const fillAt = adjStart.slice(0, n);
+  for (let k = 0; k < s.length; k++) {
+    adjEdge[fillAt[s[k]]++] = k;
+    adjEdge[fillAt[t[k]]++] = k;
+  }
   const given = cols.x && cols.y ? { x: Float64Array.from(cols.x), y: Float64Array.from(cols.y) } : null;
   if (given) {
     given.gx = new Float64Array(Math.max(1, groups.length));
     given.gy = new Float64Array(Math.max(1, groups.length));
   }
-  return { n, ids, labels: cols.label ?? null, size: cols.size ?? null, colors: cols.color ?? null, groups, group, s, t, degree, given };
+  return { n, ids, idIndex, adjStart, adjEdge, edgeIds: e.id ?? null, labels: cols.label ?? null, size: cols.size ?? null, colors: cols.color ?? null, groups, group, s, t, degree, given };
 }
 
 /** Mount a graph in `el`. Returns a small controller; the shell owns the lifecycle. */
@@ -71,12 +86,21 @@ export function createGraph(el) {
   let drawMs = 0;
   let theme = null; // resolved colours
   let batches = []; // [{ color, nodes: Int32Array }]
+  let grid = null;
+  let gridStamp = -1;
+  let inWin = new Uint8Array(0); // 1 for a node drawn in full
+  let focusSize = 300;
+  let selected = -1; // index of the selected node, or -1
+  let hlNodes = new Int32Array(0);
+  let hlNodeFlag = new Uint8Array(0);
+  let hlEdges = new Int32Array(0);
 
   function resolveTheme() {
     theme = {
       edge: resolveColor(el, "var(--muted)"),
       text: resolveColor(el, "var(--text)"),
       halo: resolveColor(el, "var(--surface)"),
+      primary: resolveColor(el, "var(--primary, #b5296b)"),
     };
   }
 
@@ -125,62 +149,176 @@ export function createGraph(el) {
     };
   }
 
+  function ensureGrid() {
+    // Positions move while the layout settles, so rebuild the index whenever a step has happened.
+    if (!grid || gridStamp !== sim.iterations) {
+      grid = buildGrid(sim.x, sim.y, g.n);
+      gridStamp = sim.iterations;
+    }
+  }
+
+  // The nodes drawn in full: the `focusSize` nearest the viewport centre, every highlighted node
+  // whatever its distance, and a selected node with its nearest neighbours (up to an allowance, so
+  // a hub cannot make a frame unbounded). Sets `inWin`; returns the list.
+  function computeWindow() {
+    const { n } = g;
+    if (inWin.length !== n) inWin = new Uint8Array(n);
+    if (n <= focusSize) {
+      inWin.fill(1);
+      return null; // everything is detailed; there are no dots
+    }
+    inWin.fill(0);
+    ensureGrid();
+    const fx = (w / 2 - view.tx) / view.k;
+    const fy = (h / 2 - view.ty) / view.k;
+    const near = nearest(grid, fx, fy, focusSize);
+    for (let j = 0; j < near.length; j++) inWin[near[j]] = 1;
+    for (let j = 0; j < hlNodes.length; j++) inWin[hlNodes[j]] = 1;
+    if (selected >= 0) {
+      inWin[selected] = 1;
+      const x = sim.x;
+      const y = sim.y;
+      const around = [];
+      for (let j = g.adjStart[selected]; j < g.adjStart[selected + 1]; j++) {
+        const e = g.adjEdge[j];
+        around.push(g.s[e] === selected ? g.t[e] : g.s[e]);
+      }
+      const d2 = (i) => (x[i] - x[selected]) ** 2 + (y[i] - y[selected]) ** 2;
+      around.sort((p, q) => d2(p) - d2(q));
+      for (let j = 0; j < Math.min(around.length, NEIGHBOUR_ALLOWANCE); j++) inWin[around[j]] = 1;
+    }
+    return near;
+  }
+
+  function publish(count) {
+    if (!el.__graph) return;
+    el.__graph.windowSize = count;
+    el.__graph.selected = selected >= 0 ? g.ids[selected] : null;
+  }
+
   function draw() {
+    const t0 = performance.now();
+    paint();
+    if (el.__graph) el.__graph.lastDrawMs = Math.round((performance.now() - t0) * 10) / 10;
+  }
+
+  function paint() {
     if (!ctx || !g || !w || !h) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     const { x, y } = sim;
     const { k, tx, ty } = view;
-    // Edges: one path, drawn faint.
-    ctx.globalAlpha = g.n > 2000 ? 0.18 : 0.35;
+    const everything = g.n <= focusSize;
+    computeWindow();
+    let count = 0;
+    for (let i = 0; i < g.n; i++) count += inWin[i];
+    publish(count);
+    const dim = hlNodes.length > 0 || hlEdges.length > 0;
+
+    // Dots: every node outside the window, as a batched fill per colour.
+    if (!everything) {
+      ctx.globalAlpha = dim ? 0.22 : 0.6;
+      for (const { color, nodes } of batches) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        for (let j = 0; j < nodes.length; j++) {
+          const i = nodes[j];
+          if (inWin[i]) continue;
+          const px = x[i] * k + tx;
+          const py = y[i] * k + ty;
+          if (px < -4 || py < -4 || px > w + 4 || py > h + 4) continue;
+          ctx.rect(px - 0.8, py - 0.8, 1.6, 1.6);
+        }
+        ctx.fill();
+      }
+    }
+
+    // Edges between detailed nodes, faint.
+    ctx.globalAlpha = dim ? 0.1 : 0.35;
     ctx.strokeStyle = theme.edge;
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let e = 0; e < g.s.length; e++) {
       const a = g.s[e];
       const b = g.t[e];
+      if (!inWin[a] || !inWin[b]) continue;
       ctx.moveTo(x[a] * k + tx, y[a] * k + ty);
       ctx.lineTo(x[b] * k + tx, y[b] * k + ty);
     }
     ctx.stroke();
+
+    // A selected node draws every edge it has, so it never looks isolated.
+    const strokeEdges = (list, color, width) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (const e of list) {
+        const a = g.s[e];
+        const b = g.t[e];
+        ctx.moveTo(x[a] * k + tx, y[a] * k + ty);
+        ctx.lineTo(x[b] * k + tx, y[b] * k + ty);
+      }
+      ctx.stroke();
+    };
+    if (selected >= 0) {
+      ctx.globalAlpha = 0.8;
+      strokeEdges(Array.from(g.adjEdge.subarray(g.adjStart[selected], g.adjStart[selected + 1])), theme.text, 1.5);
+    }
+    // Highlighted edges are always drawn in full, however far outside the window.
     ctx.globalAlpha = 1;
-    // Nodes: one fill per colour. Tiny nodes are drawn as squares, which is much cheaper.
-    let visible = 0;
+    if (hlEdges.length) strokeEdges(hlEdges, theme.primary, 2.5);
+
+    // Detailed nodes: circles, one fill per colour.
+    let labelled = 0;
     for (const { color, nodes } of batches) {
       ctx.fillStyle = color;
       ctx.beginPath();
       for (let j = 0; j < nodes.length; j++) {
         const i = nodes[j];
+        if (!inWin[i]) continue;
         const px = x[i] * k + tx;
         const py = y[i] * k + ty;
         if (px < -10 || py < -10 || px > w + 10 || py > h + 10) continue;
-        visible++;
         const r = radius(i) * Math.min(1.6, Math.max(0.5, Math.sqrt(k)));
-        if (r < 1.6) ctx.rect(px - 0.8, py - 0.8, 1.6, 1.6);
-        else {
-          ctx.moveTo(px + r, py);
-          ctx.arc(px, py, r, 0, Math.PI * 2);
-        }
+        ctx.moveTo(px + r, py);
+        ctx.arc(px, py, r, 0, Math.PI * 2);
       }
+      ctx.globalAlpha = dim ? 0.4 : 1;
       ctx.fill();
     }
-    // Labels, only when few nodes are in view and the view is zoomed in enough to read them.
-    if (visible <= 150 && k >= 0.6) {
-      ctx.font = '12px "IBM Plex Sans", system-ui, sans-serif';
-      ctx.textBaseline = "middle";
-      ctx.lineWidth = 3;
+    ctx.globalAlpha = 1;
+    // Rings: highlighted nodes in the accent colour, the selected node in the text colour.
+    const ring = (i, color, width) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.arc(x[i] * k + tx, y[i] * k + ty, radius(i) + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    };
+    for (let j = 0; j < hlNodes.length; j++) ring(hlNodes[j], theme.primary, 2.5);
+    if (selected >= 0) ring(selected, theme.text, 2);
+
+    // Labels: detailed nodes in view while the view is zoomed in enough to read them, plus the
+    // selected and highlighted nodes always.
+    ctx.font = '12px "IBM Plex Sans", system-ui, sans-serif';
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 3;
+    const label = (i, force) => {
+      const px = x[i] * k + tx;
+      const py = y[i] * k + ty;
+      if (px < 0 || py < 0 || px > w || py > h) return;
+      if (!force && (k < 0.5 || labelled >= MAX_LABELS)) return;
+      labelled++;
+      const text = String(g.labels?.[i] ?? g.ids[i]);
+      const r = radius(i) + 4;
       ctx.strokeStyle = theme.halo;
       ctx.fillStyle = theme.text;
-      for (let i = 0; i < g.n; i++) {
-        const px = x[i] * k + tx;
-        const py = y[i] * k + ty;
-        if (px < 0 || py < 0 || px > w || py > h) continue;
-        const text = String(g.labels?.[i] ?? g.ids[i]);
-        const r = radius(i) + 4;
-        ctx.strokeText(text, px + r, py);
-        ctx.fillText(text, px + r, py);
-      }
-    }
+      ctx.strokeText(text, px + r, py);
+      ctx.fillText(text, px + r, py);
+    };
+    for (let i = 0; i < g.n; i++) if (inWin[i] && !hlNodeFlag[i] && i !== selected) label(i, false);
+    for (let j = 0; j < hlNodes.length; j++) label(hlNodes[j], true);
+    if (selected >= 0) label(selected, true);
   }
 
   function frame() {
@@ -223,7 +361,34 @@ export function createGraph(el) {
     touched = false;
     startedAt = performance.now();
     el.dataset.settled = "false";
-    el.__graph = { nodes: g.n, edges: g.s.length, groups: g.groups.length, settled: false, laidOut: !g.given && g.n <= LAYOUT_LIMIT };
+    selected = -1;
+    grid = null;
+    inWin = new Uint8Array(g.n);
+    hlNodes = new Int32Array(0);
+    hlNodeFlag = new Uint8Array(g.n);
+    hlEdges = new Int32Array(0);
+    el.__graph = {
+      nodes: g.n,
+      edges: g.s.length,
+      groups: g.groups.length,
+      settled: false,
+      laidOut: !g.given && g.n <= LAYOUT_LIMIT,
+      // For tests and debugging: is this node drawn in full right now?
+      isDetailed: (id) => inWin[g.idIndex.get(id)] === 1,
+      neighbours: (id) => {
+        const i = g.idIndex.get(id);
+        const out = [];
+        for (let j = g.adjStart[i]; j < g.adjStart[i + 1]; j++) {
+          const e = g.adjEdge[j];
+          out.push(g.ids[g.s[e] === i ? g.t[e] : g.s[e]]);
+        }
+        return out;
+      },
+      screenOf: (id) => {
+        const i = g.idIndex.get(id);
+        return [sim.x[i] * view.k + view.tx, sim.y[i] * view.k + view.ty];
+      },
+    };
     if (sim.done) finish();
     fit();
     schedule();
@@ -243,16 +408,21 @@ export function createGraph(el) {
     const r = canvas.getBoundingClientRect();
     return [ev.clientX - r.left, ev.clientY - r.top];
   }
+  let downAt = null; // where a single-pointer press began, to tell a click from a drag
+  let travelled = 0;
   canvas.addEventListener("pointerdown", (ev) => {
     canvas.setPointerCapture(ev.pointerId);
     pointers.set(ev.pointerId, local(ev));
     pinch = 0;
+    downAt = pointers.size === 1 ? local(ev) : null;
+    travelled = 0;
   });
   canvas.addEventListener("pointermove", (ev) => {
     if (!pointers.has(ev.pointerId)) return;
     const [px, py] = local(ev);
     const [ox, oy] = pointers.get(ev.pointerId);
     pointers.set(ev.pointerId, [px, py]);
+    if (downAt) travelled = Math.max(travelled, Math.hypot(px - downAt[0], py - downAt[1]));
     if (pointers.size === 1) {
       view = { ...view, tx: view.tx + px - ox, ty: view.ty + py - oy };
       touched = true;
@@ -268,7 +438,13 @@ export function createGraph(el) {
     pointers.delete(ev.pointerId);
     pinch = 0;
   };
-  canvas.addEventListener("pointerup", release);
+  canvas.addEventListener("pointerup", (ev) => {
+    const click = downAt && travelled < 4 && pointers.size === 1;
+    const at = local(ev);
+    release(ev);
+    if (click) clickAt(at[0], at[1]);
+    downAt = null;
+  });
   canvas.addEventListener("pointercancel", release);
   canvas.addEventListener(
     "wheel",
@@ -279,6 +455,27 @@ export function createGraph(el) {
     },
     { passive: false },
   );
+
+  // A click picks the nearest node (a dot too) within a few pixels, selects it and centres the
+  // view on it, which also moves the focus there; a click on empty canvas clears the selection.
+  function clickAt(px, py) {
+    if (!g || !sim || g.n === 0) return;
+    ensureGrid();
+    const wx = (px - view.tx) / view.k;
+    const wy = (py - view.ty) / view.k;
+    const i = nearest(grid, wx, wy, 1)[0];
+    const near = Math.hypot(sim.x[i] * view.k + view.tx - px, sim.y[i] * view.k + view.ty - py);
+    if (near <= Math.max(10, radius(i) + 4)) {
+      select(i);
+      view = { ...view, tx: w / 2 - sim.x[i] * view.k, ty: h / 2 - sim.y[i] * view.k };
+      touched = true;
+    } else select(-1);
+    draw();
+  }
+
+  function select(i) {
+    selected = i;
+  }
 
   const offTheme = onThemeChange(() => {
     resolveTheme();
@@ -292,6 +489,24 @@ export function createGraph(el) {
     fit() {
       touched = false;
       fit();
+      draw();
+    },
+    // Options from Python: how many nodes are drawn in full, and a path to emphasise.
+    setOptions({ focusSize: size, highlight }) {
+      if (size != null && size !== focusSize) focusSize = size;
+      if (highlight !== undefined && g) {
+        const nodes = [];
+        for (const id of highlight?.nodes ?? []) if (g.idIndex.has(id)) nodes.push(g.idIndex.get(id));
+        let edges = [];
+        if (g.edgeIds && (highlight?.edges ?? []).length) {
+          const want = new Set(highlight.edges);
+          for (let e = 0; e < g.edgeIds.length; e++) if (want.has(g.edgeIds[e])) edges.push(e);
+        }
+        hlNodes = Int32Array.from(nodes);
+        hlNodeFlag = new Uint8Array(g.n);
+        for (const i of nodes) hlNodeFlag[i] = 1;
+        hlEdges = Int32Array.from(edges);
+      }
       draw();
     },
     legend() {

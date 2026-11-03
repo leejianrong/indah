@@ -2251,6 +2251,37 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
     return {"nodes": out_nodes, "edges": out_edges}
 
 
+GRAPH_MAX_FOCUS = 5_000  # the most nodes drawn in full at once (ADR-0048)
+
+
+def _graph_focus_size(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= GRAPH_MAX_FOCUS:
+        raise ValueError(
+            f"focus_size must be a whole number from 1 to {GRAPH_MAX_FOCUS}, got {value!r}"
+        )
+    return value
+
+
+def _graph_highlight(value: Any, columns: dict[str, Any]) -> dict[str, list[str]]:
+    """The nodes and edges to emphasise, checked against the graph so a typo fails loudly."""
+    if value is None:
+        return {"nodes": [], "edges": []}
+    if not isinstance(value, dict) or set(value) - {"nodes", "edges"}:
+        raise ValueError("highlight must be a dict with 'nodes' and/or 'edges' lists of ids")
+    node_ids = set(columns["nodes"]["id"])
+    edge_ids = {i for i in columns["edges"].get("id", []) if i is not None}
+    nodes, edges = list(value.get("nodes") or []), list(value.get("edges") or [])
+    for node in nodes:
+        if node not in node_ids:
+            raise ValueError(f"highlight names unknown node {node!r}")
+    for edge in edges:
+        if edge not in edge_ids:
+            raise ValueError(
+                f"highlight names unknown edge {edge!r}; give edges an 'id' to highlight them"
+            )
+    return {"nodes": [str(i) for i in nodes], "edges": [str(i) for i in edges]}
+
+
 class Graph(Component):
     """An interactive node-link graph (ADR-0048): drag to pan, wheel or pinch to zoom.
 
@@ -2268,6 +2299,14 @@ class Graph(Component):
     ``max_nodes`` defaults to 10,000 and can be raised to 20,000; edges are capped at three times
     that, up to 60,000. The viewer's own pan and zoom are not reported back to Python.
 
+    **Focus window.** Only the ``focus_size`` nodes nearest the viewport centre (default 300, at
+    most 5,000) are drawn in full, with labels and the edges between them; every other node is a
+    dot. Panning moves the focus, and a click on a node or dot selects it and centres on it. A
+    selected node draws all its edges and promotes its nearest neighbours into the window.
+    ``highlight`` is ``{"nodes": [ids], "edges": [ids]}``: those are always drawn in full, however
+    far outside the window, and everything else is dimmed. Edge ids come from an edge dict's ``id``;
+    an unknown id raises ``ValueError``. ``focus_size`` and ``highlight`` may be signals.
+
     Replace ``nodes`` and ``edges`` together, inside ``indah.batch(...)``, when both are signals:
     set one at a time, an edge can briefly name a node that is not there yet and raises.
     """
@@ -2283,6 +2322,8 @@ class Graph(Component):
         layout: Literal["auto", "given"] = "auto",
         legend: bool = True,
         max_nodes: int = GRAPH_DEFAULT_MAX_NODES,
+        focus_size: Source = 300,
+        highlight: Source = None,
         label: str = "",
     ) -> None:
         super().__init__()
@@ -2300,6 +2341,10 @@ class Graph(Component):
         self._layout = layout
         self._legend = bool(legend)
         self._label = label
+        self._focus_size = focus_size
+        self._highlight = highlight
+        if not _is_source(focus_size):
+            _graph_focus_size(focus_size)
 
         def build() -> dict[str, Any]:
             return _graph_columns(_read(nodes), _read(edges), layout=layout, max_nodes=max_nodes)
@@ -2313,6 +2358,11 @@ class Graph(Component):
         else:
             self._columns = None
             self._static = build()
+        if highlight is not None and not _is_source(highlight):
+            _graph_highlight(highlight, self._cols())  # a typo fails here, at build time
+
+    def _cols(self) -> dict[str, Any]:
+        return self._columns.value if self._columns is not None else self._static
 
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {"height": self._height, "layout": self._layout}
@@ -2320,15 +2370,25 @@ class Graph(Component):
             props["legend"] = False
         if self._label:
             props["label"] = self._label
+        if not _is_source(self._focus_size):
+            props["focusSize"] = self._focus_size
+        if self._highlight is not None and not _is_source(self._highlight):
+            props["highlight"] = _graph_highlight(self._highlight, self._cols())
         if not self._reactive:
             props.update(self._static)
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        if self._columns is None:
-            return {}
-        columns = self._columns
-        return {"nodes": lambda: columns.value["nodes"], "edges": lambda: columns.value["edges"]}
+        props: dict[str, Callable[[], Any]] = {}
+        if self._columns is not None:
+            columns = self._columns
+            props["nodes"] = lambda: columns.value["nodes"]
+            props["edges"] = lambda: columns.value["edges"]
+        if _is_source(self._focus_size):
+            props["focusSize"] = lambda: _graph_focus_size(_read(self._focus_size))
+        if _is_source(self._highlight):
+            props["highlight"] = lambda: _graph_highlight(_read(self._highlight), self._cols())
+        return props
 
 
 class DataFrame(Component):
