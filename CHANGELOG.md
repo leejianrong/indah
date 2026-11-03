@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+
+- A gallery demo, `examples/yolox_traffic.py`: a quantized YOLOX-Tiny on a bundled traffic clip, as a replay of recorded detections by default and a live run (one visitor at a time, up to 30 s) on request.
+
 ## [0.11.0] - 2026-11-01
 
 The requests from semula's security review of its public hosted dashboard (IND-237 to IND-242). The session id leaves the stream URL, the strict CSP stops allowing a map host the app never uses, and a crafted address can no longer fail a stream or log a traceback. There is also a form helper (`Form`, `validators`) and per-row table actions that depend on the row. The wire changes are additive, so `protocol_version` is still 1; two defaults change, both for apps that opt into hardening, and are listed under "Upgrading".

@@ -14,7 +14,7 @@ app="${FLY_APP:-indah-demos}"
 region="${FLY_REGION:-sin}"
 
 # Example modules the gallery mounts (must cover every hosted entry's module in gallery.toml).
-examples=(chatbot training_dashboard diffusion poster upload_classify object_detection charts stocks dataframe_explorer map_poster grc_map audio_analysis gpx_viewer markov_poet sorting expenses automaton)
+examples=(chatbot training_dashboard diffusion poster upload_classify object_detection charts stocks dataframe_explorer map_poster grc_map audio_analysis gpx_viewer markov_poet sorting expenses automaton yolox_traffic)
 
 # Install the published wheel from PyPI (the python:3.12-slim base has no git, and a
 # PyPI install is what a user would run). It is pinned to this checkout's version, not a
@@ -64,6 +64,8 @@ for mod in "${examples[@]}"; do
 done
 # audio_analysis.py reads its recordings (and their ATTRIBUTION.txt) from audio_samples/ beside it.
 cp -r "$repo/examples/audio_samples" "$out/"
+# yolox_traffic.py reads its clip frames, recorded detections and ATTRIBUTION.txt from yolox_traffic/ beside it.
+cp -r "$repo/examples/yolox_traffic" "$out/"
 
 {
   echo "$INDAH_REQ"
@@ -79,7 +81,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 # Fetch both ONNX models now, so the first visitor does not wait on (or fail on) a download
 # while the page says "connecting". The same default cache is read at run time.
-RUN python -c "from huggingface_hub import hf_hub_download as d; d('onnxmodelzoo/mobilenetv2-12', 'mobilenetv2-12.onnx'); d('onnxmodelzoo/ssd_mobilenet_v1_12', 'ssd_mobilenet_v1_12.onnx')"
+RUN python -c "from huggingface_hub import hf_hub_download as d; d('onnxmodelzoo/mobilenetv2-12', 'mobilenetv2-12.onnx'); d('onnxmodelzoo/ssd_mobilenet_v1_12', 'ssd_mobilenet_v1_12.onnx'); d('jianlee/yolox-tiny-quantized', 'yolox_tiny_ptq_int8_calib32.onnx')"
 COPY . .
 EXPOSE 7860
 # One app mounts every demo under /<slug>; --factory builds it (imports the examples).
