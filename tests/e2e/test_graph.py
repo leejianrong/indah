@@ -483,3 +483,63 @@ def test_changing_another_prop_does_not_relayout_or_reset_the_view():
             browser.close()
     finally:
         handle.stop()
+
+
+# -- keyboard (ADR-0048, IND-248) --------------------------------------------------------------
+
+
+@pytest.mark.e2e
+def test_the_keyboard_pans_zooms_and_clears_the_selection():
+    nodes, selected, _, handle = _bound_app(n=800, m=1800, groups=4)
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context(viewport={"width": 1100, "height": 800}).new_page()
+            page.goto(handle.url)
+            _wait_settled(page)
+            view = "() => document.querySelector('.graph-stage').__graph.view()"
+
+            canvas = page.locator(".graph-canvas")
+            assert canvas.get_attribute("tabindex") == "0"
+            assert canvas.get_attribute("role") == "application"
+            assert canvas.get_attribute("aria-label")
+            canvas.focus()  # what Tab does
+            assert page.evaluate("() => document.activeElement.className") == "graph-canvas"
+
+            start = page.evaluate(view)
+            page.keyboard.press("ArrowRight")
+            moved = page.evaluate(view)
+            assert moved["tx"] < start["tx"] and moved["ty"] == start["ty"]
+            page.keyboard.press("ArrowDown")
+            assert page.evaluate(view)["ty"] < moved["ty"]
+            page.keyboard.press("ArrowLeft")
+            page.keyboard.press("ArrowUp")
+            back = page.evaluate(view)
+            assert (back["tx"], back["ty"]) == (start["tx"], start["ty"])
+
+            page.keyboard.press("+")
+            zoomed = page.evaluate(view)
+            assert zoomed["k"] > start["k"]
+            page.keyboard.press("-")
+            assert abs(page.evaluate(view)["k"] - start["k"]) < 1e-9
+
+            chosen = nodes[400]["id"]
+            selected.set(chosen)
+            page.wait_for_function(
+                "(id) => document.querySelector('.graph-stage').__graph.selected === id",
+                arg=chosen,
+                timeout=10_000,
+            )
+            page.keyboard.press("Escape")
+            page.wait_for_function(
+                "() => document.querySelector('.graph-stage').__graph.selected === null",
+                timeout=10_000,
+            )
+            for _ in range(60):  # the click's twin: Escape tells Python too
+                if selected.value is None:
+                    break
+                page.wait_for_timeout(50)
+            assert selected.value is None
+            browser.close()
+    finally:
+        handle.stop()
