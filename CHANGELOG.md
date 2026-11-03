@@ -12,6 +12,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Graph`, an interactive node-link graph (ADR-0048, IND-245): drag to pan, wheel or pinch to zoom,
+  a force layout computed in the browser (clustered by `group`, deterministic, time-sliced), a legend,
+  and columnar wire data with edges as integer indexes. Every mistake (a duplicate id, an edge to a
+  node that is not there, more than `max_nodes`) raises `ValueError` in Python. The renderer is a lazy
+  module (`api/graph.js`, 9.9 KB, 4.5 KB gzip), so apps without a graph do not download it. A
+  5,000-node, 12,000-edge graph settles in about a second in the e2e suite. Size limits: new
+  `graph_*` budgets, and `python_source_bytes` raised to 600000 for the component. Focus window,
+  selection and highlight follow in IND-246 and IND-247.
 
 - A gallery demo, `examples/yolox_traffic.py`: a quantized YOLOX-Tiny on a bundled traffic clip, as a replay of recorded detections by default and a live run (one visitor at a time, up to 30 s) on request.
 
