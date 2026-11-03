@@ -81,7 +81,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 # Fetch both ONNX models now, so the first visitor does not wait on (or fail on) a download
 # while the page says "connecting". The same default cache is read at run time.
-RUN python -c "from huggingface_hub import hf_hub_download as d; d('onnxmodelzoo/mobilenetv2-12', 'mobilenetv2-12.onnx'); d('onnxmodelzoo/ssd_mobilenet_v1_12', 'ssd_mobilenet_v1_12.onnx'); d('jianlee/yolox-tiny-quantized', 'yolox_tiny_ptq_int8_calib32.onnx')"
+RUN python -c "from huggingface_hub import hf_hub_download as d; d('onnxmodelzoo/mobilenetv2-12', 'mobilenetv2-12.onnx'); d('onnxmodelzoo/ssd_mobilenet_v1_12', 'ssd_mobilenet_v1_12.onnx'); d('jianlee/yolox-tiny-quantized', 'yolox_tiny_ptq_int8_calib32.onnx', revision='d79a175adba2a5a0201803054fa74f7438fdcf63')"
 COPY . .
 EXPOSE 7860
 # One app mounts every demo under /<slug>; --factory builds it (imports the examples).

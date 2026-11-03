@@ -1,7 +1,7 @@
 # Gallery apps: the next batch (IND-194)
 
 Decided with the owner on 2026-10-26. The gallery is one 1 GB CPU process shared by every visitor, so each
-app is model-free, needs no network at run time and has bounded work per session.
+app has bounded work per session and needs no network at run time. A demo may run a model if it is small, fetched at image build time (the Hugging Face cache is baked into the image and pinned to a commit), bounded by a global slot, and has a recorded fallback; object_detection, upload_classify and yolox-traffic do.
 
 ## Chosen for the 0.9.x patch
 
