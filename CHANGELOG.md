@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+- `Button(variant="danger")` (IND-252): outlined in the error colour, for an action that deletes or
+  rejects, so it reads as set apart from the primary one. No wire change beyond the new value.
+
 ## [0.12.0] - 2026-11-04
 
 An interactive `Graph` component for node-link data (ADR-0048, IND-244 to IND-250): pan, zoom, a force layout in the browser, a focus window so a graph of thousands of nodes stays readable and fast, selection, a highlighted path, and keyboard control. It is a lazy module, so apps without a graph download nothing extra. There is also a new gallery demo, a quantized object detector on a traffic clip. The wire changes are additive, so `protocol_version` is still 1.

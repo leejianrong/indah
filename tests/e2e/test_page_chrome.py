@@ -67,3 +67,43 @@ def test_title_and_icon_change_survive_a_reload_and_other_tabs_are_untouched():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_a_danger_button_is_drawn_in_the_error_colour_and_not_like_the_others():
+    app = indah.create_app(
+        session=indah.Session(
+            indah.Column(
+                children=[
+                    indah.Button("Save"),
+                    indah.Button("Cancel", variant="ghost"),
+                    indah.Button("Delete", variant="danger"),
+                ]
+            )
+        )
+    )
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context().new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_role("button", name="Delete")).to_be_visible()
+                look = "e => { const c = getComputedStyle(e); return [c.color, c.borderTopColor]; }"
+                err = page.evaluate(
+                    "getComputedStyle(document.documentElement).getPropertyValue('--err').trim()"
+                )
+                probe = page.evaluate(
+                    "c => { const d = document.createElement('i'); d.style.color = c;"
+                    " document.body.append(d); return getComputedStyle(d).color; }",
+                    err,
+                )
+                danger = page.get_by_role("button", name="Delete").evaluate(look)
+                ghost = page.get_by_role("button", name="Cancel").evaluate(look)
+                assert danger == [probe, probe]
+                assert danger != ghost
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

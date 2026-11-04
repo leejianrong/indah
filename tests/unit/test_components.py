@@ -94,6 +94,9 @@ def test_button_variant_only_serialises_when_not_default():
     tonal = Button("go", variant="tonal")
     tonal.id = "n1"
     assert tonal.to_json()["props"] == {"variant": "tonal", "label": "go"}
+    danger = Button("delete", variant="danger")
+    danger.id = "n2"
+    assert danger.to_json()["props"] == {"variant": "danger", "label": "delete"}
 
 
 @pytest.mark.unit
