@@ -184,6 +184,7 @@
     );
   });
   let sorted = $derived.by(() => {
+    if (sortField === null && props.newestFirst && !isRemote) return [...filtered].reverse();
     if (sortField === null || isRemote) return filtered; // remote: the server sorted
     return [...filtered].sort((x, y) => cmp(x.r[sortField], y.r[sortField]) * sortDir);
   });
@@ -212,17 +213,19 @@
   $effect(() => {
     view.length;
     if (props.follow && following && sortField === null && scroller) {
-      scroller.scrollTop = scroller.scrollHeight;
+      scroller.scrollTop = props.newestFirst ? 0 : scroller.scrollHeight;
     }
   });
   function onScroll() {
     if (isVirtual && scroller) scrollTop = scroller.scrollTop;
     if (!props.follow || !scroller) return;
-    following = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 24;
+    following = props.newestFirst
+      ? scroller.scrollTop < 24
+      : scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 24;
   }
   function resumeFollowing() {
     following = true;
-    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    if (scroller) scroller.scrollTop = props.newestFirst ? 0 : scroller.scrollHeight;
   }
 
   // What a column sorts and is searched by: a cell column has no single value, so it

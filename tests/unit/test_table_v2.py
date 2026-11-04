@@ -176,6 +176,18 @@ def test_toolbar_flags_are_static_props_and_default_off():
 
 
 @pytest.mark.unit
+def test_newest_first_is_a_static_prop_only_when_asked_and_only_for_rich_tables():
+    plain = Table(rows=ROWS, key="id", height="10rem")
+    Session(Column(children=[plain]))
+    assert "newestFirst" not in plain.to_json()["props"]
+    newest = Table(rows=ROWS, key="id", height="10rem", follow=True, newest_first=True)
+    Session(Column(children=[newest]))
+    assert newest.to_json()["props"]["newestFirst"] is True
+    with pytest.raises(ValueError, match="rows="):
+        Table({"columns": ["a"], "rows": [[1]]}, newest_first=True)
+
+
+@pytest.mark.unit
 def test_follow_needs_a_height_to_scroll_in():
     with pytest.raises(ValueError, match="height"):
         Table(rows=ROWS, key="id", follow=True)
