@@ -26,6 +26,7 @@ of options: **classic** (a frame or a list), **rich** (typed columns and a stabl
 | `height` | CSS length | `None` | Makes the body scroll under a sticky header. Needed by `follow` and `virtual`. |
 | `search` | `bool` | `False` | A filter box. Case-insensitive over every column and run in the browser, so streamed rows are filtered too. In the remote form the loader does it. |
 | `column_toggle` | `bool` | `False` | Lets the viewer hide columns, remembered in the browser. |
+| `newest_first` | `bool` | `False` | Shows rows in reverse arrival order (newest at the top, as a log reads) until a column is sorted. With `follow`, the top stays in view and following pauses when the viewer scrolls down. Rich form only. |
 | `follow` | `bool` | `False` | Keeps the newest row in view while rows arrive, and pauses when the viewer scrolls up. Needs `height`. Raises `ValueError` with `remote`. |
 | `actions` | `list[RowAction]` | `None` | A button per row. Needs `key`. |
 | `checked` | `Signal[list]` | `None` | A checkbox column plus select-all, holding the ticked keys. Needs `key`. |

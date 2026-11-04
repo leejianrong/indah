@@ -12,6 +12,8 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Table(newest_first=True)` (IND-254): a streamed table shows its newest row at the top, as a log
+  reads; with `follow` it keeps the top in view and pauses when the viewer scrolls down. Off by default.
 - `create_app(quiet_status=True)` (IND-251): the connection status is silent while connected, and
   when the connection is lost the dot and its words (`reconnecting...`) appear in the header beside
   the theme toggle. Off by default; the footer's `live` line is unchanged for every other app.

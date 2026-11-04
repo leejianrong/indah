@@ -134,3 +134,52 @@ def test_a_danger_button_is_drawn_in_the_error_colour_and_not_like_the_others():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_a_newest_first_table_shows_the_newest_row_on_top_and_stays_there():
+    stream = indah.Stream([{"id": f"r{i:03d}", "n": f"row {i}"} for i in range(40)], limit=200)
+
+    def grow() -> None:
+        stream.append({"id": "r999", "n": "the newest"})
+
+    app = indah.create_app(
+        session=indah.Session(
+            indah.Column(
+                children=[
+                    indah.Table(
+                        rows=stream,
+                        key="id",
+                        height="10rem",
+                        follow=True,
+                        newest_first=True,
+                        columns=[indah.Col("n", sortable=False)],
+                    ),
+                    indah.Button("grow", grow),
+                ]
+            )
+        )
+    )
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context().new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                rows = page.locator("tbody tr")
+                expect(rows.first).to_have_text("row 39")  # newest of the first batch on top
+                page.get_by_role("button", name="grow").click()
+                expect(rows.first).to_have_text("the newest")
+                top = """() => {
+                    let e = document.querySelector('tbody');
+                    while (e && e.scrollHeight <= e.clientHeight + 1) e = e.parentElement;
+                    return e ? e.scrollTop : -1;
+                }"""
+                assert (
+                    page.evaluate(top) == 0
+                )  # the top stays in view; it did not follow the bottom
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

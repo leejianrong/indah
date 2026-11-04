@@ -2688,6 +2688,9 @@ class Table(Component):
     browser, so rows streaming in are filtered too); ``column_toggle=True`` lets the viewer
     hide columns (remembered in the browser); ``follow=True`` keeps the newest row in view
     while rows arrive and pauses when the viewer scrolls up (needs ``height``).
+    ``newest_first=True`` shows the rows in reverse arrival order (the newest at the top, as a
+    log reads) until the viewer sorts a column; with ``follow`` the table then keeps the top in
+    view and pauses when the viewer scrolls down (IND-254).
     ``actions=[RowAction(...)]`` adds a button per row that calls back with the row key;
     ``checked=`` (a ``Signal[list]`` of keys) adds a checkbox column plus select-all for
     bulk operations. Both need the rich form with a ``key``.
@@ -2740,6 +2743,7 @@ class Table(Component):
         search: bool = False,
         column_toggle: bool = False,
         follow: bool = False,
+        newest_first: bool = False,
         actions: list[RowAction] | None = None,
         checked: Signal[list[Any]] | None = None,
         remote: Callable[[TableQuery], Any] | None = None,
@@ -2775,6 +2779,7 @@ class Table(Component):
             or search
             or column_toggle
             or follow
+            or newest_first
             or actions
             or checked is not None
         ):
@@ -2802,6 +2807,7 @@ class Table(Component):
         self._search = bool(search)
         self._column_toggle = bool(column_toggle)
         self._follow = bool(follow)
+        self._newest_first = bool(newest_first)
         self._actions = list(actions or [])
         self._checked = checked
         self._virtual = bool(virtual)
@@ -2875,6 +2881,8 @@ class Table(Component):
             props["search"] = self._search
             props["columnToggle"] = self._column_toggle
             props["follow"] = self._follow
+            if self._newest_first:
+                props["newestFirst"] = True
             if self._virtual:
                 props["virtual"] = True
             if isinstance(self._density, str):
