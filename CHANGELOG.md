@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-04
+
+An interactive `Graph` component for node-link data (ADR-0048, IND-244 to IND-250): pan, zoom, a force layout in the browser, a focus window so a graph of thousands of nodes stays readable and fast, selection, a highlighted path, and keyboard control. It is a lazy module, so apps without a graph download nothing extra. There is also a new gallery demo, a quantized object detector on a traffic clip. The wire changes are additive, so `protocol_version` is still 1.
+
 ### Added
 - `Graph`, an interactive node-link graph (ADR-0048, IND-245): drag to pan, wheel or pinch to zoom,
   a force layout computed in the browser (clustered by `group`, deterministic, time-sliced), a legend,
@@ -26,29 +30,32 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   (at most 100). `highlight={"nodes": [...], "edges": [...]}` is always drawn in full, however far
   outside the window, and dims the rest; unknown ids raise `ValueError`. At the 20,000-node ceiling a
   frame draws in about 2 ms. The lazy module is now 14.7 KB (6.3 KB gzip); the `graph_*` limits are
-  re-set from that measurement. A `selected` signal follows in IND-247.
+  re-set from that measurement.
 - `Graph` selection and focus (IND-247): bind `selected` to a `Signal[str | None]` and a click sets it
   to the node's id (empty canvas sets `None`); set it from Python and the viewer selects and centres
   that node. `focus` centres a node without selecting it. The server refuses a `select` event whose id
   is not a node, or that has no `id`. A graph with no signal bound sends no events.
-
 - `Graph` keyboard, docs and Studio page (IND-248): Tab focuses the canvas, arrow keys pan, `+` and `-`
   zoom, Escape clears the selection (and tells Python). A "How to draw a graph" guide, a Studio page
   (`media/graph`, runnable in the docs), and the graph module is now copied into the docs build.
-
 - `Graph` lays out a hard graph more readably (IND-250): group centres sit closer together and nodes
   with no or one edge are pulled harder toward their group, so they no longer drift far out and shrink
   the picture. Measured over eight seeds on cross-linked graphs, the middle of the graph fills 2.6 times
   more of the fitted view on a realistic 1,000-entity world (9.6 to 24.8 percent) and 5 times more on a
   harder synthetic one, and group centres stay further apart than a group is wide. The spacing is the
   tightest that keeps that true. Layout and spatial-index tests now run under Node in the unit suite.
+- A gallery demo, `examples/yolox_traffic.py`: a quantized YOLOX-Tiny on a bundled traffic clip, as a replay of recorded detections by default and a live run (one visitor at a time, up to 30 s) on request.
 
 ### Fixed
 - `Graph` no longer restarts its layout, or resets the viewer's pan and zoom, when a prop other than
   `nodes` or `edges` changes (a highlight, the selection, the focus size). The shell now loads the data
   only when the data itself is new.
 
-- A gallery demo, `examples/yolox_traffic.py`: a quantized YOLOX-Tiny on a bundled traffic clip, as a replay of recorded detections by default and a live run (one visitor at a time, up to 30 s) on request.
+### Known limitations
+
+- `Graph` has no `hovered` signal yet (IND-249): hovering a node shows a tooltip in the browser and sends nothing to Python.
+- A graph is capped at `max_nodes` (default 10,000, at most 20,000 nodes and 60,000 edges); sample larger graphs before drawing them.
+- The Python source size budget (600000 bytes) has little room left.
 
 ## [0.11.0] - 2026-11-01
 
