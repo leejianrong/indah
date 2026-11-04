@@ -65,6 +65,19 @@ async def test_index_injects_configured_chrome():
 
 
 @pytest.mark.integration
+async def test_quiet_status_is_handed_to_the_shell_only_when_asked():
+    # IND-251: the connection status moves into the header and speaks only when lost.
+    def app(**kw):
+        return create_app(session=Session(Column(children=[Text("hi")])), **kw)
+
+    async with _client(app(quiet_status=True)) as client:
+        assert '"quietStatus": true' in (await client.get("/")).text
+    async with _client(app()) as client:  # default unchanged: no chrome blob at all
+        assert "quietStatus" not in (await client.get("/")).text.split("<script")[0]
+        assert "window.__INDAH_CHROME__={" not in (await client.get("/")).text
+
+
+@pytest.mark.integration
 async def test_title_suffix_drops_or_replaces_the_indah_suffix():
     # semula wants the exact page title: title="semula", title_suffix="" -> <title>semula</title>.
     def app(**kw):

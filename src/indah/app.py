@@ -578,6 +578,7 @@ def create_app(
     title_suffix: str = " - indah",
     home_url: str | None = None,
     source_url: str | None = None,
+    quiet_status: bool = False,
     spa: bool = False,
     proxy_flush: bool = True,
     theme: Theme | None = None,
@@ -725,6 +726,11 @@ def create_app(
     cannot inherit the page's colour. Pass a pair instead.) The tab
     reads ``"<title> - indah"``; ``title_suffix`` replaces that suffix (``""`` gives the exact
     ``title``).
+
+    ``quiet_status=True`` moves the connection status out of the footer line: nothing is shown
+    while connected, and when the connection is lost or reconnecting the status (a dot and its
+    words) appears in the header beside the theme toggle (IND-251). The default keeps the
+    footer's always-on ``live`` line.
 
     ``favicons`` maps a name (lower-case words, up to 16 of them) to an icon (a PNG, SVG, ICO,
     JPEG or WebP path or bytes, up to 64 KB). A session switches its tab's icon to one by name
@@ -1031,6 +1037,7 @@ def create_app(
     app.state.title_suffix = title_suffix
     app.state.home_url = home_url
     app.state.source_url = source_url
+    app.state.quiet_status = quiet_status
     app.state.density = density
     theme_css = theme.css() if theme is not None else ""
     if max_width != DEFAULT_MAX_WIDTH:
@@ -1096,6 +1103,7 @@ def _chrome_html(state: Any, base_href: str | None = None) -> str:
         "logoDarkUrl": "api/brand/logo?scheme=dark" if getattr(state, "logo_dark", None) else None,
         "brandName": title if getattr(state, "logo", None) else None,
         "secure": True if getattr(state, "secure", False) else None,
+        "quietStatus": True if getattr(state, "quiet_status", False) else None,
         "live": {"path": LIVE_PATH, "v": LIVE_PROTOCOL_VERSION}
         if getattr(state, "live", None) is not None
         else None,

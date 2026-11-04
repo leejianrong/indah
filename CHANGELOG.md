@@ -12,6 +12,9 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `create_app(quiet_status=True)` (IND-251): the connection status is silent while connected, and
+  when the connection is lost the dot and its words (`reconnecting...`) appear in the header beside
+  the theme toggle. Off by default; the footer's `live` line is unchanged for every other app.
 - `Button(variant="danger")` (IND-252): outlined in the error colour, for an action that deletes or
   rejects, so it reads as set apart from the primary one. No wire change beyond the new value.
 
