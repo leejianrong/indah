@@ -67,3 +67,30 @@ def test_title_and_icon_change_survive_a_reload_and_other_tabs_are_untouched():
                 browser.close()
     finally:
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_quiet_status_is_silent_while_connected_and_speaks_in_the_header_when_lost():
+    app = indah.create_app(
+        session=indah.Session(indah.Column(children=[indah.Text("hello")])), quiet_status=True
+    )
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context().new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_text("hello")).to_be_visible()
+                expect(page.locator(".shell > .status")).to_have_count(0)  # no footer line
+                head = page.locator("header.brand .status-head")
+                expect(head).to_have_text("")  # connected: nothing said
+                handle.stop()  # the server goes away
+                expect(head).to_contain_text("reconnecting", timeout=15000)
+                assert head.evaluate(  # beside the theme toggle, inside the header
+                    "e => e.nextElementSibling.classList.contains('theme-toggle')"
+                )
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

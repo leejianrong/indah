@@ -60,6 +60,10 @@ The browser tab reads `"<title> - indah"` when you pass `title=`. Pass `title_su
 the exact title (`title="semula", title_suffix=""` gives `<title>semula</title>`), or any other
 suffix such as `" | Semula Ops"`.
 
+By default the shell shows a `live` dot and the word under the page. Pass `quiet_status=True` to keep
+the page quiet while connected: nothing is drawn, and when the connection is lost or reconnecting the
+dot and its words appear in the header beside the theme toggle.
+
 ## Colour roles
 
 Every role is defined for light and dark. Use a role by its job, never by its hex value.

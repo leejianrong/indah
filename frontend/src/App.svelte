@@ -346,6 +346,15 @@
         <span>Source</span>
       </a>
     {/if}
+    {#if chrome.quietStatus}
+      <!-- IND-251: silent while connected; the words and a dot only when it is lost. -->
+      <div class="status status-head" role="status" aria-live="polite">
+        {#if !$status.live}
+          <span class="dot"></span>
+          <span>{$status.text}</span>
+        {/if}
+      </div>
+    {/if}
     <div class="theme-toggle" role="group" aria-label="Theme">
       <button
         type="button"
@@ -395,10 +404,12 @@
   {:else if $structure}
     <Node node={$structure} />
   {/if}
-  <div class="status">
-    <span class="dot" class:live={$status.live}></span>
-    <span>{$status.text}</span>
-  </div>
+  {#if !chrome.quietStatus}
+    <div class="status">
+      <span class="dot" class:live={$status.live}></span>
+      <span>{$status.text}</span>
+    </div>
+  {/if}
 </div>
 
 {#if $helpOpen}
