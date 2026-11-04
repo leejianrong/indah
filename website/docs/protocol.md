@@ -333,7 +333,7 @@ stays 1.
 | `divider` | layout | optional `vertical` | — |
 | `skeleton` | display | optional `lines` (default 3), `height` (a CSS length, default 1rem): grey placeholder bars, the last one shorter; announced as busy | — |
 | `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree); optional `variant` (plain text only: `title` / `label` / `caption` / `mono` / `readout`; absent = body text, ADR-0040) | — |
-| `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost`), `confirm` (text: the shell asks first and posts `click` only once accepted), `disabled` (optional bool, reactive: greys the button; the server also drops a click while it is true) | `click` |
+| `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost` / `danger`), `confirm` (text: the shell asks first and posts `click` only once accepted), `disabled` (optional bool, reactive: greys the button; the server also drops a click while it is true) | `click` |
 | `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label`, `error` (optional text shown under the box, `null` for none) | `input` `{value}` |
 | `textarea` | input | `value`, `placeholder`, `label`, `rows` | `input` `{value}` (debounced 150 ms, flushed on blur) |

@@ -97,6 +97,46 @@ def test_quiet_status_is_silent_while_connected_and_speaks_in_the_header_when_lo
 
 
 @pytest.mark.e2e
+def test_a_danger_button_is_drawn_in_the_error_colour_and_not_like_the_others():
+    app = indah.create_app(
+        session=indah.Session(
+            indah.Column(
+                children=[
+                    indah.Button("Save"),
+                    indah.Button("Cancel", variant="ghost"),
+                    indah.Button("Delete", variant="danger"),
+                ]
+            )
+        )
+    )
+    handle = launch(app, block=False, open_inline=False)
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context().new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.get_by_role("button", name="Delete")).to_be_visible()
+                look = "e => { const c = getComputedStyle(e); return [c.color, c.borderTopColor]; }"
+                err = page.evaluate(
+                    "getComputedStyle(document.documentElement).getPropertyValue('--err').trim()"
+                )
+                probe = page.evaluate(
+                    "c => { const d = document.createElement('i'); d.style.color = c;"
+                    " document.body.append(d); return getComputedStyle(d).color; }",
+                    err,
+                )
+                danger = page.get_by_role("button", name="Delete").evaluate(look)
+                ghost = page.get_by_role("button", name="Cancel").evaluate(look)
+                assert danger == [probe, probe]
+                assert danger != ghost
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
 def test_a_newest_first_table_shows_the_newest_row_on_top_and_stays_there():
     stream = indah.Stream([{"id": f"r{i:03d}", "n": f"row {i}"} for i in range(40)], limit=200)
 

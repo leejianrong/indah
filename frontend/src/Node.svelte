@@ -457,6 +457,7 @@
   <button
     class:tonal={props.variant === "tonal"}
     class:ghost={props.variant === "ghost"}
+    class:danger={props.variant === "danger"}
     disabled={props.disabled ? true : null}
     onclick={() => (props.confirm ? (confirming = true) : postEvent(node.id, "click"))}
     >{props.label ?? ""}</button

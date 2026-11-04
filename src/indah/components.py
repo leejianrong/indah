@@ -247,8 +247,9 @@ class Button(Component):
 
     ``variant`` picks the Studio treatment: ``"filled"`` (default, the magenta
     primary), ``"tonal"`` (the teal secondary container -- a softer secondary
-    action), or ``"ghost"`` (outline only). It is a static styling prop; the
-    click behaviour is identical.
+    action), ``"ghost"`` (outline only) or ``"danger"`` (outlined in the error colour, for an
+    action that deletes or rejects; IND-252). It is a static styling prop; the click behaviour
+    is identical.
     """
 
     type = "button"
