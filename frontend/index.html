@@ -909,6 +909,14 @@
         border: 1px solid var(--outline);
       }
       button.ghost:hover { filter: none; background: var(--surface-2); }
+      /* danger (IND-252): an outlined button in the error colour, for delete and reject. */
+      button.danger {
+        color: var(--err);
+        background: transparent;
+        border: 1px solid var(--err);
+      }
+      button.danger:hover { filter: none; background: color-mix(in srgb, var(--err) 10%, transparent); }
+      button.danger:focus-visible { outline-color: var(--err); }
 
       .badge {
         align-self: flex-start;
