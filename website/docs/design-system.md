@@ -24,7 +24,9 @@ indah.create_app(
 ```
 
 Only the colour roles below can be overridden, per scheme (`light` and `dark`). `radius` and
-`font` apply to both. An unknown token name raises an error, so a typo cannot pass silently.
+the fonts apply to both. `font` sets the display and body stacks together; for three typefaces use
+`font_display` (headings), `font_body` (running text) and `font_mono` (code, numbers, table
+headers), each one CSS font stack. A slot wins over `font` for its own token. An unknown token name raises an error, so a typo cannot pass silently.
 If you override a `*-container` role, also override its `on-*-container` partner so the text
 stays readable. The Bunga logo is brand identity, not a theme role: a theme never recolours
 it. To use your own mark, pass `logo=`. A mark that vanishes on one background needs a pair:

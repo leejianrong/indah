@@ -12,6 +12,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Theme(font_display=, font_body=, font_mono=)` (IND-255): a font stack for each of the three
+  slots (`--font-display`, `--font-body`, `--font-mono`). `font=` still sets display and body together
+  and a slot wins over it for its own token; with none of them set nothing changes. Values are checked
+  like any other theme value.
 - `Table(newest_first=True)` (IND-254): a streamed table shows its newest row at the top, as a log
   reads; with `follow` it keeps the top in view and pauses when the viewer scrolls down. Off by default.
 - `create_app(quiet_status=True)` (IND-251): the connection status is silent while connected, and
