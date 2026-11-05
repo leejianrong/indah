@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-05
+
+Theme fonts you ship with the app (`Font`, font slots), a newest-first streamed `Table`, a quiet connection status, and a `danger` button (IND-251 to IND-256). Every change is additive, so `protocol_version` is still 1 and nothing needs migrating.
+
 ### Added
 - `Theme(fonts=[Font(family, src, weight=, style=)])` (IND-256): ship typefaces with the app. `src` is
   woff2 bytes or a path, read once at app creation (a URL is refused); indah serves each file from the
@@ -28,6 +32,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   the theme toggle. Off by default; the footer's `live` line is unchanged for every other app.
 - `Button(variant="danger")` (IND-252): outlined in the error colour, for an action that deletes or
   rejects, so it reads as set apart from the primary one. No wire change beyond the new value.
+
+### Known limitations
+
+- `Font` accepts woff2 only, at most 2 MiB a file and 8 fonts; a URL source is refused.
+- `quiet_status` and `Table(newest_first=)` are off by default.
 
 ## [0.12.0] - 2026-11-04
 
