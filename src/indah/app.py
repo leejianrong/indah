@@ -946,6 +946,7 @@ def create_app(
             if restore is not None:
                 restore()
 
+    font_files = theme.font_files if theme is not None else {}
     app = Starlette(
         middleware=middleware,
         lifespan=lifespan,
@@ -969,6 +970,7 @@ def create_app(
             Route("/api/components/{name}.js", _component_js, methods=["GET"]),
             *([Route("/api/csp-report", _csp_report, methods=["POST"])] if csp == "strict" else []),
             Route("/api/file/{sid}/{token}", _file, methods=["GET"]),
+            *([Route("/api/fonts/{name}", _font, methods=["GET"])] if font_files else []),
             *([Route("/api/brand/logo", _logo, methods=["GET"])] if logo is not None else []),
             *([Route("/api/brand/favicon/{name}", _favicon, methods=["GET"])] if favicons else []),
             *([Route(DOCTOR_PATH, _doctor, methods=["GET"])] if doctor_gate is not None else []),
@@ -1043,6 +1045,7 @@ def create_app(
     if max_width != DEFAULT_MAX_WIDTH:
         theme_css += f"\n:root {{ --page-max: {max_width}; }}"
     app.state.theme_css = theme_css.strip()
+    app.state.font_files = font_files
     if isinstance(logo, tuple):
         if len(logo) != 2:
             raise ValueError("logo as a pair is (light, dark)")
@@ -1379,6 +1382,22 @@ async def _logo(request: Request) -> Response:
             "Content-Security-Policy": "sandbox",
             "X-Content-Type-Options": "nosniff",
             "Cache-Control": "public, max-age=3600",
+        },
+    )
+
+
+async def _font(request: Request) -> Response:
+    """A theme font. The name is a content hash, so a changed font is a new URL and the file can
+    be cached for good."""
+    data = request.app.state.font_files.get(request.path_params["name"])
+    if data is None:
+        return Response(status_code=404)
+    return Response(
+        data,
+        media_type="font/woff2",
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
         },
     )
 

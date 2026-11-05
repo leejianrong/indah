@@ -12,6 +12,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Theme(fonts=[Font(family, src, weight=, style=)])` (IND-256): ship typefaces with the app. `src` is
+  woff2 bytes or a path, read once at app creation (a URL is refused); indah serves each file from the
+  app's own origin at `api/fonts/<hash>.woff2` with a one-year immutable cache and writes the
+  `@font-face` (`font-display: swap`). The page never asks another host for a font, and the CSP is
+  unchanged. Limits: woff2 only, 2 MiB a file, 8 fonts. New public name `indah.Font`.
 - `Theme(font_display=, font_body=, font_mono=)` (IND-255): a font stack for each of the three
   slots (`--font-display`, `--font-body`, `--font-mono`). `font=` still sets display and body together
   and a slot wins over it for its own token; with none of them set nothing changes. Values are checked

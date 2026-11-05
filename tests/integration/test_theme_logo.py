@@ -9,7 +9,7 @@ import pytest
 from indah.app import create_app
 from indah.components import Column, Text
 from indah.session import Session
-from indah.theme import Theme
+from indah.theme import Font, Theme
 
 SVG = (
     b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'><rect width='8' height='8'/></svg>"
@@ -132,3 +132,40 @@ async def test_a_single_logo_sends_no_dark_url_and_a_bad_pair_is_refused():
         assert (await c.get("/api/brand/logo", params={"scheme": "dark"})).headers[
             "content-type"
         ] == "image/png"
+
+
+WOFF2 = b"wOF2" + b"\x00" * 60
+
+
+@pytest.mark.integration
+async def test_theme_fonts_are_served_from_the_app_with_a_long_cache():
+    theme = Theme(fonts=[Font("Hanken Grotesk", WOFF2, weight="100 900")])
+    name = next(iter(theme.font_files))
+    async with _client(_app(theme=theme)) as c:
+        html = (await c.get("/")).text
+        got = await c.get(f"/api/fonts/{name}")
+        other = await c.get("/api/fonts/" + "0" * 16 + ".woff2")
+        odd = await c.get("/api/fonts/..%2Fsecret")
+    assert f"url(api/fonts/{name})" in html and "font-display: swap;" in html
+    assert got.status_code == 200 and got.content == WOFF2
+    assert got.headers["content-type"] == "font/woff2"
+    assert got.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert got.headers["x-content-type-options"] == "nosniff"
+    assert other.status_code == 404 and odd.status_code in (404, 400)
+
+
+@pytest.mark.integration
+async def test_no_fonts_means_no_font_route():
+    async with _client(_app(theme=Theme(radius="4px"))) as c:
+        assert (await c.get("/api/fonts/" + "0" * 16 + ".woff2")).status_code == 404
+
+
+@pytest.mark.integration
+async def test_fonts_work_under_the_strict_csp_without_changing_it():
+    theme = Theme(fonts=[Font("A", WOFF2)])
+    async with _client(_app(theme=theme, csp="strict")) as c:
+        page = await c.get("/")
+    policy = page.headers["content-security-policy"]
+    assert "font-src 'self' data:" in policy and "style-src 'nonce-" in policy
+    assert re.search(r'<style nonce="[^"]+" id="indah-theme">', page.text)
+    assert "http" not in re.search(r"@font-face.*?}", page.text, re.S).group(0)

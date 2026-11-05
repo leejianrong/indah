@@ -14,8 +14,12 @@ that could close the block, open a rule or fetch a resource gets through.
 
 from __future__ import annotations
 
+import hashlib
+import os
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from pathlib import Path
 
 # The colour/elevation roles an app may override per scheme (``--radius`` and the font
 # stacks have their own arguments, since they do not differ between light and dark).
@@ -57,6 +61,49 @@ def _value(name: str, value: str) -> str:
     return text
 
 
+_MAX_FONT_BYTES = 2 * 1024 * 1024
+_MAX_FONTS = 8
+_FAMILY = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,59}")
+_WEIGHT = re.compile(r"[1-9]00(?: [1-9]00)?")
+
+
+@dataclass(frozen=True)
+class Font:
+    """One self-hosted font file for ``Theme(fonts=[...])``.
+
+    ``src`` is woff2 bytes or a path to a ``.woff2`` file, read once when the theme is built;
+    a URL is never accepted. ``family`` is the name to use in a font stack (``font_body="'Hanken
+    Grotesk', sans-serif"``). ``weight`` is ``"400"`` or a variable font's range, ``"100 900"``."""
+
+    family: str
+    src: bytes | str | os.PathLike[str]
+    weight: str = "400"
+    style: str = "normal"
+
+
+def _load_font(font: Font) -> bytes:
+    if not isinstance(font, Font):
+        raise TypeError(f"fonts take Font(...) items, got {font!r}")
+    if not _FAMILY.fullmatch(font.family):
+        raise ValueError(f"font family {font.family!r} must be 1-60 letters, digits, space, _ or -")
+    if not _WEIGHT.fullmatch(font.weight):
+        raise ValueError(f"font weight {font.weight!r} must be like '400' or '100 900'")
+    if font.style not in ("normal", "italic"):
+        raise ValueError(f"font style {font.style!r} must be 'normal' or 'italic'")
+    data = bytes(font.src) if isinstance(font.src, bytes) else Path(font.src).read_bytes()
+    if len(data) > _MAX_FONT_BYTES:
+        raise ValueError(
+            f"font {font.family!r} is {len(data)} bytes; the limit is {_MAX_FONT_BYTES}"
+        )
+    if not data.startswith(b"wOF2"):
+        raise ValueError(f"font {font.family!r} must be woff2 bytes or the path of a .woff2 file")
+    return data
+
+
+def _font_name(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()[:16] + ".woff2"
+
+
 # An app's own roles (ADR-0031 amendment, IND-134): ``x-`` then lowercase words, so they can
 # never shadow a core role and the core set stays closed.
 _EXTRA_NAME = re.compile(r"x-[a-z0-9]+(-[a-z0-9]+)*")
@@ -94,6 +141,10 @@ class Theme:
     (code, numbers, table headers) each set one font stack. ``font`` stays as the shorthand for
     display and body together; a slot given with it wins for its own token.
 
+    ``fonts`` ships typefaces with the app: each :class:`Font` is a woff2 file the app serves from
+    its own origin (cached for a year) with a generated ``@font-face``, so the page never asks
+    another host for a font and the CSP is unchanged.
+
     ``extra_light`` / ``extra_dark`` add the app's own tokens, which must be named ``x-<name>``
     and are emitted as ``--x-<name>`` for the app's own CSS to read. The core roles above stay a
     closed set. Define an extra in both schemes if it should differ, since a token set only in
@@ -109,6 +160,7 @@ class Theme:
         font_display: str | None = None,
         font_body: str | None = None,
         font_mono: str | None = None,
+        fonts: Iterable[Font] = (),
         extra_light: Mapping[str, str] | None = None,
         extra_dark: Mapping[str, str] | None = None,
     ) -> None:
@@ -120,6 +172,30 @@ class Theme:
         self.font_display = _value("font_display", font_display) if font_display else self.font
         self.font_body = _value("font_body", font_body) if font_body else self.font
         self.font_mono = _value("font_mono", font_mono) if font_mono is not None else None
+        # name -> bytes, served by ``create_app`` at ``api/fonts/<name>`` (name = content hash)
+        self.font_files: dict[str, bytes] = {}
+        self._faces: list[str] = []
+        listed = list(fonts)
+        if len(listed) > _MAX_FONTS:
+            raise ValueError(f"at most {_MAX_FONTS} fonts, got {len(listed)}")
+        seen: set[tuple[str, str, str]] = set()
+        for font in listed:
+            data = _load_font(font)
+            key = (font.family, font.weight, font.style)
+            if key in seen:
+                raise ValueError(f"font {font.family!r} {font.weight} {font.style} is listed twice")
+            seen.add(key)
+            name = _font_name(data)
+            self.font_files[name] = data
+            self._faces.append(
+                "@font-face {\n"
+                f"  font-family: '{font.family}';\n"
+                f"  font-style: {font.style};\n"
+                f"  font-weight: {font.weight};\n"
+                "  font-display: swap;\n"
+                f"  src: url(api/fonts/{name}) format('woff2');\n"
+                "}"
+            )
 
     def css(self) -> str:
         """The override stylesheet, or ``""`` when there is nothing to override."""
@@ -127,7 +203,7 @@ class Theme:
         if self.radius:
             base["radius"] = self.radius
             base["radius-control"] = self.radius  # buttons and badges follow it too
-        rules = []
+        rules = list(self._faces)
         slots = {
             "font-display": self.font_display,
             "font-body": self.font_body,
