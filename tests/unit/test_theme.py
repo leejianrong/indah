@@ -110,3 +110,37 @@ def test_radius_also_sets_the_control_radius_used_by_buttons_and_badges():
     css = Theme(radius="2px").css()
     assert "--radius-control: 2px;" in css
     assert "--radius-control" not in Theme(light={"primary": "#d6336c"}).css()
+
+
+@pytest.mark.unit
+def test_three_font_slots_write_their_own_tokens():
+    css = Theme(
+        font_display="'Bricolage Grotesque', sans-serif",
+        font_body="'Hanken Grotesk', sans-serif",
+        font_mono="'IBM Plex Mono', monospace",
+    ).css()
+    assert "--font-display: 'Bricolage Grotesque', sans-serif;" in css
+    assert "--font-body: 'Hanken Grotesk', sans-serif;" in css
+    assert "--font-mono: 'IBM Plex Mono', monospace;" in css
+
+
+@pytest.mark.unit
+def test_font_still_sets_display_and_body_and_leaves_mono_alone():
+    css = Theme(font="system-ui").css()
+    assert "--font-body: system-ui;" in css and "--font-display: system-ui;" in css
+    assert "--font-mono" not in css
+
+
+@pytest.mark.unit
+def test_a_slot_wins_over_font_for_its_own_token_only():
+    css = Theme(font="system-ui", font_display="Georgia").css()
+    assert "--font-display: Georgia;" in css and "--font-body: system-ui;" in css
+    assert css.count("--font-display") == 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("slot", ["font_display", "font_body", "font_mono"])
+@pytest.mark.parametrize("value", ["a; b: c", "x } y", "url(x)", "a</style>", "@import"])
+def test_font_slots_are_checked_like_any_theme_value(slot, value):
+    with pytest.raises(ValueError):
+        Theme(**{slot: value})

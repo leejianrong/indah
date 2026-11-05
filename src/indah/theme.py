@@ -88,7 +88,11 @@ def _tokens(scheme: str, tokens: Mapping[str, str] | None) -> dict[str, str]:
 
 class Theme:
     """Token overrides for one app. ``light``/``dark`` map a token name (with or without
-    the leading ``--``) to a CSS value; ``radius`` and ``font`` apply to both schemes.
+    the leading ``--``) to a CSS value; ``radius`` and the fonts apply to both schemes.
+
+    ``font_display`` (headings, the brand), ``font_body`` (running text) and ``font_mono``
+    (code, numbers, table headers) each set one font stack. ``font`` stays as the shorthand for
+    display and body together; a slot given with it wins for its own token.
 
     ``extra_light`` / ``extra_dark`` add the app's own tokens, which must be named ``x-<name>``
     and are emitted as ``--x-<name>`` for the app's own CSS to read. The core roles above stay a
@@ -102,6 +106,9 @@ class Theme:
         dark: Mapping[str, str] | None = None,
         radius: str | None = None,
         font: str | None = None,
+        font_display: str | None = None,
+        font_body: str | None = None,
+        font_mono: str | None = None,
         extra_light: Mapping[str, str] | None = None,
         extra_dark: Mapping[str, str] | None = None,
     ) -> None:
@@ -109,6 +116,10 @@ class Theme:
         self.dark = _tokens("dark", dark) | _extras("dark", extra_dark)
         self.radius = _value("radius", radius) if radius is not None else None
         self.font = _value("font", font) if font is not None else None
+        # ``font`` is the shorthand for display and body; a slot overrides it for its own token.
+        self.font_display = _value("font_display", font_display) if font_display else self.font
+        self.font_body = _value("font_body", font_body) if font_body else self.font
+        self.font_mono = _value("font_mono", font_mono) if font_mono is not None else None
 
     def css(self) -> str:
         """The override stylesheet, or ``""`` when there is nothing to override."""
@@ -117,10 +128,14 @@ class Theme:
             base["radius"] = self.radius
             base["radius-control"] = self.radius  # buttons and badges follow it too
         rules = []
-        if base or self.font:
+        slots = {
+            "font-display": self.font_display,
+            "font-body": self.font_body,
+            "font-mono": self.font_mono,
+        }
+        if base or any(slots.values()):
             body = [f"--{k}: {v};" for k, v in base.items()]
-            if self.font:
-                body += [f"--font-body: {self.font};", f"--font-display: {self.font};"]
+            body += [f"--{k}: {v};" for k, v in slots.items() if v]
             rules.append(":root {\n  " + "\n  ".join(body) + "\n}")
         if self.dark:
             body = [f"--{k}: {v};" for k, v in self.dark.items()]
