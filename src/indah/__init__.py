@@ -115,7 +115,7 @@ from .session_store import (
 )
 from .state import MemoryStateStore, SqliteStateStore, StateStore
 from .stream import Stream
-from .theme import Theme
+from .theme import Font, Theme
 
 __version__ = "0.12.0"
 
@@ -133,6 +133,7 @@ __all__ = [
     "MemoryStateStore",
     "SqliteStateStore",
     "Theme",
+    "Font",
     "Topic",
     "Context",
     "Principal",

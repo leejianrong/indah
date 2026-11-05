@@ -37,6 +37,31 @@ Try it live. Nothing downloads until you press **Run it**.
 
 <indah-live page="layout/theming"></indah-live>
 
+### Your own fonts
+
+`fonts=` ships typefaces with the app. Each `Font` is woff2 bytes or the path of a `.woff2` file,
+read once when the theme is built. indah serves the file from your app's own address (cached for a
+year, named by its content, so a changed file is a new URL) and writes the `@font-face` rule with
+`font-display: swap`. The page never asks another host for a font, and the CSP needs no change.
+
+```python
+indah.Theme(
+    fonts=[
+        indah.Font("Bricolage Grotesque", "fonts/bricolage.woff2", weight="200 800"),
+        indah.Font("Hanken Grotesk", "fonts/hanken.woff2", weight="100 900"),
+        indah.Font("IBM Plex Mono", "fonts/plex-mono.woff2"),
+    ],
+    font_display="'Bricolage Grotesque', system-ui, sans-serif",
+    font_body="'Hanken Grotesk', system-ui, sans-serif",
+    font_mono="'IBM Plex Mono', ui-monospace, monospace",
+)
+```
+
+`family` is the name to use in a stack. `weight` is `"400"` or a variable font's range such as
+`"100 900"`; `style` is `"normal"` or `"italic"`. A URL, a file that is not woff2, a file over 2 MiB,
+more than 8 fonts or the same family, weight and style twice raises an error when the app is built.
+Keep a fallback in each stack: until the file arrives the browser shows it, then swaps.
+
 ### Your own tokens
 
 An app can add roles the core set does not have, such as a row-hover fill or a status colour.
