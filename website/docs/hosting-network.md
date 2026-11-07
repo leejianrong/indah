@@ -76,8 +76,26 @@ indah.create_app(..., trusted_proxies=["172.16.0.0/12", "66.241.124.81", "2a09:8
 
 If you list only the private range on Fly, indah logs a warning at start that names the public addresses
 it is missing and points at `["fly"]`. This was verified for IPv4 clients; an IPv6 client was not
-tried. It was measured on the direct `*.fly.dev` path only: the path through a Cloudflare Worker is
-not measured yet. Start uvicorn with `--no-proxy-headers` if you want only indah's rules in play.
+tried. Start uvicorn with `--no-proxy-headers` if you want only indah's rules in play. The ingress IP
+belongs to each Fly app (two apps have different ones), so use the preset and do not copy an address
+from an example.
+
+### On Fly behind a Cloudflare Worker
+
+Measured on `browser -> Cloudflare -> Worker fetch() -> Fly` (IND-170), `X-Forwarded-For` is
+`<client>, <a Cloudflare address>, <your app's public IP>`. `Fly-Client-IP` is the Cloudflare
+address, not the visitor, so do not read it; `CF-Connecting-IP` carries the visitor. The Cloudflare
+address changes from request to request, but it is always inside Cloudflare's published ranges. So
+`fly` alone resolves every visitor to a Cloudflare address, and `cloudflare` alone resolves everyone
+to Fly's private proxy. You need both:
+
+```python
+indah.create_app(..., trusted_proxies=["fly", "cloudflare"])
+```
+
+With that value the visitor's address was resolved, and a client-sent `X-Forwarded-For` was ignored.
+Check yours with the deploy doctor after you deploy. Cloudflare's ranges are a dated copy inside indah
+(see the table above), so update indah now and then.
 
 ### An audit trail
 

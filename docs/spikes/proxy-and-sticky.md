@@ -5,9 +5,8 @@
   (`X-Probe-Machine`). Client: this machine (Singapore, public address 122.11.212.50, found with
   `curl https://api.ipify.org`, a third-party request).
 - Update (IND-205): the probe now runs on indah's built-in deploy doctor (`indah.doctor`); its `/whoami` keeps the shape used below, so the numbers and commands here still hold.
-- **Half done.** The direct Fly path and all of IND-171 are measured here. The Cloudflare Worker hop
-  of IND-170 needs the owner's dashboard steps in `deploy/probe/README.md`; it is not measured, and
-  IND-170 stays open.
+- **Done.** The direct Fly path and all of IND-171 are measured here, and the Cloudflare Worker hop of
+  IND-170 is in section 7 (measured 2026-11-07, with a new `indah-probe` app).
 
 ## 1. What Fly sends (direct path, no Worker)
 
@@ -107,9 +106,6 @@ shell which machine holds the session, the shell could send `fly-force-instance-
 
 ## 6. Not verified
 
-- The Cloudflare Worker hop (IND-170): what `CF-Connecting-IP`, `X-Forwarded-For` and `Via` look like
-  after `browser -> Cloudflare -> Worker fetch() -> Fly`, and which `trusted_proxies` value resolves the
-  visitor there. Needs `deploy/probe/README.md`.
 - IPv6 clients; Safari and any browser behaviour (none involved: only `curl` and `httpx`).
 - Whether machine ids are stable across `fly deploy`. A rolling deploy updated the gallery's machine
   in place (same id in the log), but replacement was not tried.
@@ -129,3 +125,27 @@ uv run python deploy/probe/sticky_check.py https://indah-probe.fly.dev --events 
   --header "fly-force-instance-id: <machine id>"
 deploy/probe/teardown.sh                                 # when finished
 ```
+
+## 7. The Cloudflare Worker hop (IND-170)
+
+- Date: 2026-11-07. Path: browser -> Cloudflare -> a pass-through Worker (`indah-probe-proxy`, route
+  `probe.abangai.dev/*`, `deploy/probe/cloudflare-worker.js`) -> Fly -> the probe. The production
+  Worker and its route were not touched. Client: this machine, public address 122.11.214.23. The probe
+  was redeployed as a new Fly app, so its ingress IP is `66.241.125.101`, not the 2026-10-24 one: the
+  ingress IP belongs to each app.
+- What arrives: `x-forwarded-for` is `122.11.214.23, <Cloudflare address>, 66.241.125.101`;
+  `fly-client-ip` is the **Cloudflare** address; `cf-connecting-ip` is the visitor. The Cloudflare
+  address varied between requests (`104.22.224.65`, `172.69.166.96`, `172.70.92.145`, `162.158.189.57`),
+  all inside Cloudflare's published ranges.
+
+| `trusted_proxies` | Clean request | Spoofed `X-Forwarded-For: 203.0.113.9` | Right? |
+|-------------------|---------------|----------------------------------------|--------|
+| (none) | `172.16.23.178`, Fly's proxy | not run | no |
+| `fly` | `104.22.224.65`, a Cloudflare address | a Cloudflare address | **no**: shared by every visitor |
+| `cloudflare` | `172.16.23.178`, Fly's proxy | `172.16.23.178` | **no**: shared by every visitor |
+| `fly`, `cloudflare` | `122.11.214.23` | `122.11.214.23` | **yes**; the spoofed hop is ignored |
+
+- Conclusion: behind a Cloudflare Worker on Fly, use `trusted_proxies=["fly", "cloudflare"]`. Both are
+  needed. This is in `website/docs/hosting-network.md`.
+- Not done: a phone on mobile data (the desktop check already compared against a known address), IPv6
+  clients, and a second Cloudflare-fronted app.
