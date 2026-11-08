@@ -4523,6 +4523,29 @@ class Expander(Component):
         return False
 
 
+class Show(Component):
+    """A container that mounts its children only while ``when`` is true (IND-253).
+
+    ``when`` is a ``Signal[bool]``, a ``Computed``, a zero-arg callable or a plain bool. While
+    it is false the shell leaves the children out of the DOM entirely (nothing is rendered, so
+    nothing is in the layout or the accessibility tree); when it flips true they mount, and a
+    flip back unmounts them. The children are built once, like every component, so their
+    signals keep their values across a hide and a show.
+
+    The children stay in the snapshot while hidden, as with ``Router`` pages and closed
+    overlays: ``Show`` is layout, not authorization, so never put a secret in one.
+    """
+
+    type = "show"
+
+    def __init__(self, when: Source, children: list[Component] | None = None) -> None:
+        super().__init__(children)
+        self._when = when
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"when": lambda: bool(_read(self._when))}
+
+
 # -- Overlays (ADR-0030) ------------------------------------------------------
 
 

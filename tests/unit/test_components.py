@@ -27,6 +27,7 @@ from indah.components import (
     Row,
     RowAction,
     Select,
+    Show,
     Sidebar,
     Slider,
     Spinner,
@@ -1159,3 +1160,24 @@ def test_selection_survives_when_its_value_remains_and_a_multi_prunes_the_rest()
     assert chips.value == ["c"]
     names.set(["c", "z"])
     assert chips.value == ["c"]  # growing the options changes nothing
+
+
+@pytest.mark.unit
+def test_show_serialises_when_as_a_reactive_prop_with_its_children():
+    flag = Signal(False)
+    s = Show(flag, [Text("a"), Text("b")])
+    assert s.type == "show"
+    assert s.reactive_props()["when"]() is False
+    assert len(s.to_json()["children"]) == 2
+    flag.set(True)
+    assert s.to_json()["props"]["when"] is True
+    assert s.handle("anything", {}) is False
+
+
+@pytest.mark.unit
+def test_show_accepts_a_bool_or_a_callable():
+    flag = Signal(0)
+    assert Show(True, []).reactive_props()["when"]() is True
+    assert Show(lambda: flag.value > 0, []).reactive_props()["when"]() is False
+    flag.set(2)
+    assert Show(lambda: flag.value > 0, []).reactive_props()["when"]() is True

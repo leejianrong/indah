@@ -99,12 +99,13 @@ pieces out once at a design size, say 1920 by 1080, and indah scales the whole t
 | `MasterDetail` | a list beside its detail, a drawer on a narrow screen |
 | `Router` / `Link` | pages chosen by the URL, and links between them |
 | `NavItem` | a `Link` for a rail with an `icon=` and a live count `badge=` that hides at zero |
+| `Show` | children mounted only while a signal is true: an answer form that is not on the page until a row is picked |
 | `Modal` / `Drawer` | a dialog and a side panel, opened from a signal |
 | `CommandPalette` / `Command` | a keyboard palette opened with Ctrl/Cmd+K: fuzzy filter, run a function or jump to a page, `confirm=`, per-page commands |
 | `Menu` / `MenuItem` | a menu button of actions with arrow keys, `confirm=`, `danger=` and `disabled=` items |
 
 <details>
-<summary>Try these live (5 examples)</summary>
+<summary>Try these live (6 examples)</summary>
 
 <indah-live page="layout/containers"></indah-live>
 
@@ -115,6 +116,8 @@ pieces out once at a design size, say 1920 by 1080, and indah scales the whole t
 <indah-live page="layout/sidebar"></indah-live>
 
 <indah-live page="layout/appshell"></indah-live>
+
+<indah-live page="layout/show"></indah-live>
 
 </details>
 

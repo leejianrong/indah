@@ -257,6 +257,44 @@ def tabs_check(pw) -> None:
     expect(page.get_by_text("Hidden until the expander opens.")).to_be_visible()
 
 
+def show(ctx: indah.Context) -> indah.Component:
+    picked = indah.Signal("")
+    reply = indah.Signal("")
+    return indah.Column(
+        children=[
+            indah.Row(
+                children=[
+                    indah.Button("Pick a call", lambda: picked.set("call-7")),
+                    indah.Button("Clear", lambda: picked.set(""), variant="tonal"),
+                ]
+            ),
+            indah.Show(
+                lambda: bool(picked.value),
+                [
+                    indah.Card(
+                        title="Answer",
+                        children=[
+                            indah.Text(lambda: f"Replying to {picked.value}"),
+                            indah.TextInput(reply, label="Reply"),
+                        ],
+                    )
+                ],
+            ),
+        ]
+    )
+
+
+def show_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.get_by_label("Reply")).to_have_count(0)
+    page.get_by_role("button", name="Pick a call").click()
+    expect(page.get_by_text("Replying to call-7")).to_be_visible()
+    page.get_by_role("button", name="Clear").click()
+    expect(page.get_by_label("Reply")).to_have_count(0)
+
+
 def sidebar(ctx: indah.Context) -> indah.Component:
     name = indah.Signal("Ada")
     loud = indah.Signal(False)
@@ -553,6 +591,15 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(15,),
             check=tabs_check,
+        ),
+        Page(
+            slug="show",
+            title="Show",
+            summary="A subtree that is not on the page at all until a signal is true.",
+            build=show,
+            covers=("Show",),
+            docs="components.md",
+            check=show_check,
         ),
         Page(
             slug="appshell",
