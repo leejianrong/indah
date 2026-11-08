@@ -105,7 +105,7 @@ pieces out once at a design size, say 1920 by 1080, and indah scales the whole t
 | `Menu` / `MenuItem` | a menu button of actions with arrow keys, `confirm=`, `danger=` and `disabled=` items |
 
 <details>
-<summary>Try these live (5 examples)</summary>
+<summary>Try these live (6 examples)</summary>
 
 <indah-live page="layout/containers"></indah-live>
 
@@ -116,6 +116,8 @@ pieces out once at a design size, say 1920 by 1080, and indah scales the whole t
 <indah-live page="layout/sidebar"></indah-live>
 
 <indah-live page="layout/appshell"></indah-live>
+
+<indah-live page="layout/show"></indah-live>
 
 </details>
 
