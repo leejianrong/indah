@@ -11,6 +11,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Fixed
+
+- The shell sends events one at a time, in order. A click right after typing in a `TextArea` or
+  `CodeEditor` could be handled before the typed text arrived, so the handler read stale state.
+
 ## [0.13.0] - 2026-11-05
 
 Theme fonts you ship with the app (`Font`, font slots), a newest-first streamed `Table`, a quiet connection status, and a `danger` button (IND-251 to IND-256). Every change is additive, so `protocol_version` is still 1 and nothing needs migrating.
