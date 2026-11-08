@@ -223,14 +223,22 @@ async function lostSession(resp) {
   return true;
 }
 
+// Events go one at a time, each after the previous answer: separate POSTs can overtake each other,
+// and a click must not be handled before the input typed just ahead of it (IND-261). The server
+// answers once the event is dispatched (async handlers run in the background), so this adds no wait.
+let eventQueue = Promise.resolve();
+
 export function postEvent(id, event, payload) {
-  fetch(apiUrl("api/event"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...routeHeaders() },
-    body: JSON.stringify({ sid: sessionId(), component: id, event, payload: payload || {} }),
-  })
-    .then(lostSession)
-    .catch(() => {});
+  const body = JSON.stringify({ sid: sessionId(), component: id, event, payload: payload || {} });
+  eventQueue = eventQueue.then(() =>
+    fetch(apiUrl("api/event"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...routeHeaders() },
+      body,
+    })
+      .then(lostSession)
+      .catch(() => {}),
+  );
 }
 
 // Upload one or more files as multipart/form-data (ADR-0017), on its own route so
