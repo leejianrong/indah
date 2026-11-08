@@ -100,6 +100,29 @@ def _load_font(font: Font) -> bytes:
     return data
 
 
+_MAX_CSS_BYTES = 256 * 1024
+_STYLE_END = re.compile(r"</style", re.IGNORECASE)
+
+
+def _load_css(css: str | Path | None) -> str:
+    """The app stylesheet: a ``Path`` is read once, a ``str`` is the CSS itself."""
+    if css is None:
+        return ""
+    if isinstance(css, str):
+        text = css
+        if "{" not in text and text.strip().endswith(".css"):
+            raise ValueError(
+                f"css={css!r} looks like a file name; pass pathlib.Path(...) to read it"
+            )
+    else:
+        text = Path(css).read_text(encoding="utf-8")
+    if len(text.encode()) > _MAX_CSS_BYTES:
+        raise ValueError(f"css is over the {_MAX_CSS_BYTES} byte limit")
+    if _STYLE_END.search(text):
+        raise ValueError("css must not contain a </style tag")
+    return text.strip()
+
+
 def _font_name(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()[:16] + ".woff2"
 
@@ -145,6 +168,10 @@ class Theme:
     its own origin (cached for a year) with a generated ``@font-face``, so the page never asks
     another host for a font and the CSP is unchanged.
 
+    ``css`` is the app's own stylesheet (a ``Path`` is read once, a ``str`` is the CSS), emitted
+    after everything above in the same nonced ``<style>``, so a ``@media`` rule works under
+    ``csp="strict"`` with no custom component. It is trusted app code, not user input.
+
     ``extra_light`` / ``extra_dark`` add the app's own tokens, which must be named ``x-<name>``
     and are emitted as ``--x-<name>`` for the app's own CSS to read. The core roles above stay a
     closed set. Define an extra in both schemes if it should differ, since a token set only in
@@ -161,9 +188,11 @@ class Theme:
         font_body: str | None = None,
         font_mono: str | None = None,
         fonts: Iterable[Font] = (),
+        css: str | Path | None = None,
         extra_light: Mapping[str, str] | None = None,
         extra_dark: Mapping[str, str] | None = None,
     ) -> None:
+        self._css = _load_css(css)
         self.light = _tokens("light", light) | _extras("light", extra_light)
         self.dark = _tokens("dark", dark) | _extras("dark", extra_dark)
         self.radius = _value("radius", radius) if radius is not None else None
@@ -216,4 +245,6 @@ class Theme:
         if self.dark:
             body = [f"--{k}: {v};" for k, v in self.dark.items()]
             rules.append(':root[data-theme="dark"] {\n  ' + "\n  ".join(body) + "\n}")
+        if self._css:
+            rules.append(self._css)  # last, so it wins over the tokens and faces above
         return "\n".join(rules)

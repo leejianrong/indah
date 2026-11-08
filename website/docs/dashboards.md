@@ -596,7 +596,7 @@ Try it live. Nothing downloads until you press **Run it**.
 
 ## Theme and density
 
-`indah.Theme(light={...}, dark={...}, radius=, font=, font_display=, font_body=, font_mono=, fonts=)` overrides the design tokens, and
+`indah.Theme(light={...}, dark={...}, radius=, font=, font_display=, font_body=, font_mono=, fonts=, css=)` overrides the design tokens, and
 `create_app(density="compact")` tightens tables. See [Design system](design-system.md) for the
 token names and what each is for.
 
