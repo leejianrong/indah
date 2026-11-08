@@ -352,6 +352,12 @@
       </div>
     {/if}
   </div>
+{:else if node.type === "show"}
+  {#if props.when}
+    {#each node.children as child (child.id)}
+      <Self node={child} />
+    {/each}
+  {/if}
 {:else if node.type === "modal" || node.type === "drawer"}
   {#if props.open}
     <Overlay

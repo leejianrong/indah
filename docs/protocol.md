@@ -392,6 +392,7 @@ stays 1.
 | `splitpane` | container | `direction`, `initial`, `min`, `key`, `height` (exactly two children) | — (resize is client-side) |
 | `masterdetail` | container | `initial`, `min`, `key`, `title`, `open` (two children: master, detail) | `close` |
 | `expander` | container | `label`, `open` | `toggle` `{value?}` |
+| `show` | container | `when` (children are mounted only while true; no wrapper element) | — |
 | `modal` | overlay | `open`, `title`, `size` (`sm`/`md`/`lg`) | `close` |
 | `drawer` | overlay | `open`, `title`, `side` (`left`/`right`) | `close` |
 | `commandpalette` | input | `shortcut` (one key or combo, canonical form; default `mod+k`), `commands` (`[{id, label, group?, shortcut?, keywords?, confirm?}]`; a live source patches it), optional `placeholder`, `label` | `run` `{command}` (the command's `id`); filtering is client side and never leaves the browser |
