@@ -59,7 +59,7 @@ indah.Text(lambda: f"Hovering {hovered.value}" if hovered.value else "Hover a no
 
 It is one way: setting `hovered` from Python does not move the graph. With no `hovered` signal the graph sends nothing when the pointer moves.
 
-Hover shares the `/api/event` rate limit with every click, slider and button, so the graph spends it sparingly. It posts only when the hovered node changes, and only after the pointer has rested for about 250 ms. Sweeping across a hundred nodes costs one event. At the worst, a pointer that settles on a new node every quarter of a second spends four events a second, which a hosted app on `indah.Rate(per_second=5, burst=30)` (see [Harden the network](hosting-network.md)) absorbs without starving other controls. If the server does answer 429, the graph drops that update without a message and the next change posts again.
+Hover shares the `/api/event` rate limit with every click, slider and button, so the graph spends it sparingly. It posts only when the hovered node changes, and only after the pointer has rested for about 250 ms. Sweeping across a hundred nodes costs one event. At the worst, a pointer that settles on a new node every quarter of a second spends four events a second, which a hosted app on `indah.Rate(per_second=5, burst=30)` (see [Gateways, limits and CSP](hosting-network.md)) absorbs without starving other controls. If the server does answer 429, the graph drops that update without a message and the next change posts again.
 
 ## Highlight a path
 

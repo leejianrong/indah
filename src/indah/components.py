@@ -2409,7 +2409,9 @@ class Graph(Component):
         if self._selected is not None:
             props["selectable"] = True  # the shell posts select events only when something listens
         if self._hovered is not None:
-            props["hoverable"] = True  # likewise hover: an unbound graph never posts on pointer move
+            props["hoverable"] = (
+                True  # likewise hover: unbound, no posts
+            )
         if self._focus is not None and not _is_source(self._focus):
             props["focus"] = self._focus
         if not _is_source(self._focus_size):

@@ -558,9 +558,7 @@ def _grid_app(cols=12, rows=8, gap=60, limits=None):
     ]
     hovered = indah.Signal(None)
     selected = indah.Signal(None)
-    graph = indah.Graph(
-        nodes, [], layout="given", height=520, hovered=hovered, selected=selected
-    )
+    graph = indah.Graph(nodes, [], layout="given", height=520, hovered=hovered, selected=selected)
     app = indah.Card(children=[graph])
     extra = {"limits": limits} if limits is not None else {}
     handle = launch(
@@ -603,9 +601,11 @@ def test_hovering_many_nodes_sends_one_event_per_settled_change():
             sent = []
             page.on(
                 "request",
-                lambda r: sent.append(r.post_data)
-                if r.url.endswith("api/event") and r.post_data and '"hover"' in r.post_data
-                else None,
+                lambda r: (
+                    sent.append(r.post_data)
+                    if r.url.endswith("api/event") and r.post_data and '"hover"' in r.post_data
+                    else None
+                ),
             )
             page.goto(handle.url)
             _wait_settled(page)
@@ -623,7 +623,7 @@ def test_hovering_many_nodes_sends_one_event_per_settled_change():
             page.mouse.move(box["x"] + last["p"][0] + 1, box["y"] + last["p"][1])
             page.wait_for_timeout(600)
             assert len(sent) == 1
-            # A settled move to another node is one more event; leaving the nodes is one more (null).
+            # A settled move to another node is one event; leaving all nodes is one more (null).
             other = inside[0]
             page.mouse.move(box["x"] + other["p"][0], box["y"] + other["p"][1])
             assert _until(lambda: hovered.value == other["id"])
