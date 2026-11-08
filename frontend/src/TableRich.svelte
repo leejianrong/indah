@@ -466,6 +466,8 @@
     const ms = toMs(v);
     return ms === null ? "" : new Date(ms).toISOString();
   }
+  // Cards mode (IND-258): each cell carries its column title, drawn by CSS under 560 px.
+  const lab = (col) => (props.narrow === "cards" ? col.title : null);
   function tone(col, v) {
     return (col.tones && col.tones[String(v)]) || "neutral";
   }
@@ -498,17 +500,18 @@
         {#each cols as col (col.field)}
           {@const v = row.r[col.field]}
           {#if col.kind === "badge"}
-            <td><span class="cell-badge tone-{tone(col, v)}">{v ?? ""}</span></td>
+            <td data-label={lab(col)}><span class="cell-badge tone-{tone(col, v)}">{v ?? ""}</span></td>
           {:else if col.kind === "mono"}
-            <td style:max-width={col.width ?? null}
+            <td data-label={lab(col)} style:max-width={col.width ?? null}
               ><code class="cell-mono" title={v}>{v ?? ""}</code></td
             >
           {:else if col.kind === "time"}
-            <td title={absTime(v)}>{fmtTime(v, col.timeFormat, $now)}</td>
+            <td data-label={lab(col)} title={absTime(v)}>{fmtTime(v, col.timeFormat, $now)}</td>
           {:else if col.kind === "number"}
-            <td class="num">{fmtNumber(v)}</td>
+            <td class="num" data-label={lab(col)}>{fmtNumber(v)}</td>
           {:else if col.kind === "cell"}
             <td
+              data-label={lab(col)}
               class="cell-rich"
               class:trunc={col.truncate}
               class:wrap={col.wrap}
@@ -518,6 +521,7 @@
             </td>
           {:else}
             <td
+              data-label={lab(col)}
               class:trunc={col.truncate}
               class:wrap={col.wrap}
               style:max-width={col.truncate ? (col.maxWidth ?? "32ch") : null}
@@ -612,6 +616,7 @@
     <table
       class="dataframe table rich"
       class:selectable={props.selectable}
+      class:cards={props.narrow === "cards"}
       role={kb ? "grid" : null}
       tabindex={kb ? 0 : null}
       aria-label={kb ? props.label || null : null}

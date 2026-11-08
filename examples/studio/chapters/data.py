@@ -407,6 +407,7 @@ def table_keyboard(ctx: indah.Context) -> indah.Component:
                 height="16rem",
                 checked=checked,
                 on_open=open_call,
+                narrow="cards",  # a labelled card per row below 560 px (IND-258)
                 columns=[
                     indah.Col("id", kind="mono"),
                     indah.Col("route"),

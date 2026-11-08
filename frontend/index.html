@@ -731,6 +731,43 @@
       .table.rich[role=grid]:focus-visible tr.kb-active > td:last-child { box-shadow: inset -2px 2px 0 var(--primary), inset 0 -2px 0 var(--primary); }
       .table.rich td.cell-rich { white-space: nowrap; }
       .table.rich td.cell-rich.wrap { white-space: normal; }
+      /* Table narrow="cards" (IND-258): under the shared narrow breakpoint (NARROW in src/stores.js;
+         @media cannot read it, so 560px is repeated) each row is a bordered card. The first
+         labelled cell is the heading; the others print their data-label (set by the shell). */
+      @media (max-width: 560px) {
+        .table.rich.cards, .table.rich.cards tbody { display: block; }
+        .table.rich.cards thead { display: none; }
+        .table.rich.cards tbody tr {
+          display: block; margin: 0 0 0.6rem; background: var(--surface);
+          border: 1px solid var(--outline); border-radius: var(--radius);
+        }
+        .table.rich.cards td {
+          display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+          border-width: 0; max-width: none; white-space: normal; overflow-wrap: anywhere;
+          text-align: right;
+        }
+        .table.rich.cards td[data-label]::before {
+          content: attr(data-label); flex: none; color: var(--muted); font-size: 0.78rem;
+          text-align: left;
+        }
+        .table.rich.cards td[data-label]:not(td[data-label] ~ *) {
+          display: block; font-weight: 600; text-align: left;
+          border-bottom: 1px solid var(--outline);
+        }
+        .table.rich.cards td[data-label]:not(td[data-label] ~ *)::before { display: none; }
+        .table.rich.cards td.actions-col { flex-wrap: wrap; justify-content: flex-start; }
+        .table.rich.cards tbody tr.selected {
+          border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary);
+        }
+        .table.rich.cards[role=grid]:focus-visible tr.kb-active {
+          border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary);
+        }
+        .table.rich.cards[role=grid]:focus-visible tr.kb-active > td,
+        .table.rich.cards[role=grid]:focus-visible tr.kb-active > td:first-child,
+        .table.rich.cards[role=grid]:focus-visible tr.kb-active > td:last-child {
+          background: none; box-shadow: none;
+        }
+      }
       .cell-badge {
         display: inline-block; padding: 0.05rem 0.55rem; border-radius: var(--radius-pill);
         font-size: 0.78rem; font-weight: 600; line-height: 1.5;
