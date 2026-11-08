@@ -1,4 +1,4 @@
-"""A click is handled after the input typed just before it, even when that input is slow (IND-261)."""
+"""A click is handled after the input typed just before it, however slow that input is (IND-261)."""
 
 import time
 
