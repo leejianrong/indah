@@ -2758,6 +2758,9 @@ class Table(Component):
     ticks a ``checked=`` row, and Escape or Tab leaves. Moving does not select or post anything;
     only Enter does. Off by default, so existing tables are unchanged (ADR-0030 note on keys).
 
+    ``narrow="cards"`` (rich and remote forms, not ``virtual``) shows each row as a labelled card
+    below 560 px, with no sideways scroll; the header (and so sorting) is hidden there (IND-258).
+
     Sorting and paging are client-side; the data rides ordinary reactive props, so no
     ``protocol_version`` bump. Use ``DataFrame`` when you only need to show a table.
     """
@@ -2788,6 +2791,7 @@ class Table(Component):
         density: str | Signal[str] | None = None,
         on_open: Callable[[Any], Any] | None = None,
         keyboard: bool = False,
+        narrow: str | None = None,
     ) -> None:
         super().__init__()
         if (on_open is not None or keyboard) and rows is None and remote is None:
@@ -2824,6 +2828,8 @@ class Table(Component):
             )
         if (actions or checked is not None) and key is None:
             raise ValueError("Table actions=/checked= need key= (they refer to rows by key)")
+        if narrow is not None and (narrow != "cards" or rows is None or virtual):
+            raise ValueError("Table narrow= is 'cards', for the rich or remote form, not virtual")
         if follow and height is None:
             raise ValueError("Table follow=True needs height= (the body scrolls inside it)")
         if rows is None and source is None:
@@ -2849,6 +2855,7 @@ class Table(Component):
         self._density = density
         self._on_open = on_open
         self._keyboard = bool(keyboard) or on_open is not None
+        self._narrow = narrow
         self._loader = remote
         if remote is not None and not page_size:
             self._page_size = 50
@@ -2925,6 +2932,8 @@ class Table(Component):
             props["checkable"] = self._checked is not None
             if self._keyboard:
                 props["keyboard"] = True
+            if self._narrow:
+                props["narrow"] = self._narrow
             if self._on_open is not None:
                 props["openable"] = True
             if self._loader is not None:

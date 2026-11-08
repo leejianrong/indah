@@ -37,6 +37,13 @@ of options: **classic** (a frame or a list), **rich** (typed columns and a stabl
 | `density` | `str` or `Signal[str]` | `None` | `"compact"` shrinks this table. A signal lets the viewer toggle it. The app-wide default is `create_app(density=)`. |
 | `on_open` | `Callable[[key], Any]` | `None` | Called on Enter for the active row. Turns on keyboard use. |
 | `keyboard` | `bool` | `False` | Turns on keyboard use without `on_open`. Enter then selects, if `selected` is bound. |
+| `narrow` | `str` | `None` | `"cards"` shows each row as a bordered card below 560 px. Rich and remote forms only, not `virtual`. |
+
+**Cards on a phone.** With `narrow="cards"`, a screen under 560 px hides the header and draws each
+row as a card: the first column is the heading and every other cell is printed with its column
+title. The actions wrap inside the card, and the selected and keyboard-active rows keep their ring.
+The header is hidden, so the viewer cannot sort there. Wider screens, and a table without
+`narrow`, are unchanged.
 
 **Keyboard.** Focus the table with Tab or a click. `j`/`k` or the arrows move the active row,
 `Home`/`End` jump, `PageUp`/`PageDown` move a screenful, Space ticks a row of a `checked` table,

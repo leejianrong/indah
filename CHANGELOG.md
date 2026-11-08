@@ -12,6 +12,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Table(narrow="cards")` (IND-258): below 560 px the header is hidden and each row is a bordered
+  card, with the first column as the heading, every other cell labelled with its column title
+  (a `data-label` the shell sets, no script, so it works under `csp="strict"`), the actions
+  wrapping, and the selected and keyboard-active rings kept. Rich and remote forms, not
+  `virtual`. Off by default, so existing tables are unchanged.
 - Phone fit (IND-259): under 560 px, or on a coarse pointer, every control (buttons, text boxes,
   selects, checkbox and radio rows, segmented options, the theme switch) is at least 44 by 44 px.
   `Diff(mode="auto")` opens unified below 560 px and split above it (the viewer can still switch),
