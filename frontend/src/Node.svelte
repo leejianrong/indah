@@ -437,7 +437,7 @@
   {#if props.markdown}
     <div class="markdown"><Markdown nodes={props.blocks ?? []} /></div>
   {:else}
-    <div class="text t-{props.variant ?? 'body'}">{props.text ?? ""}</div>
+    <div class="text t-{props.variant ?? 'body'}{props.tone ? ` tone-${props.tone}` : ''}">{props.text ?? ""}</div>
   {/if}
 {:else if node.type === "progress"}
   <div class="field">
@@ -508,9 +508,12 @@
       id={`${node.id}-input`}
       rows={props.rows ?? 4}
       placeholder={props.placeholder ?? ""}
+      aria-invalid={props.error ? "true" : null}
+      aria-describedby={props.error ? `${node.id}-error` : null}
       oninput={onAreaInput}
       onblur={onAreaBlur}
     ></textarea>
+    {#if props.error}<span class="field-error" id={`${node.id}-error`} role="alert">{props.error}</span>{/if}
   </div>
 {:else if node.type === "codeeditor"}
   <CodeEditor {props} nodeId={node.id} />

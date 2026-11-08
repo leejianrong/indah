@@ -87,6 +87,19 @@
     const v = value;
     if (editor && !editor.hasFocus()) editor.setDoc(v);
   });
+  // The editable surface is CodeMirror's own element: mirror the error onto it for screen readers.
+  $effect(() => {
+    void version;
+    const el = host?.querySelector(".cm-content");
+    if (!el) return;
+    if (props.error) {
+      el.setAttribute("aria-invalid", "true");
+      el.setAttribute("aria-describedby", `${nodeId}-error`);
+    } else {
+      el.removeAttribute("aria-invalid");
+      el.removeAttribute("aria-describedby");
+    }
+  });
   $effect(() => {
     void version;
     editor?.configure({ language: props.language, readOnly: props.readOnly, lint: props.lint });
@@ -108,6 +121,8 @@
       class="code-fallback"
       aria-labelledby={props.label ? `${nodeId}-label` : null}
       readonly={props.readOnly}
+      aria-invalid={props.error ? "true" : null}
+      aria-describedby={props.error ? `${nodeId}-error` : null}
       {value}
       oninput={changed}
       onblur={blurred}
@@ -121,6 +136,7 @@
       style:height={props.height ?? "24rem"}
     ></div>
   {/if}
+  {#if props.error}<span class="field-error" id={`${nodeId}-error`} role="alert">{props.error}</span>{/if}
 </div>
 
 <style>

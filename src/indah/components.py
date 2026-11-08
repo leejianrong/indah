@@ -213,8 +213,12 @@ class Text(Component):
         markdown: bool = False,
         variant: str | None = None,
         size: str | None = None,
+        tone: str | None = None,
     ) -> None:
         super().__init__()
+        if tone not in (None, "err"):
+            raise ValueError(f"tone must be 'err', not {tone!r}")
+        self._tone = tone
         if size is not None:
             if size not in ("readout", "body"):
                 raise ValueError(f"size must be 'readout' or 'body', not {size!r}")
@@ -234,6 +238,8 @@ class Text(Component):
         props: dict[str, Any] = {"markdown": True} if self._markdown else {}
         if self._variant != "body":
             props["variant"] = self._variant
+        if self._tone:
+            props["tone"] = self._tone
         return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
@@ -411,18 +417,23 @@ class TextArea(Component):
         placeholder: str = "",
         label: str = "",
         rows: int = 4,
+        error: Source = None,
     ) -> None:
         super().__init__()
         self._value = value
         self._placeholder = placeholder
         self._label = label
         self._rows = rows
+        self._error = error
 
     def static_props(self) -> dict[str, Any]:
         return {"placeholder": self._placeholder, "label": self._label, "rows": self._rows}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"value": lambda: self._value.value}
+        props: dict[str, Callable[[], Any]] = {"value": lambda: self._value.value}
+        if self._error is not None:
+            props["error"] = lambda: _read(self._error) or None
+        return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "input" and "value" in payload:
@@ -468,6 +479,7 @@ class CodeEditor(Component):
         placeholder: str = "",
         format_button: bool = False,
         on_save: Callable[[], Any] | None = None,
+        error: Source = None,
     ) -> None:
         if language not in CODE_LANGUAGES:
             raise ValueError(
@@ -485,6 +497,7 @@ class CodeEditor(Component):
         self._placeholder = placeholder
         self._format = bool(format_button) and language == "json" and not read_only
         self._on_save = on_save
+        self._error = error
 
     def static_props(self) -> dict[str, Any]:
         return {
@@ -499,7 +512,10 @@ class CodeEditor(Component):
         }
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"value": lambda: str(self._value.value or "")}
+        props: dict[str, Callable[[], Any]] = {"value": lambda: str(self._value.value or "")}
+        if self._error is not None:
+            props["error"] = lambda: _read(self._error) or None
+        return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if self._read_only or "value" not in payload:

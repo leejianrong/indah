@@ -257,6 +257,9 @@ Plain text never interprets markup, so backticks stay literal; use `Text(..., ma
 for code, emphasis, links and headings (a Markdown text takes no `variant`). `size="body"` and
 `size="readout"` from 0.4.0 still work and mean `variant="body"` and `variant="readout"`.
 
+`Text(..., tone="err")` draws the line in the error colour and hides it while the text is empty, so a
+refusal that belongs to no field can be one `Text(lambda: refusal.value, tone="err")` with no CSS of your own.
+
 ### Marked text
 
 `Marked(text, marks)` shows a text with some spans shaded, such as the part of a request that was ignored
@@ -507,7 +510,7 @@ any input, so keep it in per-session state and never log it.
 
 `indah.Form` groups inputs with a validator per field, a `valid` flag, an error beside each
 field and a submit button that is disabled while the form is invalid. The steps are in [How to
-validate a form](forms.md). Without a `Form`, `TextInput(..., error=)`, `Select(..., error=)` and
+validate a form](forms.md). Without a `Form`, `TextInput(..., error=)`, `Select(..., error=)`, `TextArea(..., error=)`, `CodeEditor(..., error=)` and
 `Button(..., disabled=)` take a message or a flag, or a function of signals.
 
 ## Buttons and async handlers
