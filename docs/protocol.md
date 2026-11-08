@@ -385,7 +385,7 @@ stays 1.
 | `sidebar` | container | — (first child is the side region, the rest is main) | — |
 | `appshell` | container | optional `railWidth` (a CSS length, default `256px`), `hasTop` (children are `[rail, main]`, plus the top bar third when `hasTop`) | — (the drawer is client-side) |
 | `jsontree` | display | `doc:{data,error}` (JSON-safe document or an error line), `expanded`, `search`, `label` | — (all client-side) |
-| `diff` | display | `diff:{rows,stats,same,truncated,approximate}`, `mode` (`split`/`unified`), `labels` | — (the layout toggle is client-side) |
+| `diff` | display | `diff:{rows,stats,same,truncated,approximate}`, `mode` (`split`/`unified`/`auto`), `labels` | — (the layout toggle is client-side) |
 | `router` | container | `routes:[pattern]`, `notFound`, `active` (index of the shown child, -1 for none) | `navigate` `{path}` (Back/Forward) |
 | `link` | input | `label`, `to` (an in-app path), `active` (the page is showing) | `navigate` `{path}` |
 | `navitem` | input | `label`, `to` (an in-app path), `active`, optional `icon` (a short glyph) and `badge` (a count as text; absent or empty means hidden) | `navigate` `{path}` |

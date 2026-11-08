@@ -4382,8 +4382,9 @@ class Diff(Component):
     mode both sides are pretty-printed with sorted keys first, so key order and formatting
     never show up as changes; ``"text"`` compares them as written. The diff is computed here
     (see :mod:`indah.diff`) and the browser draws it, ``split`` (side by side) or ``unified``
-    (the viewer can switch), with the changed characters of a changed line marked.
-    ``context`` is how many unchanged lines stay around a change (``None`` keeps them all).
+    (the viewer can switch), with the changed characters of a changed line marked. ``"auto"``
+    opens unified under 560 px and split above. ``context`` is how many unchanged lines stay
+    around a change (``None`` keeps them all).
     At most 5,000 lines per side are compared, and a very large, very repetitive input is
     diffed approximately; both are flagged in the UI.
     """
@@ -4400,8 +4401,8 @@ class Diff(Component):
         context: int | None = 3,
         labels: tuple[str, str] = ("incoming", "candidate"),
     ) -> None:
-        if mode not in ("split", "unified"):
-            raise ValueError(f"Diff mode must be 'split' or 'unified', got {mode!r}")
+        if mode not in ("split", "unified", "auto"):
+            raise ValueError(f"Diff mode must be 'split', 'unified' or 'auto', got {mode!r}")
         if normalise not in ("json", "text"):
             raise ValueError(f"Diff normalise must be 'json' or 'text', got {normalise!r}")
         if context is not None and context < 0:

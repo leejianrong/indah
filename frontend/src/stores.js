@@ -2,6 +2,10 @@ import { readable, writable } from "svelte/store";
 
 // The tree skeleton: {id, type, children:[...]} with no props (props live in
 // nodeProps so a patch updates only the affected entries).
+// The phone breakpoint (IND-259), one shared value. A CSS @media cannot read a variable, so
+// frontend/index.html repeats "560px" in its touch-target block and SplitPane.svelte in its own.
+export const NARROW = "(max-width: 560px)";
+
 export const structure = writable(null);
 
 // id -> props object. Patches merge into these entries.

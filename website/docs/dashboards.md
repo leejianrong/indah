@@ -516,7 +516,7 @@ indah.JsonTree(lambda: entry.value, expanded=2)  # search, collapse all, copy pa
 indah.Diff(
     old_text,
     new_text,
-    mode="split",  # or "unified"
+    mode="split",  # or "unified"; "auto" is unified on a phone
     labels=("cached", "incoming"),
 )
 ```

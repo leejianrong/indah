@@ -12,6 +12,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- Phone fit (IND-259): under 560 px, or on a coarse pointer, every control (buttons, text boxes,
+  selects, checkbox and radio rows, segmented options, the theme switch) is at least 44 by 44 px.
+  `Diff(mode="auto")` opens unified below 560 px and split above it (the viewer can still switch),
+  and diff cells wrap with `overflow-wrap: anywhere` instead of breaking mid-word. CSS only, no
+  new public name.
 - `Theme(css=)` (IND-257): the app's own stylesheet, a `Path` (read once) or a `str`. It is emitted
   after the token overrides in the same nonced `<style>`, so a `@media` rule (a phone layout, say)
   works under `csp="strict"` with no custom component and no `unsafe-inline`. A `</style` tag is
