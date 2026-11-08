@@ -11,6 +11,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+- `Theme(css=)` (IND-257): the app's own stylesheet, a `Path` (read once) or a `str`. It is emitted
+  after the token overrides in the same nonced `<style>`, so a `@media` rule (a phone layout, say)
+  works under `csp="strict"` with no custom component and no `unsafe-inline`. A `</style` tag is
+  refused and the sheet is capped at 256 KiB. No new public name.
+
 ### Fixed
 
 - The shell sends events one at a time, in order. A click right after typing in a `TextArea` or

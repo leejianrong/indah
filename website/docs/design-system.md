@@ -79,6 +79,21 @@ Define a token in both schemes if it should differ, because one set only in `ext
 value in light. Values are checked like any other theme value. The core roles stay a closed
 set: `Theme(light={"x-brand": ...})` raises, and so does an extra that does not start `x-`.
 
+### Your own stylesheet
+
+Tokens cannot express a media query. `css=` takes the app's own rules, as a `pathlib.Path` (read
+once, when the app is built) or a `str` of CSS:
+
+```python
+indah.Theme(css=Path("app.css"))
+indah.Theme(css="@media (max-width: 600px) { .my-card { padding: 4px; } }")
+```
+
+The sheet is emitted after the token overrides, in the same `<style>` indah already adds, so it
+wins over them and works under `csp="strict"` with no `unsafe-inline` and no custom component. A
+bare file name as a `str` raises (wrap it in `Path`), as does a `</style` tag or a sheet over 256 KiB.
+It is your own code: do not build it from user input.
+
 The page frame is 1080px wide at most. `create_app(max_width="none")` lets it fill the window
 (a dashboard with a left rail wants this), and `max_width="1400px"` or `"90rem"` sets another
 cap. Anything else raises an error. It is applied as the `--page-max` token.
