@@ -7,6 +7,7 @@ any violation, so this also proves the lazy module loads under it.
 """
 
 import random
+import time
 
 import pytest
 
@@ -540,6 +541,154 @@ def test_the_keyboard_pans_zooms_and_clears_the_selection():
                     break
                 page.wait_for_timeout(50)
             assert selected.value is None
+            browser.close()
+    finally:
+        handle.stop()
+
+
+# -- hover (ADR-0048, IND-249) -------------------------------------------------------------------
+
+
+def _grid_app(cols=12, rows=8, gap=60, limits=None):
+    """A graph on a fixed grid, so every node has a known, well separated position."""
+    nodes = [
+        {"id": f"n{r * cols + c}", "x": c * gap, "y": r * gap}
+        for r in range(rows)
+        for c in range(cols)
+    ]
+    hovered = indah.Signal(None)
+    selected = indah.Signal(None)
+    graph = indah.Graph(
+        nodes, [], layout="given", height=520, hovered=hovered, selected=selected
+    )
+    app = indah.Card(children=[graph])
+    extra = {"limits": limits} if limits is not None else {}
+    handle = launch(
+        indah.create_app(session=indah.Session(app), **extra), block=False, open_inline=False
+    )
+    return nodes, hovered, selected, handle
+
+
+def _onscreen(page, nodes):
+    box = page.locator(".graph-canvas").bounding_box()
+    pos = page.evaluate(
+        """(ids) => {
+          const st = document.querySelector('.graph-stage');
+          return ids.map((id) => ({ id, p: st.__graph.screenOf(id) }));
+        }""",
+        [n["id"] for n in nodes],
+    )
+    inside = [
+        q for q in pos if 10 < q["p"][0] < box["width"] - 10 and 10 < q["p"][1] < box["height"] - 10
+    ]
+    return box, inside
+
+
+def _until(pred, ms=4000):
+    deadline = time.monotonic() + ms / 1000
+    while time.monotonic() < deadline:
+        if pred():
+            return True
+        time.sleep(0.05)
+    return pred()
+
+
+@pytest.mark.e2e
+def test_hovering_many_nodes_sends_one_event_per_settled_change():
+    nodes, hovered, _, handle = _grid_app()
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context(viewport={"width": 1100, "height": 800}).new_page()
+            sent = []
+            page.on(
+                "request",
+                lambda r: sent.append(r.post_data)
+                if r.url.endswith("api/event") and r.post_data and '"hover"' in r.post_data
+                else None,
+            )
+            page.goto(handle.url)
+            _wait_settled(page)
+            box, inside = _onscreen(page, nodes)
+            assert len(inside) > 30
+            # Sweep over many nodes quickly (well inside one debounce window).
+            for q in inside[:30]:
+                page.mouse.move(box["x"] + q["p"][0], box["y"] + q["p"][1])
+                page.wait_for_timeout(5)
+            last = inside[29]
+            assert _until(lambda: hovered.value == last["id"])
+            page.wait_for_timeout(600)
+            assert len(sent) == 1, sent  # one event for the whole sweep
+            # Wiggling inside the same node posts nothing more.
+            page.mouse.move(box["x"] + last["p"][0] + 1, box["y"] + last["p"][1])
+            page.wait_for_timeout(600)
+            assert len(sent) == 1
+            # A settled move to another node is one more event; leaving the nodes is one more (null).
+            other = inside[0]
+            page.mouse.move(box["x"] + other["p"][0], box["y"] + other["p"][1])
+            assert _until(lambda: hovered.value == other["id"])
+            page.mouse.move(box["x"] + 2, box["y"] + 2)
+            assert _until(lambda: hovered.value is None)
+            page.wait_for_timeout(600)
+            assert len(sent) == 3, sent
+            browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_a_graph_without_a_hovered_signal_posts_nothing_on_pointer_move():
+    nodes, edges = _graph(100, 150, 3)
+    handle = _open(nodes, edges, height=480)
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context(viewport={"width": 900, "height": 700}).new_page()
+            sent = []
+            page.on(
+                "request", lambda r: sent.append(r.url) if r.url.endswith("api/event") else None
+            )
+            page.goto(handle.url)
+            _wait_settled(page)
+            box = page.locator(".graph-canvas").bounding_box()
+            for i in range(40):
+                page.mouse.move(box["x"] + 20 + 15 * i, box["y"] + 100 + 5 * i)
+                page.wait_for_timeout(20)
+            page.wait_for_timeout(600)
+            assert sent == []
+            browser.close()
+    finally:
+        handle.stop()
+
+
+@pytest.mark.e2e
+def test_a_hosted_app_under_the_documented_rate_keeps_working_controls_while_hovering():
+    from indah import Limits, Rate
+
+    limits = Limits(rate={"/api/event": Rate(per_second=5, burst=30)})
+    nodes, hovered, selected, handle = _grid_app(limits=limits)
+    try:
+        with playwright_sync.sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_context(viewport={"width": 1100, "height": 800}).new_page()
+            codes = []
+            page.on(
+                "response",
+                lambda r: codes.append(r.status) if r.url.endswith("api/event") else None,
+            )
+            page.goto(handle.url)
+            _wait_settled(page)
+            box, inside = _onscreen(page, nodes)
+            # Twelve seconds of restless hovering: a new node every 300 ms.
+            for i in range(40):
+                q = inside[i % len(inside)]
+                page.mouse.move(box["x"] + q["p"][0], box["y"] + q["p"][1])
+                page.wait_for_timeout(300)
+            page.wait_for_timeout(500)
+            target = inside[3]
+            page.mouse.click(box["x"] + target["p"][0], box["y"] + target["p"][1])
+            assert _until(lambda: selected.value == target["id"])
+            assert 429 not in codes, codes
             browser.close()
     finally:
         handle.stop()

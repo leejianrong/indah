@@ -68,7 +68,7 @@ export function decode(data) {
 }
 
 /** Mount a graph in `el`. Returns a small controller; the shell owns the lifecycle. */
-export function createGraph(el, { onSelect } = {}) {
+export function createGraph(el, { onSelect, onHover } = {}) {
   const canvas = document.createElement("canvas");
   canvas.className = "graph-canvas";
   canvas.tabIndex = 0;
@@ -427,7 +427,10 @@ export function createGraph(el, { onSelect } = {}) {
     travelled = 0;
   });
   canvas.addEventListener("pointermove", (ev) => {
-    if (!pointers.has(ev.pointerId)) return;
+    if (!pointers.has(ev.pointerId)) {
+      if (onHover && pointers.size === 0 && ev.pointerType !== "touch") hoverAt(...local(ev));
+      return;
+    }
     const [px, py] = local(ev);
     const [ox, oy] = pointers.get(ev.pointerId);
     pointers.set(ev.pointerId, [px, py]);
@@ -467,14 +470,37 @@ export function createGraph(el, { onSelect } = {}) {
 
   // A click picks the nearest node (a dot too) within a few pixels, selects it and centres the
   // view on it, which also moves the focus there; a click on empty canvas clears the selection.
-  function clickAt(px, py) {
-    if (!g || !sim || g.n === 0) return;
+  // The node under a point (a dot too) within a few pixels, or -1.
+  function pick(px, py) {
+    if (!g || !sim || g.n === 0) return -1;
     ensureGrid();
     const wx = (px - view.tx) / view.k;
     const wy = (py - view.ty) / view.k;
     const i = nearest(grid, wx, wy, 1)[0];
+    if (i === undefined) return -1;
     const near = Math.hypot(sim.x[i] * view.k + view.tx - px, sim.y[i] * view.k + view.ty - py);
-    if (near <= Math.max(10, radius(i) + 4)) {
+    return near <= Math.max(10, radius(i) + 4) ? i : -1;
+  }
+
+  // Hover reports the node under a resting pointer, only when it changes; the shell debounces it.
+  let hoverIndex = -1;
+  function hoverAt(px, py) {
+    const i = pick(px, py);
+    if (i === hoverIndex) return;
+    hoverIndex = i;
+    onHover(i >= 0 ? g.ids[i] : null);
+  }
+  canvas.addEventListener("pointerleave", () => {
+    if (onHover && hoverIndex !== -1) {
+      hoverIndex = -1;
+      onHover(null);
+    }
+  });
+
+  function clickAt(px, py) {
+    if (!g || !sim || g.n === 0) return;
+    const i = pick(px, py);
+    if (i >= 0) {
       select(i);
       centreOn(i);
       if (onSelect) onSelect(g.ids[i]);

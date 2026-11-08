@@ -359,6 +359,7 @@ def graph_page(ctx: indah.Context) -> indah.Component:
     nodes, edges = _demo_graph()
     path = _longest_path(edges, "n0")
     selected = indah.Signal(None)
+    hovered = indah.Signal(None)
     window = indah.Signal(120)
     trace = indah.Signal(False)
     return indah.Column(
@@ -367,6 +368,7 @@ def graph_page(ctx: indah.Context) -> indah.Component:
                 nodes,
                 edges,
                 selected=selected,
+                hovered=hovered,
                 focus_size=window,
                 highlight=lambda: path if trace.value else None,
                 height=420,
@@ -375,6 +377,7 @@ def graph_page(ctx: indah.Context) -> indah.Component:
             indah.Slider(window, min=20, max=900, step=10, label="Nodes drawn in full"),
             indah.Switch(trace, label="Highlight the longest path from n0"),
             indah.Text(lambda: f"Selected {selected.value}" if selected.value else "Click a node"),
+            indah.Text(lambda: f"Hovering {hovered.value}" if hovered.value else "Hover a node"),
         ]
     )
 

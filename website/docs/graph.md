@@ -47,6 +47,20 @@ selected.set("dev")
 
 `focus` centres on a node without selecting it. Give it an id, or a signal that holds one.
 
+## Follow the pointer
+
+Bind `hovered` and it holds the id of the node under the pointer, or `None` over none of them:
+
+```python
+hovered = indah.Signal(None)
+indah.Graph(people, works_with, hovered=hovered)
+indah.Text(lambda: f"Hovering {hovered.value}" if hovered.value else "Hover a node")
+```
+
+It is one way: setting `hovered` from Python does not move the graph. With no `hovered` signal the graph sends nothing when the pointer moves.
+
+Hover shares the `/api/event` rate limit with every click, slider and button, so the graph spends it sparingly. It posts only when the hovered node changes, and only after the pointer has rested for about 250 ms. Sweeping across a hundred nodes costs one event. At the worst, a pointer that settles on a new node every quarter of a second spends four events a second, which a hosted app on `indah.Rate(per_second=5, burst=30)` (see [Harden the network](hosting-network.md)) absorbs without starving other controls. If the server does answer 429, the graph drops that update without a message and the next change posts again.
+
 ## Highlight a path
 
 Give each edge an `id`, then name the nodes and edges to emphasise:
@@ -81,6 +95,7 @@ Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clear
 | `nodes` | ids, or dicts with `id` and optional `label`, `group`, `size`, `color`, `x`, `y` |
 | `edges` | `(source, target)` pairs, or dicts with `source`, `target` and optional `id`, `label`, `color` |
 | `selected` | a `Signal[str \| None]`, two-way |
+| `hovered` | a `Signal[str \| None]`, one-way: the node under the pointer (debounced about 250 ms) |
 | `focus` | a node id, signal or callable: centre on it |
 | `focus_size` | nodes drawn in full (default 300, at most 5,000); may be a signal |
 | `highlight` | `{"nodes": [...], "edges": [...]}`; may be a signal |

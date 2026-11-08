@@ -275,3 +275,34 @@ def test_focus_is_a_prop_and_a_reactive_focus_updates_alone():
         for change in msg["changes"]:
             changed.update(change["props"])
     assert changed == {"focus": "b"}
+
+
+@pytest.mark.unit
+def test_hovered_is_a_one_way_signal_the_viewer_sets_and_never_receives():
+    hovered: Signal[str | None] = Signal(None)
+    g = Graph(["a", "b", "c"], [("a", "b")], hovered=hovered)
+    props = _props(g)
+    assert props["hoverable"] is True
+    assert "hovered" not in g.reactive_props() and "hovered" not in props  # one way: not pushed
+
+    assert g.handle("hover", {"id": "b"}) is True and hovered.value == "b"
+    assert g.handle("hover", {"id": None}) is True and hovered.value is None
+    hovered.set("a")
+    for bad in ({"id": "zzz"}, {"id": 7}, {"id": ["a"]}, {}):
+        assert g.handle("hover", bad) is False
+    assert hovered.value == "a"  # none of them changed it
+    hovered.set("c")  # setting it from Python does not move the viewer
+    assert "hovered" not in g.reactive_props()
+
+
+@pytest.mark.unit
+def test_a_graph_without_a_hovered_signal_sends_nothing_and_ignores_hover():
+    g = Graph(["a", "b"], [])
+    assert "hoverable" not in _props(g)
+    assert g.handle("hover", {"id": "a"}) is False
+
+
+@pytest.mark.unit
+def test_an_unknown_initial_hovered_value_raises():
+    with pytest.raises(ValueError, match="unknown graph node 'zz'"):
+        Graph(["a"], [], hovered=Signal("zz"))

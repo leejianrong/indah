@@ -206,4 +206,23 @@ and its frame rate says little about a real browser. If the gate fails, the layo
 4. **IND-248** adds docs, the `docs/protocol.md` row, a Studio page (`tests/unit/test_studio_coverage.py` fails on
    any new public name without one) and an end-to-end test that covers pan, focus, click **and keyboard and
    focus handling** under `csp="strict"`.
-5. A later card adds `hovered` if it is wanted.
+5. A later card adds `hovered` if it is wanted. **Done in IND-249, see the addendum.**
+
+## Addendum (IND-249): `hovered`
+
+`Graph(hovered=Signal[str | None])` is built to the rules above. It is one way: Python never pushes
+`hovered` to the viewer. The module reports the node under a resting mouse or pen pointer (the same
+nearest-node pick as a click, a dot included) to the shell only when it changes, and `pointerleave`
+reports `None`; touch has no hover and reports nothing. `Graph.svelte` holds the trailing debounce
+(250 ms) and the last id it posted, and posts `hover` `{id}` only when the settled id differs from that,
+so wiggling inside one node, or leaving and returning within 250 ms, costs nothing. With no signal bound
+`hoverable` is absent and the module is never given a hover callback, so pointer movement does no
+work and sends nothing. `Graph.handle` checks the id against the node ids as `select` does.
+
+**Rate budget.** One posted hover is one token of the per-address `/api/event` bucket. Debounce bounds
+the rate: a pointer that rests on a new node every 250 ms spends at most four tokens a second, below
+the recommended `Rate(per_second=5, burst=30)` refill, so a sustained sweep never drains the burst that
+clicks and sliders rely on. Realistic use (a node every second or so) is a fraction of that. A 429 is
+dropped silently, as `postEvent` already does for any failed post; the next change posts again, and the
+Python value is briefly stale rather than the UI showing an error. An app that also posts on a slider
+drag should raise `burst`, not lower the debounce. Measured: the lazy module grew about 0.3 KB raw.

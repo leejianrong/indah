@@ -2315,6 +2315,14 @@ class Graph(Component):
     a node without selecting it, each time it changes. An unknown id raises ``ValueError``. No
     signal, no events: a display-only graph sends nothing to Python.
 
+    **Hover.** Bind ``hovered`` to a ``Signal[str | None]`` and it follows the node under the
+    pointer (``None`` when over none). It is one way: setting it from Python moves nothing. The
+    viewer posts only when the hovered id changes and has stayed put for about 250 ms (a trailing
+    debounce), so sweeping over many nodes costs one event, and drops a rate-limited (429) post
+    without a message. Each post spends one token of the ``/api/event`` bucket that clicks and
+    sliders share, so a hosted app on ``Rate(per_second=5, burst=30)`` keeps working controls. A
+    viewer cannot set it to a string that is not a node id.
+
     Replace ``nodes`` and ``edges`` together, inside ``indah.batch(...)``, when both are signals:
     set one at a time, an edge can briefly name a node that is not there yet and raises.
     """
@@ -2334,6 +2342,7 @@ class Graph(Component):
         highlight: Source = None,
         selected: Signal[str | None] | None = None,
         focus: Source = None,
+        hovered: Signal[str | None] | None = None,
         label: str = "",
     ) -> None:
         super().__init__()
@@ -2355,6 +2364,7 @@ class Graph(Component):
         self._highlight = highlight
         self._selected = selected
         self._focus = focus
+        self._hovered = hovered
         if not _is_source(focus_size):
             _graph_focus_size(focus_size)
 
@@ -2376,6 +2386,8 @@ class Graph(Component):
             self._known(selected.value)
         if focus is not None and not _is_source(focus):
             self._known(focus)
+        if hovered is not None:
+            self._known(hovered.value)
 
     def _known(self, node: Any) -> str | None:
         """``node`` if it is a node id of this graph, ``None`` for none; else a ``ValueError``."""
@@ -2396,6 +2408,8 @@ class Graph(Component):
             props["label"] = self._label
         if self._selected is not None:
             props["selectable"] = True  # the shell posts select events only when something listens
+        if self._hovered is not None:
+            props["hoverable"] = True  # likewise hover: an unbound graph never posts on pointer move
         if self._focus is not None and not _is_source(self._focus):
             props["focus"] = self._focus
         if not _is_source(self._focus_size):
@@ -2427,6 +2441,11 @@ class Graph(Component):
             node = payload["id"]
             if node is None or (isinstance(node, str) and node in set(self._cols()["nodes"]["id"])):
                 self._selected.set(node)
+                return True
+        if event == "hover" and self._hovered is not None and "id" in payload:
+            node = payload["id"]
+            if node is None or (isinstance(node, str) and node in set(self._cols()["nodes"]["id"])):
+                self._hovered.set(node)
                 return True
         return False
 
