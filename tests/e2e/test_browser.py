@@ -4234,3 +4234,46 @@ def test_a_page_framed_by_another_site_still_connects(block_third_party_cookies)
     finally:
         outer.shutdown()
         handle.stop()
+
+
+@pytest.mark.e2e
+def test_error_lines_show_announce_and_disappear_when_empty():
+    from indah import CodeEditor, Column, Session, Signal, Text, TextArea, create_app
+
+    msg = Signal("")
+    root = Column(
+        children=[
+            TextArea(Signal("a"), label="Note", error=lambda: msg.value),
+            CodeEditor(Signal("{}"), label="Body", error=lambda: msg.value),
+            Text(lambda: msg.value, tone="err"),
+        ]
+    )
+    handle = launch(create_app(session=Session(root)), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                expect(page.locator(".cm-content")).to_be_visible(timeout=10_000)
+                assert page.locator(".field-error").count() == 0
+                assert not page.locator(".text.tone-err").is_visible()  # empty: gone
+                msg.set("Nope")
+                errs = page.locator(".field-error")
+                expect(errs).to_have_count(2, timeout=5_000)
+                for i in range(2):
+                    assert errs.nth(i).get_attribute("role") == "alert"
+                ta = page.locator("textarea")
+                assert ta.get_attribute("aria-invalid") == "true"
+                assert ta.get_attribute("aria-describedby") == errs.first.get_attribute("id")
+                assert page.locator(".cm-content").get_attribute("aria-invalid") == "true"
+                line = page.locator(".text.tone-err")
+                expect(line).to_be_visible()
+                assert line.inner_text() == "Nope"
+                msg.set("")
+                expect(page.locator(".field-error")).to_have_count(0, timeout=5_000)
+                expect(page.locator(".text.tone-err")).to_be_hidden()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

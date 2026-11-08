@@ -17,6 +17,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   `Diff(mode="auto")` opens unified below 560 px and split above it (the viewer can still switch),
   and diff cells wrap with `overflow-wrap: anywhere` instead of breaking mid-word. CSS only, no
   new public name.
+
+- `error=` on `CodeEditor` and `TextArea` (IND-260), drawn and announced like `TextInput`'s (red line under the
+  field, `aria-invalid`, `aria-describedby`, `role=alert`; `None` or an empty string shows nothing), and
+  `Text(tone="err")`: a plain sentence in the error colour that disappears while its text is empty, for a
+  refusal that belongs to no field. `tone` is an optional `text` prop, `error` an optional prop on `textarea`
+  and `codeeditor`; the protocol stays at version 1. No new public name.
+
 - `Theme(css=)` (IND-257): the app's own stylesheet, a `Path` (read once) or a `str`. It is emitted
   after the token overrides in the same nonced `<style>`, so a `@media` rule (a phone layout, say)
   works under `csp="strict"` with no custom component and no `unsafe-inline`. A `</style` tag is
