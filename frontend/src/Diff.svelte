@@ -1,12 +1,25 @@
 <script>
   // Read-only diff (IND-109). The server computes the rows (ADR-0028); this only draws them,
   // side by side or unified, with the changed characters of a changed line marked.
+  import { onMount } from "svelte";
+  import { NARROW } from "./stores.js";
   let { props } = $props();
 
   const d = $derived(props.diff ?? { rows: [], stats: { add: 0, del: 0, chg: 0 }, same: true });
   const labels = $derived(props.labels ?? ["incoming", "candidate"]);
   let mode = $state(null);
-  const current = $derived(mode ?? props.mode ?? "split");
+  // mode "auto" (IND-259) opens unified on a phone, where two columns are 170 px each.
+  let narrow = $state(false);
+  onMount(() => {
+    const mq = window.matchMedia(NARROW);
+    const on = () => (narrow = mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  });
+  const current = $derived(
+    mode ?? (props.mode === "auto" ? (narrow ? "unified" : "split") : (props.mode ?? "split")),
+  );
 
   const CHUNK = 500;
   let shown = $state(CHUNK);
@@ -128,7 +141,7 @@
   table.diff.split td.code { width: 50%; }
   td.ln { width: 3.2rem; text-align: right; color: var(--muted); padding: 0 0.4rem; user-select: none; vertical-align: top; }
   td.gut { width: 1.1rem; text-align: center; color: var(--muted); user-select: none; vertical-align: top; }
-  td.code { white-space: pre-wrap; word-break: break-all; padding: 0 0.4rem; vertical-align: top; }
+  td.code { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 0.4rem; vertical-align: top; }
   tr.del td.code.a, tr.chg td.code.a, tr.del td.code:not(.b):not(.a) { background: color-mix(in srgb, var(--err) 13%, transparent); }
   tr.add td.code.b, tr.chg td.code.b, tr.add td.code:not(.a):not(.b) { background: color-mix(in srgb, var(--ok) 13%, transparent); }
   tr.del td.ln, tr.del td.gut { background: color-mix(in srgb, var(--err) 13%, transparent); }

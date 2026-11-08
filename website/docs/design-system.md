@@ -167,6 +167,13 @@ Tables read four tokens: `--row-h`, `--cell-pad-y`, `--cell-pad-x` and `--table-
 `density="comfortable"` (the default) and `"compact"` swap the whole set, for the app or for
 one `Table(density=)`.
 
+### On a phone
+
+Under 560 px, or on a touch screen (`pointer: coarse`), every control is at least 44 by 44 px:
+buttons, text boxes, selects, checkbox and radio rows, segmented options and the theme switch.
+No setting is needed. The same breakpoint opens `Diff(mode="auto")` unified instead of split, and
+a diff line breaks only between words unless one word is wider than the screen.
+
 ## Interaction states
 
 | State | Treatment |

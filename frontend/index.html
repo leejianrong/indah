@@ -1237,6 +1237,17 @@
       .toast-close { color: var(--muted); font-size: 1.1rem; line-height: 1; }
       .toast-action:hover,
       .toast-close:hover { background: var(--surface-2); }
+      /* Phone fit (IND-259): every control is at least 44x44 under 560 px or on a coarse pointer.
+         560px is the shared narrow breakpoint (NARROW in src/stores.js); Table cards reuse it. */
+      @media (max-width: 560px), (pointer: coarse) {
+        button, select:not([multiple]), textarea,
+        input:is([type="text"], [type="number"], [type="date"], [type="search"]) {
+          min-height: 44px;
+        }
+        button { min-width: 44px; }
+        .check, .radio-group .check { min-height: 44px; }
+        .theme-toggle button { width: 44px; height: 44px; }
+      }
     </style>
     <script>
       // Resolve the saved theme choice (light / dark / system) into data-theme
