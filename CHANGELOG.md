@@ -17,16 +17,21 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   works under `csp="strict"` with no custom component and no `unsafe-inline`. A `</style` tag is
   refused and the sheet is capped at 256 KiB. No new public name.
 
-### Fixed
-
-- The shell sends events one at a time, in order. A click right after typing in a `TextArea` or
-  `CodeEditor` could be handled before the typed text arrived, so the handler read stale state.
-
-### Added
 - `Show(when, children)` (IND-253): a container that mounts its children only while `when` (a signal,
   computed, callable or bool) is true. While false the subtree is not in the DOM at all, so it takes no
   space and is not in the accessibility tree. It adds no wrapper element. The children stay in the
   snapshot while hidden (layout, not authorization). New public name `indah.Show`, node type `show`.
+- `Graph(hovered=Signal)` (IND-249): a one-way signal that follows the node under the pointer
+  (`None` over none). The viewer posts a `hover` event only when the hovered id changes and has rested
+  for about 250 ms, sends nothing when no signal is bound, and drops a 429 without a message. Each
+  post spends one token of the `/api/event` rate bucket shared with clicks, so a hosted app on
+  `Rate(per_second=5, burst=30)` keeps working controls. Additive, `protocol_version` is still 1: a
+  new `hoverable` prop and `hover` event on `graph`. The lazy graph module grows by about 0.3 KB raw.
+
+### Fixed
+
+- The shell sends events one at a time, in order. A click right after typing in a `TextArea` or
+  `CodeEditor` could be handled before the typed text arrived, so the handler read stale state.
 
 ## [0.13.0] - 2026-11-05
 

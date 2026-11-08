@@ -48,7 +48,28 @@
     });
   }
 
+  // Hover (IND-249): posted only when the id changed since the last post and has settled for
+  // HOVER_MS (a trailing debounce), so a sweep over many nodes is one event. It shares the
+  // /api/event rate bucket with clicks, so nothing is ever sent when no `hovered` signal is bound;
+  // postEvent drops a failed or rate-limited (429) post without a message.
+  const HOVER_MS = 250;
+  let hoverTimer = 0;
+  let hoverWant = null;
+  let hoverSent = null;
+  function onHover(id) {
+    hoverWant = id;
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      hoverTimer = 0;
+      if (!props.hoverable || hoverWant === hoverSent) return;
+      hoverSent = hoverWant;
+      postEvent(nodeId, "hover", { id: hoverWant });
+    }, HOVER_MS);
+  }
+
   function destroy() {
+    clearTimeout(hoverTimer);
+    hoverTimer = 0;
     if (ctl) {
       ctl.destroy();
       ctl = null;
@@ -66,6 +87,7 @@
       ctl = mod.createGraph(el, {
         // The viewer's own click: tell Python (only when a `selected` signal is bound).
         onSelect: (id) => props.selectable && postEvent(nodeId, "select", { id }),
+        onHover: props.hoverable ? onHover : undefined,
       });
       load(true);
     });
