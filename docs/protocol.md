@@ -398,6 +398,12 @@ stays 1.
 | `commandpalette` | input | `shortcut` (one key or combo, canonical form; default `mod+k`), `commands` (`[{id, label, group?, shortcut?, keywords?, confirm?}]`; a live source patches it), optional `placeholder`, `label` | `run` `{command}` (the command's `id`); filtering is client side and never leaves the browser |
 | `menu` | input | `trigger`, `items` (`[{id, label, danger?, shortcut?, confirm?, disabled?}]`; a live source patches it), optional `label`, `variant`, `align` (`end`) | `select` `{item}` (the item's `id`) |
 
+Every value-bearing input (`slider`, `textinput`, `textarea`, `checkbox`, `switch`, `number`,
+`date`, `select`, `radio`, `multiselect`, `chips`, `segmented`) also takes an optional reactive
+`disabled` bool, absent when unset. While true the shell greys the control, ignores keyboard and
+pointer even if it holds focus, and sends no events; the server also drops any event for it.
+`codeeditor`'s `readOnly` and `button`'s `disabled` are the same idea. Additive, no version bump.
+
 `Plot` serialises to an `image` node whose `src` is a PNG `data:` URI rendered on
 the Python side, so the shell needs nothing extra to show it.
 

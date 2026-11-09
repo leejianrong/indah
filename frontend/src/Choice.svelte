@@ -61,6 +61,7 @@
         role={multi ? undefined : "radio"}
         aria-checked={multi ? undefined : isOn(o)}
         aria-pressed={multi ? isOn(o) : undefined}
+        disabled={props.disabled || null}
         tabindex={multi || o.value === stop ? 0 : -1}
         onclick={() => choose(o)}
         onkeydown={(e) => onkey(e, i)}

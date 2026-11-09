@@ -64,6 +64,13 @@ class Component:
     # kept: left out of the ``init`` snapshot and out of the hub's replay history, so a
     # reconnect cannot be handed them. Clearing one (``None``) carries no secret and is kept.
     ephemeral: frozenset[str] = frozenset()
+    # ``lockable`` classes take ``disabled=`` (bool, Signal or callable): greyed, ignores input,
+    # and ``Session.dispatch`` drops its events (IND-243). Button/CodeEditor do their own.
+    lockable = False
+    _disabled: Source = None
+
+    def locked(self) -> bool:
+        return self._disabled is not None and bool(_read(self._disabled))
 
     def __init__(
         self, children: list[Component] | None = None, *, tooltip: str | None = None
@@ -75,13 +82,23 @@ class Component:
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
+        lock = cls.lockable
+        rp = cls.__dict__.get("reactive_props")
+        if lock and rp:
+            cls.reactive_props = lambda self: {  # type: ignore[method-assign]
+                **rp(self),
+                **({} if self._disabled is None else {"disabled": self.locked}),
+            }
         init = cls.__dict__.get("__init__")
         if init is None:
             return
 
         @functools.wraps(init)
         def __init__(self: Component, *args: Any, tooltip: str | None = None, **kw: Any) -> None:
+            dis = kw.pop("disabled", None) if lock else None
             init(self, *args, **kw)
+            if dis is not None:
+                self._disabled = dis
             if tooltip is not None:
                 self.tooltip = tooltip
 
@@ -308,6 +325,7 @@ class Button(Component):
 
 
 class Slider(Component):
+    lockable = True
     type = "slider"
 
     def __init__(
@@ -345,6 +363,7 @@ class TextInput(Component):
     Needed for the Slice 3 demo's prompt box; part of the R5 starter set (V4).
     """
 
+    lockable = True
     type = "textinput"
 
     def __init__(
@@ -408,6 +427,7 @@ class TextArea(Component):
     POST per character. There is no submit event: Enter inserts a newline.
     """
 
+    lockable = True
     type = "textarea"
 
     def __init__(
@@ -541,6 +561,7 @@ class CodeEditor(Component):
 class Checkbox(Component):
     """A checkbox two-way bound to a ``Signal[bool]`` (R5)."""
 
+    lockable = True
     type = "checkbox"
 
     def __init__(self, value: Signal[bool], *, label: str = "") -> None:
@@ -561,28 +582,11 @@ class Checkbox(Component):
         return False
 
 
-class Switch(Component):
+class Switch(Checkbox):
     """A toggle switch two-way bound to a ``Signal[bool]``: a :class:`Checkbox` drawn as
     a ``role="switch"`` control, for an immediate on/off setting (a pin, a flag)."""
 
     type = "switch"
-
-    def __init__(self, value: Signal[bool], *, label: str = "") -> None:
-        super().__init__()
-        self._value = value
-        self._label = label
-
-    def static_props(self) -> dict[str, Any]:
-        return {"label": self._label}
-
-    def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"checked": lambda: bool(self._value.value)}
-
-    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
-        if event == "change" and "value" in payload:
-            self._value.set(bool(payload["value"]))
-            return True
-        return False
 
 
 BADGE_TONES = ("neutral", "ok", "warn", "err", "info")
@@ -930,6 +934,7 @@ class Number(Component):
     Like a Slider without the track: a plain number box with optional bounds.
     """
 
+    lockable = True
     type = "number"
 
     def __init__(
@@ -964,6 +969,7 @@ class Number(Component):
 class Date(Component):
     """A date picker two-way bound to a ``Signal[str]`` (ISO ``YYYY-MM-DD``) (R5)."""
 
+    lockable = True
     type = "date"
 
     def __init__(self, value: Signal[str], *, label: str = "") -> None:
@@ -1062,6 +1068,7 @@ class Select(Component):
     signal is left alone (a value no longer offered is for the app to handle).
     """
 
+    lockable = True
     type = "select"
 
     def __init__(
@@ -1104,6 +1111,7 @@ class Radio(Component):
     ``(value, label)`` tuples, same as Select.
     """
 
+    lockable = True
     type = "radio"
 
     def __init__(self, value: Signal[str], *, options: list[Any], label: str = "") -> None:
@@ -1134,6 +1142,7 @@ class MultiSelect(Component):
     dropped from the signal.
     """
 
+    lockable = True
     type = "multiselect"
 
     def __init__(self, value: Signal[list], *, options: list[Any], label: str = "") -> None:
@@ -1193,6 +1202,7 @@ class Chips(Component):
     Arrow keys move between chips; Space or Enter selects.
     """
 
+    lockable = True
     type = "chips"
 
     def __init__(
@@ -1244,6 +1254,7 @@ class Segmented(Component):
     "record" segment can be red) without spelling out dicts. Arrow keys move and select.
     """
 
+    lockable = True
     type = "segmented"
 
     def __init__(

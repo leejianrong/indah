@@ -502,6 +502,16 @@ Try them here. The example runs in your browser; nothing is downloaded until you
 
 <indah-live page="start/choices"></indah-live>
 
+Every input takes `disabled=` (a bool, `Signal` or function), as `Button` does: the control keeps
+showing its value, greys out and ignores keyboard and pointer even while focused, and the server
+drops any event for it, so flipping the signal locks and unlocks it live. `CodeEditor(read_only=True)`
+is the same idea for the editor.
+
+```python
+frozen = Signal(False)
+Slider(threshold, label="Threshold", disabled=frozen)  # frozen.set(True) locks it in place
+```
+
 `TextInput(value, password=True)` masks the field (an `<input type="password">`) for
 secrets like an API key. It is only display masking - the value still round-trips like
 any input, so keep it in per-session state and never log it.
