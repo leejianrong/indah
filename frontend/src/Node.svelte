@@ -132,7 +132,9 @@
   // on blur, adopt whatever the server settled on while we were editing.
   $effect(() => {
     void props.value; // track the server value
-    if (inputEl && document.activeElement !== inputEl) syncFromServer();
+    void props.disabled;
+    // A disabled control is never user-edited, focused or not, so it always follows the server (IND-243).
+    if (inputEl && (props.disabled || document.activeElement !== inputEl)) syncFromServer();
   });
 
   // A text area batches keystrokes: one POST per pause (150 ms), not per character,
@@ -491,6 +493,7 @@
       id={`${node.id}-input`}
       type={props.password ? "password" : "text"}
       autocomplete={props.password ? "off" : null}
+      disabled={props.disabled || null}
       placeholder={props.placeholder ?? ""}
       aria-invalid={props.error ? "true" : null}
       aria-describedby={props.error ? `${node.id}-error` : null}
@@ -507,6 +510,7 @@
       bind:this={inputEl}
       id={`${node.id}-input`}
       rows={props.rows ?? 4}
+      disabled={props.disabled || null}
       placeholder={props.placeholder ?? ""}
       aria-invalid={props.error ? "true" : null}
       aria-describedby={props.error ? `${node.id}-error` : null}
@@ -525,6 +529,7 @@
       role="switch"
       aria-checked={props.checked ? "true" : "false"}
       aria-label={props.label || null}
+      disabled={props.disabled || null}
       onclick={() => postEvent(node.id, "change", { value: !props.checked })}
     ><span class="switch-knob"></span></button>
     {#if props.label}<span class="switch-label">{props.label}</span>{/if}
@@ -587,6 +592,7 @@
     <input
       type="checkbox"
       checked={props.checked ?? false}
+      disabled={props.disabled || null}
       onchange={(e) => postEvent(node.id, "change", { value: e.currentTarget.checked })}
     />
     {#if props.label}<span>{props.label}</span>{/if}
@@ -598,6 +604,7 @@
       bind:this={inputEl}
       id={`${node.id}-input`}
       type="number"
+      disabled={props.disabled || null}
       min={props.min ?? undefined}
       max={props.max ?? undefined}
       step={props.step ?? undefined}
@@ -612,6 +619,7 @@
       bind:this={inputEl}
       id={`${node.id}-input`}
       type="date"
+      disabled={props.disabled || null}
       oninput={(e) => postEvent(node.id, "input", { value: e.currentTarget.value })}
       onblur={syncFromServer}
     />
@@ -627,6 +635,7 @@
             name={node.id}
             value={option.value}
             checked={props.value === option.value}
+            disabled={props.disabled || null}
             onchange={(e) => postEvent(node.id, "change", { value: e.currentTarget.value })}
           />
           <span>{option.label}</span>
@@ -644,6 +653,7 @@
             type="checkbox"
             value={option.value}
             checked={(props.value ?? []).includes(option.value)}
+            disabled={props.disabled || null}
             onchange={(e) =>
               postEvent(node.id, "change", {
                 // the checked values, in option order (the wire format of the old <select multiple>)
@@ -675,6 +685,7 @@
       bind:this={inputEl}
       id={`${node.id}-input`}
       type="range"
+      disabled={props.disabled || null}
       min={props.min}
       max={props.max}
       step={props.step}
@@ -688,6 +699,7 @@
     <select
       id={`${node.id}-input`}
       value={props.value ?? ""}
+      disabled={props.disabled || null}
       aria-invalid={props.error ? "true" : null}
       aria-describedby={props.error ? `${node.id}-error` : null}
       onchange={(e) => postEvent(node.id, "change", { value: e.currentTarget.value })}

@@ -404,9 +404,11 @@ def shortcuts_check(pw) -> None:
 def text_inputs(ctx: indah.Context) -> indah.Component:
     note = indah.Signal("Line one\nLine two")
     level = indah.Signal("info")
+    locked = indah.Signal(False)
     return indah.Column(
         children=[
-            indah.TextArea(note, label="Notes", rows=4),
+            indah.Switch(locked, label="Freeze editing"),
+            indah.TextArea(note, label="Notes", rows=4, disabled=locked),
             indah.Select(level, options=["info", "warn", "error"], label="Level"),
             indah.Text(
                 lambda: (
@@ -426,6 +428,8 @@ def text_inputs_check(pw) -> None:
     page.get_by_label("Notes").fill("a\nb\nc")
     page.get_by_label("Level").select_option("error")
     expect(page.get_by_text("ERROR: 3 line(s), 5 characters.")).to_be_visible()
+    page.get_by_role("switch", name="Freeze editing").click()  # disabled= locks the box live
+    expect(page.get_by_label("Notes")).to_be_disabled()
 
 
 def code_editor(ctx: indah.Context) -> indah.Component:
@@ -610,7 +614,7 @@ CHAPTER = Chapter(
         Page(
             slug="text-inputs",
             title="TextArea and Select",
-            summary="Two more two-way inputs: a multi-line box and a dropdown.",
+            summary="Two more two-way inputs: a multi-line box and a dropdown. Any input takes `disabled=` to lock it live.",
             build=text_inputs,
             covers=("TextArea", "Select"),
             docs="components.md",

@@ -246,6 +246,10 @@ class Session:
             component = self.ctx._toast_actions  # a toast's action button (IND-160)  # noqa: SLF001
         if component is None:
             return None
+        if getattr(
+            component, "locked", bool
+        )():  # a disabled control: a forged or raced event is dropped
+            return DispatchResult()
 
         self._sink = {}
         outcome: dict[str, Any] = {"ret": False}

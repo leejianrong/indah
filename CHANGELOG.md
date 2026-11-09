@@ -12,6 +12,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `disabled=` on every value-bearing input (IND-243): `Slider`, `TextInput`, `TextArea`, `Checkbox`,
+  `Switch`, `Number`, `Date`, `Select`, `Radio`, `MultiSelect`, `Chips` and `Segmented` take a bool,
+  `Signal` or callable, as `Button` does. A disabled control keeps showing its value, greys out and
+  ignores keyboard and pointer even while focused (the shell no longer holds back a server value
+  for it), sends no events, and the server drops any event for it. Flipping the signal locks and
+  unlocks it live. Implemented once on `Component`; the wire prop is an optional `disabled` bool.
 - `Table(narrow="cards")` (IND-258): below 560 px the header is hidden and each row is a bordered
   card, with the first column as the heading, every other cell labelled with its column title
   (a `data-label` the shell sets, no script, so it works under `csp="strict"`), the actions
