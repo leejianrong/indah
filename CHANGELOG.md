@@ -12,6 +12,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Slider` readout, marks, log scale and commit on release (IND-267, ADR-0050): `show_value=True`
+  shows the value (and follows the thumb while it is dragged); `marks=[{"value", "label"?}]` draws up
+  to 12 ticks; `scale="log"` spaces the track by powers (needs `min` above zero, the value is rounded
+  to a multiple of `step`); `commit="release"` sends the value when the thumb is released instead of
+  on every move, so a costly recompute runs once per drag and the shared `/api/event` bucket is not
+  spent per pixel. All off by default, so an existing slider is unchanged and the wire form only
+  gains optional props. Studio page `media/slider-release`.
 - `disabled=` on every value-bearing input (IND-243): `Slider`, `TextInput`, `TextArea`, `Checkbox`,
   `Switch`, `Number`, `Date`, `Select`, `Radio`, `MultiSelect`, `Chips` and `Segmented` take a bool,
   `Signal` or callable, as `Button` does. A disabled control keeps showing its value, greys out and

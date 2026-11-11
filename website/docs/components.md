@@ -475,6 +475,15 @@ page = Column(
 )
 ```
 
+A `Slider` can also show its value (`show_value=True`), draw ticks with optional labels
+(`marks=[{"value": 1024, "label": "cliff"}]`, at most 12), space its track by powers
+(`scale="log"`, which needs `min` above zero; the value is rounded to a multiple of `step`) and send
+its value only when the thumb is released (`commit="release"`, or on each key press), so a costly
+recompute runs once per drag instead of on every move. The default is unchanged: no readout, no
+marks, a linear track, and one event per move.
+
+<indah-live page="media/slider-release"></indah-live>
+
 `Select` options are `(value, label)` pairs, or plain strings when the value and
 label are the same. Read the current value anywhere with `.value`; it stays in
 sync with what the user picked.
