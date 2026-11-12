@@ -293,6 +293,75 @@ def chart_kinds_check(pw) -> None:
     )
 
 
+# ---- chart steps, scales and annotations ------------------------------------------------------
+
+
+def chart_steps(ctx: indah.Context) -> indah.Component:
+    # Best-so-far cost by day: it only changes when someone beats it, so it is a staircase. The
+    # public record is sampled on other days, which chart_rows aligns into one table.
+    ours = [(0, 120.0), (3, 96.0), (4, 71.5), (9, 58.0), (14, 44.0), (21, 41.2)]
+    public = [(0, 90.0), (7, 62.0), (16, 45.0)]
+    rows = indah.chart_rows({"ours": ours, "public best": public})
+    # A cost model that spans decades: gates grow as n cubed, so a log axis is the readable one.
+    sizes = [2**k for k in range(4, 13)]
+    gates = [[n, 3.1 * n**3 / 1000] for n in sizes]
+    return indah.Column(
+        children=[
+            indah.Chart(
+                rows,
+                series=[
+                    {"label": "ours", "kind": "step", "stroke": "var(--primary)", "width": 2.5},
+                    {
+                        "label": "public best",
+                        "kind": "step",
+                        "stroke": "var(--muted)",
+                        "dash": [5, 4],
+                    },
+                ],
+                title="Best cost so far (a staircase, lower is better)",
+                x_label="day",
+                y_range=(30, 130),
+                rules=[
+                    {"y": 45, "label": "threshold 45", "color": "var(--ok)"},
+                    {"x": 9, "label": "v3 promoted", "color": "var(--primary)"},
+                ],
+                bands=[{"y0": 30, "y1": 45, "color": "var(--ok)", "alpha": 0.1}],
+                markers=[{"x": 14, "y": 44, "label": "44 on day 14", "color": "var(--ok)"}],
+                height=240,
+            ),
+            indah.Chart(
+                gates,
+                series=[{"label": "cost", "stroke": "var(--primary)"}],
+                title="Cost against size, both axes logarithmic",
+                x_label="size n",
+                x_scale="log",
+                y_scale="log",
+                y_range=(10, 10_000_000),
+                bands=[{"x0": 2048, "x1": 4096, "color": "var(--err)", "label": "over budget"}],
+                rules=[{"y": 1000, "label": "budget", "color": "var(--err)"}],
+                points=True,
+                height=240,
+            ),
+        ]
+    )
+
+
+def chart_steps_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".chart canvas").nth(1)).to_be_visible()
+    # The union of the two series' days, with a gap where one has no point.
+    page.wait_for_function(
+        "() => { const u = document.querySelectorAll('.chart')[0].__uplot;"
+        " return u.data[0].length === 8 && u.data[2].includes(null); }"
+    )
+    page.wait_for_function(
+        "() => { const u = document.querySelectorAll('.chart')[1].__uplot;"
+        " return u.scales.x.distr === 3 && u.scales.y.distr === 3; }"
+    )
+
+
 # ---- heatmap ----------------------------------------------------------------------------------
 
 
@@ -709,6 +778,20 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(44,),
             check=chart_kinds_check,
+        ),
+        Page(
+            slug="chart-steps",
+            title="Steps, log axes and annotations",
+            summary=(
+                "A `step` series draws a staircase for a value that only changes at events. "
+                "Axes can be logarithmic, rules can be vertical, and bands and markers call out a "
+                "region or a point. `chart_rows` lines up series that have different x values."
+            ),
+            build=chart_steps,
+            covers=("chart_rows",),
+            docs="components.md",
+            adr=(49,),
+            check=chart_steps_check,
         ),
         Page(
             slug="pie",
