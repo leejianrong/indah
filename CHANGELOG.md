@@ -19,6 +19,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   on every move, so a costly recompute runs once per drag and the shared `/api/event` bucket is not
   spent per pixel. All off by default, so an existing slider is unchanged and the wire form only
   gains optional props. Studio page `media/slider-release`.
+- `Chart` steps, log scales and annotations (IND-262, ADR-0049): `kind="step"` series draw a
+  staircase (`align` `"after"` by default, or `"before"`); `x_scale` and `y_scale` take `"log"`
+  (decade grid and compact labels; Python refuses a non-positive range, rule, band or marker, and a
+  non-positive data point is a gap); `rules` take `x` for a vertical line; new `bands` (`x0`/`x1` or
+  `y0`/`y1`) and `markers` (`x`, `y`, `label`) draw in the overlay hook, 12 of each at most. New
+  `indah.chart_rows({"name": [(x, y), ...]})` lines up series with different x values (sorted union
+  of x, `None` for gaps, NaN and infinity become `None`). All optional and additive; the shell grows
+  by about 1.9 KB raw. Studio page `media/chart-steps`.
 - `disabled=` on every value-bearing input (IND-243): `Slider`, `TextInput`, `TextArea`, `Checkbox`,
   `Switch`, `Number`, `Date`, `Select`, `Radio`, `MultiSelect`, `Chips` and `Segmented` take a bool,
   `Signal` or callable, as `Button` does. A disabled control keeps showing its value, greys out and

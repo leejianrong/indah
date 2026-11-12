@@ -1569,7 +1569,8 @@ def _figure_src(value: Any) -> str:
     return _image_src(value)
 
 
-_SERIES_KINDS = ("line", "scatter", "bars")
+_SERIES_KINDS = ("line", "step", "scatter", "bars")
+_SCALES = ("linear", "log")
 _COLOR_OK = re.compile(r"[A-Za-z0-9 #%.,()\-_/]{1,80}")
 
 
@@ -1592,8 +1593,9 @@ def _normalise_series(spec: Any) -> dict[str, Any]:
     """A series descriptor: ``"loss"`` or a dict -> a wire dict.
 
     A dict takes ``label``, ``stroke`` (a colour), ``kind`` (``"line"``, ``"scatter"`` for dots
-    only, ``"bars"``), ``width``, ``dash`` (``[dash, gap]`` in px), ``alpha`` (0 to 1) and ``size``
-    (a scatter dot's diameter, px)."""
+    only, ``"bars"``, ``"step"`` for a staircase), ``align`` (a step series holds each value
+    ``"after"`` its x, the default, or ``"before"`` it), ``width``, ``dash`` (``[dash, gap]`` in
+    px), ``alpha`` (0 to 1) and ``size`` (a scatter dot's diameter, px)."""
     if not isinstance(spec, dict):
         return {"label": str(spec)}
     out: dict[str, Any] = {"label": str(spec.get("label", ""))}
@@ -1603,6 +1605,13 @@ def _normalise_series(spec: Any) -> dict[str, Any]:
         if spec["kind"] not in _SERIES_KINDS:
             raise ValueError(f"series kind must be one of {_SERIES_KINDS}, got {spec['kind']!r}")
         out["kind"] = spec["kind"]
+    if "align" in spec:
+        if spec.get("kind") != "step":
+            raise ValueError("series align only applies to kind='step'")
+        if spec["align"] not in ("after", "before"):
+            raise ValueError(f"series align must be 'after' or 'before', got {spec['align']!r}")
+        if spec["align"] == "before":
+            out["align"] = "before"  # "after" is the default and is not sent
     if "width" in spec:
         out["width"] = _number(spec["width"], "series width", 0, 20)
     if "alpha" in spec:
@@ -1628,25 +1637,110 @@ def _axis_range(value: Any, name: str) -> list[float] | None:
     return [lo, hi]
 
 
-def _rules(rules: Any) -> list[dict[str, Any]]:
-    """Horizontal reference lines: ``[{"y": 31, "label": "optimal 31", "color": "var(--ok)"}]``."""
+def _item_color(item: dict[str, Any], out: dict[str, Any], what: str) -> None:
+    if item.get("color"):
+        out["color"] = _color(item["color"], f"{what} color")
+
+
+def _at(item: dict[str, Any], key: str, what: str, scales: dict[str, str]) -> float:
+    value = _number(item[key], f"{what} {key}", -1e15, 1e15)
+    if scales[key[0]] == "log" and value <= 0:
+        raise ValueError(f"{what} {key} must be above zero on a log axis, got {value!r}")
+    return value
+
+
+def _rules(rules: Any, scales: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """Reference lines: ``{"y": 31, "label": "best"}`` is horizontal, ``{"x": 12}`` vertical."""
+    scales = scales or {"x": "linear", "y": "linear"}
     out: list[dict[str, Any]] = []
     for rule in rules or []:
-        if not isinstance(rule, dict) or "y" not in rule:
+        if not isinstance(rule, dict) or ("x" in rule) == ("y" in rule):
             raise ValueError(
-                "a rule is a dict with a 'y' value, such as {'y': 31, 'label': 'best'}"
+                "a rule is a dict with one 'y' (horizontal) or 'x' (vertical) value, "
+                "such as {'y': 31, 'label': 'best'}"
             )
-        item: dict[str, Any] = {"y": _number(rule["y"], "rule y", -1e15, 1e15)}
+        axis = "x" if "x" in rule else "y"
+        item: dict[str, Any] = {axis: _at(rule, axis, "rule", scales)}
         if rule.get("label"):
             item["label"] = str(rule["label"])[:60]
-        if rule.get("color"):
-            item["color"] = _color(rule["color"], "rule color")
+        _item_color(rule, item, "rule")
         if rule.get("dash") is False:
             item["dash"] = False
         out.append(item)
     if len(out) > 12:
         raise ValueError("a chart takes at most 12 rules")
     return out
+
+
+def _bands(bands: Any, scales: dict[str, str]) -> list[dict[str, Any]]:
+    """Shaded regions: ``{"x0": 10, "x1": 40}`` (vertical strip) or ``{"y0": 0, "y1": 1}``."""
+    out: list[dict[str, Any]] = []
+    for band in bands or []:
+        axis = None
+        if isinstance(band, dict):
+            for a in ("x", "y"):
+                if (a + "0") in band and (a + "1") in band:
+                    axis = a
+        if axis is None or (("x0" in band) and ("y0" in band)):
+            raise ValueError(
+                "a band is a dict with 'x0' and 'x1', or 'y0' and 'y1', "
+                "such as {'x0': 10, 'x1': 40}"
+            )
+        lo = _at(band, axis + "0", "band", scales)
+        hi = _at(band, axis + "1", "band", scales)
+        if hi <= lo:
+            raise ValueError(f"band {axis}1 must be greater than {axis}0")
+        item: dict[str, Any] = {axis + "0": lo, axis + "1": hi}
+        if band.get("label"):
+            item["label"] = str(band["label"])[:60]
+        _item_color(band, item, "band")
+        if "alpha" in band:
+            item["alpha"] = _number(band["alpha"], "band alpha", 0, 1)
+        out.append(item)
+    if len(out) > 12:
+        raise ValueError("a chart takes at most 12 bands")
+    return out
+
+
+def _markers(markers: Any, scales: dict[str, str]) -> list[dict[str, Any]]:
+    """Labelled points: ``{"x": 12, "y": 4.2, "label": "Q=300", "color": "var(--ok)"}``."""
+    out: list[dict[str, Any]] = []
+    for marker in markers or []:
+        if not isinstance(marker, dict) or "x" not in marker or "y" not in marker:
+            raise ValueError("a marker is a dict with 'x' and 'y', such as {'x': 12, 'y': 4.2}")
+        item: dict[str, Any] = {
+            "x": _at(marker, "x", "marker", scales),
+            "y": _at(marker, "y", "marker", scales),
+        }
+        if marker.get("label"):
+            item["label"] = str(marker["label"])[:60]
+        _item_color(marker, item, "marker")
+        out.append(item)
+    if len(out) > 12:
+        raise ValueError("a chart takes at most 12 markers")
+    return out
+
+
+def chart_rows(series: dict[str, Any]) -> list[list[Any]]:
+    """Align series that have different x values into the rows a ``Chart`` takes.
+
+    ``chart_rows({"score": [(0, 1.0), (5, 1.2)], "frontier": [(0, 1.5)]})`` gives
+    ``[[0, 1.0, 1.5], [5, 1.2, None]]``: the sorted union of every x, one column per series in
+    the order given, and ``None`` (a gap in the line) where a series has no point. Pass
+    ``series=list(...)`` with the same names to ``Chart``. NaN and infinity are not JSON, so
+    they become ``None``; a repeated x within one series keeps the last value.
+    """
+    columns: list[dict[Any, Any]] = []
+    for name, points in series.items():
+        column: dict[Any, Any] = {}
+        for x, y in points:
+            if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
+                raise ValueError(f"chart_rows: x in {name!r} must be a finite number, got {x!r}")
+            y = _json_safe(y)
+            column[x] = None if isinstance(y, float) and not math.isfinite(y) else y
+        columns.append(column)
+    xs = sorted({x for column in columns for x in column})
+    return [[x, *(column.get(x) for column in columns)] for x in xs]
 
 
 def _opt_number(value: Any) -> float | None:
@@ -1692,6 +1786,10 @@ class Chart(Component):
       carries the full accumulated data, so a fresh connect or a resume re-renders
       the whole curve (ADR-0011).
 
+    Annotations (ADR-0049): a ``kind="step"`` series draws a staircase; ``x_scale`` / ``y_scale``
+    may be ``"log"``; ``rules`` take ``x`` for a vertical line, ``bands`` shade an x or y span and
+    ``markers`` label a point. :func:`chart_rows` aligns series that have different x values.
+
     Example (a streaming loss curve fed from a training loop, ADR-0009)::
 
         chart = Chart(series=["loss"], title="Training loss", x_label="step")
@@ -1720,6 +1818,10 @@ class Chart(Component):
         playhead: Source = None,
         shade_after: bool = False,
         rules: list[dict[str, Any]] | None = None,
+        bands: list[dict[str, Any]] | None = None,
+        markers: list[dict[str, Any]] | None = None,
+        x_scale: str = "linear",
+        y_scale: str = "linear",
         highlight: Source = None,
         highlight_color: str | None = None,
         legend: str = "auto",
@@ -1728,6 +1830,10 @@ class Chart(Component):
         if legend not in ("auto", "labels", "off"):
             raise ValueError(f"Chart legend must be 'auto', 'labels' or 'off', got {legend!r}")
         self._legend = legend
+        for name, scale in (("x_scale", x_scale), ("y_scale", y_scale)):
+            if scale not in _SCALES:
+                raise ValueError(f"Chart {name} must be one of {_SCALES}, got {scale!r}")
+        self._scales = {"x": x_scale, "y": y_scale}
         self._reactive = data is not None
         self._data = data
         self._buffer: list[list[Any]] = []
@@ -1739,7 +1845,12 @@ class Chart(Component):
                 _number(source, name, -1e15, 1e15)  # a fixed value is checked now, not on first use
         self._playhead = playhead
         self._shade_after = bool(shade_after)
-        self._rules = _rules(rules)
+        for axis, rng in (("x", self._x_range), ("y", self._y_range)):
+            if rng and self._scales[axis] == "log" and rng[0] <= 0:
+                raise ValueError(f"{axis}_range must start above zero on a log axis, got {rng!r}")
+        self._rules = _rules(rules, self._scales)
+        self._bands = _bands(bands, self._scales)
+        self._markers = _markers(markers, self._scales)
         self._highlight = highlight
         self._highlight_color = (
             _color(highlight_color, "highlight_color") if highlight_color else None
@@ -1774,6 +1885,13 @@ class Chart(Component):
             props["shadeAfter"] = True
         if self._rules:
             props["rules"] = self._rules
+        if self._bands:
+            props["bands"] = self._bands
+        if self._markers:
+            props["markers"] = self._markers
+        for axis in ("x", "y"):
+            if self._scales[axis] == "log":
+                props[axis + "Scale"] = "log"
         if self._highlight_color:
             props["highlightColor"] = self._highlight_color
         for name, source in (("playhead", self._playhead), ("highlight", self._highlight)):

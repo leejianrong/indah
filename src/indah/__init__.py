@@ -95,6 +95,7 @@ from .components import (
     TextInput,
     Upload,
     UploadedFile,
+    chart_rows,
     marked_runs,
     steps_items,
 )
@@ -247,6 +248,7 @@ __all__ = [
     "Empty",
     "Expander",
     # custom components (R7)
+    "chart_rows",
     "marked_runs",
     "steps_items",
     "register_component",

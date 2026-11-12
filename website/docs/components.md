@@ -160,6 +160,10 @@ A series can be bars or dots, a playhead dims what has not happened yet, a highl
 
 <indah-live page="media/chart-kinds"></indah-live>
 
+A `step` series draws a staircase (`"align": "before"` holds each value up to its x instead of after it). `x_scale` and `y_scale` take `"log"` (a log axis needs positive values and ranges; zero or negative data points are drawn as gaps). `rules` take `x` for a vertical line, `bands` shade an x or y span (`{"x0": 2048, "x1": 4096}`) and `markers` label a point; each list holds at most 12 items and every colour may be `var(--token)`. `indah.chart_rows({"ours": [(0, 120), (3, 96)], "public": [(0, 90)]})` lines up series with different x values into `[[0, 120, 90], [3, 96, None]]`, the sorted union of x with `None` where a series has no point:
+
+<indah-live page="media/chart-steps"></indah-live>
+
 <indah-live page="media/heatmap"></indah-live>
 
 A heatmap can take its own colour stops, leave a cell with no value blank, label rows and runs of columns, and spotlight one cell:

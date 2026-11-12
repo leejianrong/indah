@@ -13,6 +13,9 @@
   // `alpha`; fixed `xRange` / `yRange`; a `playhead` (a vertical line, with the region after it
   // shaded when `shadeAfter`); horizontal `rules`; a `highlight` bar; and colours written as
   // var(--token) that follow the light/dark switch.
+  //
+  // ADR-0049 adds: a `step` series kind (`align` after/before), `xScale` / `yScale` "log",
+  // vertical rules ({x}), `bands` (x0/x1 or y0/y1 strips) and labelled `markers`.
   import uPlot from "uplot";
   import "uplot/dist/uPlot.min.css";
   import { untrack } from "svelte";
@@ -43,6 +46,11 @@
           const size = o.size ?? 5;
           return { ...base, paths: () => null, points: { show: true, size, fill: stroke, stroke, width: 0 } };
         }
+        if (o.kind === "step") {
+          const align = o.align === "before" ? -1 : 1;
+          // spanGaps: a staircase holds its value across a row where this series has no point.
+          return { ...base, spanGaps: true, paths: uPlot.paths.stepped({ align }), points: { show: props.points ?? false } };
+        }
         if (o.kind === "bars") {
           return {
             ...base,
@@ -58,11 +66,18 @@
   }
 
   // Rows [[x, y0, y1], ...] -> uPlot's columnar [[x...], [y0...], [y1...]].
+  // A log axis cannot place a value of zero or below, so those become gaps.
   function columnar() {
     const n = ySeries().length;
     const cols = Array.from({ length: n + 1 }, () => []);
+    const logX = props.xScale === "log";
+    const logY = props.yScale === "log";
     for (const row of props.data ?? []) {
-      for (let i = 0; i <= n; i++) cols[i].push(row?.[i] ?? null);
+      for (let i = 0; i <= n; i++) {
+        let v = row?.[i] ?? null;
+        if (v != null && v <= 0 && (i === 0 ? logX : logY)) v = null;
+        cols[i].push(v);
+      }
     }
     return cols;
   }
@@ -87,6 +102,7 @@
     ctx.beginPath();
     ctx.rect(left, top, width, height);
     ctx.clip();
+    drawBands(self, ctx, dpr);
     if (props.shadeAfter && props.playhead != null) {
       // Dim everything after the playhead (the part of the run not played yet).
       const edge = Math.min(Math.max(self.valToPos(props.playhead, "x", true), left), left + width);
@@ -95,21 +111,35 @@
       ctx.fillRect(edge, top, left + width - edge, height);
       ctx.globalAlpha = 1;
     }
+    const mono = `${11 * dpr}px ${getComputedStyle(el).getPropertyValue("--font-mono") || "monospace"}`;
     for (const rule of props.rules ?? []) {
-      const y = self.valToPos(rule.y, "y", true);
+      const vertical = rule.x != null;
+      const at = vertical ? self.valToPos(rule.x, "x", true) : self.valToPos(rule.y, "y", true);
       ctx.strokeStyle = resolveColor(el, rule.color || "var(--x-gold, #d9a300)");
       ctx.lineWidth = 1.4 * dpr;
       ctx.setLineDash(rule.dash === false ? [] : [5 * dpr, 4 * dpr]);
       ctx.beginPath();
-      ctx.moveTo(left, y);
-      ctx.lineTo(left + width, y);
+      if (vertical) {
+        ctx.moveTo(at, top);
+        ctx.lineTo(at, top + height);
+      } else {
+        ctx.moveTo(left, at);
+        ctx.lineTo(left + width, at);
+      }
       ctx.stroke();
       if (rule.label) {
         ctx.setLineDash([]);
         ctx.fillStyle = ctx.strokeStyle;
-        ctx.textAlign = "right";
-        ctx.font = `${11 * dpr}px ${getComputedStyle(el).getPropertyValue("--font-mono") || "monospace"}`;
-        ctx.fillText(rule.label, left + width - 4 * dpr, y - 5 * dpr);
+        ctx.font = mono;
+        if (vertical) {
+          // On the left of the line, unless that runs off the plot.
+          const flip = at - ctx.measureText(rule.label).width - 8 * dpr < left;
+          ctx.textAlign = flip ? "left" : "right";
+          ctx.fillText(rule.label, at + (flip ? 4 : -4) * dpr, top + 12 * dpr);
+        } else {
+          ctx.textAlign = "right";
+          ctx.fillText(rule.label, left + width - 4 * dpr, at - 5 * dpr);
+        }
       }
     }
     ctx.setLineDash([]);
@@ -123,7 +153,51 @@
       ctx.stroke();
     }
     if (props.highlight != null) drawHighlight(self, ctx, dpr); // above the playhead line
+    drawMarkers(self, ctx, dpr, mono);
     ctx.restore();
+  }
+
+  // Shaded strips across the plot: x0..x1 is vertical, y0..y1 horizontal.
+  function drawBands(self, ctx, dpr) {
+    const { left, top, width, height } = self.bbox;
+    for (const b of props.bands ?? []) {
+      const vertical = b.x0 != null;
+      const a = vertical ? self.valToPos(b.x0, "x", true) : self.valToPos(b.y1, "y", true);
+      const z = vertical ? self.valToPos(b.x1, "x", true) : self.valToPos(b.y0, "y", true);
+      ctx.fillStyle = resolveColor(el, b.color || "var(--x-gold, #d9a300)");
+      ctx.globalAlpha = b.alpha ?? 0.14;
+      if (vertical) ctx.fillRect(Math.min(a, z), top, Math.abs(z - a), height);
+      else ctx.fillRect(left, Math.min(a, z), width, Math.abs(z - a));
+      ctx.globalAlpha = 1;
+      if (b.label) {
+        ctx.fillStyle = resolveColor(el, b.color || "var(--x-gold, #d9a300)");
+        ctx.textAlign = "left";
+        ctx.font = `${11 * dpr}px ${getComputedStyle(el).getPropertyValue("--font-mono") || "monospace"}`;
+        ctx.fillText(b.label, Math.max(Math.min(a, z), left) + 4 * dpr, (vertical ? top : Math.min(a, z)) + 12 * dpr);
+      }
+    }
+  }
+
+  // A ringed dot (a diamond would also do; the ring keeps it visible over any series) and its label.
+  function drawMarkers(self, ctx, dpr, font) {
+    for (const m of props.markers ?? []) {
+      const x = self.valToPos(m.x, "x", true);
+      const y = self.valToPos(m.y, "y", true);
+      const color = resolveColor(el, m.color || "var(--x-gold, #d9a300)");
+      ctx.beginPath();
+      ctx.arc(x, y, 5 * dpr, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.lineWidth = 2 * dpr;
+      ctx.strokeStyle = resolveColor(el, "var(--surface)");
+      ctx.stroke();
+      if (m.label) {
+        ctx.font = font;
+        ctx.fillStyle = resolveColor(el, "var(--text)");
+        ctx.textAlign = "center";
+        ctx.fillText(m.label, x, y - 10 * dpr);
+      }
+    }
   }
 
   // Redraw the bar at x in the highlight colour, on every bars series.
@@ -155,12 +229,28 @@
     return { show: ySeries().length > 1 };
   }
 
+  // Log axes draw grid lines, ticks and labels at the decades only (1, 10, 100, ...), labelled
+  // compactly (1k, 10k, 1M). uPlot's own filter marks hidden ticks as null.
+  const isDecade = (v) => v != null && v > 0 && Math.abs(v / 10 ** Math.round(Math.log10(v)) - 1) < 1e-9;
+  const decades = (_u, splits) => splits.map((v) => (isDecade(v) ? v : null));
+  function logLabels(_u, splits) {
+    return splits.map((v) => {
+      if (!isDecade(v)) return "";
+      const e = Math.round(Math.log10(v));
+      return e >= 9 ? `${10 ** (e - 9)}G` : e >= 6 ? `${10 ** (e - 6)}M` : e >= 3 ? `${10 ** (e - 3)}k` : `${v}`;
+    });
+  }
+  const logAxis = { values: logLabels, filter: decades };
+
   function options() {
     const axis = { stroke: AXIS, grid: { stroke: "rgba(140,133,144,0.18)" }, ticks: { stroke: AXIS } };
     const x = { time: false };
+    if (props.xScale === "log") Object.assign(x, { distr: 3, log: 10 });
     if (props.xRange) x.range = () => [props.xRange[0], props.xRange[1]];
     const scales = { x };
-    if (props.yRange) scales.y = { range: () => [props.yRange[0], props.yRange[1]] };
+    const y = props.yScale === "log" ? { distr: 3, log: 10 } : {};
+    if (props.yRange) y.range = () => [props.yRange[0], props.yRange[1]];
+    if (props.yScale === "log" || props.yRange) scales.y = y;
     return {
       width: (el && el.clientWidth) || 400,
       height: plotHeight(),
@@ -169,8 +259,16 @@
       series: seriesConfig(),
       // An axis with no label needs no room for one: a compact x axis keeps the plot tall.
       axes: [
-        { ...axis, ...(props.xLabel ? { label: props.xLabel } : { size: 30 }) },
-        { ...axis, ...(props.yLabel ? { label: props.yLabel } : {}) },
+        {
+          ...axis,
+          ...(props.xLabel ? { label: props.xLabel } : { size: 30 }),
+          ...(props.xScale === "log" ? { ...logAxis, grid: { ...axis.grid, filter: decades }, ticks: { ...axis.ticks, filter: decades } } : {}),
+        },
+        {
+          ...axis,
+          ...(props.yLabel ? { label: props.yLabel } : {}),
+          ...(props.yScale === "log" ? { ...logAxis, grid: { ...axis.grid, filter: decades }, ticks: { ...axis.ticks, filter: decades } } : {}),
+        },
       ],
       padding: [8, 8, 0, 0],
       legend: legendOptions(),
@@ -210,6 +308,10 @@
     void props.xRange;
     void props.yRange;
     void props.rules;
+    void props.bands;
+    void props.markers;
+    void props.xScale;
+    void props.yScale;
     void props.shadeAfter;
     void props.highlightColor;
     void props.legend;
