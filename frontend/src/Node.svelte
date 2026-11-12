@@ -120,11 +120,58 @@
     uploadStatus = ok ? `Uploaded ${names}` : `Upload failed: ${names}`;
   }
 
+  // Slider (ADR-0050). A log slider keeps its thumb on 0..LOG_STEPS and maps that to min..max by
+  // powers; the value sent is rounded to a multiple of `step`. `sliderLive` is the value under
+  // the thumb while it is dragged (the readout follows it), cleared when the server answers.
+  const LOG_STEPS = 400;
+  let sliderLive = $state(null);
+  function sliderFraction(v) {
+    const { min, max } = props;
+    const f = props.scale === "log" ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min);
+    return Math.min(1, Math.max(0, f));
+  }
+  function sliderValue() {
+    const raw = Number(inputEl.value);
+    if (props.scale !== "log") return raw;
+    const { min, max, step } = props;
+    const v = min * (max / min) ** (raw / LOG_STEPS);
+    const q = step > 0 ? Math.round(v / step) * step : v;
+    return Math.min(max, Math.max(min, Number(q.toPrecision(12))));
+  }
+  function sliderText(v) {
+    if (v == null) return "";
+    const decimals = (String(props.step ?? 1).split(".")[1] ?? "").length;
+    return Number(v).toLocaleString(undefined, { maximumFractionDigits: decimals });
+  }
+  function onSliderInput() {
+    const v = sliderValue();
+    sliderLive = v;
+    if (props.commit !== "release") postEvent(node.id, "input", { value: v });
+  }
+  function onSliderChange() {
+    if (props.commit === "release") postEvent(node.id, "input", { value: sliderValue() });
+  }
+  // Drop the live value once the server agrees with it (a stale echo while dragging must not pull
+  // the readout back); blur drops it too.
+  $effect(() => {
+    if (sliderLive != null && props.value === sliderLive) sliderLive = null;
+  });
+  // Place a mark with CSSOM (no style attribute, so it passes the strict CSP). The thumb is about
+  // 16px wide, so its centre runs from 8px to 8px short of the far end.
+  function markAt(el, f) {
+    const place = (frac) => (el.style.left = `calc(8px + (100% - 16px) * ${frac})`);
+    place(f);
+    return { update: place };
+  }
+
   function syncFromServer() {
     if (!inputEl) return;
     // Compare/assign as a string: element .value is always a string, so coercing
     // keeps text/slider/number/date on the same focused-echo path.
-    const next = props.value == null ? "" : String(props.value);
+    let next = props.value == null ? "" : String(props.value);
+    if (node.type === "slider" && props.scale === "log" && props.value != null) {
+      next = String(Math.round(sliderFraction(props.value) * LOG_STEPS));
+    }
     if (inputEl.value !== next) inputEl.value = next;
   }
   // While the user is editing (element focused), the DOM owns the value so a laggy
@@ -679,19 +726,35 @@
     <div class="streamtext">{props.text ?? ""}</div>
   </div>
 {:else if node.type === "slider"}
-  <div class="field">
-    <label for={`${node.id}-input`}>{props.label ?? ""}</label>
+  <div class="field slider">
+    <label for={`${node.id}-input`}
+      >{props.label ?? ""}{#if props.showValue}<output class="slider-value" for={`${node.id}-input`}>{sliderText(sliderLive ?? props.value)}</output>{/if}</label
+    >
     <input
       bind:this={inputEl}
       id={`${node.id}-input`}
       type="range"
       disabled={props.disabled || null}
-      min={props.min}
-      max={props.max}
-      step={props.step}
-      oninput={(e) => postEvent(node.id, "input", { value: Number(e.currentTarget.value) })}
-      onblur={syncFromServer}
+      min={props.scale === "log" ? 0 : props.min}
+      max={props.scale === "log" ? LOG_STEPS : props.max}
+      step={props.scale === "log" ? 1 : props.step}
+      aria-valuetext={props.showValue ? sliderText(sliderLive ?? props.value) : null}
+      oninput={onSliderInput}
+      onchange={onSliderChange}
+      onblur={() => {
+        sliderLive = null;
+        syncFromServer();
+      }}
     />
+    {#if props.marks?.length}
+      <div class="slider-marks" aria-hidden="true">
+        {#each props.marks as mark (mark.value)}
+          <span class="slider-mark" use:markAt={sliderFraction(mark.value)}
+            ><i></i>{#if mark.label}<small>{mark.label}</small>{/if}</span
+          >
+        {/each}
+      </div>
+    {/if}
   </div>
 {:else if node.type === "select"}
   <div class="field">

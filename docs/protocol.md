@@ -334,7 +334,7 @@ stays 1.
 | `skeleton` | display | optional `lines` (default 3), `height` (a CSS length, default 1rem): grey placeholder bars, the last one shorter; announced as busy | — |
 | `text` | display | `text`, or `markdown:true` + `blocks:[node]` (a safe tree); optional `variant` (plain text only: `title` / `label` / `caption` / `mono` / `readout`; absent = body text, ADR-0040), optional `tone` (`err`: the text in the error colour, and hidden while empty) | — |
 | `button` | input | `label`, `variant` (`filled` default / `tonal` / `ghost` / `danger`), `confirm` (text: the shell asks first and posts `click` only once accepted), `disabled` (optional bool, reactive: greys the button; the server also drops a click while it is true) | `click` |
-| `slider` | input | `value`, `min`, `max`, `step`, `label` | `input` `{value}` |
+| `slider` | input | `value`, `min`, `max`, `step`, `label`; optional `showValue`, `scale` (`"log"`; absent = linear), `marks:[{value,label?}]`, `commit` (`"release"`: the shell sends `input` on release; absent = every move) | `input` `{value}` |
 | `textinput` | input | `value`, `placeholder`, `label`, `error` (optional text shown under the box, `null` for none) | `input` `{value}` |
 | `textarea` | input | `value`, `placeholder`, `label`, `rows`, `error` (optional text shown under the box, `null` for none) | `input` `{value}` (debounced 150 ms, flushed on blur) |
 | `codeeditor` | input | `value`, `language` (`json`/`yaml`/`text`), `readOnly`, `lint`, `height`, `label`, `placeholder`, `format` (a Format button), `save` (Ctrl/Cmd-S), `error` (optional text shown under the editor, `null` for none) | `input` `{value}` (debounced 150 ms, flushed on blur), `format` `{value}` (JSON re-indent, key order kept), `save` `{value}` |

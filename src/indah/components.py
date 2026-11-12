@@ -325,6 +325,21 @@ class Button(Component):
 
 
 class Slider(Component):
+    """A numeric input on a track, two-way bound to a ``Signal[float]``.
+
+    Optional (ADR-0050), all off by default so an existing slider is unchanged:
+
+    - ``show_value=True`` shows the current value next to the label, and follows the thumb while
+      it is dragged.
+    - ``scale="log"`` spaces the track by powers (for sizes that span decades); it needs
+      ``min`` above zero, and the value is rounded to a multiple of ``step``.
+    - ``marks=[{"value": 1024, "label": "cliff"}]`` draws up to 12 ticks, each with an optional
+      label, under the track.
+    - ``commit="release"`` sends the value when the thumb is released (or a key is pressed)
+      instead of on every move, for a slider that drives a costly recompute. The readout still
+      follows the drag.
+    """
+
     lockable = True
     type = "slider"
 
@@ -336,16 +351,54 @@ class Slider(Component):
         max: float = 100,
         step: float = 1,
         label: str = "",
+        show_value: bool = False,
+        scale: str = "linear",
+        marks: list[dict[str, Any]] | None = None,
+        commit: str = "input",
     ) -> None:
         super().__init__()
+        if scale not in ("linear", "log"):
+            raise ValueError(f"Slider scale must be 'linear' or 'log', got {scale!r}")
+        if commit not in ("input", "release"):
+            raise ValueError(f"Slider commit must be 'input' or 'release', got {commit!r}")
+        if scale == "log" and not 0 < min < max:
+            raise ValueError(f"a log Slider needs 0 < min < max, got min={min!r} max={max!r}")
         self._value = value
         self._min = min
         self._max = max
         self._step = step
         self._label = label
+        self._show_value = bool(show_value)
+        self._scale = scale
+        self._commit = commit
+        self._marks: list[dict[str, Any]] = []
+        for mark in marks or []:
+            if not isinstance(mark, dict) or "value" not in mark:
+                raise ValueError("a mark is a dict with a 'value', such as {'value': 5}")
+            at = _number(mark["value"], "mark value", min, max)
+            item: dict[str, Any] = {"value": at}
+            if mark.get("label"):
+                item["label"] = str(mark["label"])[:30]
+            self._marks.append(item)
+        if len(self._marks) > 12:
+            raise ValueError("a slider takes at most 12 marks")
 
     def static_props(self) -> dict[str, Any]:
-        return {"min": self._min, "max": self._max, "step": self._step, "label": self._label}
+        props: dict[str, Any] = {
+            "min": self._min,
+            "max": self._max,
+            "step": self._step,
+            "label": self._label,
+        }
+        if self._show_value:
+            props["showValue"] = True
+        if self._scale != "linear":
+            props["scale"] = self._scale
+        if self._marks:
+            props["marks"] = self._marks
+        if self._commit != "input":
+            props["commit"] = self._commit
+        return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"value": lambda: self._value.value}

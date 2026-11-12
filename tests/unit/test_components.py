@@ -64,6 +64,44 @@ def test_slider_static_and_reactive_props():
 
 
 @pytest.mark.unit
+def test_slider_options_reach_the_wire_only_when_set():
+    props = Slider(
+        Signal(8),
+        min=1,
+        max=4096,
+        label="n",
+        show_value=True,
+        scale="log",
+        commit="release",
+        marks=[{"value": 1024, "label": "cliff"}, {"value": 1}],
+    ).to_json()["props"]
+    assert props["showValue"] is True and props["scale"] == "log" and props["commit"] == "release"
+    assert props["marks"] == [{"value": 1024, "label": "cliff"}, {"value": 1}]
+    plain = Slider(Signal(0)).to_json()["props"]
+    assert not {"showValue", "scale", "commit", "marks"} & set(plain)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"scale": "ln"},
+        {"commit": "drop"},
+        {"scale": "log", "min": 0, "max": 10},
+        {"scale": "log", "min": -1, "max": 10},
+        {"scale": "log", "min": 5, "max": 5},
+        {"marks": [{"value": 200}]},  # outside min..max
+        {"marks": [{"label": "no value"}]},
+        {"marks": ["x"]},
+        {"marks": [{"value": i} for i in range(13)], "max": 20},
+    ],
+)
+def test_bad_slider_options_are_refused(kwargs):
+    with pytest.raises(ValueError):
+        Slider(Signal(1), **kwargs)
+
+
+@pytest.mark.unit
 def test_slider_input_event_sets_signal():
     v = Signal(0)
     sl = Slider(v)

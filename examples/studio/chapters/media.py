@@ -293,6 +293,47 @@ def chart_kinds_check(pw) -> None:
     )
 
 
+# ---- slider that recomputes a chart on release ----------------------------------------------
+
+
+def slider_release(ctx: indah.Context) -> indah.Component:
+    n = indah.Signal(256)
+
+    def curve() -> list[list[float]]:
+        top = int(n.value)
+        sizes = sorted({max(1, round(top * i / 40)) for i in range(1, 41)})
+        return [[s, 3.1 * s**3 / 1e9, 40 * s**2 / 1e6] for s in sizes]
+
+    return indah.Column(
+        children=[
+            indah.Slider(
+                n,
+                min=16,
+                max=4096,
+                step=1,
+                label="Problem size n",
+                scale="log",
+                show_value=True,
+                commit="release",
+                marks=[{"value": 64}, {"value": 1024, "label": "cliff 1,024"}, {"value": 4096}],
+            ),
+            indah.Chart(
+                curve,
+                series=[
+                    {"label": "n cubed term", "stroke": "var(--primary)"},
+                    {"label": "n squared term", "stroke": "var(--muted)"},
+                ],
+                title="Cost terms up to n (recomputed when the thumb is released)",
+                x_label="size",
+                y_label="cost (millions of gates)",
+                playhead=n,
+                height=220,
+            ),
+            indah.Text(lambda: f"The server has n = {n.value:,.0f} (it only changes on release)."),
+        ]
+    )
+
+
 # ---- chart steps, scales and annotations ------------------------------------------------------
 
 
@@ -343,6 +384,35 @@ def chart_steps(ctx: indah.Context) -> indah.Component:
                 height=240,
             ),
         ]
+    )
+
+
+def slider_release_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".chart canvas").first).to_be_visible()
+    expect(page.locator(".slider-value")).to_have_text("256")
+    expect(page.locator(".slider-mark")).to_have_count(3)
+    expect(page.get_by_text("The server has n = 256")).to_be_visible()
+    slider = page.locator("input[type=range]")
+
+    def drag_to(position: int, fire_change: bool) -> None:
+        slider.evaluate(
+            "(el, [p, c]) => { el.value = p; el.dispatchEvent(new Event('input', {bubbles: true}));"
+            " if (c) el.dispatchEvent(new Event('change', {bubbles: true})); }",
+            [position, fire_change],
+        )
+
+    drag_to(400, False)  # the far end of the log track: the readout follows, nothing is sent
+    expect(page.locator(".slider-value")).to_have_text("4,096")
+    page.wait_for_timeout(500)
+    expect(page.get_by_text("The server has n = 256")).to_be_visible()
+    drag_to(400, True)  # release
+    expect(page.get_by_text("The server has n = 4,096")).to_be_visible()
+    page.wait_for_function(
+        "() => { const d = document.querySelector('.chart').__uplot.data[0];"
+        " return d[d.length - 1] === 4096; }"
     )
 
 
@@ -778,6 +848,20 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(44,),
             check=chart_kinds_check,
+        ),
+        Page(
+            slug="slider-release",
+            title="Slider: readout, marks and commit on release",
+            summary=(
+                "A slider can show its value, put ticks and labels on the track, space the track "
+                'by powers (`scale="log"`) and send its value only when the thumb is released '
+                '(`commit="release"`), so a costly recompute runs once per drag.'
+            ),
+            build=slider_release,
+            covers=(),
+            docs="components.md",
+            adr=(50,),
+            check=slider_release_check,
         ),
         Page(
             slug="chart-steps",
