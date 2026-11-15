@@ -12,6 +12,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `DirectUpload` (ADR-0051): a file input that sends the file from the browser straight to a URL
+  your app returns (a presigned PUT), with a progress bar, so the indah server never holds the bytes
+  and there is no size cap in indah. `get_target(info)` returns `{"url", "headers"?}`; `on_done`
+  receives the outcome. Under `csp="strict"` list the store with the new
+  `create_app(csp_connect_hosts=[...])`. Studio page `media/direct-upload`.
 - `Slider` readout, marks, log scale and commit on release (IND-267, ADR-0050): `show_value=True`
   shows the value (and follows the thumb while it is dragged); `marks=[{"value", "label"?}]` draws up
   to 12 ticks; `scale="log"` spaces the track by powers (needs `min` above zero, the value is rounded
