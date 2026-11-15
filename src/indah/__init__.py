@@ -38,6 +38,7 @@ from .components import (
     DataFrame,
     Date,
     Diff,
+    DirectUpload,
     Divider,
     Download,
     DownloadFile,
@@ -208,6 +209,7 @@ __all__ = [
     "Switch",
     # file upload / download (ADR-0017)
     "Upload",
+    "DirectUpload",
     "UploadedFile",
     # live media, Tier 1 (ADR-0045)
     "Camera",

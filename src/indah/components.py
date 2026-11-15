@@ -3851,6 +3851,78 @@ class Microphone(Component):
         return True
 
 
+class DirectUpload(Component):
+    """A file input whose bytes go from the browser straight to a URL the app chooses
+    (a presigned object-store PUT, say), never through the indah server.
+
+    When the viewer picks a file the shell sends a ``pick`` event; ``get_target`` is
+    called with ``{"filename", "size", "content_type"}`` and returns
+    ``{"url": ..., "headers": {...}}`` (``headers`` optional), sync or ``async``. The
+    shell then PUTs the file to that URL with a progress bar and reports ``done`` with
+    ``{"filename", "size", "ok", "status", "error"}``, which goes to ``on_done``
+    (sync or ``async``). The server never sees the file, so there is no size cap here;
+    the target store sets it. The target URL must be reachable from the browser, and a
+    cross-origin one needs a CORS rule that allows the page's origin.
+    """
+
+    type = "directupload"
+
+    def __init__(
+        self,
+        get_target: Callable[[dict[str, Any]], Any],
+        *,
+        on_done: Callable[[dict[str, Any]], Any] | None = None,
+        label: str = "",
+        accept: str = "",
+    ) -> None:
+        super().__init__()
+        self._get_target = get_target
+        self._on_done = on_done
+        self._label = label
+        self._accept = accept
+        self._target: Signal[dict[str, Any] | None] = Signal(None)
+        self._serial = 0
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label, "accept": self._accept}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"target": lambda: self._target.value}
+
+    def _offer(self, target: dict[str, Any]) -> None:
+        url = target.get("url") if isinstance(target, dict) else None
+        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+            raise ValueError("get_target must return {'url': 'http(s)://...', 'headers': {...}}")
+        self._serial += 1  # a new id, so picking the same file again uploads again
+        self._target.set(
+            {"id": self._serial, "url": url, "headers": dict(target.get("headers") or {})}
+        )
+
+    async def _offer_later(self, pending: Any) -> None:
+        self._offer(await pending)
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "pick":
+            info = {
+                "filename": str(payload.get("filename", "")),
+                "size": int(payload.get("size", 0)),
+                "content_type": str(payload.get("content_type", "")),
+            }
+            result = self._get_target(info)
+            if inspect.isawaitable(result):
+                return self._offer_later(result)
+            self._offer(result)
+            return True
+        if event == "done":
+            self._target.set(None)
+            if self._on_done is not None:
+                result = self._on_done(dict(payload))
+                if inspect.iscoroutine(result):
+                    return result
+            return True
+        return False
+
+
 @dataclass
 class DownloadFile:
     """Bytes to hand back to the user, with the filename the browser saves as."""
