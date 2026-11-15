@@ -357,6 +357,7 @@ stays 1.
 | `microphone` | input | `label`, `sampleRate` | PCM over `WebSocket /api/live` (`kind` `audio`), or one WAV take via `POST /api/upload`; `transport` event `{value: "live"|"recording"|"off"}` |
 | `camera` | input | `label`, `fps`, `maxWidth`, `quality` | JPEG frames over `WebSocket /api/live`, or snapshots via `POST /api/upload`; `transport` event `{value: "live"|"snapshot"|"off"}` |
 | `upload` | input | `label`, `accept`, `multiple` | file(s) via `POST /api/upload` (not the event path) |
+| `directupload` | input | `label`, `accept`; reactive `target` | `pick` `{filename, size, content_type}`; the app answers by setting `target` `{id, url, headers}`; the shell PUTs the file to `url` itself, then sends `done` `{filename, size, ok, status, error}` |
 | `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |
 | `image` | display | `src`, `alt` | — |
 | `imageoverlay` | display | `src`, `alt`, `boxes:[{x,y,w,h,label?,color?,score?}]`, `points:[{x,y,label?,color?}]`, `masks:[{src,opacity}]` (coords in `[0,1]`) | — |

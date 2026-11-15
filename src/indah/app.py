@@ -596,6 +596,7 @@ def create_app(
     limits: Limits | None = UNSET,
     csp: str | None = UNSET,
     csp_media_hosts: Sequence[str] = (),
+    csp_connect_hosts: Sequence[str] = (),
     security_headers: bool | Mapping[str, str] = False,
     allow_sid_in_url: bool | None = None,
     logo: str | os.PathLike[str] | bytes | tuple[Any, Any] | None = None,
@@ -704,7 +705,8 @@ def create_app(
     ``csp="strict"`` serves the shell with a Content-Security-Policy: a per-response nonce on
     its inline ``<script>``/``<style>`` tags and nothing else allowed to run (ADR-0038). Images
     and audio may come from ``'self'``, ``data:``, ``blob:`` and the tile hosts of any ``Map`` (plus
-    ``csp_media_hosts``, a list of ``https://host`` sources). Violations are reported to
+    ``csp_media_hosts``, a list of ``https://host`` sources). A ``DirectUpload`` PUTs from the
+    browser to another origin, which ``csp_connect_hosts`` must list. Violations are reported to
     ``POST api/csp-report`` and kept in ``app.state.csp_violations``. Any other string is used
     as the policy, with ``{nonce}`` replaced per response. Off by default, and in ``launch()``:
     a notebook frames the app, which a fixed policy would break.
@@ -1019,6 +1021,7 @@ def create_app(
     app.state.allowed_origins = normalize_origins(allowed_origins)
     app.state.env_used = env.report()
     app.state.csp_media_hosts = tuple(csp_media_hosts)
+    app.state.csp_connect_hosts = tuple(csp_connect_hosts)
     app.state.allow_sid_in_url = allow_sid_in_url
     app.state.csp_violations = deque(maxlen=100)
     app.state.stream_limiter = StreamLimiter(limits.max_streams_per_ip)
@@ -1164,7 +1167,7 @@ async def _index(request: Request) -> Response:
             nonce,
             img_hosts=[*known_img_hosts(), *state.csp_media_hosts],
             report_uri=f"{base or ''}api/csp-report",
-            connect_extra=_live_connect_sources(request),
+            connect_extra=[*_live_connect_sources(request), *state.csp_connect_hosts],
         )
     else:
         policy = render_custom(state.csp, nonce)

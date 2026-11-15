@@ -164,6 +164,49 @@
     return { update: place };
   }
 
+  // Direct upload: the file never goes to the indah server. Picking it sends `pick`;
+  // the app answers with a target {id, url, headers} prop; we PUT the file there with
+  // progress and report `done`.
+  let direct = $state({ file: null, pct: 0, status: "", seen: 0 });
+  function onPick(e) {
+    const file = e.currentTarget.files?.[0];
+    if (!file) return;
+    direct = { file, pct: 0, status: `Preparing ${file.name}...`, seen: direct.seen };
+    postEvent(node.id, "pick", {
+      filename: file.name,
+      size: file.size,
+      content_type: file.type || "",
+    });
+  }
+  function putFile(file, target) {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", target.url);
+      for (const [k, v] of Object.entries(target.headers || {})) xhr.setRequestHeader(k, v);
+      xhr.upload.onprogress = (ev) => {
+        if (ev.lengthComputable) direct.pct = Math.round((100 * ev.loaded) / ev.total);
+      };
+      xhr.onload = () => {
+        const ok = xhr.status >= 200 && xhr.status < 300;
+        resolve({ ok, status: xhr.status, error: ok ? "" : `HTTP ${xhr.status}` });
+      };
+      xhr.onerror = () => resolve({ ok: false, status: 0, error: "network error" });
+      xhr.send(file);
+    });
+  }
+  $effect(() => {
+    const target = props.target;
+    if (node.type !== "directupload" || !target || !direct.file || target.id <= direct.seen) return;
+    const file = direct.file;
+    direct.seen = target.id;
+    direct.status = `Uploading ${file.name}...`;
+    putFile(file, target).then((r) => {
+      direct.pct = r.ok ? 100 : direct.pct;
+      direct.status = r.ok ? `Uploaded ${file.name}` : `Upload failed: ${r.error}`;
+      postEvent(node.id, "done", { filename: file.name, size: file.size, ...r });
+    });
+  });
+
   function syncFromServer() {
     if (!inputEl) return;
     // Compare/assign as a string: element .value is always a string, so coercing
@@ -787,6 +830,20 @@
       onchange={onUpload}
     />
     {#if uploadStatus}<span class="upload-status">{uploadStatus}</span>{/if}
+  </div>
+{:else if node.type === "directupload"}
+  <div class="field upload">
+    {#if props.label}<label for={`${node.id}-input`}>{props.label}</label>{/if}
+    <input
+      id={`${node.id}-input`}
+      type="file"
+      accept={props.accept || undefined}
+      onchange={onPick}
+    />
+    {#if direct.file}
+      <progress max="100" value={direct.pct} aria-label="Upload progress"></progress>
+    {/if}
+    {#if direct.status}<span class="upload-status">{direct.status}</span>{/if}
   </div>
 {:else if node.type === "download"}
   {#if props.href}

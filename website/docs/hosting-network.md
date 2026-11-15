@@ -186,5 +186,12 @@ else, list the host:
 indah.create_app(..., csp="strict", csp_media_hosts=["https://cdn.example.com"])
 ```
 
+A `DirectUpload` sends the file from the browser to another origin, and `connect-src` allows
+only the page's own, so list the store's origin too (and give the store a CORS rule for the page):
+
+```python
+indah.create_app(..., csp="strict", csp_connect_hosts=["https://store.example.com"])
+```
+
 Any other string is used as the policy, with `{nonce}` replaced for you. It is off by default and
 in `launch()`.

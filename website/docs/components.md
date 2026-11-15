@@ -198,6 +198,7 @@ Try it live. Nothing downloads until you press **Run it**.
 | Component | Use |
 |-----------|-----|
 | `Upload` | a file input (image / audio / any file) |
+| `DirectUpload` | a file input that sends the file from the browser straight to a URL you give it (a presigned PUT), with a progress bar; the file never reaches the indah server |
 | `Download` | a link that hands the user a file back |
 | `Progress` | a progress bar bound to a source |
 | `Spinner` | an indeterminate busy indicator |

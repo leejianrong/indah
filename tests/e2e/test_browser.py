@@ -1112,6 +1112,87 @@ def test_upload_image_classify_and_show_result(tmp_path):
         handle.stop()
 
 
+@pytest.mark.e2e
+def test_direct_upload_puts_the_file_cross_origin_and_reports_done(tmp_path):
+    """DirectUpload: the browser PUTs the file to another origin (with a CORS preflight),
+    shows progress, and the app's on_done sees the outcome; the indah server never gets
+    the bytes."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from indah import Column, DirectUpload, Session, Signal, Text, create_app
+
+    got: dict = {}
+
+    class Store(BaseHTTPRequestHandler):
+        def _cors(self):
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "PUT")
+            self.send_header("Access-Control-Allow-Headers", "*")
+
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self._cors()
+            self.end_headers()
+
+        def do_PUT(self):
+            got["path"] = self.path
+            got["token"] = self.headers.get("x-token")
+            got["body"] = self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self._cors()
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    store = HTTPServer(("127.0.0.1", 0), Store)
+    threading.Thread(target=store.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{store.server_port}"
+
+    def app():
+        outcome = Signal("waiting")
+        return create_app(
+            csp_connect_hosts=[base],
+            session=Session(
+                Column(
+                    children=[
+                        DirectUpload(
+                            lambda info: {
+                                "url": f"{base}/put/{info['filename']}",
+                                "headers": {"x-token": "t1"},
+                            },
+                            on_done=lambda r: outcome.set(f"ok={r['ok']} {r['filename']}"),
+                            label="Dataset",
+                        ),
+                        Text(lambda: outcome.value),
+                    ]
+                )
+            ),
+        )
+
+    handle = launch(app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                data = tmp_path / "d.zip"
+                data.write_bytes(b"PK" + bytes(range(256)) * 400)
+                page.locator("input[type=file]").set_input_files(str(data))
+                expect(page.locator("text=ok=True d.zip")).to_be_visible()
+                expect(page.locator(".upload-status")).to_have_text("Uploaded d.zip")
+                expect(page.locator("progress")).to_have_attribute("value", "100")
+                assert got["path"] == "/put/d.zip" and got["token"] == "t1"
+                assert got["body"] == data.read_bytes()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()
+        store.shutdown()
+
+
 _RESTART_SERVER = """
 import sys, uvicorn
 from indah.app import create_app
