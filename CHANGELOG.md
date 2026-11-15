@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-15
+
+`DirectUpload` (a browser PUT to a presigned URL with progress), plus the Slider, Chart, Table and input work merged since 0.13.0. Every change is additive, so `protocol_version` stays 1.
+
 ### Added
 - `DirectUpload` (ADR-0051): a file input that sends the file from the browser straight to a URL
   your app returns (a presigned PUT), with a progress bar, so the indah server never holds the bytes
