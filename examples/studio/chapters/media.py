@@ -6,6 +6,7 @@ import io
 import math
 import random
 import struct
+import sys
 import threading
 import wave
 import zlib
@@ -885,7 +886,7 @@ CHAPTER = Chapter(
     # The direct-upload demo PUTs to a local sink on another origin, which connect-src must name.
     app_kwargs={
         "csp_media_hosts": ["https://tile.openstreetmap.org"],
-        "csp_connect_hosts": [_put_sink()],
+        "csp_connect_hosts": [] if sys.platform == "emscripten" else [_put_sink()],
     },
     title="Media and files",
     order=70,
