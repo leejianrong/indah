@@ -61,3 +61,16 @@ def test_a_target_must_be_an_http_url(bad):
 @pytest.mark.unit
 def test_unknown_events_are_unhandled():
     assert DirectUpload(target).handle("click", {}) is False
+
+
+@pytest.mark.unit
+def test_strict_csp_lists_upload_hosts_in_connect_src():
+    from starlette.testclient import TestClient
+
+    from indah import Session, Text, create_app
+
+    app = create_app(
+        session=Session(Text("x")), csp="strict", csp_connect_hosts=["https://store.example.com"]
+    )
+    policy = TestClient(app).get("/").headers["content-security-policy"]
+    assert "connect-src 'self' https://store.example.com;" in policy

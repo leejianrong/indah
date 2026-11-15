@@ -1153,6 +1153,7 @@ def test_direct_upload_puts_the_file_cross_origin_and_reports_done(tmp_path):
     def app():
         outcome = Signal("waiting")
         return create_app(
+            csp_connect_hosts=[base],
             session=Session(
                 Column(
                     children=[
@@ -1167,7 +1168,7 @@ def test_direct_upload_puts_the_file_cross_origin_and_reports_done(tmp_path):
                         Text(lambda: outcome.value),
                     ]
                 )
-            )
+            ),
         )
 
     handle = launch(app(), block=False, open_inline=False)

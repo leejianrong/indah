@@ -6,6 +6,7 @@ import io
 import math
 import random
 import struct
+import threading
 import wave
 import zlib
 
@@ -748,6 +749,70 @@ def upload_check(pw) -> None:
     expect(page.get_by_text("Got notes.txt (text/plain), 14 bytes, 3 line(s).")).to_be_visible()
 
 
+_sink: dict = {}
+
+
+def _put_sink() -> str:
+    """A throwaway local PUT endpoint (CORS open) that only counts bytes, for the demo."""
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    if "url" not in _sink:
+
+        class Sink(BaseHTTPRequestHandler):
+            def _cors(self):
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "PUT")
+                self.send_header("Access-Control-Allow-Headers", "*")
+
+            def do_OPTIONS(self):
+                self.send_response(204)
+                self._cors()
+                self.end_headers()
+
+            def do_PUT(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                self.send_response(200)
+                self._cors()
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Sink)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        _sink["url"] = f"http://127.0.0.1:{server.server_port}"
+    return _sink["url"]
+
+
+def direct_upload_page(ctx: indah.Context) -> indah.Component:
+    report = indah.Signal("No file yet.")
+
+    def get_target(info: dict) -> dict:
+        # In an app this is a presigned URL from your object store.
+        return {"url": f"{_put_sink()}/{info['filename']}"}
+
+    def on_done(result: dict) -> None:
+        report.set(
+            f"{result['filename']}: {'stored' if result['ok'] else 'failed (' + result['error'] + ')'}."
+        )
+
+    return indah.Column(
+        children=[
+            indah.DirectUpload(get_target, on_done=on_done, label="Choose a file"),
+            indah.Text(lambda: report.value),
+        ]
+    )
+
+
+def direct_upload_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    pw.page.locator("input[type=file]").set_input_files(
+        {"name": "big.bin", "mimeType": "application/octet-stream", "buffer": b"x" * 100_000}
+    )
+    expect(pw.page.get_by_text("big.bin: stored.")).to_be_visible()
+
+
 def download_page(ctx: indah.Context) -> indah.Component:
     rows = indah.Signal(3.0)
     report = indah.computed(
@@ -817,7 +882,11 @@ def camera_check(pw) -> None:
 CHAPTER = Chapter(
     slug="media",
     # The chapter's Map is built when a session opens, after the page (and its CSP) is served.
-    app_kwargs={"csp_media_hosts": ["https://tile.openstreetmap.org"]},
+    # The direct-upload demo PUTs to a local sink on another origin, which connect-src must name.
+    app_kwargs={
+        "csp_media_hosts": ["https://tile.openstreetmap.org"],
+        "csp_connect_hosts": [_put_sink()],
+    },
     title="Media and files",
     order=70,
     blurb=(
@@ -1013,6 +1082,17 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(17,),
             check=upload_check,
+        ),
+        Page(
+            slug="direct-upload",
+            local_only="the browser PUTs the file to another origin, which the browser runtime does not provide",
+            title="Direct upload",
+            summary="`DirectUpload` sends the file from the browser to a URL your app returns "
+            "(a presigned PUT), with a progress bar. The server never sees the bytes.",
+            build=direct_upload_page,
+            covers=("DirectUpload",),
+            docs="components.md",
+            check=direct_upload_check,
         ),
         Page(
             slug="download",
