@@ -12,9 +12,9 @@ set shipped so far.
 |-----------|-----|
 | `Text` | a label bound to a signal, computed, or string |
 | `Marked` | text with shaded spans (the part that is ignored or flagged): `Marked(text, marks=[(start, end, tone)])` |
-| `Steps` | a timeline of steps, vertical or horizontal: `Steps(items, orientation=)`; each step is `done`, `current`, `skipped`, `off` or `pending` |
+| `Steps` | a timeline of steps, vertical or horizontal, or a stepper with `on_select=`: `Steps(items, orientation=)`; each step is `done`, `current`, `skipped`, `off` or `pending` |
 | `Image` | a URL, `data:` URI, or raw PNG bytes |
-| `ImageOverlay` | an image with read-only vector overlays (boxes, masks, keypoints) |
+| `ImageOverlay` | an image with vector overlays: boxes, masks and keypoints in fractions, plus rectangles and polygons in raster pixels that can be picked, and a cropped view |
 | `Audio` | a URL, `data:` URI, or raw audio bytes, played with native browser controls |
 
 <details>

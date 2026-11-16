@@ -11,6 +11,20 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-16
+
+`ImageOverlay` gains shapes in raster pixels, picking and a cropped view, and `Steps` can be a stepper (ADR-0052). Both are additive, so `protocol_version` stays 1.
+
+### Added
+- `ImageOverlay(size=(w, h), shapes=[...], selected=..., view=[x, y, w, h], on_pick=fn)`: rectangles and
+  polygons in the picture's own pixels (stroke, dash, fill, hover label), clickable and keyboard
+  reachable when marked `pick`, with the picked one drawn thicker, and a cropped view for close-ups.
+- `Steps(on_select=fn)`: a stepper with arrow-key movement; an `off` step is disabled.
+- Studio: the `overlay` page shows both.
+
+### Changed
+- The size budget's `python_source_bytes` is raised from 612,000 to 630,000 for the above (ADR-0052).
+
 ## [0.14.0] - 2026-11-15
 
 `DirectUpload` (a browser PUT to a presigned URL with progress), plus the Slider, Chart, Table and input work merged since 0.13.0. Every change is additive, so `protocol_version` stays 1.

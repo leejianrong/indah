@@ -84,3 +84,54 @@ def test_streaming_detections_replace_boxes_over_the_patch_op():
         "target": ov.id,
         "props": {"boxes": [{"x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2, "label": "dog"}]},
     }
+
+
+@pytest.mark.unit
+def test_shapes_are_in_raster_pixels_and_validated():
+    ov = ImageOverlay(
+        "http://img.png",
+        size=(650, 480),
+        selected=Signal("a"),
+        view=[0, 0, 100, 80],
+        shapes=[
+            {"id": "a", "box": [10, 20, 110, 220], "stroke": "#f00", "dash": [4, 3], "pick": True},
+            {"id": 2, "points": [[0, 0], [5, 0], [5, 5]], "fill": "var(--x)", "label": "t"},
+        ],
+    )
+    Session(Column(children=[ov]))
+    j = ov.to_json()["props"]
+    assert j["size"] == [650, 480] and j["selected"] == "a" and j["view"] == [0, 0, 100, 80]
+    assert j["shapes"][0] == {
+        "id": "a",
+        "box": [10, 20, 110, 220],
+        "stroke": "#f00",
+        "dash": [4, 3],
+        "pick": True,
+    }
+    assert j["shapes"][1]["id"] == "2" and j["shapes"][1]["label"] == "t"
+    with pytest.raises(ValueError, match="size"):
+        ImageOverlay("x", shapes=[])
+    for bad in (
+        {"id": "a"},
+        {"id": "a", "box": [1, 2, 3]},
+        {"id": "a", "points": [[0, 0]]},
+        {"id": "a", "box": [0, 0, 1, 1], "stroke": "url(http://evil)"},
+    ):
+        with pytest.raises(ValueError):
+            ImageOverlay("x", size=(1, 1), shapes=[bad]).reactive_props()["shapes"]()
+
+
+@pytest.mark.unit
+def test_pick_runs_only_for_a_current_pickable_shape():
+    picked = []
+    ov = ImageOverlay(
+        "x",
+        size=(10, 10),
+        on_pick=picked.append,
+        shapes=[{"id": "t0", "box": [0, 0, 5, 5], "pick": True}, {"id": "t1", "box": [5, 5, 9, 9]}],
+    )
+    assert ov.handle("pick", {"id": "t0"}) is True
+    assert ov.handle("pick", {"id": "t1"}) is True  # not pickable: ignored
+    assert ov.handle("pick", {"id": "zz"}) is True
+    assert picked == ["t0"]
+    assert ImageOverlay("x").handle("pick", {"id": "t0"}) is False

@@ -631,8 +631,42 @@ def overlay_page(ctx: indah.Context) -> indah.Component:
     points = [{"x": 0.81, "y": 0.25, "label": "sun", "color": "#ffb300"}]
     mask = [{"src": mask_png(), "opacity": 0.5}]
     show_boxes, show_points, show_mask = (indah.Signal(v) for v in (True, True, False))
+    # Shapes in raster pixels (ADR-0052): two overlapping "tiles" you can pick, and a close-up.
+    tiles = {"left": [0, 0, 100, 120], "right": [60, 0, 160, 120]}
+    picked, stage = indah.Signal("left"), indah.Signal(0)
+
+    def shapes():
+        if stage.value != 0:  # a layer is switched off by leaving its shapes out
+            return []
+        return [
+            {"id": k, "box": b, "pick": True, "label": f"tile {k}", "dash": [6, 4]}
+            for k, b in tiles.items()
+        ]
+
+    def steps():
+        return [
+            ("Cut", "current" if stage.value == 0 else "done"),
+            ("Detect", "current" if stage.value == 1 else "pending"),
+        ]
+
     return indah.Column(
         children=[
+            indah.Steps(steps, orientation="horizontal", on_select=stage.set),
+            indah.ImageOverlay(
+                scene_png(),
+                size=(160, 120),
+                shapes=shapes,
+                selected=picked,
+                on_pick=picked.set,
+                alt="tiles",
+            ),
+            indah.Text(lambda: f"picked: {picked.value}"),
+            indah.ImageOverlay(
+                scene_png(),
+                size=(160, 120),
+                alt="close-up",
+                view=lambda: [tiles[picked.value][0], 0, 100, 75],
+            ),
             indah.ImageOverlay(
                 scene_png(),
                 boxes=lambda: boxes if show_boxes.value else [],
@@ -662,7 +696,12 @@ def overlay_check(pw) -> None:
     page.get_by_label("Boxes").check()
     expect(page.locator(".overlay-wrap .ov-box")).to_have_count(1)
     page.get_by_label("Mask").check()
-    expect(page.locator(".overlay-wrap img")).to_have_count(2)  # the picture and the mask
+    expect(page.locator(".overlay-wrap img")).to_have_count(4)  # three pictures and the mask
+    expect(page.get_by_text("picked: left")).to_be_visible()
+    page.locator(".ov-shapes rect").nth(1).click()
+    expect(page.get_by_text("picked: right")).to_be_visible()
+    page.get_by_role("button", name="Detect").click()
+    expect(page.locator(".ov-shapes rect")).to_have_count(0)
 
 
 # ---- audio ------------------------------------------------------------------------------------
@@ -1046,11 +1085,11 @@ CHAPTER = Chapter(
         Page(
             slug="overlay",
             title="Image overlay",
-            summary="Boxes, keypoints and a mask drawn over an image, in fractions so they scale.",
+            summary="Boxes, keypoints and a mask in fractions, plus pickable shapes in raster pixels and a cropped view.",
             build=overlay_page,
             covers=("ImageOverlay", "Checkbox"),
             docs="components.md",
-            adr=(20,),
+            adr=(20, 52),
             check=overlay_check,
         ),
         Page(

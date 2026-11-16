@@ -5,26 +5,45 @@
   // is spoken as "<label>, step 2 of 5, done" (with its detail). The current step is aria-current.
   // Items are [label, state, detail] from the server (indah.steps_items); a patch moves the
   // existing <li> elements (unkeyed each), it does not remount them.
-  let { items = [], orientation = "vertical", size = "normal", label = "" } = $props();
+  let {
+    items = [],
+    orientation = "vertical",
+    size = "normal",
+    label = "",
+    selectable = false,
+    onselect = () => {},
+  } = $props();
 
   const KNOWN = ["done", "current", "skipped", "off", "pending"];
   const stateOf = (s) => (KNOWN.includes(s) ? s : "pending");
   const compact = $derived(size === "compact");
+
+  // A stepper (on_select): each step is a button; the arrow keys move to the next enabled step and
+  // choose it, as a radio group does.
+  function onKey(e, i) {
+    const dir = ["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(e.key) ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    for (let j = i + dir; j >= 0 && j < items.length; j += dir) {
+      if (stateOf(items[j][1]) !== "off") {
+        e.currentTarget.closest("ol").querySelectorAll(".step-btn")[j].focus();
+        onselect(j);
+        return;
+      }
+    }
+  }
 </script>
 
 <ol
   class={`steps ${orientation === "horizontal" ? "steps-h" : "steps-v"}`}
   class:steps-compact={compact}
+  class:steps-select={selectable}
   aria-label={label || undefined}
 >
   {#each items as item, i}
     {@const state = stateOf(item[1])}
     {@const detail = item[2] || ""}
-    <li
-      class={`step st-${state}`}
-      aria-current={state === "current" ? "step" : undefined}
-      title={compact && detail ? detail : undefined}
-    >
+    {#snippet face()}
       <svg class="step-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
         {#if state === "done"}
           <circle class="g-fill" cx="8" cy="8" r="7" />
@@ -46,6 +65,25 @@
         {#if detail && !compact}<span class="step-detail">{detail}</span>{/if}
         <span class="sr-only">, step {i + 1} of {items.length}, {state}{detail ? `. ${detail}` : ""}</span>
       </span>
+    {/snippet}
+    <li
+      class={`step st-${state}`}
+      aria-current={state === "current" ? "step" : undefined}
+      title={compact && detail ? detail : undefined}
+    >
+      {#if selectable}
+        <button
+          type="button"
+          class="step-btn"
+          disabled={state === "off"}
+          onclick={() => onselect(i)}
+          onkeydown={(e) => onKey(e, i)}
+        >
+          {@render face()}
+        </button>
+      {:else}
+        {@render face()}
+      {/if}
     </li>
   {/each}
 </ol>

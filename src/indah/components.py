@@ -852,6 +852,10 @@ class Steps(Component):
     by a screen reader). At the normal size the ``detail`` is shown under its label. The steps are
     display only, so they are not a tab stop. ``label`` names the timeline for assistive technology.
 
+    ``on_select(index)`` turns the timeline into a stepper: each step becomes a button (arrow keys
+    move between them, a step in the ``off`` state is disabled) and choosing one runs the callback
+    with its position, which you usually store in a Signal and show as the ``current`` step.
+
     To show it in a ``List`` item or a table cell, put ``steps_items(...)`` in a field and give the
     spec ``{"component": "steps", "bind": {"items": "field"}}``; there it is compact and horizontal
     unless ``orientation`` or ``size`` are bound to fields too.
@@ -866,6 +870,7 @@ class Steps(Component):
         orientation: str = "vertical",
         size: str = "normal",
         label: str = "",
+        on_select: Callable[[int], Any] | None = None,
     ) -> None:
         super().__init__()
         if orientation not in ("vertical", "horizontal"):
@@ -878,11 +883,29 @@ class Steps(Component):
         self._orientation = orientation
         self._size = size
         self._label = label
+        self._on_select = on_select
         if not (isinstance(items, (Signal, Computed)) or callable(items)):
             steps_items(_read(items))  # a bad step in static data fails here, not on first render
 
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event != "select" or self._on_select is None:
+            return False
+        items = steps_items(_read(self._items))
+        index = payload.get("index")
+        if (
+            isinstance(index, bool)
+            or not isinstance(index, int)
+            or not 0 <= index < len(items)
+            or items[index][1] == "off"
+        ):
+            return True  # out of range, or a disabled step: ignored, not an error
+        result = self._on_select(index)
+        return result if inspect.iscoroutine(result) else True
+
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {}
+        if self._on_select is not None:
+            props["selectable"] = True
         if self._orientation != "vertical":
             props["orientation"] = self._orientation
         if self._size != "normal":
@@ -1480,9 +1503,74 @@ def _to_masks(value: Any) -> list[dict[str, Any]]:
     return out
 
 
+_SHAPE_KINDS = ("rect", "polygon")
+
+
+def _to_shapes(value: Any) -> list[dict[str, Any]]:
+    """``ImageOverlay`` shapes in raster pixels -> wire dicts. A shape is ``{"id", "box":
+    [x1, y1, x2, y2]}`` (a rectangle) or ``{"id", "points": [[x, y], ...]}`` (a polygon), with
+    optional ``stroke``, ``width`` (px), ``dash`` (``[dash, gap]`` px), ``fill``, ``opacity`` (the
+    fill's, 0 to 1), ``label`` (hover text) and ``pick`` (clicking it fires ``on_pick``)."""
+    out: list[dict[str, Any]] = []
+    for sh in value or []:
+        if not isinstance(sh, dict) or not isinstance(sh.get("id"), (str, int)):
+            raise ValueError("an ImageOverlay shape is a dict with an 'id'")
+        item: dict[str, Any] = {"id": str(sh["id"])}
+        if "box" in sh:
+            box = sh["box"]
+            if not isinstance(box, (list, tuple)) or len(box) != 4:
+                raise ValueError(f"shape {item['id']!r}: box is [x1, y1, x2, y2]")
+            item["box"] = [_num(v) for v in box]
+        elif "points" in sh:
+            pts = sh["points"]
+            if (
+                not isinstance(pts, (list, tuple))
+                or len(pts) < 3
+                or any(not isinstance(p, (list, tuple)) or len(p) != 2 for p in pts)
+            ):
+                raise ValueError(f"shape {item['id']!r}: points is a list of at least 3 [x, y]")
+            item["points"] = [[_num(p[0]), _num(p[1])] for p in pts]
+        else:
+            raise ValueError(f"shape {item['id']!r} needs 'box' or 'points'")
+        for key in ("stroke", "fill"):
+            if sh.get(key):
+                item[key] = _color(sh[key], f"shape {key}")
+        if "width" in sh:
+            item["width"] = _number(sh["width"], "shape width", 0, 20)
+        if "opacity" in sh:
+            item["opacity"] = _number(sh["opacity"], "shape opacity", 0, 1)
+        if "dash" in sh:
+            dash = sh["dash"]
+            if not isinstance(dash, (list, tuple)) or len(dash) != 2:
+                raise ValueError(f"shape {item['id']!r}: dash is [dash, gap]")
+            item["dash"] = [_number(v, "shape dash", 0, 100) for v in dash]
+        if sh.get("label") is not None:
+            item["label"] = str(sh["label"])
+        if sh.get("pick"):
+            item["pick"] = True
+        out.append(item)
+    return out
+
+
+def _to_view(value: Any) -> list[float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)) or len(value) != 4 or value[2] <= 0 or value[3] <= 0:
+        raise ValueError("view is [x, y, width, height] in raster pixels, with a size above zero")
+    return [_num(v) for v in value]
+
+
 class ImageOverlay(Component):
     """An image with vector overlays drawn on top (ADR-0020): the read-only display
     path for detection boxes, segmentation masks, and keypoints.
+
+    **Shapes in raster pixels (ADR-0052).** Give ``size=(width, height)``, the pixel size of the
+    picture, and ``shapes`` takes rectangles and polygons in those pixels (see ``_to_shapes``:
+    stroke, dash, fill, a hover ``label``). Shapes you mark ``pick`` can be clicked: ``on_pick(id)``
+    runs with the shape's id (an id that is not a current pickable shape is ignored), and
+    ``selected`` (an id, or a Signal of one) draws that shape thicker. ``view=[x, y, w, h]``
+    (raster pixels, reactive) shows only that region, filled to the width: a close-up of a seam.
+    Turn layers on and off by filtering the list you pass.
 
     The base image is a ``source`` (URL / ``data:`` URI / PNG ``bytes``, like
     ``Image``). ``boxes``, ``points``, and ``masks`` are reactive sources whose
@@ -1514,6 +1602,11 @@ class ImageOverlay(Component):
         masks: Source = None,
         alt: str = "",
         label_mode: Literal["always", "hover"] = "always",
+        size: tuple[int, int] | None = None,
+        shapes: Source = None,
+        selected: Source = None,
+        view: Source = None,
+        on_pick: Callable[[str], Any] | None = None,
     ) -> None:
         super().__init__()
         self._source = source
@@ -1522,9 +1615,30 @@ class ImageOverlay(Component):
         self._masks = masks
         self._alt = alt
         self._label_mode = label_mode
+        if size is not None and (len(size) != 2 or min(size) < 1):
+            raise ValueError("size is (width, height) in pixels, both above zero")
+        if (shapes is not None or view is not None) and size is None:
+            raise ValueError("shapes and view are in raster pixels: pass size=(width, height)")
+        self._size = size
+        self._shapes = shapes
+        self._selected = selected
+        self._view = view
+        self._on_pick = on_pick
 
     def static_props(self) -> dict[str, Any]:
-        return {"alt": self._alt, "labelMode": self._label_mode}
+        props: dict[str, Any] = {"alt": self._alt, "labelMode": self._label_mode}
+        if self._size is not None:
+            props["size"] = [int(self._size[0]), int(self._size[1])]
+        return props
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event != "pick" or self._on_pick is None:
+            return False
+        ident = payload.get("id")
+        if not any(sh.get("pick") and sh["id"] == ident for sh in _to_shapes(_read(self._shapes))):
+            return True  # a click that raced a change of shapes: ignored, not an error
+        result = self._on_pick(ident)
+        return result if inspect.iscoroutine(result) else True
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         props: dict[str, Callable[[], Any]] = {
@@ -1533,6 +1647,12 @@ class ImageOverlay(Component):
             "points": lambda: _to_points(_read(self._points)),
             "masks": lambda: _to_masks(_read(self._masks)),
         }
+        if self._shapes is not None:
+            props["shapes"] = lambda: _to_shapes(_read(self._shapes))
+        if self._selected is not None:
+            props["selected"] = lambda: None if (v := _read(self._selected)) is None else str(v)
+        if self._view is not None:
+            props["view"] = lambda: _to_view(_read(self._view))
         return props
 
 

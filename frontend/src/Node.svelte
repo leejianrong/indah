@@ -663,6 +663,8 @@
     orientation={props.orientation ?? "vertical"}
     size={props.size ?? "normal"}
     label={props.label ?? ""}
+    selectable={props.selectable ?? false}
+    onselect={(index) => postEvent(node.id, "select", { index })}
   />
 {:else if node.type === "empty"}
   <div class="empty-state">
@@ -890,7 +892,7 @@
     <span class="audio audio-empty">No audio</span>
   {/if}
 {:else if node.type === "imageoverlay"}
-  <ImageOverlay {props} />
+  <ImageOverlay {props} id={node.id} />
 {:else if node.type === "camera"}
   <Camera {node} {props} />
 {:else if node.type === "microphone"}
