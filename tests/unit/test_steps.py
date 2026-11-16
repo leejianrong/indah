@@ -177,3 +177,15 @@ def test_any_other_list_in_an_item_is_still_turned_into_text():
     item = {"tag": "span", "text": "other"}
     node = _wire(List(Signal([{"id": "a", "other": [1, 2]}]), item=item))
     assert node["props"]["items"][0]["other"] == "[1, 2]"
+
+
+@pytest.mark.unit
+def test_on_select_makes_a_stepper_and_ignores_bad_or_disabled_choices():
+    chosen = []
+    s = Steps([("a", "done"), ("b", "current"), ("c", "off")], on_select=chosen.append)
+    assert _wire(s)["props"]["selectable"] is True
+    assert "selectable" not in _wire(Steps(["a"]))["props"]
+    for payload in ({"index": 0}, {"index": 2}, {"index": 9}, {"index": True}, {}):
+        assert s.handle("select", payload) is True
+    assert chosen == [0]
+    assert Steps(["a"]).handle("select", {"index": 0}) is False

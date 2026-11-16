@@ -616,6 +616,10 @@
         font: 600 0.72rem/1.4 var(--font-body); color: #fff; padding: 0 0.35rem;
         white-space: nowrap; border-radius: 3px 3px 0 0;
       }
+      .ov-shapes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+      .ov-shapes .ov-pick { pointer-events: all; cursor: pointer; }
+      .ov-shapes .ov-pick:hover { fill-opacity: 0.4; }
+      .ov-shapes .ov-pick:focus-visible { outline: 2px solid var(--primary); }
       .ov-point {
         position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px;
         border: 2px solid #fff; border-radius: 50%; pointer-events: auto;
@@ -1028,6 +1032,14 @@
       .st-pending .step-label { color: var(--muted); }
       .st-off .step-glyph { color: var(--outline); }
       .st-off .step-label { color: var(--muted); font-style: italic; }
+      .steps-select .step { padding: 0; }
+      .step-btn {
+        all: unset; box-sizing: border-box; display: flex; gap: inherit; align-items: inherit;
+        cursor: pointer; padding: 0.25rem 0.4rem; border-radius: var(--radius-sm);
+      }
+      .step-btn:hover:not(:disabled) { background: var(--surface-2); }
+      .step-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+      .step-btn:disabled { cursor: not-allowed; }
       .steps-compact { margin: 0; --step-glyph: 0.8rem; flex-wrap: nowrap; }
       .steps-compact .step { gap: 0.3rem; align-items: center; white-space: nowrap; }
       .steps-compact .step-label { font-size: 0.82rem; }

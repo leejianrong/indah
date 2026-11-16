@@ -4358,3 +4358,72 @@ def test_error_lines_show_announce_and_disappear_when_empty():
                 browser.close()
     finally:
         handle.stop()
+
+
+def _stage_app():
+    from indah import Column, ImageOverlay, Session, Signal, Steps, Text, create_app
+
+    img = (
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='650' "
+        "height='400'%3E%3Crect width='650' height='400' fill='%23ccc'/%3E%3C/svg%3E"
+    )
+    tile, step = Signal("none"), Signal(0)
+    shapes = [
+        {"id": "t0", "box": [0, 0, 640, 400], "pick": True, "label": "tile 0", "dash": [6, 4]},
+        {"id": "t1", "box": [512, 0, 650, 400], "pick": True, "label": "tile 1"},
+        {"id": "b", "points": [[10, 10], [60, 10], [60, 60]], "fill": "#00f"},
+    ]
+    root = Column(
+        children=[
+            ImageOverlay(
+                img, size=(650, 400), shapes=shapes, selected=tile, on_pick=tile.set, alt="stage"
+            ),
+            ImageOverlay(img, size=(650, 400), view=[500, 0, 150, 100], alt="closeup"),
+            Text(lambda: f"tile={tile.value}"),
+            Steps(
+                [("Cut", "pending"), ("Detect", "pending"), ("Score", "off")],
+                orientation="horizontal",
+                on_select=step.set,
+            ),
+            Text(lambda: f"step={step.value}"),
+        ]
+    )
+    return create_app(session=Session(root))
+
+
+@pytest.mark.e2e
+def test_image_stage_shapes_pick_view_and_stepper():
+    """Shapes in raster pixels can be picked, view crops, Steps is a stepper (ADR-0052)."""
+    handle = launch(_stage_app(), block=False, open_inline=False)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            try:
+                page.goto(handle.url, wait_until="domcontentloaded")
+                svg = page.locator(".overlay-wrap svg.ov-shapes").first
+                expect(svg.locator("rect, polygon")).to_have_count(3)
+                assert svg.get_attribute("viewBox") == "0 0 650 400"
+                # a picked tile is reported to Python and drawn thicker
+                svg.locator("rect").nth(1).click()
+                expect(page.get_by_text("tile=t1")).to_be_visible()
+                expect(svg.locator("rect.ov-on")).to_have_count(1)
+                # the non-pickable polygon is not a button
+                assert svg.locator("polygon").get_attribute("role") is None
+                # the crop shows the 150x100 region at the width of the viewport
+                crop = page.locator(".overlay-wrap").nth(1)
+                box = crop.bounding_box()
+                assert abs(box["width"] / box["height"] - 1.5) < 0.02
+                # stepper: click, arrows skip the disabled step
+                page.get_by_role("button", name="Detect").click()
+                expect(page.get_by_text("step=1")).to_be_visible()
+                page.keyboard.press("ArrowLeft")
+                expect(page.get_by_text("step=0")).to_be_visible()
+                page.keyboard.press("ArrowRight")
+                page.keyboard.press("ArrowRight")
+                expect(page.get_by_text("step=1")).to_be_visible()
+                expect(page.get_by_role("button", name="Score")).to_be_disabled()
+            finally:
+                browser.close()
+    finally:
+        handle.stop()

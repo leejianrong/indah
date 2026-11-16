@@ -4,7 +4,30 @@
   // scale+translate on that one layer zooms/pans everything in lockstep - no
   // coordinate math in the box/point rendering itself. `.overlay-wrap` stays a
   // fixed-size, overflow:hidden viewport; only `.ov-content` inside it transforms.
-  let { props } = $props();
+  import { postEvent } from "./api.js";
+  let { props, id = "" } = $props();
+
+  // Shapes in raster pixels (ADR-0052) live in one SVG whose viewBox is the raster, stretched over
+  // the image, so they line up at any size and any zoom. `view` crops to a region of the raster.
+  const size = $derived(props.size ?? null);
+  const view = $derived(props.view ?? null);
+  const cropStyle = $derived(
+    view && size
+      ? `aspect-ratio: ${view[2]} / ${view[3]}; display: block; width: 100%;`
+      : "",
+  );
+  const contentStyle = $derived(
+    view && size
+      ? `position: absolute; width: ${(size[0] / view[2]) * 100}%; left: ${(-view[0] / view[2]) * 100}%; top: ${(-view[1] / view[3]) * 100}%;`
+      : null,
+  );
+  const pick = (sh) => sh.pick && postEvent(id, "pick", { id: sh.id });
+  const onShapeKey = (e, sh) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      pick(sh);
+    }
+  };
 
   let wrapEl = $state();
   let scale = $state(1);
@@ -46,6 +69,7 @@
   });
 
   function handleWheel(e) {
+    if (view) return; // a cropped view is fixed
     e.preventDefault();
     if (!wrapEl) return;
     const rect = wrapEl.getBoundingClientRect();
@@ -67,7 +91,7 @@
     // Don't hijack a click on the reset button: pointer capture retargets its
     // mouseup/click to the wrap too, so the button's own handler never fires.
     if (e.target.closest(".ov-reset-btn")) return;
-    if (scale <= 1) return;
+    if (scale <= 1 || view) return;
     dragging = true;
     dragStart = { x: e.clientX, y: e.clientY, panX, panY };
     wrapEl.setPointerCapture(e.pointerId);
@@ -97,6 +121,7 @@
   class="overlay-wrap"
   class:zoomed={scale > 1}
   class:dragging
+  style={cropStyle}
   bind:this={wrapEl}
   onwheel={handleWheel}
   onpointerdown={handlePointerDown}
@@ -106,9 +131,39 @@
 >
   <div
     class="ov-content"
-    style="transform: translate({panX}px, {panY}px) scale({scale}); transform-origin: 0 0;"
+    style={contentStyle ?? `transform: translate(${panX}px, ${panY}px) scale(${scale}); transform-origin: 0 0;`}
   >
     <img class="image" src={props.src ?? ""} alt={props.alt ?? ""} />
+    {#if size && props.shapes}
+      <svg class="ov-shapes" viewBox="0 0 {size[0]} {size[1]}" preserveAspectRatio="none" aria-hidden={props.shapes.some((x) => x.pick) ? null : "true"}>
+        {#each props.shapes as sh (sh.id)}
+          {@const on = props.selected != null && props.selected === sh.id}
+          {@const common = {
+            fill: sh.fill ?? "none",
+            "fill-opacity": sh.opacity ?? 0.25,
+            stroke: sh.stroke ?? "var(--primary)",
+            "stroke-width": (sh.width ?? 1.5) + (on ? 2 : 0),
+            "stroke-dasharray": sh.dash ? sh.dash.join(" ") : null,
+            "vector-effect": "non-scaling-stroke",
+          }}
+          {#if sh.box}
+            <rect
+              x={sh.box[0]} y={sh.box[1]} width={sh.box[2] - sh.box[0]} height={sh.box[3] - sh.box[1]}
+              {...common} class:ov-pick={sh.pick} class:ov-on={on}
+              role={sh.pick ? "button" : null} tabindex={sh.pick ? 0 : null} aria-label={sh.pick ? sh.label : null}
+              onclick={() => pick(sh)} onkeydown={(e) => sh.pick && onShapeKey(e, sh)}
+            >{#if sh.label}<title>{sh.label}</title>{/if}</rect>
+          {:else if sh.points}
+            <polygon
+              points={sh.points.map((p) => p.join(",")).join(" ")}
+              {...common} class:ov-pick={sh.pick} class:ov-on={on}
+              role={sh.pick ? "button" : null} tabindex={sh.pick ? 0 : null} aria-label={sh.pick ? sh.label : null}
+              onclick={() => pick(sh)} onkeydown={(e) => sh.pick && onShapeKey(e, sh)}
+            >{#if sh.label}<title>{sh.label}</title>{/if}</polygon>
+          {/if}
+        {/each}
+      </svg>
+    {/if}
     {#each props.masks ?? [] as m (m.src)}
       <img class="ov-mask" src={m.src} alt="" style="opacity: {m.opacity ?? 0.5};" />
     {/each}
