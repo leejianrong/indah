@@ -160,6 +160,7 @@ Plain `Text` has six roles (ADR-0040), all on that ladder:
 | `caption` | 0.78rem, 400 | `--muted` |
 | `mono` | 0.88rem, 400, `--font-mono` | `--text` |
 | `readout` | 1.4rem, 600, tabular numbers | `--text` |
+| `display` | 2.6rem, 600, tabular numbers | `--text` |
 
 ### Density
 

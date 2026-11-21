@@ -212,7 +212,9 @@ class Text(Component):
 
     Plain text is body text (ADR-0040). ``variant`` picks a role from a small scale:
     ``"body"`` (the default), ``"title"``, ``"label"``, ``"caption"``, ``"mono"`` and
-    ``"readout"``, the large semi-bold look for a counter or a figure. Newlines are kept.
+    ``"readout"``, the large semi-bold look for a counter or a figure, and ``"display"``, the
+    biggest type on the screen (a year, a score, the one number a page is about). Newlines are
+    kept except in those two, which stay on one line.
     Plain text never interprets markup; use ``markdown=True`` for backticks, emphasis or
     links (a Markdown text takes no ``variant``).
 
@@ -222,7 +224,7 @@ class Text(Component):
 
     type = "text"
 
-    VARIANTS = ("body", "title", "label", "caption", "mono", "readout")
+    VARIANTS = ("body", "title", "label", "caption", "mono", "readout", "display")
 
     def __init__(
         self,

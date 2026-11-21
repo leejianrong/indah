@@ -12,6 +12,9 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Text(variant="display")` (IND-281, ADR-0040 amendment): the biggest type on the screen, 2.6rem
+  semi-bold with tabular numbers on one line, for the one figure a page is about (a year being stepped
+  through). `title` and `label` already existed. Shell CSS only; `protocol_version` stays 1.
 - `Chart` time axis, whole-number ticks and a labelled playhead (IND-269, IND-270, IND-274):
   `x_scale="time"` reads x as Unix seconds and draws date ticks in UTC; a `datetime` in the data is
   converted (a naive one is UTC), also through `push` and `extend`. Ranges, rules, bands, markers and
