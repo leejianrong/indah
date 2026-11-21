@@ -1902,6 +1902,30 @@ def _is_source(value: Any) -> bool:
     return isinstance(value, (Signal, Computed)) or callable(value)
 
 
+def _label(x: Any) -> str:
+    return "" if x is None else str(x)
+
+
+def _categories(value: Any) -> list[str]:
+    """The distinct labels in the first column, in the order they first appear."""
+    seen: dict[str, None] = {}
+    for row in value or []:
+        seen.setdefault(_label(row[0] if isinstance(row, (list, tuple)) and row else row), None)
+    return list(seen)
+
+
+def _category_rows(value: Any) -> list[Any]:
+    """Rows with the label in column 0 swapped for its position among the categories."""
+    cats = {c: i for i, c in enumerate(_categories(value))}
+    out: list[Any] = []
+    for row in value or []:
+        if isinstance(row, (list, tuple)) and row:
+            out.append([cats[_label(row[0])], *row[1:]])
+        else:
+            out.append([cats[_label(row)]])
+    return out
+
+
 def _time_x(x: Any) -> Any:
     """A ``datetime`` x becomes Unix seconds (a naive one is UTC); anything else is left alone."""
     if isinstance(x, datetime.datetime):
@@ -1960,9 +1984,17 @@ class Chart(Component):
     may be ``"log"``; ``rules`` take ``x`` for a vertical line, ``bands`` shade an x or y span and
     ``markers`` label a point. :func:`chart_rows` aligns series that have different x values.
 
-    Axes: ``x_scale="time"`` reads x as Unix seconds (a ``datetime`` in the data is converted; a
-    naive one is taken as UTC) and draws date ticks in UTC (IND-269). ``x_integer=True`` keeps
-    every x tick on a whole number, for counts such as a bit width (IND-270).
+    ``rules``, ``bands`` and ``markers`` may each be a callable or a ``Signal`` returning the list,
+    so a threshold follows a slider or a model's output (IND-272); the chart redraws the overlay
+    without rebuilding the plot. A live list is checked every time it is read.
+
+    Axes: ``x_scale="category"`` puts text labels on x, for bars per circuit or benchmark
+    (IND-273): the first column of ``data`` is the label, in the order it first appears, and
+    rules, bands and markers place themselves by position (0 is the first category). It needs
+    ``data=``, not ``push``. ``x_scale="time"`` reads x as Unix seconds (a ``datetime`` in the
+    data is converted; a naive one is taken as UTC) and draws date ticks in UTC (IND-269).
+    ``x_integer=True`` keeps every x tick on a whole number, for counts such as a bit width
+    (IND-270).
     ``playhead_label`` (a string, signal or callable) writes a short label beside the playhead
     line (IND-274).
 
@@ -1993,9 +2025,9 @@ class Chart(Component):
         y_range: tuple[float, float] | None = None,
         playhead: Source = None,
         shade_after: bool = False,
-        rules: list[dict[str, Any]] | None = None,
-        bands: list[dict[str, Any]] | None = None,
-        markers: list[dict[str, Any]] | None = None,
+        rules: Any = None,
+        bands: Any = None,
+        markers: Any = None,
         x_scale: str = "linear",
         y_scale: str = "linear",
         x_integer: bool = False,
@@ -2009,13 +2041,15 @@ class Chart(Component):
             raise ValueError(f"Chart legend must be 'auto', 'labels' or 'off', got {legend!r}")
         self._legend = legend
         for name, scale, allowed in (
-            ("x_scale", x_scale, _SCALES + ("time",)),
+            ("x_scale", x_scale, _SCALES + ("time", "category")),
             ("y_scale", y_scale, _SCALES),
         ):
             if scale not in allowed:
                 raise ValueError(f"Chart {name} must be one of {allowed}, got {scale!r}")
         if x_integer and x_scale != "linear":
             raise ValueError("Chart x_integer needs a linear x_scale")
+        if x_scale == "category" and data is None:
+            raise ValueError("Chart x_scale='category' needs data=, it cannot be streamed")
         self._x_integer = bool(x_integer)
         self._playhead_label = playhead_label
         self._scales = {"x": x_scale, "y": y_scale}
@@ -2033,9 +2067,10 @@ class Chart(Component):
         for axis, rng in (("x", self._x_range), ("y", self._y_range)):
             if rng and self._scales[axis] == "log" and rng[0] <= 0:
                 raise ValueError(f"{axis}_range must start above zero on a log axis, got {rng!r}")
-        self._rules = _rules(rules, self._scales)
-        self._bands = _bands(bands, self._scales)
-        self._markers = _markers(markers, self._scales)
+        # A callable or Signal is read live; anything else is checked now.
+        self._rules = rules if _is_source(rules) else _rules(rules, self._scales)
+        self._bands = bands if _is_source(bands) else _bands(bands, self._scales)
+        self._markers = markers if _is_source(markers) else _markers(markers, self._scales)
         self._highlight = highlight
         self._highlight_color = (
             _color(highlight_color, "highlight_color") if highlight_color else None
@@ -2068,17 +2103,18 @@ class Chart(Component):
             props["yRange"] = self._y_range
         if self._shade_after:
             props["shadeAfter"] = True
-        if self._rules:
-            props["rules"] = self._rules
-        if self._bands:
-            props["bands"] = self._bands
-        if self._markers:
-            props["markers"] = self._markers
+        for name, value in (
+            ("rules", self._rules),
+            ("bands", self._bands),
+            ("markers", self._markers),
+        ):
+            if value and not _is_source(value):
+                props[name] = value
         for axis in ("x", "y"):
             if self._scales[axis] == "log":
                 props[axis + "Scale"] = "log"
-        if self._scales["x"] == "time":
-            props["xScale"] = "time"
+        if self._scales["x"] in ("time", "category"):
+            props["xScale"] = self._scales["x"]
         if self._x_integer:
             props["xInteger"] = True
         if isinstance(self._playhead_label, str) and self._playhead_label:
@@ -2095,6 +2131,8 @@ class Chart(Component):
         return props
 
     def _rows(self, value: Any) -> list[list[Any]]:
+        if self._scales["x"] == "category":
+            return _to_rows(_category_rows(value))
         return _to_rows(_time_rows(value) if self._scales["x"] == "time" else value)
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
@@ -2105,6 +2143,14 @@ class Chart(Component):
             props["playhead"] = lambda: _opt_number(_read(self._playhead))
         if self._highlight is not None and _is_source(self._highlight):
             props["highlight"] = lambda: _opt_number(_read(self._highlight))
+        if _is_source(self._rules):
+            props["rules"] = lambda: _rules(_read(self._rules), self._scales)
+        if _is_source(self._bands):
+            props["bands"] = lambda: _bands(_read(self._bands), self._scales)
+        if _is_source(self._markers):
+            props["markers"] = lambda: _markers(_read(self._markers), self._scales)
+        if self._scales["x"] == "category":
+            props["xCategories"] = lambda: _categories(_read(self._data))
         if _is_source(self._playhead_label):
             props["playheadLabel"] = lambda: str(_read(self._playhead_label) or "")[:40]
         return props

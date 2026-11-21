@@ -12,6 +12,20 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Chart` category axis and live annotations (IND-273, IND-272): `x_scale="category"` writes a text
+  label under each bar or point (the first column of `data` is the label, in order of first
+  appearance; rules, bands and markers place by position, 0 for the first). It needs `data=`, not
+  `push`. `rules`, `bands` and `markers` take a callable or `Signal` returning the list, so a
+  threshold follows a slider or a model's output; a live list is checked on every read. All
+  optional and additive. Studio page `media/chart-category`.
+
+### Changed
+- A `Chart` no longer rebuilds its plot on every patch. The shell compared nothing before, so a moved
+  playhead, threshold or highlight tore the plot down and drew it again (losing a zoom); it now
+  rebuilds only when the series, labels, ranges, scales, height or legend change, and repaints
+  the overlay otherwise.
+
+### Added
 - `Chart` time axis, whole-number ticks and a labelled playhead (IND-269, IND-270, IND-274):
   `x_scale="time"` reads x as Unix seconds and draws date ticks in UTC; a `datetime` in the data is
   converted (a naive one is UTC), also through `push` and `extend`. Ranges, rules, bands, markers and
