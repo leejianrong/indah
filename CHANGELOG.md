@@ -12,6 +12,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Slider(min=, max=, step=)` take a `Signal`, `Computed` or callable (IND-276), so a track can follow
+  data that arrives later instead of padding it. A number stays on the wire as before; a live bound
+  becomes a reactive prop. The value signal is not clamped when the range moves, a live log range
+  that is not `0 < min < max` keeps the last good one, and marks outside the range are not drawn.
+  Studio page `media/slider-range`.
 - `Badge(tone=)` takes a `Signal`, `Computed` or callable (IND-271), so a pass/fail chip changes colour
   with state. A plain string is checked at once and stays on the wire as before; a live value that is
   not a tone shows as `neutral`. Shown on the Studio badges page.

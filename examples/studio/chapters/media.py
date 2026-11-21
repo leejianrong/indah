@@ -336,6 +336,37 @@ def slider_release(ctx: indah.Context) -> indah.Component:
     )
 
 
+def slider_range(ctx: indah.Context) -> indah.Component:
+    # The track follows the data: choosing a world changes the years the slider covers.
+    worlds = {"Long": (1900, 2020), "Short": (1990, 2000)}
+    world = indah.Signal("Long")
+    year = indah.Signal(1950)
+
+    def clamp() -> None:  # the slider does not clamp the signal when the range moves
+        lo, hi = worlds[world.value]
+        year.set(min(hi, max(lo, year.peek())))
+
+    indah.effect(clamp)
+
+    return indah.Column(
+        children=[
+            indah.Select(
+                world,
+                options=list(worlds),
+                label="World",
+            ),
+            indah.Slider(
+                year,
+                min=lambda: worlds[world.value][0],
+                max=lambda: worlds[world.value][1],
+                label="Year",
+                show_value=True,
+            ),
+            indah.Text(lambda: f"Year {year.value:.0f} of {worlds[world.value]}."),
+        ]
+    )
+
+
 # ---- chart steps, scales and annotations ------------------------------------------------------
 
 
@@ -416,6 +447,19 @@ def slider_release_check(pw) -> None:
         "() => { const d = document.querySelector('.chart').__uplot.data[0];"
         " return d[d.length - 1] === 4096; }"
     )
+
+
+def slider_range_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    slider = page.locator("input[type=range]")
+    expect(slider).to_have_attribute("min", "1900")
+    expect(slider).to_have_attribute("max", "2020")
+    page.get_by_label("World").select_option("Short")
+    expect(slider).to_have_attribute("min", "1990")
+    expect(slider).to_have_attribute("max", "2000")
+    expect(page.locator(".slider-value")).to_have_text("1,990")
 
 
 def chart_steps_check(pw) -> None:
@@ -971,6 +1015,18 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(50,),
             check=slider_release_check,
+        ),
+        Page(
+            slug="slider-range",
+            title="Slider with a live range",
+            summary=(
+                "`min`, `max` and `step` can be signals or callables, so the track follows data "
+                "that arrives later (the years of a generated world) instead of padding it."
+            ),
+            build=slider_range,
+            covers=(),
+            docs="components.md",
+            check=slider_range_check,
         ),
         Page(
             slug="chart-steps",
