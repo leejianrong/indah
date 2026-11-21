@@ -343,6 +343,11 @@ def badges(ctx: indah.Context) -> indah.Component:
                 ]
             ),
             indah.Switch(pinned, label="Pinned"),
+            # The tone is a callable, so the chip changes colour with the switch.
+            indah.Badge(
+                lambda: "pass" if pinned.value else "fail",
+                tone=lambda: "ok" if pinned.value else "err",
+            ),
             indah.Text(lambda: "Pinned." if pinned.value else "Not pinned."),
             indah.Text("Hover or focus me", tooltip="Shown on hover and on keyboard focus"),
         ]
@@ -357,8 +362,10 @@ def badges_check(pw) -> None:
     page.get_by_role("button", name="Take one").click()
     expect(page.get_by_text("2 waiting")).to_be_visible()
     expect(page.get_by_text("Not pinned.")).to_be_visible()
+    expect(page.locator(".badge.tone-err", has_text="fail")).to_be_visible()
     page.get_by_role("switch", name="Pinned").click()
     expect(page.get_by_text("Pinned.", exact=True)).to_be_visible()
+    expect(page.locator(".badge.tone-ok", has_text="pass")).to_be_visible()
     page.get_by_text("Hover or focus me").hover()
     expect(page.get_by_role("tooltip")).to_have_text("Shown on hover and on keyboard focus")
 

@@ -720,6 +720,19 @@ def test_badge_serialises_text_source_and_tone():
 
 
 @pytest.mark.unit
+def test_badge_tone_follows_a_signal_or_callable():
+    state = Signal("ok")
+    b = Badge("run", tone=state)
+    assert b.static_props() == {}
+    assert b.to_json()["props"]["tone"] == "ok"
+    state.set("err")
+    assert b.reactive_props()["tone"]() == "err"
+    state.set("purple")  # not a tone: neutral, the stream is not broken
+    assert b.reactive_props()["tone"]() == "neutral"
+    assert Badge("x", tone=lambda: "warn").reactive_props()["tone"]() == "warn"
+
+
+@pytest.mark.unit
 def test_switch_round_trips_a_bool_signal():
     v = Signal(False)
     sw = Switch(v, label="Pinned")

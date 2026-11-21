@@ -671,23 +671,28 @@ BADGE_TONES = ("neutral", "ok", "warn", "err", "info")
 
 
 class Badge(Component):
-    """A small status chip. ``text`` may be a string, signal or callable; ``tone`` is one
-    of ``neutral``/``ok``/``warn``/``err``/``info`` (the same tones as a Table badge)."""
+    """A small status chip. ``text`` and ``tone`` may each be a string, signal or callable;
+    ``tone`` is one of ``neutral``/``ok``/``warn``/``err``/``info`` (the same tones as a Table
+    badge). A plain string is checked at once; a signal or callable is read live, and a value
+    that is not a tone shows as ``neutral``."""
 
     type = "badge"
 
-    def __init__(self, text: Source, *, tone: str = "neutral") -> None:
-        if tone not in BADGE_TONES:
+    def __init__(self, text: Source, *, tone: Source = "neutral") -> None:
+        if isinstance(tone, str) and tone not in BADGE_TONES:
             raise ValueError(f"Badge tone must be one of {BADGE_TONES}, got {tone!r}")
         super().__init__()
         self._text = text
         self._tone = tone
 
     def static_props(self) -> dict[str, Any]:
-        return {"tone": self._tone}
+        return {"tone": self._tone} if isinstance(self._tone, str) else {}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"text": lambda: str(_read(self._text))}
+        props: dict[str, Callable[[], Any]] = {"text": lambda: str(_read(self._text))}
+        if not isinstance(self._tone, str):
+            props["tone"] = lambda: t if (t := _read(self._tone)) in BADGE_TONES else "neutral"
+        return props
 
 
 class Code(Component):
