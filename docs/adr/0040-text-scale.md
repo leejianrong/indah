@@ -87,3 +87,12 @@ theme can change it later.
   in the same change. The public gallery and the landing page are reviewed afterwards (IND-172).
 - The design-system page gains a type table; `size="body"` stays working.
 - Future roles (a larger display size, an `overline`) are additive variants.
+
+## Amendment 2026-11-21: `display` (IND-281)
+
+A seventh variant, `display`, is the biggest type on the screen: 2.6rem, weight 600, line height
+1.1, tabular numbers, one line. It is for the one figure a page is about (a year being stepped
+through, a score), where `readout` (1.4rem) is a figure among others. `title` and `label` from the
+request already exist. The size is a new rung above the ladder and is Proposed for owner review;
+changing it later is a one-line CSS edit. Additive: the wire is a `variant` value, `protocol_version`
+stays 1.

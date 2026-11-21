@@ -966,7 +966,7 @@ def test_plain_text_is_body_text_and_sends_no_variant():
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("variant", ["title", "label", "caption", "mono", "readout"])
+@pytest.mark.parametrize("variant", ["title", "label", "caption", "mono", "readout", "display"])
 def test_text_variant_is_a_static_prop(variant):
     assert Text("x", variant=variant).to_json()["props"]["variant"] == variant
 
