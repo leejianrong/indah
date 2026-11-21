@@ -461,6 +461,59 @@ def chart_axes(ctx: indah.Context) -> indah.Component:
     )
 
 
+def chart_category(ctx: indah.Context) -> indah.Component:
+    # Gate counts per benchmark, with a budget line the slider moves: the line is a callable, so
+    # the overlay redraws without rebuilding the chart.
+    rows = [["adder", 120], ["qft", 310], ["grover", 540], ["shor", 880], ["vqe", 260]]
+    budget = indah.Signal(400)
+    return indah.Column(
+        children=[
+            indah.Slider(budget, min=100, max=1000, step=10, label="Budget", show_value=True),
+            indah.Chart(
+                rows,
+                series=[{"label": "gates", "kind": "bars", "stroke": "var(--primary)"}],
+                title="Gates per benchmark",
+                x_scale="category",
+                y_range=(0, 1000),
+                rules=lambda: [{"y": budget.value, "label": f"budget {budget.value:.0f}"}],
+                bands=lambda: [
+                    {"y0": budget.value, "y1": 1000, "color": "var(--err)", "alpha": 0.08}
+                ],
+                height=260,
+            ),
+        ]
+    )
+
+
+def chart_category_check(pw) -> None:
+    page = pw.page
+    page.wait_for_function("() => document.querySelector('.chart')?.__uplot")
+    # Five bars at positions 0..4, and half a slot of room either side.
+    assert page.evaluate(
+        "() => { const u = document.querySelector('.chart').__uplot;"
+        " return u.data[0].join() === '0,1,2,3,4' && u.scales.x.min === -0.5 && u.scales.x.max === 4.5; }"
+    )
+    # The axis writes the labels, not the positions.
+    assert page.evaluate(
+        "() => { const u = document.querySelector('.chart').__uplot;"
+        " return u.axes[0].values(u, [0, 1, 4]).join() === 'adder,qft,vqe'; }"
+    )
+    uplot_before = page.evaluate(
+        "() => { window.__u = document.querySelector('.chart').__uplot; return 1; }"
+    )
+    slider = page.locator("input[type=range]")
+    slider.evaluate(
+        "(el) => { el.value = 700; el.dispatchEvent(new Event('input', {bubbles: true}));"
+        " el.dispatchEvent(new Event('change', {bubbles: true})); }"
+    )
+    page.wait_for_function(
+        "() => document.querySelector('.chart').parentElement.parentElement.textContent.includes('700')"
+    )
+    # The same plot instance is still there: the line moved without a rebuild.
+    assert page.evaluate("() => window.__u === document.querySelector('.chart').__uplot")
+    assert uplot_before == 1
+
+
 def chart_axes_check(pw) -> None:
     page = pw.page
     page.wait_for_function(
@@ -1112,6 +1165,20 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(50,),
             check=slider_release_check,
+        ),
+        Page(
+            slug="chart-category",
+            title="Category axis and live threshold",
+            summary=(
+                '`x_scale="category"` labels each bar with its name, and `rules`, `bands` and '
+                "`markers` may be callables, so a threshold line follows a slider and the chart "
+                "redraws the overlay without rebuilding."
+            ),
+            build=chart_category,
+            covers=(),
+            docs="components.md",
+            adr=(49,),
+            check=chart_category_check,
         ),
         Page(
             slug="chart-axes",

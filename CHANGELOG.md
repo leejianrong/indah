@@ -18,6 +18,20 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   phone; options may be live, `disabled=` works, and the server refuses a value that is not offered.
   New public name `indah.ChoiceCards`, node type `choicecards`; additive, `protocol_version` stays 1.
   Studio page `media/choice-cards`.
+- `Chart` category axis and live annotations (IND-273, IND-272): `x_scale="category"` writes a text
+  label under each bar or point (the first column of `data` is the label, in order of first
+  appearance; rules, bands and markers place by position, 0 for the first). It needs `data=`, not
+  `push`. `rules`, `bands` and `markers` take a callable or `Signal` returning the list, so a
+  threshold follows a slider or a model's output; a live list is checked on every read. All
+  optional and additive. Studio page `media/chart-category`.
+
+### Changed
+- A `Chart` no longer rebuilds its plot on every patch. The shell compared nothing before, so a moved
+  playhead, threshold or highlight tore the plot down and drew it again (losing a zoom); it now
+  rebuilds only when the series, labels, ranges, scales, height or legend change, and repaints
+  the overlay otherwise.
+
+### Added
 - `Text(variant="display")` (IND-281, ADR-0040 amendment): the biggest type on the screen, 2.6rem
   semi-bold with tabular numbers on one line, for the one figure a page is about (a year being stepped
   through). `title` and `label` already existed. Shell CSS only; `protocol_version` stays 1.

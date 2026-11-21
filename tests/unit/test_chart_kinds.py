@@ -261,3 +261,62 @@ def test_playhead_label_is_static_or_live():
     n.set(2)
     assert live.reactive_props()["playheadLabel"]() == "step 2"
     assert "playheadLabel" not in indah.Chart(series=["a"]).to_json()["props"]
+
+
+# ---- live annotations and a category axis (IND-272, IND-273) -------------------------------------
+
+
+@pytest.mark.unit
+def test_rules_bands_and_markers_can_be_live():
+    cut = indah.Signal(5.0)
+    chart = indah.Chart(
+        [[0, 1.0]],
+        series=["a"],
+        rules=lambda: [{"y": cut.value, "label": "cut"}],
+        bands=lambda: [{"y0": 0, "y1": cut.value}],
+        markers=lambda: [{"x": 0, "y": cut.value}],
+    )
+    static = chart.static_props()
+    assert not {"rules", "bands", "markers"} & static.keys()
+    live = chart.reactive_props()
+    assert live["rules"]() == [{"y": 5.0, "label": "cut"}]
+    cut.set(7.5)
+    assert live["rules"]() == [{"y": 7.5, "label": "cut"}]
+    assert live["bands"]() == [{"y0": 0, "y1": 7.5}]
+    assert live["markers"]()[0]["y"] == 7.5
+
+
+@pytest.mark.unit
+def test_a_live_annotation_is_checked_each_time_it_is_read():
+    bad = indah.Signal([{"y": 1}])
+    chart = indah.Chart([[1, 1]], series=["a"], y_scale="log", rules=bad)
+    assert chart.reactive_props()["rules"]() == [{"y": 1}]
+    bad.set([{"y": 0}])  # not above zero on a log axis: refused, as a fixed rule is
+    with pytest.raises(ValueError):
+        chart.reactive_props()["rules"]()
+    # A plain list is still checked at once, and stays on the wire as before.
+    with pytest.raises(ValueError):
+        indah.Chart(series=["a"], rules=[{"y": 1, "x": 2}])
+    assert indah.Chart(series=["a"], rules=[{"y": 1}]).static_props()["rules"] == [{"y": 1}]
+
+
+@pytest.mark.unit
+def test_category_scale_sends_positions_and_labels():
+    rows = [["add", 3], ["mul", 5], ["add", 4], [None, 1]]
+    chart = indah.Chart(rows, series=["n"], x_scale="category")
+    assert chart.static_props()["xScale"] == "category"
+    props = chart.to_json()["props"]
+    assert props["xCategories"] == ["add", "mul", ""]
+    assert props["data"] == [[0, 3], [1, 5], [0, 4], [2, 1]]
+    live = indah.Signal([["a", 1]])
+    chart = indah.Chart(live, series=["n"], x_scale="category")
+    live.set([["b", 1], ["a", 2]])
+    assert chart.reactive_props()["xCategories"]() == ["b", "a"]
+
+
+@pytest.mark.unit
+def test_category_scale_needs_data_and_a_linear_look():
+    with pytest.raises(ValueError):
+        indah.Chart(series=["n"], x_scale="category")  # streaming has no fixed labels
+    with pytest.raises(ValueError):
+        indah.Chart([["a", 1]], series=["n"], x_scale="category", x_integer=True)

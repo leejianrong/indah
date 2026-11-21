@@ -35,7 +35,7 @@
 
   function seriesConfig() {
     return [
-      {}, // x
+      props.xScale === "category" ? { value: (_u, v) => props.xCategories?.[v] ?? "" } : {}, // x
       ...ySeries().map((s, i) => {
         const o = typeof s === "string" ? { label: s } : s;
         const stroke = resolveColor(el, o.stroke || PALETTE[i % PALETTE.length]);
@@ -256,8 +256,11 @@
   function options() {
     const axis = { stroke: AXIS, grid: { stroke: "rgba(140,133,144,0.18)" }, ticks: { stroke: AXIS } };
     const x = { time: props.xScale === "time" };
+    // A category axis counts positions 0..n-1 and writes the label under each, with half a slot
+    // of room either side so the first and last bar are not cut.
+    if (props.xScale === "category") x.range = () => [-0.5, Math.max(0, (props.xCategories?.length ?? 1) - 0.5)];
     if (props.xScale === "log") Object.assign(x, { distr: 3, log: 10 });
-    if (props.xRange) x.range = () => [props.xRange[0], props.xRange[1]];
+    if (props.xRange && props.xScale !== "category") x.range = () => [props.xRange[0], props.xRange[1]];
     const scales = { x };
     const y = props.yScale === "log" ? { distr: 3, log: 10 } : {};
     if (props.yRange) y.range = () => [props.yRange[0], props.yRange[1]];
@@ -276,6 +279,14 @@
           ...axis,
           ...(props.xLabel ? { label: props.xLabel } : { size: 30 }),
           ...(props.xScale === "log" ? { ...logAxis, grid: { ...axis.grid, filter: decades }, ticks: { ...axis.ticks, filter: decades } } : {}),
+          ...(props.xScale === "category"
+            ? {
+                filter: wholes,
+                grid: { ...axis.grid, filter: wholes },
+                ticks: { ...axis.ticks, filter: wholes },
+                values: (_u, splits) => splits.map((v) => props.xCategories?.[v] ?? ""),
+              }
+            : {}),
           ...(props.xInteger ? { filter: wholes, grid: { ...axis.grid, filter: wholes }, ticks: { ...axis.ticks, filter: wholes } } : {}),
         },
         {
@@ -313,27 +324,33 @@
 
   // Rebuild only on structural changes (series/title/height/labels/ranges/rules), reading the
   // data untracked so a point append does not tear down and recreate the plot.
+  // `props` is a new object on every patch, so this effect runs on each one; the key says whether
+  // anything structural really changed. Without it a moved playhead or threshold would tear the
+  // plot down and rebuild it.
+  let builtKey;
+  let builtEl;
   $effect(() => {
-    void props.series;
-    void props.title;
-    void props.height;
-    void props.xLabel;
-    void props.yLabel;
-    void props.xRange;
-    void props.yRange;
-    void props.rules;
-    void props.bands;
-    void props.markers;
-    void props.xScale;
-    void props.yScale;
-    void props.xInteger;
-    void props.shadeAfter;
-    void props.highlightColor;
-    void props.legend;
-    void el;
+    const key = JSON.stringify([
+      props.series,
+      props.title,
+      props.height,
+      props.xLabel,
+      props.yLabel,
+      props.xRange,
+      props.yRange,
+      props.xScale,
+      props.yScale,
+      props.xInteger,
+      props.shadeAfter,
+      props.highlightColor,
+      props.legend,
+    ]);
+    if (el && el === builtEl && key === builtKey && u) return;
+    builtKey = key;
+    builtEl = el;
     untrack(build);
-    return destroy;
   });
+  $effect(() => destroy);
 
   // Data-only updates: push the new columnar data into the existing plot (O(redraw),
   // and O(point) on the wire because the delta arrived as an append).
@@ -347,7 +364,9 @@
   // redraw straight after the data was cleared would draw axes that have no scale yet).
   let lastMarks;
   $effect(() => {
-    const marks = `${props.playhead}|${props.highlight}|${props.playheadLabel}`;
+    // Rules, bands and markers are drawn from props on every redraw, so a live list (IND-272)
+    // repaints the overlay and never rebuilds the plot.
+    const marks = JSON.stringify([props.playhead, props.highlight, props.playheadLabel, props.rules, props.bands, props.markers]);
     const changed = marks !== lastMarks;
     lastMarks = marks;
     if (u && changed && u.data[0]?.length) untrack(() => u.redraw(false));
