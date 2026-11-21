@@ -12,6 +12,18 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `ChoiceCards(columns=, options=[{"badge": ...}])` and a check on the chosen card (IND-279 follow-up):
+  `columns` fixes 1 to 6 columns (one on a phone), `badge` is a short tag beside a title, and the chosen
+  card carries a check mark as well as its border, so colour is not the only cue.
+- `Text(size="display" | "title" | "label")` (IND-281 follow-up) is accepted as the older spelling of
+  `variant=`, and `display` now uses the theme's display font.
+
+### Changed
+- `Slider` with a live range now clamps its value (IND-276, from the request): when `min` or `max`
+  moves past the value, the signal is set to the nearest end. 0.15.x left it alone, so the thumb
+  showed one value and the signal held another.
+
+### Added
 - `ChoiceCards(value, options=[(value, title, body), ...], label=)` (IND-279): a radio group where each
   option is a card with a title and a sentence of explanation, for a preset, a difficulty or a persona.
   A native radio group underneath (arrow keys, screen readers), in a responsive grid that stacks on a

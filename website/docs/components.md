@@ -47,7 +47,7 @@ set shipped so far.
 | `Select` | a single-choice dropdown |
 | `MultiSelect` | a list of checkboxes; the value is the list of checked options |
 | `Radio` | a radio group |
-| `ChoiceCards` | a radio group of cards, each with a title and a sentence of explanation |
+| `ChoiceCards` | a radio group of cards: a title, a sentence of explanation and an optional badge each |
 | `Chips` | filter chips, single (`Signal[str]`) or `multi=True` (`Signal[list]`); an option may carry a `count` and a `tone` |
 | `Segmented` | a joined row of options, one selected; `tones={value: tone}` tints a segment |
 | `Checkbox` | a boolean checkbox |

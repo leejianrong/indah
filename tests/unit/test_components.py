@@ -1304,3 +1304,40 @@ def test_choice_cards_options_can_be_live_and_lock():
     opts.set([("a", "A"), ("b", "B", "more")])
     assert cards.reactive_props()["options"]()[1] == {"value": "b", "title": "B", "body": "more"}
     assert cards.handle("change", {"value": "b"}) is True
+
+
+@pytest.mark.unit
+def test_slider_live_range_clamps_the_value_it_moves_past():
+    from indah.reactive import effect
+
+    hi, v = Signal(100), Signal(80)
+    sl = Slider(v, min=0, max=hi)
+    seen = []
+    effect(lambda: seen.append(sl.reactive_props()["max"]()))
+    assert v.value == 80  # inside the range: untouched
+    hi.set(50)
+    assert v.value == 50 and seen[-1] == 50  # moved past: the signal follows the range
+    hi.set(200)
+    assert v.value == 50  # a wider range does not move it back
+
+
+@pytest.mark.unit
+def test_choice_cards_badge_and_columns():
+    cards = ChoiceCards(
+        Signal("a"),
+        options=[{"value": "a", "title": "A", "badge": "Recommended"}, ("b", "B")],
+        columns=2,
+    )
+    props = cards.to_json()["props"]
+    assert props["options"][0]["badge"] == "Recommended" and "badge" not in props["options"][1]
+    assert props["columns"] == 2
+    assert "columns" not in ChoiceCards(Signal("a"), options=["a"]).static_props()
+    for bad in (0, 7, True, "2"):
+        with pytest.raises(ValueError):
+            ChoiceCards(Signal("a"), options=["a"], columns=bad)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("name", ["display", "title", "label"])
+def test_text_size_accepts_the_named_roles(name):
+    assert Text("x", size=name).to_json()["props"]["variant"] == name
