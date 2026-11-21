@@ -35,7 +35,7 @@ All additive and off by default (no `protocol_version` bump, ADR-0005). Three pa
   an index out of range. This keeps duplicate-looking labels and mixed types out of the protocol.
 - Playing is a browser timer that posts one `input` per step. The speed is capped at 4 steps a second so a
   hosted app on `Rate(per_second=5)` keeps working controls. `playing` is an optional `Signal[bool]`, two way.
-  Reaching the last point stops playback. A timer that cannot reach the server (429) pauses and says so.
+  Reaching the last point stops playback, and pressing play at the last point starts again from the first. A step the server refuses with 429 is dropped without a message, as for Graph hover.
 - Node type `timeline`; props `points` (the labels), `index`, `density`, `unit`, `playing`, `speed`.
 
 ### 2. Graph element styles and stable layout (IND-278)
