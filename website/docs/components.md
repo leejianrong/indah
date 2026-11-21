@@ -47,6 +47,7 @@ set shipped so far.
 | `Select` | a single-choice dropdown |
 | `MultiSelect` | a list of checkboxes; the value is the list of checked options |
 | `Radio` | a radio group |
+| `Timeline` | step through an ordered list of moments, with density bars, event jumps and play |
 | `ChoiceCards` | a radio group of cards, each with a title and a sentence of explanation |
 | `Chips` | filter chips, single (`Signal[str]`) or `multi=True` (`Signal[list]`); an option may carry a `count` and a `tone` |
 | `Segmented` | a joined row of options, one selected; `tones={value: tone}` tints a segment |

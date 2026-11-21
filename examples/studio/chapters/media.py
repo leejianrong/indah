@@ -599,6 +599,60 @@ def choice_cards_check(pw) -> None:
     expect(page.get_by_text("You picked normal")).to_be_visible()
 
 
+def timeline_page(ctx: indah.Context) -> indah.Component:
+    # A world that changes on irregular dates: it steps through exactly its dates.
+    years = [1990, 1994, 1995, 2001, 2003, 2004, 2010, 2016, 2020]
+    events = [0, 3, 1, 0, 5, 2, 0, 1, 4]
+    year = indah.Signal(1990)
+    playing = indah.Signal(False)
+    return indah.Column(
+        children=[
+            indah.Timeline(
+                year,
+                years,
+                density=events,
+                unit="year",
+                playing=playing,
+                speed=4,
+                label="History",
+            ),
+            indah.Text(lambda: f"{year.value}", variant="display"),
+            indah.Text(lambda: "Playing." if playing.value else "Paused."),
+        ]
+    )
+
+
+def timeline_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".timeline-now")).to_have_text("1990")
+    expect(page.locator(".timeline-bar")).to_have_count(9)
+    page.get_by_role("button", name="Next", exact=True).click()
+    expect(page.locator(".timeline-now")).to_have_text("1994")
+    expect(page.get_by_text("1994", exact=True).first).to_be_visible()
+    # "Next event" skips a point with no density (1995 has some, 2001 has none).
+    page.get_by_role("button", name="Next event").click()
+    expect(page.locator(".timeline-now")).to_have_text("1995")
+    page.get_by_role("button", name="Next event").click()
+    expect(page.locator(".timeline-now")).to_have_text("2003")  # 2001 has no events
+    page.get_by_role("button", name="Previous event").click()
+    expect(page.locator(".timeline-now")).to_have_text("1995")
+    # A keyboard user can play and pause: space on the track.
+    slider = page.get_by_role("slider")
+    expect(slider).to_have_attribute("aria-valuetext", "year 1995, step 3 of 9")
+    slider.focus()
+    page.keyboard.press("End")
+    expect(page.locator(".timeline-now")).to_have_text("2020")
+    page.keyboard.press("Home")
+    expect(page.locator(".timeline-now")).to_have_text("1990")
+    page.keyboard.press(" ")
+    expect(page.get_by_text("Playing.")).to_be_visible()
+    # At 4 steps a second it reaches the end by itself and stops there.
+    expect(page.locator(".timeline-now")).to_have_text("2020", timeout=6000)
+    expect(page.get_by_text("Paused.")).to_be_visible()
+
+
 def slider_range_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -1205,6 +1259,20 @@ CHAPTER = Chapter(
             covers=("ChoiceCards",),
             docs="components.md",
             check=choice_cards_check,
+        ),
+        Page(
+            slug="timeline",
+            title="Timeline",
+            summary=(
+                "Step through the moments that exist, however irregular: buttons for the previous "
+                "and next point or event, play at up to 4 steps a second, density bars for the busy "
+                "moments, and the arrow, Home, End and space keys."
+            ),
+            build=timeline_page,
+            covers=("Timeline",),
+            docs="components.md",
+            adr=(53,),
+            check=timeline_check,
         ),
         Page(
             slug="slider-range",

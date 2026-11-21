@@ -12,6 +12,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Timeline(value, points, labels=, density=, unit=, playing=, speed=)` (IND-277, ADR-0053): step through
+  the moments that exist, however irregular (years now, days later). Buttons for the previous and next
+  point or event (a point with density above zero), play and pause at 0.5, 1, 2 or 4 steps a second (4 is
+  the cap, so a hosted app on `Rate(per_second=5)` keeps working controls), a native range track (arrow
+  keys, Home, End) with density bars behind it, space to play, and "year 2003, step 4 of 11" for a screen
+  reader. The wire carries the point's index and Python refuses one out of range. New public name
+  `indah.Timeline`, node type `timeline`; additive. Studio page `media/timeline`.
 - `ChoiceCards(value, options=[(value, title, body), ...], label=)` (IND-279): a radio group where each
   option is a card with a title and a sentence of explanation, for a preset, a difficulty or a persona.
   A native radio group underneath (arrow keys, screen readers), in a responsive grid that stacks on a
@@ -26,6 +33,8 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   optional and additive. Studio page `media/chart-category`.
 
 ### Changed
+- The size budget's `python_source_bytes` is raised from 630,000 to 660,000 for `Timeline` and the two
+  Graph parts that follow it (ADR-0053). The wheel has 7 KB left of its 630,000.
 - A `Chart` no longer rebuilds its plot on every patch. The shell compared nothing before, so a moved
   playhead, threshold or highlight tore the plot down and drew it again (losing a zoom); it now
   rebuilds only when the series, labels, ranges, scales, height or legend change, and repaints
