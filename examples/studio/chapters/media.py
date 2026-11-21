@@ -1092,6 +1092,8 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(49,),
             check=chart_axes_check,
+        ),
+        Page(
             slug="slider-range",
             title="Slider with a live range",
             summary=(
