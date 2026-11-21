@@ -11,6 +11,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+- `Slider(min=, max=, step=)` take a `Signal`, `Computed` or callable (IND-276), so a track can follow
+  data that arrives later instead of padding it. A number stays on the wire as before; a live bound
+  becomes a reactive prop. The value signal is not clamped when the range moves, a live log range
+  that is not `0 < min < max` keeps the last good one, and marks outside the range are not drawn.
+  Studio page `media/slider-range`.
+
 ## [0.15.0] - 2026-11-16
 
 `ImageOverlay` gains shapes in raster pixels, picking and a cropped view, and `Steps` can be a stepper (ADR-0052). Both are additive, so `protocol_version` stays 1.

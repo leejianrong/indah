@@ -223,6 +223,10 @@
   $effect(() => {
     void props.value; // track the server value
     void props.disabled;
+    // A live range (IND-276) moves the track, so the thumb is placed again against the new one.
+    void props.min;
+    void props.max;
+    void props.step;
     // A disabled control is never user-edited, focused or not, so it always follows the server (IND-243).
     if (inputEl && (props.disabled || document.activeElement !== inputEl)) syncFromServer();
   });
@@ -793,7 +797,7 @@
     />
     {#if props.marks?.length}
       <div class="slider-marks" aria-hidden="true">
-        {#each props.marks as mark (mark.value)}
+        {#each props.marks.filter((m) => m.value >= props.min && m.value <= props.max) as mark (mark.value)}
           <span class="slider-mark" use:markAt={sliderFraction(mark.value)}
             ><i></i>{#if mark.label}<small>{mark.label}</small>{/if}</span
           >
