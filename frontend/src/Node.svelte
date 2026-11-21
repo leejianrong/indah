@@ -745,7 +745,7 @@
 {:else if node.type === "choicecards"}
   <fieldset class="field choicecards-fieldset" disabled={props.disabled || null}>
     {#if props.label}<legend class="stream-label">{props.label}</legend>{/if}
-    <div class="choicecards">
+    <div class="choicecards" data-cols={props.columns ?? null}>
       {#each props.options ?? [] as option (option.value)}
         <label class="choicecard" class:on={props.value === option.value}>
           <input
@@ -755,7 +755,9 @@
             checked={props.value === option.value}
             onchange={(e) => postEvent(node.id, "change", { value: e.currentTarget.value })}
           />
-          <span class="choicecard-title">{option.title}</span>
+          <span class="choicecard-title"
+            >{option.title}{#if option.badge}<span class="choicecard-badge">{option.badge}</span>{/if}</span
+          >
           {#if option.body}<span class="choicecard-body">{option.body}</span>{/if}
         </label>
       {/each}

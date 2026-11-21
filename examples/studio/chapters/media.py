@@ -342,12 +342,6 @@ def slider_range(ctx: indah.Context) -> indah.Component:
     world = indah.Signal("Long")
     year = indah.Signal(1950)
 
-    def clamp() -> None:  # the slider does not clamp the signal when the range moves
-        lo, hi = worlds[world.value]
-        year.set(min(hi, max(lo, year.peek())))
-
-    indah.effect(clamp)
-
     return indah.Column(
         children=[
             indah.Select(
@@ -577,7 +571,16 @@ def choice_cards(ctx: indah.Context) -> indah.Component:
             indah.ChoiceCards(
                 level,
                 label="Difficulty",
-                options=[(k, k.title(), v) for k, v in blurbs.items()],
+                options=[
+                    {
+                        "value": k,
+                        "title": k.title(),
+                        "body": v,
+                        **({"badge": "Recommended"} if k == "normal" else {}),
+                    }
+                    for k, v in blurbs.items()
+                ],
+                columns=3,
             ),
             indah.Text(lambda: f"You picked {level.value}: {blurbs[level.value]}"),
         ]
@@ -590,6 +593,8 @@ def choice_cards_check(pw) -> None:
     page = pw.page
     expect(page.locator(".choicecard")).to_have_count(3)
     expect(page.get_by_role("radio", name="Normal")).to_be_checked()
+    expect(page.locator(".choicecard-badge")).to_have_text("Recommended")
+    expect(page.locator(".choicecards")).to_have_attribute("data-cols", "3")
     page.locator(".choicecard", has_text="Hard").click()
     expect(page.get_by_text("You picked hard: No hints and one life.")).to_be_visible()
     expect(page.locator(".choicecard.on")).to_have_count(1)
@@ -664,6 +669,8 @@ def slider_range_check(pw) -> None:
     expect(slider).to_have_attribute("min", "1990")
     expect(slider).to_have_attribute("max", "2000")
     expect(page.locator(".slider-value")).to_have_text("1,990")
+    # The slider pulled the signal to the new range, so the server's own text agrees.
+    expect(page.get_by_text("Year 1990 of")).to_be_visible()
 
 
 def chart_steps_check(pw) -> None:

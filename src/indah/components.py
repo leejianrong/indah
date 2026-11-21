@@ -218,8 +218,8 @@ class Text(Component):
     Plain text never interprets markup; use ``markdown=True`` for backticks, emphasis or
     links (a Markdown text takes no ``variant``).
 
-    ``size="body"`` and ``size="readout"`` are the 0.4.0 spelling and still work: they mean
-    ``variant="body"`` and ``variant="readout"``.
+    ``size=`` is the older spelling and still works for ``"body"``, ``"readout"``, ``"display"``,
+    ``"title"`` and ``"label"``: it means the same ``variant``.
     """
 
     type = "text"
@@ -240,8 +240,10 @@ class Text(Component):
             raise ValueError(f"tone must be 'err', not {tone!r}")
         self._tone = tone
         if size is not None:
-            if size not in ("readout", "body"):
-                raise ValueError(f"size must be 'readout' or 'body', not {size!r}")
+            if size not in ("readout", "body", "display", "title", "label"):
+                raise ValueError(
+                    f"size must be 'readout', 'body', 'display', 'title' or 'label', not {size!r}"
+                )
             if variant is not None and variant != size:
                 raise ValueError(f"size={size!r} and variant={variant!r} disagree; use variant")
             variant = size
@@ -343,10 +345,10 @@ class Slider(Component):
       follows the drag.
 
     ``min``, ``max`` and ``step`` may each be a number, ``Signal``, ``Computed`` or callable
-    (IND-276), so the track can follow data that arrives later. The ``value`` signal is not
-    clamped when the range moves: the thumb shows the nearest end, so reset it yourself if the
-    range can shrink past it. A live log range that is not ``0 < min < max`` keeps the last good
-    one, and marks outside a live range are not drawn.
+    (IND-276), so the track can follow data that arrives later. When the range moves past the
+    value, the ``value`` signal is set to the nearest end, and that change is sent like any other
+    (the app's own handlers see it). A live log range that is not ``0 < min < max`` keeps the
+    last good one, and marks outside a live range are not drawn.
     """
 
     lockable = True
@@ -421,12 +423,28 @@ class Slider(Component):
                 return self._last_log
         return lo, hi
 
+    def _fit(self) -> tuple[float, float]:
+        """The live range, after pulling the value inside it. The patch for the new range and the
+        patch for the clamped value both go out once, from the effect that read the range."""
+        lo, hi = self._range()
+        now = self._value.peek()
+        if (
+            isinstance(lo, (int, float))
+            and isinstance(hi, (int, float))
+            and lo <= hi
+            and isinstance(now, (int, float))
+            and not isinstance(now, bool)
+            and not lo <= now <= hi
+        ):
+            self._value.set(min(hi, max(lo, now)))
+        return lo, hi
+
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         props: dict[str, Callable[[], Any]] = {"value": lambda: self._value.value}
         if not isinstance(self._min, (int, float)):
-            props["min"] = lambda: self._range()[0]
+            props["min"] = lambda: self._fit()[0]
         if not isinstance(self._max, (int, float)):
-            props["max"] = lambda: self._range()[1]
+            props["max"] = lambda: self._fit()[1]
         if not isinstance(self._step, (int, float)):
             props["step"] = lambda: _read(self._step)
         return props
@@ -1244,7 +1262,8 @@ class Radio(Component):
 
 def _normalise_card(option: Any) -> dict[str, str]:
     """``(value, title, body)``, ``(value, title)``, a bare ``"value"`` or a dict with
-    ``value``, ``title`` and an optional ``body`` -> ``{"value", "title", "body"?}``."""
+    ``value``, ``title`` and optional ``body`` and ``badge`` (a short tag, such as "Recommended")
+    -> ``{"value", "title", "body"?, "badge"?}``."""
     if isinstance(option, dict):
         if "value" not in option:
             raise ValueError(
@@ -1259,6 +1278,9 @@ def _normalise_card(option: Any) -> dict[str, str]:
     out = {"value": value, "title": str(title)}
     if body:
         out["body"] = str(body)
+    badge = option.get("badge") if isinstance(option, dict) else None
+    if badge:
+        out["badge"] = str(badge)[:20]
     return out
 
 
@@ -1269,21 +1291,33 @@ class ChoiceCards(Component):
     Two-way bound to a ``Signal[str]``. ``options`` is a list of ``(value, title, body)``
     tuples, ``{"value", "title", "body"}`` dicts, ``(value, title)`` pairs or bare strings, or a
     ``Signal`` or callable returning one. It is a native radio group underneath, so arrow keys
-    move the choice and a screen reader reads each title and body. ``disabled=`` locks it like any
-    input. The cards sit in a responsive grid and stack on a phone.
+    move the choice and a screen reader reads each title and body. The chosen card is marked by
+    a check as well as its border, so colour is not the only cue. ``columns=`` fixes the number
+    of columns (1 to 6); by default the cards fill the width and stack on a phone. ``disabled=``
+    locks it like any input.
     """
 
     lockable = True
     type = "choicecards"
 
-    def __init__(self, value: Signal[str], *, options: Any, label: str = "") -> None:
+    def __init__(
+        self, value: Signal[str], *, options: Any, label: str = "", columns: int | None = None
+    ) -> None:
         super().__init__()
+        if columns is not None and (
+            isinstance(columns, bool) or not isinstance(columns, int) or not 1 <= columns <= 6
+        ):
+            raise ValueError(f"ChoiceCards columns must be 1 to 6, got {columns!r}")
         self._value = value
         _wire_options(self, options, _normalise_card)
         self._label = label
+        self._columns = columns
 
     def static_props(self) -> dict[str, Any]:
-        return {**_options_static(self), "label": self._label}
+        props = {**_options_static(self), "label": self._label}
+        if self._columns:
+            props["columns"] = self._columns
+        return props
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         return {"value": lambda: self._value.value, **_options_reactive(self)}
