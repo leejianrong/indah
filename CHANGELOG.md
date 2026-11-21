@@ -12,6 +12,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `ChoiceCards(value, options=[(value, title, body), ...], label=)` (IND-279): a radio group where each
+  option is a card with a title and a sentence of explanation, for a preset, a difficulty or a persona.
+  A native radio group underneath (arrow keys, screen readers), in a responsive grid that stacks on a
+  phone; options may be live, `disabled=` works, and the server refuses a value that is not offered.
+  New public name `indah.ChoiceCards`, node type `choicecards`; additive, `protocol_version` stays 1.
+  Studio page `media/choice-cards`.
 - `Chart` time axis, whole-number ticks and a labelled playhead (IND-269, IND-270, IND-274):
   `x_scale="time"` reads x as Unix seconds and draws date ticks in UTC; a `datetime` in the data is
   converted (a naive one is UTC), also through `push` and `extend`. Ranges, rules, bands, markers and

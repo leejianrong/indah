@@ -739,6 +739,25 @@
       {/each}
     </div>
   </div>
+{:else if node.type === "choicecards"}
+  <fieldset class="field choicecards-fieldset" disabled={props.disabled || null}>
+    {#if props.label}<legend class="stream-label">{props.label}</legend>{/if}
+    <div class="choicecards">
+      {#each props.options ?? [] as option (option.value)}
+        <label class="choicecard" class:on={props.value === option.value}>
+          <input
+            type="radio"
+            name={node.id}
+            value={option.value}
+            checked={props.value === option.value}
+            onchange={(e) => postEvent(node.id, "change", { value: e.currentTarget.value })}
+          />
+          <span class="choicecard-title">{option.title}</span>
+          {#if option.body}<span class="choicecard-body">{option.body}</span>{/if}
+        </label>
+      {/each}
+    </div>
+  </fieldset>
 {:else if node.type === "multiselect"}
   <fieldset class="field checkbox-fieldset">
     {#if props.label}<legend class="stream-label">{props.label}</legend>{/if}
