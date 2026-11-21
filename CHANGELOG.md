@@ -12,6 +12,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `ChoiceCards(value, options=[(value, title, body), ...], label=)` (IND-279): a radio group where each
+  option is a card with a title and a sentence of explanation, for a preset, a difficulty or a persona.
+  A native radio group underneath (arrow keys, screen readers), in a responsive grid that stacks on a
+  phone; options may be live, `disabled=` works, and the server refuses a value that is not offered.
+  New public name `indah.ChoiceCards`, node type `choicecards`; additive, `protocol_version` stays 1.
+  Studio page `media/choice-cards`.
 - `Chart` category axis and live annotations (IND-273, IND-272): `x_scale="category"` writes a text
   label under each bar or point (the first column of `data` is the label, in order of first
   appearance; rules, bands and markers place by position, 0 for the first). It needs `data=`, not

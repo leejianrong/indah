@@ -1242,6 +1242,65 @@ class Radio(Component):
         return False
 
 
+def _normalise_card(option: Any) -> dict[str, str]:
+    """``(value, title, body)``, ``(value, title)``, a bare ``"value"`` or a dict with
+    ``value``, ``title`` and an optional ``body`` -> ``{"value", "title", "body"?}``."""
+    if isinstance(option, dict):
+        if "value" not in option:
+            raise ValueError(
+                "a card option needs a 'value', such as {'value': 'easy', 'title': 'Easy'}"
+            )
+        value = str(option["value"])
+        title, body = option.get("title", value), option.get("body", "")
+    elif isinstance(option, (tuple, list)) and len(option) in (2, 3):
+        value, title, body = str(option[0]), option[1], option[2] if len(option) == 3 else ""
+    else:
+        value, title, body = str(option), option, ""
+    out = {"value": value, "title": str(title)}
+    if body:
+        out["body"] = str(body)
+    return out
+
+
+class ChoiceCards(Component):
+    """A radio group where each option is a card with a title and a sentence of explanation
+    (IND-279): a preset, a difficulty, a persona.
+
+    Two-way bound to a ``Signal[str]``. ``options`` is a list of ``(value, title, body)``
+    tuples, ``{"value", "title", "body"}`` dicts, ``(value, title)`` pairs or bare strings, or a
+    ``Signal`` or callable returning one. It is a native radio group underneath, so arrow keys
+    move the choice and a screen reader reads each title and body. ``disabled=`` locks it like any
+    input. The cards sit in a responsive grid and stack on a phone.
+    """
+
+    lockable = True
+    type = "choicecards"
+
+    def __init__(self, value: Signal[str], *, options: Any, label: str = "") -> None:
+        super().__init__()
+        self._value = value
+        _wire_options(self, options, _normalise_card)
+        self._label = label
+
+    def static_props(self) -> dict[str, Any]:
+        return {**_options_static(self), "label": self._label}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"value": lambda: self._value.value, **_options_reactive(self)}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event in ("change", "input") and "value" in payload:
+            value = str(payload["value"])
+            if value not in {o["value"] for o in self._current_options()}:
+                return False  # not an offered card: refused, as a forged event would be
+            self._value.set(value)
+            return True
+        return False
+
+    def _current_options(self) -> list[dict[str, str]]:
+        return [self._options_norm(o) for o in _read(self._options_src)]  # type: ignore[attr-defined]
+
+
 class MultiSelect(Component):
     """A multi-select two-way bound to a ``Signal[list[str]]`` (R5).
 

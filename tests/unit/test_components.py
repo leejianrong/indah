@@ -8,6 +8,7 @@ from indah.components import (
     Button,
     Card,
     Checkbox,
+    ChoiceCards,
     Col,
     Column,
     DataFrame,
@@ -1269,3 +1270,37 @@ def test_slider_marks_with_a_live_range_are_only_type_checked():
     Slider(Signal(1), min=Signal(0), max=Signal(10), marks=[{"value": 500}])
     with pytest.raises(ValueError):
         Slider(Signal(1), min=Signal(0), max=Signal(10), marks=[{"value": "x"}])
+
+
+@pytest.mark.unit
+def test_choice_cards_normalises_options_and_two_way_binds():
+    v = Signal("a")
+    cards = ChoiceCards(
+        v,
+        label="Mode",
+        options=[("a", "Alpha", "first"), ("b", "Beta"), {"value": "c", "title": "Gamma"}, "d"],
+    )
+    assert cards.type == "choicecards"
+    props = cards.to_json()["props"]
+    assert props["options"] == [
+        {"value": "a", "title": "Alpha", "body": "first"},
+        {"value": "b", "title": "Beta"},
+        {"value": "c", "title": "Gamma"},
+        {"value": "d", "title": "d"},
+    ]
+    assert props["value"] == "a" and props["label"] == "Mode"
+    assert cards.handle("change", {"value": "b"}) is True and v.value == "b"
+    assert cards.handle("change", {"value": "zzz"}) is False and v.value == "b"  # not offered
+    with pytest.raises(ValueError):
+        ChoiceCards(v, options=[{"title": "no value"}])
+
+
+@pytest.mark.unit
+def test_choice_cards_options_can_be_live_and_lock():
+    v, opts = Signal("a"), Signal([("a", "A")])
+    cards = ChoiceCards(v, options=opts, disabled=Signal(False))
+    assert "options" not in cards.static_props()
+    assert cards.reactive_props()["options"]() == [{"value": "a", "title": "A"}]
+    opts.set([("a", "A"), ("b", "B", "more")])
+    assert cards.reactive_props()["options"]()[1] == {"value": "b", "title": "B", "body": "more"}
+    assert cards.handle("change", {"value": "b"}) is True

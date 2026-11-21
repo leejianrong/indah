@@ -565,6 +565,40 @@ def slider_release_check(pw) -> None:
     )
 
 
+def choice_cards(ctx: indah.Context) -> indah.Component:
+    level = indah.Signal("normal")
+    blurbs = {
+        "easy": "Forgiving: hints are on and mistakes are free.",
+        "normal": "The intended game: hints on request.",
+        "hard": "No hints and one life.",
+    }
+    return indah.Column(
+        children=[
+            indah.ChoiceCards(
+                level,
+                label="Difficulty",
+                options=[(k, k.title(), v) for k, v in blurbs.items()],
+            ),
+            indah.Text(lambda: f"You picked {level.value}: {blurbs[level.value]}"),
+        ]
+    )
+
+
+def choice_cards_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".choicecard")).to_have_count(3)
+    expect(page.get_by_role("radio", name="Normal")).to_be_checked()
+    page.locator(".choicecard", has_text="Hard").click()
+    expect(page.get_by_text("You picked hard: No hints and one life.")).to_be_visible()
+    expect(page.locator(".choicecard.on")).to_have_count(1)
+    # A native radio group: the arrow keys move the choice.
+    page.get_by_role("radio", name="Hard").focus()
+    page.keyboard.press("ArrowUp")
+    expect(page.get_by_text("You picked normal")).to_be_visible()
+
+
 def slider_range_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -1159,6 +1193,18 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(49,),
             check=chart_axes_check,
+        ),
+        Page(
+            slug="choice-cards",
+            title="Choice cards",
+            summary=(
+                "A radio group where each option is a card with a title and a sentence of "
+                "explanation, for a preset, a difficulty or a persona. Arrow keys move the choice."
+            ),
+            build=choice_cards,
+            covers=("ChoiceCards",),
+            docs="components.md",
+            check=choice_cards_check,
         ),
         Page(
             slug="slider-range",
