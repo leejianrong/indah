@@ -2691,8 +2691,37 @@ class Map(Component):
 GRAPH_DEFAULT_MAX_NODES = 10_000
 GRAPH_MAX_NODES = 20_000  # the hard ceiling for max_nodes (ADR-0048)
 GRAPH_MAX_EDGES = 60_000
-_GRAPH_NODE_KEYS = {"id", "label", "group", "size", "color", "x", "y"}
-_GRAPH_EDGE_KEYS = {"source", "target", "id", "label", "color"}
+_GRAPH_NODE_KEYS = {
+    "id", "label", "group", "size", "color", "x", "y", "ring", "opacity", "label_style",
+}  # fmt: skip
+_GRAPH_EDGE_KEYS = {"source", "target", "id", "label", "color", "dash", "opacity", "width"}
+_GRAPH_LABEL_STYLES = ("strike", "bold")
+
+
+def _graph_style(key: str, value: Any, what: str) -> Any:
+    """Check one style value of a node or an edge (ADR-0053); the wire form is what it returns."""
+    if key == "opacity":
+        return _number(value, f"{what} opacity", 0, 1)
+    if key == "width":
+        return _number(value, f"{what} width", 0.25, 12)
+    if key == "ring":
+        return True if value is True else _color(value, "node ring")
+    if key == "label_style":
+        if value not in _GRAPH_LABEL_STYLES:
+            raise ValueError(f"label_style must be one of {_GRAPH_LABEL_STYLES}, got {value!r}")
+        return value
+    # dash: True for the default pattern, or [dash, gap] in px
+    if value is True:
+        return True
+    if (
+        isinstance(value, (list, tuple))
+        and len(value) == 2
+        and all(
+            not isinstance(v, bool) and isinstance(v, (int, float)) and 0 < v <= 40 for v in value
+        )
+    ):
+        return list(value)
+    raise ValueError(f"edge dash must be True or [dash, gap] in pixels, got {value!r}")
 
 
 def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> dict[str, Any]:
@@ -2706,7 +2735,10 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
             f"raise max_nodes (the ceiling is {GRAPH_MAX_NODES})"
         )
     index: dict[str, int] = {}
-    cols: dict[str, list[Any]] = {k: [] for k in ("label", "group", "size", "color", "x", "y")}
+    cols: dict[str, list[Any]] = {
+        k: []
+        for k in ("label", "group", "size", "color", "x", "y", "ring", "opacity", "label_style")
+    }
     used: set[str] = set()
     ids: list[str] = []
     for item in items:
@@ -2730,6 +2762,8 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
             if value is not None:
                 if key == "color":
                     value = _color(value, "node color")
+                elif key in ("ring", "opacity", "label_style"):
+                    value = _graph_style(key, value, "node")
                 elif key == "group":
                     value = str(value)
                 elif key == "label":
@@ -2747,7 +2781,7 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
     out_nodes: dict[str, list[Any]] = {"id": ids}
     for key, values in cols.items():
         if key in used and (key not in ("x", "y") or layout == "given"):
-            out_nodes[key] = values
+            out_nodes["labelStyle" if key == "label_style" else key] = values
 
     max_edges = min(GRAPH_MAX_EDGES, 3 * max_nodes)
     pairs = list(edges or [])
@@ -2755,7 +2789,9 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
         raise ValueError(f"a Graph holds at most {max_edges} edges, got {len(pairs)}")
     src: list[int] = []
     dst: list[int] = []
-    edge_cols: dict[str, list[Any]] = {"id": [], "label": [], "color": []}
+    edge_cols: dict[str, list[Any]] = {
+        "id": [], "label": [], "color": [], "dash": [], "opacity": [], "width": []
+    }  # fmt: skip
     edge_used: set[str] = set()
     for k, pair in enumerate(pairs):
         if isinstance(pair, dict):
@@ -2780,7 +2816,10 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
         for key in edge_cols:
             value = spec.get(key)
             if value is not None:
-                value = _color(value, "edge color") if key == "color" else str(value)
+                if key in ("dash", "opacity", "width"):
+                    value = _graph_style(key, value, "edge")
+                else:
+                    value = _color(value, "edge color") if key == "color" else str(value)
                 edge_used.add(key)
             edge_cols[key].append(value)
     out_edges: dict[str, list[Any]] = {"s": src, "t": dst}
@@ -2861,6 +2900,15 @@ class Graph(Component):
     sliders share, so a hosted app on ``Rate(per_second=5, burst=30)`` keeps working controls. A
     viewer cannot set it to a string that is not a node id.
 
+    **Styles** (ADR-0053). A node dict takes ``ring`` (``True`` for the text colour, or a colour),
+    ``opacity`` (0 to 1) and ``label_style`` (``"strike"`` or ``"bold"``); an edge dict takes
+    ``dash`` (``True``, or ``[dash, gap]`` in pixels), ``opacity`` and ``width``. Each is drawn the
+    same inside and outside the focus window: a styled edge is drawn wherever it is, and a styled
+    node far from the centre is a dot that keeps its opacity and ring. ``layout="stable"`` seeds
+    the layout from node ids and edges only, never ``group`` or style or the order of the nodes,
+    so changing a style, a group or the list order does not move a node (``"auto"``, the default,
+    still clusters by group).
+
     Replace ``nodes`` and ``edges`` together, inside ``indah.batch(...)``, when both are signals:
     set one at a time, an edge can briefly name a node that is not there yet and raises.
     """
@@ -2873,7 +2921,7 @@ class Graph(Component):
         edges: Source = None,
         *,
         height: int | str = 480,
-        layout: Literal["auto", "given"] = "auto",
+        layout: Literal["auto", "stable", "given"] = "auto",
         legend: bool = True,
         max_nodes: int = GRAPH_DEFAULT_MAX_NODES,
         focus_size: Source = 300,
@@ -2884,8 +2932,8 @@ class Graph(Component):
         label: str = "",
     ) -> None:
         super().__init__()
-        if layout not in ("auto", "given"):
-            raise ValueError(f"Graph layout must be 'auto' or 'given', got {layout!r}")
+        if layout not in ("auto", "stable", "given"):
+            raise ValueError(f"Graph layout must be 'auto', 'stable' or 'given', got {layout!r}")
         if (
             isinstance(max_nodes, bool)
             or not isinstance(max_nodes, int)

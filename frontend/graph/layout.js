@@ -49,7 +49,7 @@ export function mulberry32(seed) {
 
 // Group-clustered start: each group gets a centre on a spiral and its nodes a disc around it.
 // `group` is an Int32Array of group indexes (0 for an ungrouped graph).
-export function initialPositions(n, group, nGroups, seed) {
+export function initialPositions(n, group, nGroups, seed, idSeeds) {
   const rand = mulberry32(seed);
   const size = new Int32Array(nGroups);
   for (let i = 0; i < n; i++) size[group[i]]++;
@@ -66,8 +66,9 @@ export function initialPositions(n, group, nGroups, seed) {
   for (let i = 0; i < n; i++) {
     const g = group[i];
     const radius = LINK_DISTANCE * Math.sqrt(size[g]) * 0.7;
-    const r = radius * Math.sqrt(rand());
-    const a = rand() * Math.PI * 2;
+    const draw = idSeeds ? mulberry32(idSeeds[i]) : rand; // a node's own id, not the running sequence
+    const r = radius * Math.sqrt(draw());
+    const a = draw() * Math.PI * 2;
     x[i] = gx[g] + r * Math.cos(a);
     y[i] = gy[g] + r * Math.sin(a);
   }
@@ -183,8 +184,16 @@ class Tree {
 // A simulation over `n` nodes. `s` and `t` are edge endpoint indexes (Int32Array), `group` the
 // per-node group index. Call step() until `done`. With more than LAYOUT_LIMIT nodes it is done
 // at once and the clustered start is the layout.
-export function createSimulation({ n, s, t, group, nGroups, seed, given }) {
-  const start = given ?? initialPositions(n, group, nGroups, seed);
+//
+// `idSeeds` (a Uint32Array, one hash per node id) makes the layout stable (ADR-0053): each node
+// starts where its own id puts it and `group` is ignored throughout, so changing a node's group
+// or style, or the order of the nodes, never moves it.
+export function createSimulation({ n, s, t, group, nGroups, seed, given, idSeeds }) {
+  if (idSeeds) {
+    group = new Int32Array(n);
+    nGroups = 1;
+  }
+  const start = given ?? initialPositions(n, group, nGroups, seed, idSeeds);
   const x = start.x;
   const y = start.y;
   const vx = new Float64Array(n);

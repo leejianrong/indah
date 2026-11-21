@@ -88,3 +88,12 @@ def test_the_spatial_index_agrees_with_brute_force():
     result = run_probe("spatial_probe.mjs")
     assert result["checked"] >= 200
     assert result["bad"] == 0
+
+
+def test_a_stable_layout_ignores_group_and_node_order():
+    ids = [f"n{i}" for i in range(60)]
+    edges = [[ids[i], ids[(i * 7 + 3) % 60]] for i in range(60) if i != (i * 7 + 3) % 60]
+    result = run_probe("stable_probe.mjs", {"ids": ids, "edges": edges})
+    assert result["startGroup"] < 1e-9  # the group a node is in does not place it
+    assert result["startOrder"] < 1e-9  # nor does its position in the list
+    assert result["endGroup"] < 1e-6  # so settling the same graph gives the same picture

@@ -100,7 +100,7 @@ def test_layout_given_needs_a_position_for_every_node():
     assert cols["x"] == [0.0, 2.0] and cols["y"] == [1.0, 3.0]
     with pytest.raises(ValueError, match="needs an x for every node"):
         Graph([{"id": "a", "x": 0, "y": 1}, {"id": "b"}], [], layout="given")
-    with pytest.raises(ValueError, match="'auto' or 'given'"):
+    with pytest.raises(ValueError, match="'stable' or 'given'"):
         Graph(["a"], [], layout="radial")
 
 
@@ -306,3 +306,72 @@ def test_a_graph_without_a_hovered_signal_sends_nothing_and_ignores_hover():
 def test_an_unknown_initial_hovered_value_raises():
     with pytest.raises(ValueError, match="unknown graph node 'zz'"):
         Graph(["a"], [], hovered=Signal("zz"))
+
+
+# -- element styles and the stable layout (IND-278, ADR-0053) ------------------------------------
+
+
+@pytest.mark.unit
+def test_node_and_edge_styles_ride_as_optional_columns():
+    nodes = [
+        {"id": "a", "ring": True, "opacity": 0.4, "label_style": "strike"},
+        {"id": "b", "ring": "var(--ok)", "label_style": "bold"},
+        "c",
+    ]
+    edges = [
+        {"source": "a", "target": "b", "dash": True, "opacity": 0.5, "width": 2},
+        {"source": "b", "target": "c", "dash": [6, 3]},
+        ("a", "c"),
+    ]
+    props = Graph(nodes, edges).static_props()
+    assert props["nodes"]["ring"] == [True, "var(--ok)", None]
+    assert props["nodes"]["opacity"] == [0.4, None, None]
+    assert props["nodes"]["labelStyle"] == ["strike", "bold", None]
+    assert props["edges"]["dash"] == [True, [6, 3], None]
+    assert props["edges"]["opacity"] == [0.5, None, None]
+    assert props["edges"]["width"] == [2, None, None]
+
+
+@pytest.mark.unit
+def test_an_unstyled_graph_sends_no_style_columns():
+    props = Graph(["a", "b"], [("a", "b")]).static_props()
+    assert set(props["nodes"]) == {"id"} and set(props["edges"]) == {"s", "t"}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "node",
+    [
+        {"id": "a", "opacity": 1.5},
+        {"id": "a", "opacity": True},
+        {"id": "a", "ring": "url(x)"},
+        {"id": "a", "label_style": "italic"},
+    ],
+)
+def test_a_bad_node_style_is_refused(node):
+    with pytest.raises(ValueError):
+        Graph([node])
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "edge",
+    [
+        {"dash": "yes"},
+        {"dash": [5]},
+        {"dash": [0, 4]},
+        {"opacity": -0.1},
+        {"width": 0},
+        {"width": 99},
+    ],
+)
+def test_a_bad_edge_style_is_refused(edge):
+    with pytest.raises(ValueError):
+        Graph(["a", "b"], [{"source": "a", "target": "b", **edge}])
+
+
+@pytest.mark.unit
+def test_layout_stable_is_accepted_and_sent():
+    assert Graph(["a"], layout="stable").static_props()["layout"] == "stable"
+    with pytest.raises(ValueError):
+        Graph(["a"], layout="radial")

@@ -27,6 +27,7 @@ export function groupColor(index) {
 // Decode the columnar wire form (ADR-0048): nodes {id, label?, group?, size?, color?, x?, y?},
 // edges {s, t}, where s and t are indexes into the node columns.
 export function decode(data) {
+  const stable = data.layout === "stable";
   const cols = data.nodes ?? {};
   const ids = cols.id ?? [];
   const n = ids.length;
@@ -64,7 +65,13 @@ export function decode(data) {
     given.gx = new Float64Array(Math.max(1, groups.length));
     given.gy = new Float64Array(Math.max(1, groups.length));
   }
-  return { n, ids, idIndex, adjStart, adjEdge, edgeIds: e.id ?? null, labels: cols.label ?? null, size: cols.size ?? null, colors: cols.color ?? null, groups, group, s, t, degree, given };
+  return {
+    n, ids, idIndex, adjStart, adjEdge, edgeIds: e.id ?? null, labels: cols.label ?? null, size: cols.size ?? null,
+    colors: cols.color ?? null, groups, group, s, t, degree, given, stable,
+    // Styles (ADR-0053): optional columns, null where a node or edge has none.
+    ring: cols.ring ?? null, opacity: cols.opacity ?? null, labelStyle: cols.labelStyle ?? null,
+    eDash: e.dash ?? null, eOpacity: e.opacity ?? null, eWidth: e.width ?? null,
+  };
 }
 
 /** Mount a graph in `el`. Returns a small controller; the shell owns the lifecycle. */
@@ -116,9 +123,29 @@ export function createGraph(el, { onSelect, onHover } = {}) {
     return groupColor(g.group[i]);
   }
 
+  // Styled elements (ADR-0053) are drawn from short lists, in and out of the focus window, so a
+  // dashed edge or a ringed dot far from the centre is still seen. An unstyled graph has none.
+  let styledNodes = [];
+  let styledEdges = [];
+  let styledEdgeFlag = new Uint8Array(0);
+  function buildStyled() {
+    styledNodes = [];
+    for (let i = 0; i < g.n; i++) if (g.ring?.[i] != null || g.opacity?.[i] != null) styledNodes.push(i);
+    styledEdges = [];
+    for (let e = 0; e < g.s.length; e++) {
+      if (g.eDash?.[e] != null || g.eOpacity?.[e] != null || g.eWidth?.[e] != null) styledEdges.push(e);
+    }
+    styledEdgeFlag = new Uint8Array(g.s.length);
+    for (const e of styledEdges) styledEdgeFlag[e] = 1;
+  }
+  const nodeAlpha = (i) => g.opacity?.[i] ?? 1;
+
   function buildBatches() {
+    buildStyled();
     const byColor = new Map();
+    const styled = new Set(styledNodes);
     for (let i = 0; i < g.n; i++) {
+      if (styled.has(i)) continue; // drawn by drawStyledNodes with its own opacity and ring
       const c = nodeColor(i);
       if (!byColor.has(c)) byColor.set(c, []);
       byColor.get(c).push(i);
@@ -248,10 +275,32 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       const a = g.s[e];
       const b = g.t[e];
       if (!inWin[a] || !inWin[b]) continue;
+      if (styledEdgeFlag[e]) continue;
       ctx.moveTo(x[a] * k + tx, y[a] * k + ty);
       ctx.lineTo(x[b] * k + tx, y[b] * k + ty);
     }
     ctx.stroke();
+
+    // Styled edges: each with its own dash, opacity and width, wherever it is.
+    for (const e of styledEdges) {
+      const a = g.s[e];
+      const b = g.t[e];
+      const ax = x[a] * k + tx;
+      const ay = y[a] * k + ty;
+      const bx = x[b] * k + tx;
+      const by = y[b] * k + ty;
+      if ((ax < -20 && bx < -20) || (ay < -20 && by < -20) || (ax > w + 20 && bx > w + 20) || (ay > h + 20 && by > h + 20)) continue;
+      const d = g.eDash?.[e];
+      ctx.setLineDash(d == null ? [] : d === true ? [5, 4] : d);
+      ctx.globalAlpha = (g.eOpacity?.[e] ?? (dim ? 0.1 : 0.35)) * (dim ? 0.5 : 1);
+      ctx.strokeStyle = theme.edge;
+      ctx.lineWidth = g.eWidth?.[e] ?? 1;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
 
     // A selected node draws every edge it has, so it never looks isolated.
     const strokeEdges = (list, color, width) => {
@@ -292,6 +341,29 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       ctx.globalAlpha = dim ? 0.4 : 1;
       ctx.fill();
     }
+    // Styled nodes: own opacity and an optional ring. In the window a full circle; outside it a dot,
+    // which keeps its opacity and ring, so a state still reads far from the centre.
+    for (const i of styledNodes) {
+      const px = x[i] * k + tx;
+      const py = y[i] * k + ty;
+      if (px < -10 || py < -10 || px > w + 10 || py > h + 10) continue;
+      const near = everything || inWin[i];
+      const r = near ? radius(i) * Math.min(1.6, Math.max(0.5, Math.sqrt(k))) : 1.6;
+      ctx.globalAlpha = nodeAlpha(i) * (dim ? 0.4 : near ? 1 : 0.8);
+      ctx.fillStyle = nodeColor(i);
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
+      const ringColor = g.ring?.[i];
+      if (ringColor != null) {
+        ctx.globalAlpha = Math.max(0.5, nodeAlpha(i));
+        ctx.strokeStyle = ringColor === true ? theme.text : resolveColor(el, ringColor);
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(px, py, r + (near ? 3 : 2.5), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
     ctx.globalAlpha = 1;
     // Rings: highlighted nodes in the accent colour, the selected node in the text colour.
     const ring = (i, color, width) => {
@@ -306,7 +378,8 @@ export function createGraph(el, { onSelect, onHover } = {}) {
 
     // Labels: detailed nodes in view while the view is zoomed in enough to read them, plus the
     // selected and highlighted nodes always.
-    ctx.font = '12px "IBM Plex Sans", system-ui, sans-serif';
+    const baseFont = '12px "IBM Plex Sans", system-ui, sans-serif';
+    ctx.font = baseFont;
     ctx.textBaseline = "middle";
     ctx.lineWidth = 3;
     const label = (i, force) => {
@@ -317,10 +390,24 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       labelled++;
       const text = String(g.labels?.[i] ?? g.ids[i]);
       const r = radius(i) + 4;
+      const style = g.labelStyle?.[i];
+      ctx.font = style === "bold" ? `600 ${baseFont}` : baseFont;
+      ctx.globalAlpha = nodeAlpha(i);
       ctx.strokeStyle = theme.halo;
       ctx.fillStyle = theme.text;
       ctx.strokeText(text, px + r, py);
       ctx.fillText(text, px + r, py);
+      if (style === "strike") {
+        const len = ctx.measureText(text).width;
+        ctx.strokeStyle = theme.text;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(px + r, py);
+        ctx.lineTo(px + r + len, py);
+        ctx.stroke();
+        ctx.lineWidth = 3;
+      }
+      ctx.globalAlpha = 1;
     };
     for (let i = 0; i < g.n; i++) if (inWin[i] && !hlNodeFlag[i] && i !== selected) label(i, false);
     for (let j = 0; j < hlNodes.length; j++) label(hlNodes[j], true);
@@ -363,7 +450,8 @@ export function createGraph(el, { onSelect, onHover } = {}) {
     resolveTheme();
     buildBatches();
     const seed = hashString(`${g.n}:${g.s.length}:${g.ids[0] ?? ""}:${g.ids[g.n - 1] ?? ""}`);
-    sim = createSimulation({ n: g.n, s: g.s, t: g.t, group: g.group, nGroups: Math.max(1, g.groups.length), seed, given: g.given });
+    const idSeeds = g.stable ? Uint32Array.from(g.ids, hashString) : undefined;
+    sim = createSimulation({ n: g.n, s: g.s, t: g.t, group: g.group, nGroups: Math.max(1, g.groups.length), seed, given: g.given, idSeeds });
     touched = false;
     startedAt = performance.now();
     el.dataset.settled = "false";

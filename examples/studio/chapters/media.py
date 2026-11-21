@@ -738,6 +738,110 @@ def graph_check(pw) -> None:
     expect(page.get_by_text("Click a node", exact=True)).to_be_visible()
 
 
+# A small world that changes by year: every node has a first and a last year, so a year view needs
+# "not there yet", "this year" and "ended" without moving anything (ADR-0053).
+_WORLD = [(f"n{i}", 2000 + (i * 5) // 40, 2002 + (i * 7) % 4 + (i % 3)) for i in range(40)]
+_WORLD_EDGES = [(f"n{i}", f"n{(i * 3 + 1) % 40}") for i in range(40)] + [
+    (f"n{i}", f"n{i + 1}") for i in range(39)
+]
+
+
+def _world_at(year: int) -> tuple[list[dict], list[dict]]:
+    nodes = []
+    for name, born, ended in _WORLD:
+        node: dict = {"id": name, "label": name, "group": "past" if year > born else "new"}
+        if born > year:
+            node["opacity"] = 0.25  # not there yet
+        elif ended < year:
+            node.update(opacity=0.55, label_style="strike")  # ended
+        elif born == year:
+            node["ring"] = True  # new this year
+        nodes.append(node)
+    gone = {name for name, _, ended in _WORLD if ended < year}
+    edges = [
+        {
+            "source": a,
+            "target": b,
+            **({"dash": True, "opacity": 0.8} if a in gone or b in gone else {}),
+        }
+        for a, b in _WORLD_EDGES
+        if a != b
+    ]
+    return nodes, edges
+
+
+def graph_styles_page(ctx: indah.Context) -> indah.Component:
+    year = indah.Signal(2000)
+    world = indah.computed(lambda: _world_at(year.value))
+    return indah.Column(
+        children=[
+            indah.Graph(
+                lambda: world.value[0],
+                lambda: world.value[1],
+                layout="stable",
+                focus_size=6,
+                height=380,
+                label="A world by year",
+            ),
+            indah.Slider(year, min=2000, max=2004, step=1, label="Year", show_value=True),
+            indah.Text(lambda: f"Year {year.value}", variant="caption"),
+        ]
+    )
+
+
+def graph_styles_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    stage = page.locator('.graph-stage[data-settled="true"]')
+    expect(stage).to_be_visible(timeout=30_000)
+    ids = [name for name, _, _ in _WORLD]
+    read = "(ids) => Object.fromEntries(ids.map((i) => [i, document.querySelector('.graph-stage').__graph.screenOf(i)]))"
+    before = page.evaluate(read, ids)
+    slider = page.get_by_role("slider")
+    slider.focus()
+    for _ in range(4):
+        slider.press("ArrowRight")
+    expect(page.get_by_text("Year 2004")).to_be_visible()
+    page.wait_for_timeout(600)
+    after = page.evaluate(read, ids)
+    # Stepping the year changed styles and groups, and not one node moved.
+    assert before == after
+    # An ended edge between two nodes that are only dots is still drawn, dashed.
+    _, edges = _world_at(2004)
+    gone = [
+        e
+        for e in edges
+        if e.get("dash")
+        and not page.evaluate(
+            "([a, b]) => { const g = document.querySelector('.graph-stage').__graph;"
+            " return g.isDetailed(a) || g.isDetailed(b); }",
+            [e["source"], e["target"]],
+        )
+    ]
+    assert gone, "no dashed edge lies outside the focus window"
+    e = gone[0]
+    hits = page.evaluate(
+        """([a, b]) => {
+          const stage = document.querySelector('.graph-stage');
+          const c = stage.querySelector('canvas');
+          const ctx = c.getContext('2d');
+          const r = c.width / c.getBoundingClientRect().width;
+          const [ax, ay] = stage.__graph.screenOf(a);
+          const [bx, by] = stage.__graph.screenOf(b);
+          let n = 0;
+          for (let i = 1; i < 60; i++) {
+            const t = i / 60;
+            const d = ctx.getImageData(Math.round((ax + (bx - ax) * t) * r), Math.round((ay + (by - ay) * t) * r), 1, 1).data;
+            if (d[3] > 0) n++;
+          }
+          return n;
+        }""",
+        [e["source"], e["target"]],
+    )
+    assert hits > 5, f"the dashed edge was not drawn ({hits} marked pixels)"
+
+
 def heatmap_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -1212,6 +1316,21 @@ CHAPTER = Chapter(
             covers=("ChoiceCards",),
             docs="components.md",
             check=choice_cards_check,
+        ),
+        Page(
+            slug="graph-styles",
+            title="Graph element styles and a stable layout",
+            summary=(
+                "Nodes take `ring`, `opacity` and `label_style`, edges take `dash`, `opacity` and "
+                '`width`, drawn the same inside and outside the focus window. `layout="stable"` '
+                "seeds the layout from ids only, so stepping the year changes styles and groups "
+                "without moving a node."
+            ),
+            build=graph_styles_page,
+            covers=(),
+            docs="graph.md",
+            adr=(53,),
+            check=graph_styles_check,
         ),
         Page(
             slug="slider-range",

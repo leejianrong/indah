@@ -12,6 +12,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Graph` element styles and `layout="stable"` (IND-278, ADR-0053 part 2): a node takes `ring`
+  (`True` or a colour), `opacity` and `label_style` (`"strike"` or `"bold"`); an edge takes `dash`
+  (`True` or `[dash, gap]`), `opacity` and `width`. All are drawn the same inside and outside the focus
+  window (a styled edge is drawn wherever it is, a styled node far away is a dot that keeps its opacity and
+  ring). `layout="stable"` seeds the layout from node ids and edges only, never `group`, a style or the
+  order of the nodes, so stepping a year changes styles without moving a node. It is opt-in: `"auto"` still
+  clusters by group. The lazy graph module grows by about 1.8 KB raw (limits raised to 21,000 raw and 8,800
+  gzip for the parts that follow). Studio page `media/graph-styles`.
 - `ChoiceCards(columns=, options=[{"badge": ...}])` and a check on the chosen card (IND-279 follow-up):
   `columns` fixes 1 to 6 columns (one on a phone), `badge` is a short tag beside a title, and the chosen
   card carries a check mark as well as its border, so colour is not the only cue.
