@@ -298,6 +298,7 @@ def text_roles(ctx: indah.Context) -> indah.Component:
             indah.Text("Caption: help text and fine print", variant="caption"),
             indah.Text("mono: ids, paths, aligned numbers", variant="mono"),
             indah.Text("1,284", variant="readout"),
+            indah.Text("1987", variant="display"),
             indah.Text("Two lines,\nkept as written."),
         ],
     )
@@ -311,6 +312,7 @@ def text_roles_check(pw) -> None:
     expect(body).to_have_css("font-size", "15.2px")
     expect(page.get_by_text("1,284")).to_have_css("font-size", "22.4px")  # the readout, 1.4rem
     expect(page.get_by_text("Title: a heading")).to_have_css("font-weight", "600")
+    expect(page.get_by_text("1987")).to_have_css("font-size", "41.6px")  # display, 2.6rem
 
 
 def first_app_check(pw) -> None:

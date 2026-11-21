@@ -258,6 +258,7 @@ Plain `Text` is body text: normal size and weight, with line breaks kept. Pick a
 | `"caption"` | help text, timestamps, fine print (muted) |
 | `"mono"` | ids, paths, numbers that must line up |
 | `"readout"` | a counter or a figure: large, semi-bold, tabular numbers |
+| `"display"` | the biggest type on the screen: a year, a score, the one number a page is about |
 
 Plain text never interprets markup, so backticks stay literal; use `Text(..., markdown=True)`
 for code, emphasis, links and headings (a Markdown text takes no `variant`). `size="body"` and
