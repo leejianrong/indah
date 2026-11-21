@@ -210,3 +210,54 @@ def test_chart_rows_handles_nan_unsorted_repeats_and_empty():
         indah.chart_rows({"a": [(float("nan"), 1)]})
     with pytest.raises(ValueError):
         indah.chart_rows({"a": [("1", 1)]})
+
+
+# ---- time axis, integer ticks and a playhead label (IND-269, 270, 274) --------------------------
+
+
+@pytest.mark.unit
+def test_time_scale_turns_datetimes_into_unix_seconds():
+    import datetime
+
+    t0 = datetime.datetime(2026, 11, 1)
+    chart = indah.Chart(
+        [[t0, 1.0], [t0 + datetime.timedelta(hours=1), 2.0]], x_scale="time", series=["a"]
+    )
+    assert chart.static_props()["xScale"] == "time"
+    assert chart.to_json()["props"]["data"] == [[1793491200.0, 1.0], [1793494800.0, 2.0]]
+    aware = datetime.datetime(2026, 11, 1, 8, tzinfo=datetime.timezone(datetime.timedelta(hours=8)))
+    assert chart.reactive_props()["data"]()[0][0] == 1793491200.0
+    streaming = indah.Chart(x_scale="time", series=["a"])
+    streaming.push(aware, 1.0)
+    streaming.extend([[t0, 2.0]])
+    assert streaming.static_props()["data"] == [[1793491200.0, 1.0], [1793491200.0, 2.0]]
+
+
+@pytest.mark.unit
+def test_time_scale_is_x_only_and_a_number_passes_through():
+    with pytest.raises(ValueError):
+        indah.Chart(y_scale="time")
+    chart = indah.Chart([[5, 1.0]], x_scale="time", series=["a"])
+    assert chart.to_json()["props"]["data"] == [[5, 1.0]]
+
+
+@pytest.mark.unit
+def test_x_integer_is_linear_only_and_off_by_default():
+    assert "xInteger" not in indah.Chart(series=["a"]).static_props()
+    assert indah.Chart(series=["a"], x_integer=True).static_props()["xInteger"] is True
+    with pytest.raises(ValueError):
+        indah.Chart(series=["a"], x_integer=True, x_scale="log")
+
+
+@pytest.mark.unit
+def test_playhead_label_is_static_or_live():
+    fixed = indah.Chart(series=["a"], playhead=3, playhead_label="step 3")
+    assert fixed.static_props()["playheadLabel"] == "step 3"
+    assert "playheadLabel" not in fixed.reactive_props()
+    n = indah.Signal(1)
+    live = indah.Chart(series=["a"], playhead=n, playhead_label=lambda: f"step {n.value}")
+    assert "playheadLabel" not in live.static_props()
+    assert live.reactive_props()["playheadLabel"]() == "step 1"
+    n.set(2)
+    assert live.reactive_props()["playheadLabel"]() == "step 2"
+    assert "playheadLabel" not in indah.Chart(series=["a"]).to_json()["props"]
