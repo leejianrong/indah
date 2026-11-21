@@ -11,6 +11,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+- `Badge(tone=)` takes a `Signal`, `Computed` or callable (IND-271), so a pass/fail chip changes colour
+  with state. A plain string is checked at once and stays on the wire as before; a live value that is
+  not a tone shows as `neutral`. Shown on the Studio badges page.
+
 ## [0.15.0] - 2026-11-16
 
 `ImageOverlay` gains shapes in raster pixels, picking and a cropped view, and `Steps` can be a stepper (ADR-0052). Both are additive, so `protocol_version` stays 1.
