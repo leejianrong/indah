@@ -339,6 +339,12 @@ class Slider(Component):
     - ``commit="release"`` sends the value when the thumb is released (or a key is pressed)
       instead of on every move, for a slider that drives a costly recompute. The readout still
       follows the drag.
+
+    ``min``, ``max`` and ``step`` may each be a number, ``Signal``, ``Computed`` or callable
+    (IND-276), so the track can follow data that arrives later. The ``value`` signal is not
+    clamped when the range moves: the thumb shows the nearest end, so reset it yourself if the
+    range can shrink past it. A live log range that is not ``0 < min < max`` keeps the last good
+    one, and marks outside a live range are not drawn.
     """
 
     lockable = True
@@ -348,9 +354,9 @@ class Slider(Component):
         self,
         value: Signal[float],
         *,
-        min: float = 0,
-        max: float = 100,
-        step: float = 1,
+        min: Source = 0,
+        max: Source = 100,
+        step: Source = 1,
         label: str = "",
         show_value: bool = False,
         scale: str = "linear",
@@ -362,8 +368,10 @@ class Slider(Component):
             raise ValueError(f"Slider scale must be 'linear' or 'log', got {scale!r}")
         if commit not in ("input", "release"):
             raise ValueError(f"Slider commit must be 'input' or 'release', got {commit!r}")
-        if scale == "log" and not 0 < min < max:
+        live = [not isinstance(x, (int, float)) for x in (min, max)]
+        if scale == "log" and not any(live) and not 0 < min < max:
             raise ValueError(f"a log Slider needs 0 < min < max, got min={min!r} max={max!r}")
+        self._last_log = (min, max) if scale == "log" and not any(live) else None
         self._value = value
         self._min = min
         self._max = max
@@ -376,7 +384,10 @@ class Slider(Component):
         for mark in marks or []:
             if not isinstance(mark, dict) or "value" not in mark:
                 raise ValueError("a mark is a dict with a 'value', such as {'value': 5}")
-            at = _number(mark["value"], "mark value", min, max)
+            if any(live):  # the range moves: only the type is checked, the shell hides strays
+                at = _number(mark["value"], "mark value", float("-inf"), float("inf"))
+            else:
+                at = _number(mark["value"], "mark value", min, max)
             item: dict[str, Any] = {"value": at}
             if mark.get("label"):
                 item["label"] = str(mark["label"])[:30]
@@ -385,12 +396,10 @@ class Slider(Component):
             raise ValueError("a slider takes at most 12 marks")
 
     def static_props(self) -> dict[str, Any]:
-        props: dict[str, Any] = {
-            "min": self._min,
-            "max": self._max,
-            "step": self._step,
-            "label": self._label,
-        }
+        props: dict[str, Any] = {"label": self._label}
+        for name, val in (("min", self._min), ("max", self._max), ("step", self._step)):
+            if isinstance(val, (int, float)):
+                props[name] = val
         if self._show_value:
             props["showValue"] = True
         if self._scale != "linear":
@@ -401,8 +410,24 @@ class Slider(Component):
             props["commit"] = self._commit
         return props
 
+    def _range(self) -> tuple[float, float]:
+        lo, hi = _read(self._min), _read(self._max)
+        if self._scale == "log":
+            if isinstance(lo, (int, float)) and isinstance(hi, (int, float)) and 0 < lo < hi:
+                self._last_log = (lo, hi)
+            elif self._last_log is not None:
+                return self._last_log
+        return lo, hi
+
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"value": lambda: self._value.value}
+        props: dict[str, Callable[[], Any]] = {"value": lambda: self._value.value}
+        if not isinstance(self._min, (int, float)):
+            props["min"] = lambda: self._range()[0]
+        if not isinstance(self._max, (int, float)):
+            props["max"] = lambda: self._range()[1]
+        if not isinstance(self._step, (int, float)):
+            props["step"] = lambda: _read(self._step)
+        return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "input" and "value" in payload:
@@ -647,23 +672,28 @@ BADGE_TONES = ("neutral", "ok", "warn", "err", "info")
 
 
 class Badge(Component):
-    """A small status chip. ``text`` may be a string, signal or callable; ``tone`` is one
-    of ``neutral``/``ok``/``warn``/``err``/``info`` (the same tones as a Table badge)."""
+    """A small status chip. ``text`` and ``tone`` may each be a string, signal or callable;
+    ``tone`` is one of ``neutral``/``ok``/``warn``/``err``/``info`` (the same tones as a Table
+    badge). A plain string is checked at once; a signal or callable is read live, and a value
+    that is not a tone shows as ``neutral``."""
 
     type = "badge"
 
-    def __init__(self, text: Source, *, tone: str = "neutral") -> None:
-        if tone not in BADGE_TONES:
+    def __init__(self, text: Source, *, tone: Source = "neutral") -> None:
+        if isinstance(tone, str) and tone not in BADGE_TONES:
             raise ValueError(f"Badge tone must be one of {BADGE_TONES}, got {tone!r}")
         super().__init__()
         self._text = text
         self._tone = tone
 
     def static_props(self) -> dict[str, Any]:
-        return {"tone": self._tone}
+        return {"tone": self._tone} if isinstance(self._tone, str) else {}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
-        return {"text": lambda: str(_read(self._text))}
+        props: dict[str, Callable[[], Any]] = {"text": lambda: str(_read(self._text))}
+        if not isinstance(self._tone, str):
+            props["tone"] = lambda: t if (t := _read(self._tone)) in BADGE_TONES else "neutral"
+        return props
 
 
 class Code(Component):

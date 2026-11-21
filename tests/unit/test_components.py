@@ -720,6 +720,19 @@ def test_badge_serialises_text_source_and_tone():
 
 
 @pytest.mark.unit
+def test_badge_tone_follows_a_signal_or_callable():
+    state = Signal("ok")
+    b = Badge("run", tone=state)
+    assert b.static_props() == {}
+    assert b.to_json()["props"]["tone"] == "ok"
+    state.set("err")
+    assert b.reactive_props()["tone"]() == "err"
+    state.set("purple")  # not a tone: neutral, the stream is not broken
+    assert b.reactive_props()["tone"]() == "neutral"
+    assert Badge("x", tone=lambda: "warn").reactive_props()["tone"]() == "warn"
+
+
+@pytest.mark.unit
 def test_switch_round_trips_a_bool_signal():
     v = Signal(False)
     sw = Switch(v, label="Pinned")
@@ -1219,3 +1232,40 @@ def test_show_accepts_a_bool_or_a_callable():
     assert Show(lambda: flag.value > 0, []).reactive_props()["when"]() is False
     flag.set(2)
     assert Show(lambda: flag.value > 0, []).reactive_props()["when"]() is True
+
+
+@pytest.mark.unit
+def test_slider_range_follows_signals():
+    lo, hi = Signal(0), Signal(10)
+    sl = Slider(Signal(5), min=lo, max=hi, step=lambda: 1 if hi.value <= 10 else 5)
+    assert sl.static_props() == {"label": ""}
+    props = sl.to_json()["props"]
+    assert (props["min"], props["max"], props["step"]) == (0, 10, 1)
+    lo.set(2000)
+    hi.set(2020)
+    assert sl.reactive_props()["min"]() == 2000
+    assert sl.reactive_props()["max"]() == 2020
+    assert sl.reactive_props()["step"]() == 5
+    # A number stays on the wire as before, with no reactive getter.
+    fixed = Slider(Signal(1), min=0, max=9)
+    assert fixed.static_props()["max"] == 9 and "max" not in fixed.reactive_props()
+
+
+@pytest.mark.unit
+def test_slider_live_log_range_keeps_the_last_good_one():
+    hi = Signal(1000)
+    sl = Slider(Signal(10), min=1, max=hi, scale="log")
+    assert sl.reactive_props()["max"]() == 1000
+    hi.set(0)  # not 0 < min < max: the stream must not break
+    assert sl.reactive_props()["max"]() == 1000
+    hi.set(4000)
+    assert sl.reactive_props()["max"]() == 4000
+    with pytest.raises(ValueError):
+        Slider(Signal(1), min=0, max=10, scale="log")
+
+
+@pytest.mark.unit
+def test_slider_marks_with_a_live_range_are_only_type_checked():
+    Slider(Signal(1), min=Signal(0), max=Signal(10), marks=[{"value": 500}])
+    with pytest.raises(ValueError):
+        Slider(Signal(1), min=Signal(0), max=Signal(10), marks=[{"value": "x"}])
