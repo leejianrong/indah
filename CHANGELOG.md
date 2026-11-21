@@ -15,6 +15,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 - `Text(variant="display")` (IND-281, ADR-0040 amendment): the biggest type on the screen, 2.6rem
   semi-bold with tabular numbers on one line, for the one figure a page is about (a year being stepped
   through). `title` and `label` already existed. Shell CSS only; `protocol_version` stays 1.
+- `Chart` time axis, whole-number ticks and a labelled playhead (IND-269, IND-270, IND-274):
+  `x_scale="time"` reads x as Unix seconds and draws date ticks in UTC; a `datetime` in the data is
+  converted (a naive one is UTC), also through `push` and `extend`. Ranges, rules, bands, markers and
+  the playhead stay in seconds. `x_integer=True` hides every fractional x tick, label and grid line, for
+  counts such as a bit width (linear x only). `playhead_label` (a string, signal or callable, 40 characters)
+  is written beside the playhead line, on the side that has room. All optional and additive; the
+  shell grows by under 1 KB raw. Studio page `media/chart-axes`.
 - `Slider(min=, max=, step=)` take a `Signal`, `Computed` or callable (IND-276), so a track can follow
   data that arrives later instead of padding it. A number stays on the wire as before; a live bound
   becomes a reactive prop. The value signal is not clamped when the range moves, a live log range
