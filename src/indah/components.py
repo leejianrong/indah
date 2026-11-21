@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import datetime
 import functools
 import inspect
 import io
@@ -1871,6 +1872,25 @@ def _is_source(value: Any) -> bool:
     return isinstance(value, (Signal, Computed)) or callable(value)
 
 
+def _time_x(x: Any) -> Any:
+    """A ``datetime`` x becomes Unix seconds (a naive one is UTC); anything else is left alone."""
+    if isinstance(x, datetime.datetime):
+        if x.tzinfo is None:
+            x = x.replace(tzinfo=datetime.timezone.utc)
+        return x.timestamp()
+    return x
+
+
+def _time_row(row: Any) -> Any:
+    if isinstance(row, (list, tuple)) and row:
+        return [_time_x(row[0]), *row[1:]]
+    return row
+
+
+def _time_rows(value: Any) -> Any:
+    return None if value is None else [_time_row(r) for r in value]
+
+
 def _to_rows(value: Any) -> list[list[Any]]:
     """Coerce chart data to a JSON-safe list of rows ``[[x, y0, y1, ...], ...]``."""
     if value is None:
@@ -1910,6 +1930,12 @@ class Chart(Component):
     may be ``"log"``; ``rules`` take ``x`` for a vertical line, ``bands`` shade an x or y span and
     ``markers`` label a point. :func:`chart_rows` aligns series that have different x values.
 
+    Axes: ``x_scale="time"`` reads x as Unix seconds (a ``datetime`` in the data is converted; a
+    naive one is taken as UTC) and draws date ticks in UTC (IND-269). ``x_integer=True`` keeps
+    every x tick on a whole number, for counts such as a bit width (IND-270).
+    ``playhead_label`` (a string, signal or callable) writes a short label beside the playhead
+    line (IND-274).
+
     Example (a streaming loss curve fed from a training loop, ADR-0009)::
 
         chart = Chart(series=["loss"], title="Training loss", x_label="step")
@@ -1942,6 +1968,8 @@ class Chart(Component):
         markers: list[dict[str, Any]] | None = None,
         x_scale: str = "linear",
         y_scale: str = "linear",
+        x_integer: bool = False,
+        playhead_label: Source = None,
         highlight: Source = None,
         highlight_color: str | None = None,
         legend: str = "auto",
@@ -1950,9 +1978,16 @@ class Chart(Component):
         if legend not in ("auto", "labels", "off"):
             raise ValueError(f"Chart legend must be 'auto', 'labels' or 'off', got {legend!r}")
         self._legend = legend
-        for name, scale in (("x_scale", x_scale), ("y_scale", y_scale)):
-            if scale not in _SCALES:
-                raise ValueError(f"Chart {name} must be one of {_SCALES}, got {scale!r}")
+        for name, scale, allowed in (
+            ("x_scale", x_scale, _SCALES + ("time",)),
+            ("y_scale", y_scale, _SCALES),
+        ):
+            if scale not in allowed:
+                raise ValueError(f"Chart {name} must be one of {allowed}, got {scale!r}")
+        if x_integer and x_scale != "linear":
+            raise ValueError("Chart x_integer needs a linear x_scale")
+        self._x_integer = bool(x_integer)
+        self._playhead_label = playhead_label
         self._scales = {"x": x_scale, "y": y_scale}
         self._reactive = data is not None
         self._data = data
@@ -2012,6 +2047,12 @@ class Chart(Component):
         for axis in ("x", "y"):
             if self._scales[axis] == "log":
                 props[axis + "Scale"] = "log"
+        if self._scales["x"] == "time":
+            props["xScale"] = "time"
+        if self._x_integer:
+            props["xInteger"] = True
+        if isinstance(self._playhead_label, str) and self._playhead_label:
+            props["playheadLabel"] = self._playhead_label[:40]
         if self._highlight_color:
             props["highlightColor"] = self._highlight_color
         for name, source in (("playhead", self._playhead), ("highlight", self._highlight)):
@@ -2023,17 +2064,25 @@ class Chart(Component):
             props["data"] = [list(row) for row in self._buffer]
         return props
 
+    def _rows(self, value: Any) -> list[list[Any]]:
+        return _to_rows(_time_rows(value) if self._scales["x"] == "time" else value)
+
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         props: dict[str, Callable[[], Any]] = {}
         if self._reactive:
-            props["data"] = lambda: _to_rows(_read(self._data))
+            props["data"] = lambda: self._rows(_read(self._data))
         if self._playhead is not None and _is_source(self._playhead):
             props["playhead"] = lambda: _opt_number(_read(self._playhead))
         if self._highlight is not None and _is_source(self._highlight):
             props["highlight"] = lambda: _opt_number(_read(self._highlight))
+        if _is_source(self._playhead_label):
+            props["playheadLabel"] = lambda: str(_read(self._playhead_label) or "")[:40]
         return props
 
     # -- streaming API (only when data= is unset) ----------------------------
+
+    def _time_row(self, row: Any) -> Any:
+        return _time_row(row) if self._scales["x"] == "time" else row
 
     def _guard_streaming(self) -> None:
         if self._reactive:
@@ -2044,7 +2093,7 @@ class Chart(Component):
     def push(self, *row: Any) -> None:
         """Append one point ``(x, y0, y1, ...)`` and emit an append delta."""
         self._guard_streaming()
-        point = [_json_safe(v) for v in row]
+        point = [_json_safe(v) for v in self._time_row(row)]
         self._buffer.append(point)
         if self._session is not None:
             self._session.emit_append(self.id, "data", [point])
@@ -2052,7 +2101,7 @@ class Chart(Component):
     def extend(self, rows: Any) -> None:
         """Append several points at once, as a single append patch."""
         self._guard_streaming()
-        batch = [[_json_safe(v) for v in row] for row in rows]
+        batch = [[_json_safe(v) for v in self._time_row(row)] for row in rows]
         if not batch:
             return
         self._buffer.extend(batch)

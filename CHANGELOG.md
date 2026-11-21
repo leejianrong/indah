@@ -11,6 +11,15 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+- `Chart` time axis, whole-number ticks and a labelled playhead (IND-269, IND-270, IND-274):
+  `x_scale="time"` reads x as Unix seconds and draws date ticks in UTC; a `datetime` in the data is
+  converted (a naive one is UTC), also through `push` and `extend`. Ranges, rules, bands, markers and
+  the playhead stay in seconds. `x_integer=True` hides every fractional x tick, label and grid line, for
+  counts such as a bit width (linear x only). `playhead_label` (a string, signal or callable, 40 characters)
+  is written beside the playhead line, on the side that has room. All optional and additive; the
+  shell grows by under 1 KB raw. Studio page `media/chart-axes`.
+
 ## [0.15.0] - 2026-11-16
 
 `ImageOverlay` gains shapes in raster pixels, picking and a cropped view, and `Steps` can be a stepper (ADR-0052). Both are additive, so `protocol_version` stays 1.

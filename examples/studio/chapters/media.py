@@ -389,6 +389,69 @@ def chart_steps(ctx: indah.Context) -> indah.Component:
     )
 
 
+def chart_axes(ctx: indah.Context) -> indah.Component:
+    import datetime
+
+    # A run sampled every six hours: x is a real timestamp, so the axis shows dates.
+    start = datetime.datetime(2026, 11, 1)
+    runs = [[start + datetime.timedelta(hours=6 * i), 100 - 3.2 * i + (i % 3)] for i in range(14)]
+    # Bit widths are counts: a narrow range must not show 2.5 or 3.5.
+    widths = [[w, 2**w] for w in range(3, 8)]
+    step = indah.Signal(6)
+    return indah.Column(
+        children=[
+            indah.Chart(
+                runs,
+                series=[{"label": "cost", "stroke": "var(--primary)"}],
+                title="Cost by time (UTC)",
+                x_scale="time",
+                height=220,
+            ),
+            indah.Chart(
+                widths,
+                series=[{"label": "states", "stroke": "var(--primary)"}],
+                title="States by bit width",
+                x_label="bits",
+                x_integer=True,
+                points=True,
+                height=220,
+            ),
+            indah.Slider(step, min=0, max=13, label="Step"),
+            indah.Chart(
+                [[i, 100 - 3.2 * i + (i % 3)] for i in range(14)],
+                series=[{"label": "cost", "stroke": "var(--primary)"}],
+                title="A labelled playhead",
+                x_integer=True,
+                playhead=step,
+                playhead_label=lambda: f"step {step.value:.0f}",
+                height=220,
+            ),
+        ]
+    )
+
+
+def chart_axes_check(pw) -> None:
+    page = pw.page
+    page.wait_for_function(
+        "() => { const c = document.querySelectorAll('.chart');"
+        " return c.length === 3 && [...c].every((e) => e.__uplot); }"
+    )
+    # The time chart's scale is a time scale; the first x is 2026-11-01 00:00 UTC.
+    assert page.evaluate(
+        "() => { const u = document.querySelectorAll('.chart')[0].__uplot;"
+        " return u.scales.x.time === true && u.data[0][0] === 1793491200; }"
+    )
+    # Integer ticks: every x axis split that is drawn is a whole number.
+    page.wait_for_function(
+        "() => { const u = document.querySelectorAll('.chart')[1].__uplot;"
+        " const ax = u.axes[0]; const vals = ax._splits.filter((v, i) => ax.filter(u, ax._splits, 0)[i] != null);"
+        " return vals.length > 0 && vals.every(Number.isInteger); }"
+    )
+    page.wait_for_function(
+        "() => document.querySelectorAll('.chart')[2].__uplot.data[0].length === 14"
+    )
+
+
 def slider_release_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -971,6 +1034,20 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(50,),
             check=slider_release_check,
+        ),
+        Page(
+            slug="chart-axes",
+            title="Time axis, whole-number ticks and a labelled playhead",
+            summary=(
+                '`x_scale="time"` draws dates for a series of timestamps, `x_integer=True` keeps '
+                "the ticks of a count on whole numbers, and `playhead_label` says what the "
+                "playhead line marks."
+            ),
+            build=chart_axes,
+            covers=(),
+            docs="components.md",
+            adr=(49,),
+            check=chart_axes_check,
         ),
         Page(
             slug="chart-steps",

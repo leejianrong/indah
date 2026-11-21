@@ -151,6 +151,14 @@
       ctx.moveTo(x, top);
       ctx.lineTo(x, top + height);
       ctx.stroke();
+      if (props.playheadLabel) {
+        // Beside the line, on the side with room, so it never runs off the plot.
+        ctx.font = mono;
+        const room = left + width - x;
+        ctx.textAlign = room > ctx.measureText(props.playheadLabel).width + 10 * dpr ? "left" : "right";
+        ctx.fillStyle = resolveColor(el, "var(--text)");
+        ctx.fillText(props.playheadLabel, x + (ctx.textAlign === "left" ? 4 : -4) * dpr, top + 11 * dpr);
+      }
     }
     if (props.highlight != null) drawHighlight(self, ctx, dpr); // above the playhead line
     drawMarkers(self, ctx, dpr, mono);
@@ -242,9 +250,12 @@
   }
   const logAxis = { values: logLabels, filter: decades };
 
+  // Whole-number ticks only (IND-270): a fractional split is hidden, label, grid line and tick.
+  const wholes = (_u, splits) => splits.map((v) => (v != null && Number.isInteger(v) ? v : null));
+
   function options() {
     const axis = { stroke: AXIS, grid: { stroke: "rgba(140,133,144,0.18)" }, ticks: { stroke: AXIS } };
-    const x = { time: false };
+    const x = { time: props.xScale === "time" };
     if (props.xScale === "log") Object.assign(x, { distr: 3, log: 10 });
     if (props.xRange) x.range = () => [props.xRange[0], props.xRange[1]];
     const scales = { x };
@@ -256,6 +267,8 @@
       height: plotHeight(),
       title: props.title ?? "",
       scales,
+      // A time axis is drawn in UTC, so a chart reads the same in every browser's zone.
+      ...(props.xScale === "time" ? { tzDate: (ts) => uPlot.tzDate(new Date(ts * 1e3), "UTC") } : {}),
       series: seriesConfig(),
       // An axis with no label needs no room for one: a compact x axis keeps the plot tall.
       axes: [
@@ -263,6 +276,7 @@
           ...axis,
           ...(props.xLabel ? { label: props.xLabel } : { size: 30 }),
           ...(props.xScale === "log" ? { ...logAxis, grid: { ...axis.grid, filter: decades }, ticks: { ...axis.ticks, filter: decades } } : {}),
+          ...(props.xInteger ? { filter: wholes, grid: { ...axis.grid, filter: wholes }, ticks: { ...axis.ticks, filter: wholes } } : {}),
         },
         {
           ...axis,
@@ -312,6 +326,7 @@
     void props.markers;
     void props.xScale;
     void props.yScale;
+    void props.xInteger;
     void props.shadeAfter;
     void props.highlightColor;
     void props.legend;
@@ -332,7 +347,7 @@
   // redraw straight after the data was cleared would draw axes that have no scale yet).
   let lastMarks;
   $effect(() => {
-    const marks = `${props.playhead}|${props.highlight}`;
+    const marks = `${props.playhead}|${props.highlight}|${props.playheadLabel}`;
     const changed = marks !== lastMarks;
     lastMarks = marks;
     if (u && changed && u.data[0]?.length) untrack(() => u.redraw(false));
