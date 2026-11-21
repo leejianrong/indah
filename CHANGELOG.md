@@ -12,6 +12,9 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Text(variant="display")` (IND-281, ADR-0040 amendment): the biggest type on the screen, 2.6rem
+  semi-bold with tabular numbers on one line, for the one figure a page is about (a year being stepped
+  through). `title` and `label` already existed. Shell CSS only; `protocol_version` stays 1.
 - `Badge(tone=)` takes a `Signal`, `Computed` or callable (IND-271), so a pass/fail chip changes colour
   with state. A plain string is checked at once and stays on the wire as before; a live value that is
   not a tone shows as `neutral`. Shown on the Studio badges page.
