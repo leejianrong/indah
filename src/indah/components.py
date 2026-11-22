@@ -1335,6 +1335,113 @@ class ChoiceCards(Component):
         return [self._options_norm(o) for o in _read(self._options_src)]  # type: ignore[attr-defined]
 
 
+_TIMELINE_MAX_POINTS = 2000
+_TIMELINE_SPEEDS = (0.5, 1, 2, 4)
+
+
+class Timeline(Component):
+    """Step through an ordered list of moments: years, a run's checkpoints, log times (IND-277).
+
+    ``points`` is the ordered list of moments that exist, numbers or strings, unique, up to 2,000,
+    any spacing; ``value`` is a ``Signal`` holding one of them (it must be one at the start).
+    Stepping goes to the next point, so a world that changes on irregular dates steps through
+    exactly those.
+    ``labels`` is a list the same length as ``points``, or a function of a point returning its text
+    (default ``str(point)``). ``density`` is an optional list of non-negative numbers, one per
+    point, drawn as small bars behind the track so the busy moments show; "previous event" and
+    "next event" jump to the nearest point with a density above zero. ``unit`` (``"year"``) is for
+    the screen reader: "year 2003, step 4 of 11".
+
+    The track is a native range input (arrow keys, Home and End). Buttons step to the previous and
+    next point or event and play or pause; space plays. Play is a browser timer that posts one
+    step at a time, at ``speed`` steps a second (0.5, 1, 2 or 4; 4 is the cap so a hosted app on
+    ``Rate(per_second=5)`` keeps working controls), and stops at the last point. ``playing`` is an
+    optional ``Signal[bool]`` that follows play and pause and can start it from Python.
+    ``disabled=`` locks it. The wire carries the point's index, and Python refuses one out of
+    range.
+    """
+
+    lockable = True
+    type = "timeline"
+
+    def __init__(
+        self,
+        value: Signal[Any],
+        points: list[Any],
+        *,
+        labels: list[Any] | Callable[[Any], Any] | None = None,
+        density: list[float] | None = None,
+        unit: str = "",
+        playing: Signal[bool] | None = None,
+        speed: float = 1,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        points = list(points)
+        if not 0 < len(points) <= _TIMELINE_MAX_POINTS:
+            raise ValueError(f"a Timeline takes 1 to {_TIMELINE_MAX_POINTS} points")
+        for p in points:
+            if isinstance(p, bool) or not isinstance(p, (int, float, str)):
+                raise ValueError(f"a Timeline point is a number or a string, got {p!r}")
+        if len(set(points)) != len(points):
+            raise ValueError("Timeline points must be unique")
+        if value.peek() not in points:
+            raise ValueError(f"the Timeline value {value.peek()!r} is not one of its points")
+        if callable(labels):
+            labels = [labels(p) for p in points]
+        if labels is not None and len(labels) != len(points):
+            raise ValueError("Timeline labels must be as long as points")
+        if density is not None:
+            if len(density) != len(points) or any(
+                isinstance(d, bool) or not isinstance(d, (int, float)) or not 0 <= d < 1e15
+                for d in density
+            ):
+                raise ValueError("Timeline density is one non-negative number per point")
+        if speed not in _TIMELINE_SPEEDS:
+            raise ValueError(f"Timeline speed must be one of {_TIMELINE_SPEEDS}, got {speed!r}")
+        self._value, self._points, self._playing, self._speed = value, points, playing, speed
+        self._labels = [str(x) for x in (labels if labels is not None else points)]
+        self._density = None if density is None else [float(d) for d in density]
+        self._unit, self._label = str(unit)[:30], label
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"labels": self._labels, "speed": self._speed}
+        if self._density is not None:
+            props["density"] = self._density
+        if self._unit:
+            props["unit"] = self._unit
+        if self._label:
+            props["label"] = self._label
+        return props
+
+    def _index(self) -> int:
+        try:
+            return self._points.index(self._value.value)
+        except ValueError:
+            return 0  # the app set a value that is not a point: show the first
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {"index": self._index}
+        if self._playing is not None:
+            props["playing"] = lambda: bool(self._playing.value)
+        return props
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "input":
+            index = payload.get("index")
+            if isinstance(index, bool) or not isinstance(index, int):
+                return False
+            if not 0 <= index < len(self._points):
+                return False
+            self._value.set(self._points[index])
+            return True
+        if event == "play" and isinstance(payload.get("playing"), bool):
+            if self._playing is not None:
+                self._playing.set(payload["playing"])
+            return True
+        return False
+
+
 class MultiSelect(Component):
     """A multi-select two-way bound to a ``Signal[list[str]]`` (R5).
 

@@ -7,6 +7,7 @@
   import Markdown from "./Markdown.svelte";
   import MarkedRuns from "./MarkedRuns.svelte";
   import Steps from "./Steps.svelte";
+  import Timeline from "./Timeline.svelte";
   import Chart from "./Chart.svelte";
   import Heatmap from "./Heatmap.svelte";
   import Pie from "./Pie.svelte";
@@ -670,6 +671,8 @@
     selectable={props.selectable ?? false}
     onselect={(index) => postEvent(node.id, "select", { index })}
   />
+{:else if node.type === "timeline"}
+  <Timeline id={node.id} {props} />
 {:else if node.type === "empty"}
   <div class="empty-state">
     {#if props.title}<div class="text t-title">{props.title}</div>{/if}

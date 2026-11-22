@@ -39,6 +39,7 @@ from indah.components import (
     Text,
     TextArea,
     TextInput,
+    Timeline,
     walk,
 )
 from indah.reactive import Signal
@@ -1304,6 +1305,56 @@ def test_choice_cards_options_can_be_live_and_lock():
     opts.set([("a", "A"), ("b", "B", "more")])
     assert cards.reactive_props()["options"]()[1] == {"value": "b", "title": "B", "body": "more"}
     assert cards.handle("change", {"value": "b"}) is True
+
+
+# -- Timeline (IND-277, ADR-0053) ----------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_timeline_maps_the_wire_index_to_a_point():
+    year = Signal(2003)
+    tl = Timeline(
+        year, [1999, 2003, 2010], density=[0, 4, 1], unit="year", labels=lambda y: f"in {y}"
+    )
+    props = tl.to_json()["props"]
+    assert tl.type == "timeline"
+    assert props["labels"] == ["in 1999", "in 2003", "in 2010"]
+    assert props["index"] == 1 and props["density"] == [0.0, 4.0, 1.0] and props["unit"] == "year"
+    assert tl.handle("input", {"index": 2}) is True and year.value == 2010
+    assert tl.reactive_props()["index"]() == 2
+    for bad in (3, -1, True, "1", None):
+        assert tl.handle("input", {"index": bad}) is False
+    assert year.value == 2010  # a refused index changes nothing
+
+
+@pytest.mark.unit
+def test_timeline_play_follows_a_signal_and_is_optional():
+    playing = Signal(False)
+    tl = Timeline(Signal("a"), ["a", "b"], playing=playing)
+    assert tl.reactive_props()["playing"]() is False
+    assert tl.handle("play", {"playing": True}) is True and playing.value is True
+    assert Timeline(Signal("a"), ["a"]).handle("play", {"playing": True}) is True  # nothing to set
+    assert "playing" not in Timeline(Signal("a"), ["a"]).reactive_props()
+    assert tl.handle("play", {"playing": "yes"}) is False
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"points": []},
+        {"points": [1, 1]},
+        {"points": [1, True]},
+        {"points": [1, 2], "labels": ["one"]},
+        {"points": [1, 2], "density": [1]},
+        {"points": [1, 2], "density": [1, -1]},
+        {"points": [1, 2], "speed": 8},
+        {"points": [5, 6]},  # the value is not one of the points
+    ],
+)
+def test_timeline_refuses_bad_arguments(kwargs):
+    with pytest.raises(ValueError):
+        Timeline(Signal(1), **kwargs)
 
 
 @pytest.mark.unit

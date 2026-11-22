@@ -20,18 +20,18 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   order of the nodes, so stepping a year changes styles without moving a node. It is opt-in: `"auto"` still
   clusters by group. The lazy graph module grows by about 1.8 KB raw (limits raised to 21,000 raw and 8,800
   gzip for the parts that follow). Studio page `media/graph-styles`.
+- `Timeline(value, points, labels=, density=, unit=, playing=, speed=)` (IND-277, ADR-0053): step through
+  the moments that exist, however irregular (years now, days later). Buttons for the previous and next
+  point or event (a point with density above zero), play and pause at 0.5, 1, 2 or 4 steps a second (4 is
+  the cap, so a hosted app on `Rate(per_second=5)` keeps working controls), a native range track (arrow
+  keys, Home, End) with density bars behind it, space to play, and "year 2003, step 4 of 11" for a screen
+  reader. The wire carries the point's index and Python refuses one out of range. New public name
+  `indah.Timeline`, node type `timeline`; additive. Studio page `media/timeline`.
 - `ChoiceCards(columns=, options=[{"badge": ...}])` and a check on the chosen card (IND-279 follow-up):
   `columns` fixes 1 to 6 columns (one on a phone), `badge` is a short tag beside a title, and the chosen
   card carries a check mark as well as its border, so colour is not the only cue.
 - `Text(size="display" | "title" | "label")` (IND-281 follow-up) is accepted as the older spelling of
   `variant=`, and `display` now uses the theme's display font.
-
-### Changed
-- `Slider` with a live range now clamps its value (IND-276, from the request): when `min` or `max`
-  moves past the value, the signal is set to the nearest end. 0.15.x left it alone, so the thumb
-  showed one value and the signal held another.
-
-### Added
 - `ChoiceCards(value, options=[(value, title, body), ...], label=)` (IND-279): a radio group where each
   option is a card with a title and a sentence of explanation, for a preset, a difficulty or a persona.
   A native radio group underneath (arrow keys, screen readers), in a responsive grid that stacks on a
@@ -44,14 +44,6 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   `push`. `rules`, `bands` and `markers` take a callable or `Signal` returning the list, so a
   threshold follows a slider or a model's output; a live list is checked on every read. All
   optional and additive. Studio page `media/chart-category`.
-
-### Changed
-- A `Chart` no longer rebuilds its plot on every patch. The shell compared nothing before, so a moved
-  playhead, threshold or highlight tore the plot down and drew it again (losing a zoom); it now
-  rebuilds only when the series, labels, ranges, scales, height or legend change, and repaints
-  the overlay otherwise.
-
-### Added
 - `Text(variant="display")` (IND-281, ADR-0040 amendment): the biggest type on the screen, 2.6rem
   semi-bold with tabular numbers on one line, for the one figure a page is about (a year being stepped
   through). `title` and `label` already existed. Shell CSS only; `protocol_version` stays 1.
@@ -70,6 +62,17 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 - `Badge(tone=)` takes a `Signal`, `Computed` or callable (IND-271), so a pass/fail chip changes colour
   with state. A plain string is checked at once and stays on the wire as before; a live value that is
   not a tone shows as `neutral`. Shown on the Studio badges page.
+
+### Changed
+- `Slider` with a live range now clamps its value (IND-276, from the request): when `min` or `max`
+  moves past the value, the signal is set to the nearest end. 0.15.x left it alone, so the thumb
+  showed one value and the signal held another.
+- The size budget's `python_source_bytes` is raised from 630,000 to 660,000 for `Timeline` and the two
+  Graph parts that follow it (ADR-0053). The wheel has 7 KB left of its 630,000.
+- A `Chart` no longer rebuilds its plot on every patch. The shell compared nothing before, so a moved
+  playhead, threshold or highlight tore the plot down and drew it again (losing a zoom); it now
+  rebuilds only when the series, labels, ranges, scales, height or legend change, and repaints
+  the overlay otherwise.
 
 ## [0.15.0] - 2026-11-16
 
