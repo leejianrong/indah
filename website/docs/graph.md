@@ -84,6 +84,21 @@ A graph with thousands of labelled nodes is a hairball. `Graph` draws only the `
 - A graph holds at most `max_nodes` nodes (default 10,000, up to 20,000) and three times as many edges. Past that, sample the graph before you hand it over.
 - Above 8,000 nodes the nodes start clustered by group and are not relaxed further.
 
+## Show state without moving anything
+
+A graph that changes over time (a year, a run) often needs to say "this ended", "this is new" and
+"this is not there yet" without anything jumping. Give a node `opacity`, a `ring` or
+`label_style="strike"`, and an edge `dash`, `opacity` or `width`. Styles draw the same far from the
+centre: a dashed edge is still dashed, and a ringed dot keeps its ring. Add `layout="stable"` and the
+layout depends on ids and edges only, so changing a style, a group or the order of the nodes never
+moves a node.
+
+```python
+nodes = [{"id": "a", "ring": True}, {"id": "b", "opacity": 0.4, "label_style": "strike"}]
+edges = [{"source": "a", "target": "b", "dash": True}]
+indah.Graph(nodes, edges, layout="stable")
+```
+
 ## Use the keyboard
 
 Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clears the selection.
@@ -92,14 +107,14 @@ Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clear
 
 | Argument | Meaning |
 |----------|---------|
-| `nodes` | ids, or dicts with `id` and optional `label`, `group`, `size`, `color`, `x`, `y` |
-| `edges` | `(source, target)` pairs, or dicts with `source`, `target` and optional `id`, `label`, `color` |
+| `nodes` | ids, or dicts with `id` and optional `label`, `group`, `size`, `color`, `x`, `y`, `ring`, `opacity`, `label_style` |
+| `edges` | `(source, target)` pairs, or dicts with `source`, `target` and optional `id`, `label`, `color`, `dash`, `opacity`, `width` |
 | `selected` | a `Signal[str \| None]`, two-way |
 | `hovered` | a `Signal[str \| None]`, one-way: the node under the pointer (debounced about 250 ms) |
 | `focus` | a node id, signal or callable: centre on it |
 | `focus_size` | nodes drawn in full (default 300, at most 5,000); may be a signal |
 | `highlight` | `{"nodes": [...], "edges": [...]}`; may be a signal |
-| `layout` | `"auto"` (default) or `"given"`, which needs `x` and `y` on every node |
+| `layout` | `"auto"` (default), `"stable"` (seeded from ids and edges only) or `"given"`, which needs `x` and `y` on every node |
 | `height` | pixels, or `"fill"` |
 | `legend` | show the group colours (default `True`) |
 | `max_nodes` | most nodes allowed (default 10,000; ceiling 20,000) |

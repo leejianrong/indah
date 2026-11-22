@@ -45,10 +45,12 @@ All additive and off by default (no `protocol_version` bump, ADR-0005). Three pa
 - Styles are drawn identically inside and outside the focus window, so a dashed edge and a ringed dot are
   still visible far from the centre (the dot keeps its ring and opacity; the label style needs a label and is
   drawn only where labels are).
-- **Layout is seeded from ids and edges only**, never from `group`, `color` or any style, so changing a style or
-  a group never moves a node. This is a documented guarantee, with a test that reads positions before and after.
-  Today's clustering by group changes: with `layout="auto"` the start is a deterministic function of the ids and
-  edges. `group` still picks the colour and the legend.
+- **Layout can be seeded from ids and edges only.** `layout="stable"` (opt-in) never reads `group`, `color`
+  or any style, and starts each node from a hash of its own id, so changing a style, a group or the order of
+  the nodes never moves a node. It is a documented guarantee with a Node test (`stable_probe.mjs`) and a
+  browser test that reads positions before and after. `layout="auto"` keeps today's clustering by group and
+  is still the default: changing the default would move every existing graph, so that waits for the owner
+  (open question 2). `group` still picks the colour and the legend either way.
 - `Graph(update="keep")`: when `nodes` and `edges` are replaced, every id already on screen keeps its position
   and only new ids are placed (near their neighbours). The default stays today's behaviour (`"relayout"`).
 - `transition_ms` (0 to 2,000, default 0) eases colour, opacity and position changes between updates. It is off
@@ -85,15 +87,14 @@ generic "linked components" mechanism: `link=` is only Timeline to Graph.
 
 ## Consequences
 
-- The auto layout of existing graphs changes (no more group clustering). It is still deterministic. Graphs that
-  need the old look can pass `x` and `y` with `layout="given"`. Listed under Changed in the CHANGELOG.
-- The Python-source size budget needs raising for the three parts (about 4 KB left today); each PR says so.
+- No existing graph changes: `layout="auto"` stays the default and `"stable"` is opt-in.
+- The size budgets needed raising for the three parts (Python source, and the lazy graph module's raw and gzip
+  limits); each PR says so.
 - Three PRs, one per part, in the order above; part 3 needs part 2's style vocabulary.
 
 ## Open questions for the owner
 
 1. Is capping play at 4 steps a second right, or should a hosted app be able to raise it with its own `Rate`?
-2. Is changing the default layout acceptable (the guarantee needs it), or should stable layout be opt-in
-   (`layout="stable"`) with the old clustering kept as the default until 1.0?
+2. Should `layout="stable"` become the default? It is opt-in in the first build, so no existing graph moves.
 3. `Timeline(link=graph)` couples two components in the browser. Is that acceptable, or should frames play
    from the Graph's own control strip instead?

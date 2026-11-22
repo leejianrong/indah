@@ -32,7 +32,7 @@
     if (!force && props.nodes === loadedNodes && props.edges === loadedEdges) return;
     loadedNodes = props.nodes;
     loadedEdges = props.edges;
-    ctl.setData({ nodes: props.nodes, edges: props.edges });
+    ctl.setData({ nodes: props.nodes, edges: props.edges, layout: props.layout });
     options();
     ctl.resize();
     legend = ctl.legend();
