@@ -460,6 +460,21 @@
       .radio-group { display: flex; flex-direction: column; gap: 0.45rem; }
       /* ChoiceCards (IND-279): a native radio group dressed as cards. The input is visually hidden but
          stays focusable, so arrow keys and screen readers work; the card shows the focus ring. */
+      /* Timeline (IND-277). The track is a native range input; density bars sit behind it. */
+      .timeline { display: flex; flex-direction: column; gap: 0.35rem; }
+      .timeline-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+      .timeline-now { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .timeline-count { font-size: 0.78rem; color: var(--muted); }
+      .timeline-track { position: relative; }
+      .timeline-density { position: absolute; inset: 0 8px 50% 8px; display: flex; align-items: flex-end; gap: 1px; pointer-events: none; }
+      .timeline-bar { flex: 1 1 0; min-width: 1px; background: var(--outline); border-radius: 1px 1px 0 0; }
+      .timeline-bar.on { background: var(--primary); }
+      .timeline input[type="range"] { position: relative; width: 100%; margin: 0; padding-top: 1.1rem; }
+      .timeline-controls { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+      .timeline-controls button { min-width: 2.2rem; padding: 0.25rem 0.5rem; }
+      .timeline-speed { margin-left: auto; }
+      .timeline-speed select { font-size: 0.85rem; }
+      .timeline.disabled { opacity: 0.55; }
       .choicecards-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
       .choicecards-fieldset legend { padding: 0; margin-bottom: 0.35rem; }
       .choicecards { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.6rem; }
