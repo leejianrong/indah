@@ -116,3 +116,61 @@ def test_streaming_api_rejected_on_a_reactive_chart():
     _chart_session(chart)
     with pytest.raises(TypeError):
         chart.push(0, 1.0)
+
+
+# -- hover and click (IND-266) ----------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_hovered_and_clicked_signals_are_set_from_the_data_not_the_payload():
+    from indah import Signal
+
+    hovered, clicked = Signal(None), Signal(None)
+    chart = Chart([[1, 10, 100], [2, 20, 200]], series=["a", "b"], hovered=hovered, clicked=clicked)
+    props = chart.static_props()
+    assert props["hoverable"] is True and props["clickable"] is True
+    assert chart.handle("hover", {"index": 1, "series": 1}) is True
+    assert hovered.value == {"series": "b", "index": 1, "x": 2, "y": 200}
+    assert chart.handle("click", {"index": 0, "series": 0}) is True
+    assert clicked.value == {"series": "a", "index": 0, "x": 1, "y": 10}
+    assert chart.handle("hover", {"index": None}) is True and hovered.value is None
+    assert clicked.value is not None  # leaving the plot does not clear a click
+
+
+@pytest.mark.unit
+def test_chart_events_refuse_what_the_data_cannot_back():
+    from indah import Signal
+
+    hovered = Signal(None)
+    chart = Chart([[1, 10]], series=["a"], hovered=hovered)
+    for bad in (
+        {"index": 5, "series": 0},
+        {"index": -1, "series": 0},
+        {"index": 0, "series": 3},
+        {"index": True, "series": 0},
+        {"index": "0", "series": 0},
+        {"series": 0},
+    ):
+        assert chart.handle("hover", bad) is False
+    assert hovered.value is None
+    assert chart.handle("click", {"index": 0, "series": 0}) is False  # no clicked signal bound
+    assert "hoverable" in chart.static_props() and "clickable" not in chart.static_props()
+    assert "hoverable" not in Chart([[1, 2]], series=["a"]).static_props()
+
+
+@pytest.mark.unit
+def test_chart_events_on_a_category_and_a_streaming_chart():
+    from indah import Signal
+
+    clicked = Signal(None)
+    bars = Chart(
+        [["x", 3], ["y", 4]],
+        series=[{"label": "n", "kind": "bars"}],
+        x_scale="category",
+        clicked=clicked,
+    )
+    assert bars.handle("click", {"index": 1, "series": 0}) is True
+    assert clicked.value == {"series": "n", "index": 1, "x": "y", "y": 4}
+    live = Chart(series=["loss"], hovered=Signal(None))
+    live.push(0, 1.5)
+    assert live.handle("hover", {"index": 0, "series": 0}) is True

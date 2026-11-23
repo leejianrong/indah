@@ -17,6 +17,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   frames locally, so playing sends no events; the index is reported once on a pause, at the end or on a
   manual step. At most 400 frames and 60,000 patch entries; unknown ids and bad styles raise `ValueError`.
   Studio page `media/graph-frames`.
+- `Chart(hovered=, clicked=)` (IND-266): two `Signal`s that report the point or bar under the pointer as
+  `{"series", "index", "x", "y"}`. Hover is a trailing 250 ms debounce and goes back to `None` when the
+  pointer leaves; a click posts at once and is not cleared by leaving. Python reads the value from its own
+  data, so only a row and a series index go on the wire and an index the data does not have is refused.
+  Nothing is posted unless a signal is bound. Studio page `media/chart-events` (a click selects a table row).
 - `Graph(update="keep", transition_ms=)` (IND-278 second half, ADR-0053): a replaced graph keeps the
   position of every id it already had and the viewer's pan and zoom; new ids are placed near their placed
   neighbours. `transition_ms` (0 to 2,000, off under `prefers-reduced-motion`) fades new nodes in and eases
