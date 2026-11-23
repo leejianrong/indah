@@ -540,6 +540,67 @@ def chart_bars_check(pw) -> None:
     expect(page.locator(".uplot").nth(2).locator(".u-series:visible")).to_have_count(1)  # latency
 
 
+def _flame_svg(depth_pick: int | None = None) -> str:
+    """A flame chart drawn as SVG text: nested spans as stacked bars, in theme colours."""
+    spans = [  # (name, start, end, depth)
+        ("compile", 0, 100, 0), ("parse", 0, 18, 1), ("route", 18, 70, 1), ("emit", 70, 100, 1),
+        ("swap search", 18, 50, 2), ("layout", 50, 70, 2), ("score", 18, 30, 3), ("prune", 30, 50, 3),
+    ]  # fmt: skip
+    colours = ["var(--primary)", "var(--ok)", "var(--warn)", "var(--text)"]
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 110">']
+    for name, a, b, d in spans:
+        x, w, y = a * 4, (b - a) * 4, 4 + d * 26
+        hot = depth_pick == d
+        out.append(
+            f'<rect x="{x}" y="{y}" width="{w - 1}" height="24" rx="3" '
+            f'fill="{colours[d]}" fill-opacity="{1 if hot else 0.55}" '
+            f'stroke="var(--surface)"><title>{name}: {b - a} ms</title></rect>'
+        )
+        if w > 40:
+            out.append(
+                f'<text x="{x + 6}" y="{y + 16}" font-size="11" fill="var(--surface)">{name}</text>'
+            )
+    out.append("</svg>")
+    return "".join(out)
+
+
+def svg_page(ctx: indah.Context) -> indah.Component:
+    level = indah.Signal(0)
+    return indah.Column(
+        children=[
+            indah.Svg(lambda: _flame_svg(level.value), label="Flame chart of a compile run"),
+            indah.Slider(level, min=0, max=3, step=1, label="Highlight depth", show_value=True),
+        ]
+    )
+
+
+def svg_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    svg = page.locator("svg.svg-drawing")
+    expect(svg).to_have_attribute("aria-label", "Flame chart of a compile run")
+    expect(svg.locator("rect")).to_have_count(8)
+    expect(svg.locator("text")).to_have_count(8)
+    # A theme colour reaches the drawing: var(--primary) resolves, it is not the default black.
+    fill = page.evaluate("getComputedStyle(document.querySelector('svg.svg-drawing rect')).fill")
+    assert fill not in ("", "rgb(0, 0, 0)", "none"), fill
+    # No markup was parsed: the drawing has no script and no style attribute anywhere.
+    assert (
+        page.evaluate(
+            "document.querySelectorAll('svg.svg-drawing [style], svg.svg-drawing script').length"
+        )
+        == 0
+    )
+    before = page.locator("svg.svg-drawing rect").nth(1).get_attribute("fill-opacity")
+    slider = page.get_by_role("slider")
+    slider.focus()
+    slider.press("ArrowRight")
+    expect(page.locator("svg.svg-drawing rect").nth(1)).not_to_have_attribute(
+        "fill-opacity", before
+    )  # redrawn in place
+
+
 _RUN = [
     {"id": "compile", "label": "compile", "start": 0, "end": 100},
     {"id": "parse", "label": "parse", "start": 0, "end": 18},
@@ -1684,6 +1745,20 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(49,),
             check=chart_bars_check,
+        ),
+        Page(
+            slug="svg",
+            title="Inline SVG",
+            summary=(
+                "`Svg(markup)` draws generated SVG, such as a flame chart, safely: Python keeps only "
+                "drawing elements and attributes and sends a tree, so no script, event handler or "
+                "outside reference can arrive. Colours may be `var(--token)`, so it follows the theme."
+            ),
+            build=svg_page,
+            covers=("Svg",),
+            docs="components.md",
+            adr=(12,),
+            check=svg_check,
         ),
         Page(
             slug="spans",

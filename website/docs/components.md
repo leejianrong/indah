@@ -136,6 +136,8 @@ pieces out once at a design size, say 1920 by 1080, and indah scales the whole t
 | `Table` | an interactive table: sort, page, and select |
 | `Pie` | a pie chart with one slice lit: pulled out and glowing while the rest dim |
 | `Spans` | nested labelled intervals: a flame chart, an icicle chart or a timeline; click selects a span, `view=` zooms |
+| `Svg` | a generated SVG drawing (a flame chart, a diagram), sanitised in Python; colours may be `var(--token)` |
+| `Stat` | a metric / KPI card: a big value with a label and optional delta |
 | `Stat` | a metric / KPI card: a big value with a label and optional delta; `delta_good=`, `tone=` and `spark=` for a metric where down is good, a coloured value and a small trend |
 | `Sparkline`, `TickStrip` | a tiny trend line, and a row of pass/fail ticks; both bind from a table cell |
 | `BarStrip` | a small activity strip: one bar per interval (calls per minute), optionally stacked, with a tooltip per bar |
@@ -323,6 +325,21 @@ A `Diff` draws its own changed characters; to show shaded text beside one, put a
 of a `Row` or `SplitPane`. `marked_runs` returns a list that a List item or a table row carries as it is
 (other lists and dicts in an item field are shown as text).
 
+### Svg
+
+`Svg(markup, label="...")` draws SVG you generate, such as a flame chart or a diagram. Python parses and checks
+it, keeps only drawing elements (`svg`, `g`, `defs`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`,
+`polygon`, `text`, `tspan`, `title`, `desc`, gradients, `stop`, `clipPath`) and geometry and presentation
+attributes, and sends a tree that the shell builds element by element. A script, an event handler, a `style` or
+`class` attribute, a link, an image, `use` or a reference outside the drawing raises `ValueError`, as does a
+drawing over 200 KB, 5,000 elements or 32 levels. Nothing is parsed in the browser, so it works under the
+strict CSP.
+
+A colour may be a CSS colour or `var(--token)`, and `currentColor` is the text colour, so the drawing follows
+the light and dark themes. `markup` can be a `Signal` or a function, and the drawing is replaced when it
+changes. `label` names the drawing for a screen reader (required), or pass `decorative=True` to hide it.
+
+<indah-live page="media/svg"></indah-live>
 ### Sparklines and tick strips
 
 `Sparkline(values)` is a trend line with no axes (`None` is a gap; `tone=` or `color=` sets the line, `fill=True`

@@ -19,6 +19,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   `view=` zooms, and every span is a button named by its label, length and place. It is drawn in the shell
   with plain elements, not in a lazily loaded module (that would have cost a sixth build target for no gain
   at this size). Studio page `media/spans`.
+- `Svg(markup, label=)` (IND-275): an inline SVG drawing for generated flame charts and diagrams. Python
+  parses it with an allowlist (drawing elements and geometry and presentation attributes only; no script,
+  event handler, style, class, link, image, `use`, DOCTYPE or outside reference; at most 200 KB, 5,000
+  elements and 32 levels) and sends a tree that the shell builds with `createElementNS`, so nothing is
+  parsed in the browser and it holds under the strict CSP. Colours may be `var(--token)`; ids are
+  prefixed per drawing. A label (or `decorative=True`) is required. Studio page `media/svg`. The wheel budget
+  rose to 645,000 and the shell's to 510,000 (see the chart bars and sparklines).
 - `Sparkline`, `TickStrip`, and `Stat(delta_good=, tone=, spark=)` (IND-263): a tiny trend line with no axes
   and a row of pass/fail ticks (a failed tick is taller, so it does not rest on colour; the screen reader
   hears the counts). Both bind from a table cell as render-spec components (`"sparkline"` with `values`

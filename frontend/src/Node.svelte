@@ -24,6 +24,7 @@
   import BarStrip from "./BarStrip.svelte";
   import InfoTip from "./InfoTip.svelte";
   import Spans from "./Spans.svelte";
+  import Svg from "./Svg.svelte";
   import Sparkline from "./Sparkline.svelte";
   import TickStrip from "./TickStrip.svelte";
   import Menu from "./Menu.svelte";
@@ -550,6 +551,8 @@
   </div>
 {:else if node.type === "barstrip"}
   <BarStrip {node} {props} />
+{:else if node.type === "svg"}
+  <Svg tree={props.tree} label={props.label} decorative={props.decorative} nodeId={node.id} />
 {:else if node.type === "sparkline"}
   <Sparkline values={props.values ?? []} tone={props.tone} color={props.color} fill={props.fill} height={props.height} label={props.label} />
 {:else if node.type === "ticks"}
