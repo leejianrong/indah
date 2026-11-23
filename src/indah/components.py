@@ -36,6 +36,7 @@ from .protocol import RenderSpec
 from .reactive import Computed, Signal, computed, effect
 from .routes import compile_route, match_routes, normalize_path
 from .stream import Stream
+from .svg import parse_svg
 
 if TYPE_CHECKING:
     from .context import Context
@@ -4014,6 +4015,44 @@ def _to_records(source: Any, key: str | None) -> list[dict[str, Any]]:
             raise ValueError(f"Table row is missing its key {key!r}: {row!r}")
         out.append({str(k): _json_safe(v) for k, v in row.items()})
     return out
+
+
+class Svg(Component):
+    """An inline SVG drawing, sanitised (IND-275): for a generated flame chart or a diagram.
+
+    ``markup`` is SVG text, or a ``Signal`` or function returning it (the drawing is replaced when
+    it changes). It is parsed and checked in Python: only drawing elements (``svg``, ``g``,
+    ``defs``, ``path``, ``rect``, ``circle``, ``ellipse``, ``line``, ``polyline``, ``polygon``,
+    ``text``, ``tspan``, ``title``, ``desc``, gradients, ``stop``, ``clipPath``) and geometry and
+    presentation attributes are kept; a script, event handler, ``style`` or ``class`` attribute,
+    link, image, ``use`` or any reference outside the drawing raises ``ValueError``, and so does
+    a drawing over 200 KB, 5,000 elements or 32 levels. The shell builds the elements itself, so
+    it works under the strict CSP. A colour may be a CSS colour or ``var(--token)`` (and
+    ``currentColor`` is the text colour), so a drawing follows the light and dark themes.
+    ``label`` names it for a screen reader (required); ``decorative=True`` hides it from one
+    instead. It scales to the width of its container and keeps its ``viewBox`` shape.
+    """
+
+    type = "svg"
+
+    def __init__(self, markup: Source, *, label: str = "", decorative: bool = False) -> None:
+        super().__init__()
+        if not label and not decorative:
+            raise ValueError("Svg needs a label for a screen reader, or decorative=True")
+        self._markup, self._label, self._decorative = markup, label, bool(decorative)
+        if not _is_source(markup):
+            parse_svg(markup)  # a bad drawing fails at build time
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if self._label:
+            props["label"] = self._label
+        if self._decorative:
+            props["decorative"] = True
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"tree": lambda: parse_svg(_read(self._markup))}
 
 
 class Stat(Component):
