@@ -466,3 +466,24 @@ def test_timeline_link_names_the_graph_and_needs_matching_frames():
         Timeline(Signal(1), [1, 2], link="n7")
     with pytest.raises(ValueError, match="frames"):
         Timeline(Signal(1), [1, 2], link=Graph(_FN))  # a graph without frames
+
+
+@pytest.mark.unit
+def test_update_keep_and_transition_are_off_by_default_and_sent_when_set():
+    base = Graph(["a"]).static_props()
+    assert "update" not in base and "transitionMs" not in base
+    props = Graph(["a"], update="keep", transition_ms=300).static_props()
+    assert props["update"] == "keep" and props["transitionMs"] == 300
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad", [-1, 2001, 1.5, True, "5"])
+def test_transition_ms_is_an_int_from_0_to_2000(bad):
+    with pytest.raises(ValueError, match="transition_ms"):
+        Graph(["a"], transition_ms=bad)
+
+
+@pytest.mark.unit
+def test_update_must_be_relayout_or_keep():
+    with pytest.raises(ValueError, match="'relayout' or 'keep'"):
+        Graph(["a"], update="morph")

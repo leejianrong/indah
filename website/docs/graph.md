@@ -120,6 +120,17 @@ The browser applies a frame itself. `Timeline(link=graph)` steps the frames loca
 playing sends no events; the index is reported once on a pause, at the end or on a manual step. There can be
 at most 400 frames and 60,000 patch entries in all, and unknown ids raise `ValueError`.
 
+## Keep positions when the graph changes
+
+By default a replaced graph is laid out afresh. Pass `update="keep"` and every id the graph already had
+stays exactly where it was (and the viewer's pan and zoom are kept); only new ids are placed, near the
+neighbours they are linked to. Add `transition_ms` (0 to 2,000) to fade new nodes in and ease opacity and
+edge width changes; it does nothing under `prefers-reduced-motion`.
+
+```python
+indah.Graph(lambda: grown.value[0], lambda: grown.value[1], update="keep", transition_ms=300)
+```
+
 ## Use the keyboard
 
 Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clears the selection.
@@ -138,6 +149,8 @@ Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clear
 | `layout` | `"auto"` (default), `"stable"` (seeded from ids and edges only) or `"given"`, which needs `x` and `y` on every node |
 | `frames` | a list of `{"nodes": {id: style}, "edges": {id: style}, "hide": [ids]}` patches, one per frame |
 | `frame` | a `Signal[int]`, two way: the frame on show |
+| `update` | `"relayout"` (default) or `"keep"`: a replaced graph keeps the position of every id it already had |
+| `transition_ms` | 0 (default) to 2,000: ease opacity and edge width changes, fade new nodes in |
 | `height` | pixels, or `"fill"` |
 | `legend` | show the group colours (default `True`) |
 | `max_nodes` | most nodes allowed (default 10,000; ceiling 20,000) |
