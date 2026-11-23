@@ -4069,6 +4069,173 @@ class Stat(Component):
         return props
 
 
+SPANS_MAX = 5_000
+_SPAN_KEYS = {"id", "label", "start", "end", "depth", "lane", "color"}
+_SPAN_LAYOUTS = ("flame", "icicle", "timeline")
+
+
+def _spans_columns(items: Any, layout: str) -> dict[str, Any]:
+    """The columns of a ``Spans`` (IND-268): every span checked, and a row for each, from its
+    nesting (flame, icicle), its ``lane`` or a first-fit packing (timeline)."""
+    spans = list(items or [])
+    if len(spans) > SPANS_MAX:
+        raise ValueError(f"Spans holds at most {SPANS_MAX:,} spans, got {len(spans):,}")
+    ids: list[str] = []
+    labels: list[str] = []
+    starts: list[float] = []
+    ends: list[float] = []
+    colors: list[Any] = []
+    depths: list[Any] = []
+    lanes: list[Any] = []
+    for k, sp in enumerate(spans):
+        if not isinstance(sp, dict) or set(sp) - _SPAN_KEYS:
+            raise ValueError(f"span {k} must be a dict with {sorted(_SPAN_KEYS)}, got {sp!r}")
+        if not sp.get("label"):
+            raise ValueError(f"span {k} needs a label")
+        a, b = (_number(sp.get(key), f"span {k} {key}", -1e15, 1e15) for key in ("start", "end"))
+        if b < a:
+            raise ValueError(f"span {k} ends ({b}) before it starts ({a})")
+        ids.append(str(sp.get("id", f"s{k}")))
+        labels.append(str(sp["label"]))
+        starts.append(a)
+        ends.append(b)
+        colors.append(_color(sp["color"], f"span {k} color") if sp.get("color") else None)
+        depth = sp.get("depth")
+        if depth is not None and (
+            isinstance(depth, bool) or not isinstance(depth, int) or depth < 0
+        ):
+            raise ValueError(f"span {k} depth must be a whole number, 0 or more")
+        depths.append(depth)
+        lanes.append(sp.get("lane"))
+    if len(set(ids)) != len(ids):
+        raise ValueError("Spans ids must be unique")
+    rows: list[int] = [0] * len(spans)
+    order = sorted(range(len(spans)), key=lambda i: (starts[i], -ends[i], i))
+    if layout == "timeline":
+        if any(lane is not None for lane in lanes) and any(lane is None for lane in lanes):
+            raise ValueError("give every span a lane, or none")
+        if lanes and lanes[0] is not None:
+            names: dict[Any, int] = {}
+            rows = [names.setdefault(lane, len(names)) for lane in lanes]
+        else:
+            free: list[float] = []  # when each row is next free
+            for i in order:
+                row = next((r for r, end in enumerate(free) if end <= starts[i]), len(free))
+                if row == len(free):
+                    free.append(0)
+                free[row] = ends[i]
+                rows[i] = row
+    else:
+        stack: list[int] = []
+        for i in order:
+            while stack and not (starts[i] >= starts[stack[-1]] and ends[i] <= ends[stack[-1]]):
+                stack.pop()
+            rows[i] = len(stack)
+            stack.append(i)
+        rows = [d if d is not None else rows[i] for i, d in enumerate(depths)]
+    cols: dict[str, Any] = {
+        "id": ids, "label": labels, "start": starts, "end": ends, "row": rows,
+        "rows": max(rows, default=-1) + 1,
+    }  # fmt: skip
+    if any(c is not None for c in colors):
+        cols["color"] = colors
+    return cols
+
+
+def _span_view(value: Any) -> list[float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        raise ValueError("Spans view must be a (start, end) pair")
+    a, b = (_number(v, "Spans view", -1e15, 1e15) for v in value)
+    if b <= a:
+        raise ValueError(f"Spans view must have end after start, got {value!r}")
+    return [a, b]
+
+
+class Spans(Component):
+    """Nested labelled intervals: a flame chart, an icicle chart or a timeline (IND-268).
+
+    ``spans`` is a list of dicts ``{label, start, end, id?, color?, depth?, lane?}`` (numbers in
+    one unit, ``unit`` names it for the axis and the tooltips), or a ``Signal`` or function
+    returning one. ``layout="flame"`` stacks nested spans upward from the bottom, ``"icicle"``
+    downward from the top (a span nests in the one that contains it, or takes an explicit
+    ``depth``); ``"timeline"`` puts each span in a row by its ``lane`` (give every span one, or
+    none) or packs overlaps into the fewest rows. ``color`` is a CSS colour or ``var(--token)``;
+    the default depends on the row. At most 5,000 spans.
+
+    Bind ``selected`` (a ``Signal[str | None]``, two way) to react to a click on a span, by its
+    ``id`` (``"s<index>"`` unless given). ``view`` (a ``(start, end)`` pair or a source of one)
+    zooms to a range. Each span is a button, so the keyboard reaches it, and its label, length and
+    place are its accessible name. It is drawn in the shell, not loaded lazily.
+    """
+
+    type = "spans"
+
+    def __init__(
+        self,
+        spans: Source,
+        *,
+        layout: str = "flame",
+        unit: str = "",
+        selected: Signal[str | None] | None = None,
+        view: Source = None,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        if layout not in _SPAN_LAYOUTS:
+            raise ValueError(f"Spans layout must be one of {_SPAN_LAYOUTS}, got {layout!r}")
+        self._spans, self._layout, self._unit = spans, layout, str(unit)[:12]
+        self._selected, self._view, self._label = selected, view, label
+        self._static: dict[str, Any] | None = None
+        if not _is_source(spans):
+            self._static = _spans_columns(spans, layout)
+        if view is not None and not _is_source(view):
+            _span_view(view)
+        if selected is not None and selected.peek() is not None:
+            self._known(selected.peek())
+
+    def _cols(self) -> dict[str, Any]:
+        return self._static or _spans_columns(_read(self._spans), self._layout)
+
+    def _known(self, span_id: Any) -> str | None:
+        if not isinstance(span_id, str) or span_id not in set(self._cols()["id"]):
+            raise ValueError(f"unknown span {span_id!r}")
+        return span_id
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"layout": self._layout}
+        if self._unit:
+            props["unit"] = self._unit
+        if self._label:
+            props["label"] = self._label
+        if self._selected is not None:
+            props["selectable"] = True
+        if self._static is not None:
+            props["spans"] = self._static
+        if self._view is not None and not _is_source(self._view):
+            props["view"] = _span_view(self._view)
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        props: dict[str, Callable[[], Any]] = {}
+        if self._static is None:
+            props["spans"] = lambda: _spans_columns(_read(self._spans), self._layout)
+        if _is_source(self._view):
+            props["view"] = lambda: _span_view(_read(self._view))
+        if self._selected is not None:
+            props["selected"] = lambda: self._selected.value
+        return props
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "select" and self._selected is not None and "id" in payload:
+            span_id = payload["id"]
+            if span_id is None or (isinstance(span_id, str) and span_id in set(self._cols()["id"])):
+                self._selected.set(span_id)
+                return True
+        return False
+
+
 class Runs(list):  # type: ignore[type-arg]
     """What :func:`marked_runs` returns: a plain list of runs that a List item or a table row
     carries as nested data (any other non-scalar field value is turned into text)."""

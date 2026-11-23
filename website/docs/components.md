@@ -135,6 +135,7 @@ pieces out once at a design size, say 1920 by 1080, and indah scales the whole t
 | `DataFrame` | a pandas frame, a `{columns, rows}` dict, or record dicts |
 | `Table` | an interactive table: sort, page, and select |
 | `Pie` | a pie chart with one slice lit: pulled out and glowing while the rest dim |
+| `Spans` | nested labelled intervals: a flame chart, an icicle chart or a timeline; click selects a span, `view=` zooms |
 | `Stat` | a metric / KPI card: a big value with a label and optional delta; `delta_good=`, `tone=` and `spark=` for a metric where down is good, a coloured value and a small trend |
 | `Sparkline`, `TickStrip` | a tiny trend line, and a row of pass/fail ticks; both bind from a table cell |
 | `BarStrip` | a small activity strip: one bar per interval (calls per minute), optionally stacked, with a tooltip per bar |
@@ -341,6 +342,24 @@ Col("history", kind="cell", render={"component": "ticks", "bind": {"states": "hi
 ```
 
 <indah-live page="data/sparklines"></indah-live>
+
+### Spans
+
+`Spans(spans)` draws nested labelled intervals: where a run spent its time. Each span is a dict with `label`,
+`start` and `end` (numbers in one unit, named by `unit=`) and optionally `id`, `color`, `depth` and `lane`.
+
+- `layout="flame"` (the default) stacks a span on the one that contains it, root at the bottom; `"icicle"` is the
+  same hanging down from the top. Nesting comes from containment, or from an explicit `depth`.
+- `layout="timeline"` puts each span in a row by its `lane` (give every span one, or none), or packs overlapping
+  spans into the fewest rows.
+
+Bind `selected=` to a `Signal[str | None]` to react to a click on a span (by its `id`, `"s<index>"` unless you
+give one); a click on the selected span clears it. `view=(start, end)`, or a signal of one, zooms to a range.
+Every span is a button with its label, length and place as its name, so the keyboard reaches it. `spans` can be
+a signal or a function, and holds at most 5,000. It is drawn in the shell with plain elements (no canvas), so it
+works under the strict CSP.
+
+<indah-live page="media/spans"></indah-live>
 
 ### Steps
 

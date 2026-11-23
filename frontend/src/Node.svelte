@@ -23,6 +23,7 @@
   import Choice from "./Choice.svelte";
   import BarStrip from "./BarStrip.svelte";
   import InfoTip from "./InfoTip.svelte";
+  import Spans from "./Spans.svelte";
   import Sparkline from "./Sparkline.svelte";
   import TickStrip from "./TickStrip.svelte";
   import Menu from "./Menu.svelte";
@@ -553,6 +554,8 @@
   <Sparkline values={props.values ?? []} tone={props.tone} color={props.color} fill={props.fill} height={props.height} label={props.label} />
 {:else if node.type === "ticks"}
   <TickStrip states={props.states ?? []} label={props.label} />
+{:else if node.type === "spans"}
+  <Spans {props} nodeId={node.id} />
 {:else if node.type === "infotip"}
   <InfoTip text={props.text ?? ""} label={props.label} />
 {:else if node.type === "spinner"}

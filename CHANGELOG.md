@@ -12,6 +12,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Spans(spans, layout=, unit=, selected=, view=)` (IND-268): nested labelled intervals as a flame chart, an
+  icicle chart or a timeline. Python decides each span's row (from containment or an explicit `depth`; for a
+  timeline from its `lane` or a first-fit packing) and checks every span (finite numbers, end not before
+  start, unique ids, theme-safe colours, at most 5,000). A click selects a span through a two-way signal,
+  `view=` zooms, and every span is a button named by its label, length and place. It is drawn in the shell
+  with plain elements, not in a lazily loaded module (that would have cost a sixth build target for no gain
+  at this size). Studio page `media/spans`.
 - `Sparkline`, `TickStrip`, and `Stat(delta_good=, tone=, spark=)` (IND-263): a tiny trend line with no axes
   and a row of pass/fail ticks (a failed tick is taller, so it does not rest on colour; the screen reader
   hears the counts). Both bind from a table cell as render-spec components (`"sparkline"` with `values`
