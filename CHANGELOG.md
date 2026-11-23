@@ -12,6 +12,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Graph(frames=, frame=)` and `Timeline(link=graph)` (IND-280, ADR-0053 part 3): a base graph plus a few
+  style patches per frame (`nodes`, `edges`, `hide`), applied in the browser. A linked `Timeline` steps the
+  frames locally, so playing sends no events; the index is reported once on a pause, at the end or on a
+  manual step. At most 400 frames and 60,000 patch entries; unknown ids and bad styles raise `ValueError`.
+  Studio page `media/graph-frames`.
 - `Graph` element styles and `layout="stable"` (IND-278, ADR-0053 part 2): a node takes `ring`
   (`True` or a colour), `opacity` and `label_style` (`"strike"` or `"bold"`); an edge takes `dash`
   (`True` or `[dash, gap]`), `opacity` and `width`. All are drawn the same inside and outside the focus

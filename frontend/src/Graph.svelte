@@ -5,6 +5,7 @@
   // (ADR-0042). A devDependency-free, hand-rolled canvas: no Node at install or runtime.
   import { untrack } from "svelte";
   import { apiUrl, postEvent } from "./api.js";
+  import { frameLinks } from "./stores.js";
 
   let { props, nodeId } = $props();
   let el = $state();
@@ -90,8 +91,21 @@
         onHover: props.hoverable ? onHover : undefined,
       });
       load(true);
+      frames();
+      // A linked Timeline sets frames here; the index goes to Python only when `report` is set
+      // (a pause, the end, a manual step) and a `frame` signal is bound.
+      const link = {
+        set: (i, report) => {
+          ctl?.setFrame(i);
+          if (report && props.frame !== undefined && i !== props.frame) postEvent(nodeId, "frame", { index: i });
+        },
+      };
+      frameLinks.update((m) => new Map(m).set(nodeId, link));
     });
-    return destroy;
+    return () => {
+      frameLinks.update((m) => (m.delete(nodeId), new Map(m)));
+      destroy();
+    };
   });
 
   $effect(() => {
@@ -99,6 +113,15 @@
     void props.edges;
     void props.layout;
     untrack(load);
+  });
+
+  function frames() {
+    if (ctl && props.frames) ctl.setFrames(props.frames, props.frame ?? 0);
+  }
+  $effect(() => {
+    void props.frames;
+    void props.frame;
+    untrack(frames);
   });
 
   // The focus size and the highlight change without resending the graph.

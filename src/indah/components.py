@@ -1358,7 +1358,9 @@ class Timeline(Component):
     ``Rate(per_second=5)`` keeps working controls), and stops at the last point. ``playing`` is an
     optional ``Signal[bool]`` that follows play and pause and can start it from Python.
     ``disabled=`` locks it. The wire carries the point's index, and Python refuses one out of
-    range.
+    range. ``link=graph`` (a ``Graph`` with one frame per point) couples the two in the browser:
+    while playing, the timeline steps the graph's frame locally and posts nothing; it reports the
+    index once on pause, at the end and on any manual step.
     """
 
     lockable = True
@@ -1374,6 +1376,7 @@ class Timeline(Component):
         unit: str = "",
         playing: Signal[bool] | None = None,
         speed: float = 1,
+        link: Graph | None = None,
         label: str = "",
     ) -> None:
         super().__init__()
@@ -1399,6 +1402,12 @@ class Timeline(Component):
                 raise ValueError("Timeline density is one non-negative number per point")
         if speed not in _TIMELINE_SPEEDS:
             raise ValueError(f"Timeline speed must be one of {_TIMELINE_SPEEDS}, got {speed!r}")
+        if link is not None:
+            if not isinstance(link, Graph):
+                raise ValueError("Timeline link= takes a Graph")
+            if link._frames is None or len(link._frames) != len(points):
+                raise ValueError("a linked Graph needs one of its frames= for each Timeline point")
+        self._link = link
         self._value, self._points, self._playing, self._speed = value, points, playing, speed
         self._labels = [str(x) for x in (labels if labels is not None else points)]
         self._density = None if density is None else [float(d) for d in density]
@@ -1412,6 +1421,8 @@ class Timeline(Component):
             props["unit"] = self._unit
         if self._label:
             props["label"] = self._label
+        if self._link is not None and self._link.id:
+            props["link"] = self._link.id
         return props
 
     def _index(self) -> int:
@@ -2936,6 +2947,59 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
     return {"nodes": out_nodes, "edges": out_edges}
 
 
+GRAPH_MAX_FRAMES = 400
+_GRAPH_NODE_PATCH = ("ring", "opacity", "label_style")
+_GRAPH_EDGE_PATCH = ("dash", "opacity", "width")
+
+
+def _graph_frames(frames: Any, columns: dict[str, Any]) -> list[dict[str, Any]]:
+    """The wire form of ``Graph(frames=)`` (ADR-0053): per frame, style patches for nodes and edges
+    by id plus ids to hide. Every unknown id or bad style raises here, as ``highlight`` does."""
+    frames = list(frames)
+    if not 1 <= len(frames) <= GRAPH_MAX_FRAMES:
+        raise ValueError(f"a Graph takes 1 to {GRAPH_MAX_FRAMES} frames, got {len(frames)}")
+    node_ids = set(columns["nodes"]["id"])
+    edge_ids = {i for i in columns["edges"].get("id", []) if i is not None}
+    out: list[dict[str, Any]] = []
+    entries = 0
+    for k, frame in enumerate(frames):
+        if not isinstance(frame, dict) or set(frame) - {"nodes", "edges", "hide"}:
+            raise ValueError(f"frame {k} must be a dict with 'nodes', 'edges' and/or 'hide'")
+        wire: dict[str, Any] = {}
+        for part, known, keys, what in (
+            ("nodes", node_ids, _GRAPH_NODE_PATCH, "node"),
+            ("edges", edge_ids, _GRAPH_EDGE_PATCH, "edge"),
+        ):
+            patch = frame.get(part) or {}
+            if not isinstance(patch, dict):
+                raise ValueError(f"frame {k} '{part}' must map ids to style dicts")
+            checked: dict[str, Any] = {}
+            for ident, style in patch.items():
+                if ident not in known:
+                    hint = "; give edges an 'id' to style them" if what == "edge" else ""
+                    raise ValueError(f"frame {k} names unknown {what} {ident!r}{hint}")
+                if not isinstance(style, dict) or set(style) - set(keys):
+                    raise ValueError(f"frame {k} {what} {ident!r} takes only {list(keys)}")
+                checked[ident] = {
+                    ("labelStyle" if key == "label_style" else key): _graph_style(key, v, what)
+                    for key, v in style.items()
+                }
+            if checked:
+                wire[part] = checked
+                entries += len(checked)
+        hide = list(frame.get("hide") or [])
+        for ident in hide:
+            if ident not in node_ids and ident not in edge_ids:
+                raise ValueError(f"frame {k} hides unknown id {ident!r}")
+        if hide:
+            wire["hide"] = [str(i) for i in hide]
+            entries += len(hide)
+        out.append(wire)
+    if entries > GRAPH_MAX_EDGES:
+        raise ValueError(f"the frames of a Graph hold at most {GRAPH_MAX_EDGES:,} entries in all")
+    return out
+
+
 GRAPH_MAX_FOCUS = 5_000  # the most nodes drawn in full at once (ADR-0048)
 
 
@@ -3016,6 +3080,14 @@ class Graph(Component):
     so changing a style, a group or the list order does not move a node (``"auto"``, the default,
     still clusters by group).
 
+    **Frames** (ADR-0053). ``frames`` is a list of up to 400 patches, each ``{"nodes": {id: style},
+    "edges": {id: style}, "hide": [ids]}`` (the style dicts of the element styles above; an edge
+    needs an ``id`` to be patched; ``hide`` takes node or edge ids and draws them at opacity 0,
+    their place kept). A frame is the base graph plus only its own patches, so any frame can be
+    shown directly; all frames together hold at most 60,000 entries. The browser applies a frame
+    locally, so ``frame`` (a ``Signal[int]``, two way) moves without sending a graph, and
+    ``Timeline(..., link=graph)`` plays the frames with no events at all.
+
     Replace ``nodes`` and ``edges`` together, inside ``indah.batch(...)``, when both are signals:
     set one at a time, an edge can briefly name a node that is not there yet and raises.
     """
@@ -3036,9 +3108,13 @@ class Graph(Component):
         selected: Signal[str | None] | None = None,
         focus: Source = None,
         hovered: Signal[str | None] | None = None,
+        frames: list[dict[str, Any]] | None = None,
+        frame: Signal[int] | None = None,
         label: str = "",
     ) -> None:
         super().__init__()
+        if frame is not None and frames is None:
+            raise ValueError("Graph frame= needs frames=")
         if layout not in ("auto", "stable", "given"):
             raise ValueError(f"Graph layout must be 'auto', 'stable' or 'given', got {layout!r}")
         if (
@@ -3073,6 +3149,10 @@ class Graph(Component):
         else:
             self._columns = None
             self._static = build()
+        self._frames = None if frames is None else _graph_frames(frames, self._cols())
+        self._frame = frame
+        if frame is not None and not self._frame_ok(frame.peek()):
+            raise ValueError(f"the Graph frame {frame.peek()!r} is not one of its frames")
         if highlight is not None and not _is_source(highlight):
             _graph_highlight(highlight, self._cols())  # a typo fails here, at build time
         if selected is not None:
@@ -3081,6 +3161,14 @@ class Graph(Component):
             self._known(focus)
         if hovered is not None:
             self._known(hovered.value)
+
+    def _frame_ok(self, i: Any) -> bool:
+        return (
+            self._frames is not None
+            and isinstance(i, int)
+            and not isinstance(i, bool)
+            and 0 <= i < len(self._frames)
+        )
 
     def _known(self, node: Any) -> str | None:
         """``node`` if it is a node id of this graph, ``None`` for none; else a ``ValueError``."""
@@ -3105,6 +3193,8 @@ class Graph(Component):
             props["hoverable"] = True  # likewise hover: unbound, no posts
         if self._focus is not None and not _is_source(self._focus):
             props["focus"] = self._focus
+        if self._frames is not None:
+            props["frames"] = self._frames
         if not _is_source(self._focus_size):
             props["focusSize"] = self._focus_size
         if self._highlight is not None and not _is_source(self._highlight):
@@ -3127,6 +3217,8 @@ class Graph(Component):
             props["selected"] = lambda: self._known(self._selected.value)
         if _is_source(self._focus):
             props["focus"] = lambda: self._known(_read(self._focus))
+        if self._frame is not None:
+            props["frame"] = lambda: self._frame.value if self._frame_ok(self._frame.value) else 0
         return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
@@ -3135,6 +3227,9 @@ class Graph(Component):
             if node is None or (isinstance(node, str) and node in set(self._cols()["nodes"]["id"])):
                 self._selected.set(node)
                 return True
+        if event == "frame" and self._frame is not None and self._frame_ok(payload.get("index")):
+            self._frame.set(payload["index"])
+            return True
         if event == "hover" and self._hovered is not None and "id" in payload:
             node = payload["id"]
             if node is None or (isinstance(node, str) and node in set(self._cols()["nodes"]["id"])):
