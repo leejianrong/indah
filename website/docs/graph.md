@@ -99,6 +99,27 @@ edges = [{"source": "a", "target": "b", "dash": True}]
 indah.Graph(nodes, edges, layout="stable")
 ```
 
+## Play a graph through frames
+
+When a graph changes by moments (years, checkpoints), send the base graph once and a few style patches per
+frame. A frame is the base plus only its own patches, so any frame can be shown directly. Edges need an
+`id` to be patched; `hide` takes node or edge ids and draws them at opacity 0 in their place.
+
+```python
+graph = indah.Graph(
+    nodes,
+    edges,
+    layout="stable",
+    frames=[{}, {"nodes": {"a": {"ring": True}}, "edges": {"ab": {"dash": True}}}],
+    frame=frame,  # optional Signal[int], two way
+)
+indah.Timeline(year, [2000, 2001], link=graph)
+```
+
+The browser applies a frame itself. `Timeline(link=graph)` steps the frames locally while it plays, so
+playing sends no events; the index is reported once on a pause, at the end or on a manual step. There can be
+at most 400 frames and 60,000 patch entries in all, and unknown ids raise `ValueError`.
+
 ## Keep positions when the graph changes
 
 By default a replaced graph is laid out afresh. Pass `update="keep"` and every id the graph already had
@@ -126,6 +147,8 @@ Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clear
 | `focus_size` | nodes drawn in full (default 300, at most 5,000); may be a signal |
 | `highlight` | `{"nodes": [...], "edges": [...]}`; may be a signal |
 | `layout` | `"auto"` (default), `"stable"` (seeded from ids and edges only) or `"given"`, which needs `x` and `y` on every node |
+| `frames` | a list of `{"nodes": {id: style}, "edges": {id: style}, "hide": [ids]}` patches, one per frame |
+| `frame` | a `Signal[int]`, two way: the frame on show |
 | `update` | `"relayout"` (default) or `"keep"`: a replaced graph keeps the position of every id it already had |
 | `transition_ms` | 0 (default) to 2,000: ease opacity and edge width changes, fade new nodes in |
 | `height` | pixels, or `"fill"` |

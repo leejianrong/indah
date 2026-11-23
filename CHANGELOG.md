@@ -17,6 +17,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   category on top (category axis and bars only, no overlays); `kind="box"` draws a box and whiskers from
   five columns, and `indah.box_rows(samples)` summarises raw samples into those rows. Time and category
   axes were already in (IND-269, IND-273). Studio page `media/chart-bars`.
+- `Graph(frames=, frame=)` and `Timeline(link=graph)` (IND-280, ADR-0053 part 3): a base graph plus a few
+  style patches per frame (`nodes`, `edges`, `hide`), applied in the browser. A linked `Timeline` steps the
+  frames locally, so playing sends no events; the index is reported once on a pause, at the end or on a
+  manual step. At most 400 frames and 60,000 patch entries; unknown ids and bad styles raise `ValueError`.
+  Studio page `media/graph-frames`.
 - `Chart(hovered=, clicked=)` (IND-266): two `Signal`s that report the point or bar under the pointer as
   `{"series", "index", "x", "y"}`. Hover is a trailing 250 ms debounce and goes back to `None` when the
   pointer leaves; a click posts at once and is not cleared by leaving. Python reads the value from its own

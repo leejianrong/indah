@@ -539,7 +539,44 @@ export function createGraph(el, { onSelect, onHover } = {}) {
     if (before && keepView) [view, touched] = keepView; // a kept layout keeps the viewer's pan and zoom
     else fit();
     schedule();
+    base = null; // a new graph has new base styles; show the current frame over them
+    if (frames) applyFrame(frameAt);
     if (fade) ease(fade, data.transitionMs);
+  }
+
+  // Frames (ADR-0053): a frame is the base style columns plus only its own patches, applied here in
+  // the browser so stepping through them sends nothing. Hidden ids, and the edges of a hidden node,
+  // are drawn at opacity 0 and keep their place.
+  let frames = null;
+  let frameAt = 0;
+  let base = null;
+  function applyFrame(i) {
+    if (!g || !frames) return;
+    frameAt = i;
+    el.__graph.frame = i; // for tests
+    base ??= { opacity: g.opacity, ring: g.ring, labelStyle: g.labelStyle, eDash: g.eDash, eOpacity: g.eOpacity, eWidth: g.eWidth };
+    const cols = {};
+    const col = (name, len) => (cols[name] ??= Array.from({ length: len }, (_, k) => base[name]?.[k] ?? null));
+    const f = frames[i] ?? {};
+    const eIndex = new Map((g.edgeIds ?? []).map((id, k) => [id, k]));
+    for (const [id, st] of Object.entries(f.nodes ?? {})) {
+      const k = g.idIndex.get(id);
+      if (k !== undefined) for (const [key, v] of Object.entries(st)) col(key, g.n)[k] = v;
+    }
+    for (const [id, st] of Object.entries(f.edges ?? {})) {
+      const k = eIndex.get(id);
+      if (k !== undefined) for (const [key, v] of Object.entries(st)) col({ dash: "eDash", opacity: "eOpacity", width: "eWidth" }[key], g.s.length)[k] = v;
+    }
+    for (const id of f.hide ?? []) {
+      const k = g.idIndex.get(id);
+      if (k !== undefined) {
+        col("opacity", g.n)[k] = 0;
+        for (let j = g.adjStart[k]; j < g.adjStart[k + 1]; j++) col("eOpacity", g.s.length)[g.adjEdge[j]] = 0;
+      } else if (eIndex.has(id)) col("eOpacity", g.s.length)[eIndex.get(id)] = 0;
+    }
+    Object.assign(g, base, cols);
+    buildBatches();
+    draw();
   }
 
   // Pan with a drag, zoom with the wheel or two fingers.
@@ -732,6 +769,13 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       if (!g || g.groups.length === 0 || (g.groups.length === 1 && g.groups[0] === "")) return [];
       return g.groups.map((name, i) => ({ group: name, color: groupColor(i) }));
     },
+    // The frame list from Python and the frame to show; a new list or index acts, a repeat does not.
+    setFrames(list, index) {
+      if (list !== frames) [frames, base] = [list, null];
+      else if (index === frameAt) return;
+      applyFrame(index);
+    },
+    setFrame: applyFrame,
     destroy() {
       if (raf) cancelAnimationFrame(raf);
       offTheme();

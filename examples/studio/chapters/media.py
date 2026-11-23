@@ -1015,6 +1015,75 @@ def graph_keep_check(pw) -> None:
     assert page.evaluate(read, ids) == before  # every id it already had stayed put
 
 
+def _world_frames() -> tuple[list[dict], list[dict], list[dict]]:
+    """The world as one base graph and a frame of style patches per year (ADR-0053)."""
+    nodes = [{"id": name, "label": name} for name, _, _ in _WORLD]
+    edges = [
+        {"source": a, "target": b, "id": f"e{k}"} for k, (a, b) in enumerate(_WORLD_EDGES) if a != b
+    ]
+    frames = []
+    for year in range(2000, 2005):
+        patch: dict = {"nodes": {}, "edges": {}}
+        gone = {name for name, _, ended in _WORLD if ended < year}
+        for name, born, ended in _WORLD:
+            if born > year:
+                patch["nodes"][name] = {"opacity": 0.25}
+            elif ended < year:
+                patch["nodes"][name] = {"opacity": 0.55, "label_style": "strike"}
+            elif born == year:
+                patch["nodes"][name] = {"ring": True}
+        for e in edges:
+            if e["source"] in gone or e["target"] in gone:
+                patch["edges"][e["id"]] = {"dash": True, "opacity": 0.8}
+        frames.append(patch)
+    return nodes, edges, frames
+
+
+def graph_frames_page(ctx: indah.Context) -> indah.Component:
+    nodes, edges, frames = _world_frames()
+    frame = indah.Signal(0)
+    year = indah.Signal(2000)
+    graph = indah.Graph(
+        nodes,
+        edges,
+        frames=frames,
+        frame=frame,
+        layout="stable",
+        focus_size=6,
+        height=380,
+        label="A world by year",
+    )
+    return indah.Column(
+        children=[
+            graph,
+            indah.Timeline(year, list(range(2000, 2005)), unit="year", link=graph, speed=4),
+            indah.Text(lambda: f"frame {frame.value}", variant="caption"),
+        ]
+    )
+
+
+def graph_frames_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator('.graph-stage[data-settled="true"]')).to_be_visible(timeout=30_000)
+    # Count the events by wrapping fetch in the page: the Pyodide runtime answers /api/event
+    # in the page, so a network listener would see nothing there.
+    page.evaluate(
+        "() => { window.__posts = []; const f = window.fetch;"
+        " window.fetch = (u, o) => { if (String(u).includes('api/event')) window.__posts.push(o.body);"
+        " return f(u, o); }; }"
+    )
+    page.get_by_role("button", name="Play").click()
+    expect(page.locator(".timeline-now")).to_have_text("2004", timeout=6000)
+    expect(page.get_by_text("frame 4", exact=True)).to_be_visible()  # reported once, at the end
+    assert page.evaluate("document.querySelector('.graph-stage').__graph.frame") == 4  # drawn too
+    posts = page.evaluate("window.__posts")
+    inputs = [p for p in posts if '"event":"input"' in p]
+    assert len(inputs) == 1, posts  # four steps played, one input sent
+    assert len([p for p in posts if '"event":"frame"' in p]) == 1, posts
+
+
 def graph_styles_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -1597,6 +1666,20 @@ CHAPTER = Chapter(
             docs="graph.md",
             adr=(53,),
             check=graph_keep_check,
+        ),
+        Page(
+            slug="graph-frames",
+            title="Graph frames",
+            summary=(
+                "`Graph(frames=[...], frame=Signal)` is a base graph plus a few style patches per "
+                "frame, applied in the browser. `Timeline(link=graph)` plays them with no events: "
+                "the index is reported once, at the end."
+            ),
+            build=graph_frames_page,
+            covers=(),
+            docs="graph.md",
+            adr=(53,),
+            check=graph_frames_check,
         ),
         Page(
             slug="timeline",

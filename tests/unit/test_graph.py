@@ -377,6 +377,97 @@ def test_layout_stable_is_accepted_and_sent():
         Graph(["a"], layout="radial")
 
 
+# -- frames (IND-280, ADR-0053 part 3) -------------------------------------------------------------
+
+_FN = ["a", "b", "c"]
+_FE = [{"source": "a", "target": "b", "id": "ab"}, {"source": "b", "target": "c", "id": "bc"}]
+
+
+@pytest.mark.unit
+def test_frames_go_to_the_wire_with_wire_names_and_frame_follows_a_signal():
+    from indah import Signal
+
+    frame = Signal(1)
+    g = Graph(
+        _FN,
+        _FE,
+        frames=[
+            {},
+            {
+                "nodes": {"a": {"ring": True, "label_style": "strike"}},
+                "edges": {"ab": {"dash": True}},
+            },
+            {"hide": ["c", "bc"]},
+        ],
+        frame=frame,
+    )
+    props = g.static_props()
+    assert props["frames"][1] == {
+        "nodes": {"a": {"ring": True, "labelStyle": "strike"}},
+        "edges": {"ab": {"dash": True}},
+    }
+    assert props["frames"][2] == {"hide": ["c", "bc"]} and props["frames"][0] == {}
+    assert g.reactive_props()["frame"]() == 1
+    assert g.handle("frame", {"index": 2}) is True and frame.value == 2
+    for bad in (3, -1, True, "1", None):
+        assert g.handle("frame", {"index": bad}) is False
+    assert frame.value == 2
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "frames",
+    [
+        [{"nodes": {"zz": {"ring": True}}}],  # unknown node
+        [{"edges": {"zz": {"dash": True}}}],  # unknown edge
+        [{"hide": ["zz"]}],
+        [{"nodes": {"a": {"opacity": 2}}}],  # a bad style
+        [{"nodes": {"a": {"dash": True}}}],  # an edge style on a node
+        [{"bogus": 1}],
+        ["nope"],
+        [{}] * 401,
+    ],
+)
+def test_frames_refuse_mistakes_in_python(frames):
+    with pytest.raises(ValueError):
+        Graph(_FN, _FE, frames=frames)
+
+
+@pytest.mark.unit
+def test_frames_total_entries_are_capped():
+    nodes = [f"n{i}" for i in range(500)]
+    frames = [{"nodes": {n: {"opacity": 0.5} for n in nodes}} for _ in range(121)]  # 60,500
+    with pytest.raises(ValueError, match="60,000"):
+        Graph(nodes, frames=frames)
+
+
+@pytest.mark.unit
+def test_frame_needs_frames_and_a_valid_start():
+    from indah import Signal
+
+    with pytest.raises(ValueError, match="frames"):
+        Graph(_FN, frame=Signal(0))
+    with pytest.raises(ValueError, match="frame"):
+        Graph(_FN, frames=[{}, {}], frame=Signal(2))
+    assert "frames" not in Graph(_FN).static_props()
+
+
+@pytest.mark.unit
+def test_timeline_link_names_the_graph_and_needs_matching_frames():
+    from indah import Signal, Timeline
+
+    g = Graph(_FN, _FE, frames=[{}, {}, {}])
+    g.id = "n7"
+    tl = Timeline(Signal(1), [1, 2, 3], link=g)
+    assert tl.static_props()["link"] == "n7"
+    with pytest.raises(ValueError, match="frames"):
+        Timeline(Signal(1), [1, 2], link=g)  # 2 points, 3 frames
+    with pytest.raises(ValueError, match="Graph"):
+        Timeline(Signal(1), [1, 2], link="n7")
+    with pytest.raises(ValueError, match="frames"):
+        Timeline(Signal(1), [1, 2], link=Graph(_FN))  # a graph without frames
+
+
 @pytest.mark.unit
 def test_update_keep_and_transition_are_off_by_default_and_sent_when_set():
     base = Graph(["a"]).static_props()
