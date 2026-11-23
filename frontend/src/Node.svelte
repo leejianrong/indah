@@ -23,6 +23,7 @@
   import Choice from "./Choice.svelte";
   import BarStrip from "./BarStrip.svelte";
   import InfoTip from "./InfoTip.svelte";
+  import Svg from "./Svg.svelte";
   import Menu from "./Menu.svelte";
   import CommandPalette from "./CommandPalette.svelte";
 
@@ -547,6 +548,8 @@
   </div>
 {:else if node.type === "barstrip"}
   <BarStrip {node} {props} />
+{:else if node.type === "svg"}
+  <Svg tree={props.tree} label={props.label} decorative={props.decorative} nodeId={node.id} />
 {:else if node.type === "infotip"}
   <InfoTip text={props.text ?? ""} label={props.label} />
 {:else if node.type === "spinner"}

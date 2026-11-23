@@ -12,6 +12,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Svg(markup, label=)` (IND-275): an inline SVG drawing for generated flame charts and diagrams. Python
+  parses it with an allowlist (drawing elements and geometry and presentation attributes only; no script,
+  event handler, style, class, link, image, `use`, DOCTYPE or outside reference; at most 200 KB, 5,000
+  elements and 32 levels) and sends a tree that the shell builds with `createElementNS`, so nothing is
+  parsed in the browser and it holds under the strict CSP. Colours may be `var(--token)`; ids are
+  prefixed per drawing. A label (or `decorative=True`) is required. Studio page `media/svg`. The wheel budget
+  rose to 645,000 and the shell's to 510,000 (see the chart bars and sparklines).
 - `Graph(frames=, frame=)` and `Timeline(link=graph)` (IND-280, ADR-0053 part 3): a base graph plus a few
   style patches per frame (`nodes`, `edges`, `hide`), applied in the browser. A linked `Timeline` steps the
   frames locally, so playing sends no events; the index is reported once on a pause, at the end or on a
