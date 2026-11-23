@@ -909,6 +909,52 @@ def graph_styles_page(ctx: indah.Context) -> indah.Component:
     )
 
 
+def _grown(size: int) -> tuple[list[dict], list[dict]]:
+    nodes = [{"id": f"k{i}", "label": f"k{i}", "group": "a" if i % 2 else "b"} for i in range(size)]
+    edges = [{"source": f"k{i}", "target": f"k{(i * 5 + 2) % size}"} for i in range(size)]
+    edges += [{"source": f"k{i}", "target": f"k{i + 1}"} for i in range(size - 1)]
+    return nodes, [e for e in edges if e["source"] != e["target"]]
+
+
+def graph_keep_page(ctx: indah.Context) -> indah.Component:
+    size = indah.Signal(20)
+    grown = indah.computed(lambda: _grown(size.value))
+    return indah.Column(
+        children=[
+            indah.Graph(
+                lambda: grown.value[0],
+                lambda: grown.value[1],
+                update="keep",
+                transition_ms=300,
+                height=380,
+                label="A graph that grows",
+            ),
+            indah.Button("Add 10 nodes", on_click=lambda: size.set(size.value + 10)),
+            indah.Text(lambda: f"{size.value} nodes", variant="caption"),
+        ]
+    )
+
+
+def graph_keep_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator('.graph-stage[data-settled="true"]')).to_be_visible(timeout=30_000)
+    ids = [f"k{i}" for i in range(20)]
+    # World coordinates: the view re-fits to the larger graph, so screen positions may shift.
+    read = (
+        "(ids) => { const g = document.querySelector('.graph-stage').__graph; const v = g.view();"
+        " return Object.fromEntries(ids.map((i) => { const [x, y] = g.screenOf(i);"
+        " return [i, [Math.round((x - v.tx) / v.k * 100), Math.round((y - v.ty) / v.k * 100)]]; })); }"
+    )
+    before = page.evaluate(read, ids)
+    page.get_by_role("button", name="Add 10 nodes").click()
+    expect(page.get_by_text("30 nodes")).to_be_visible()
+    page.wait_for_function("document.querySelector('.graph-stage').__graph.nodes === 30")
+    page.wait_for_timeout(500)
+    assert page.evaluate(read, ids) == before  # every id it already had stayed put
+
+
 def graph_styles_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -1464,6 +1510,19 @@ CHAPTER = Chapter(
             docs="graph.md",
             adr=(53,),
             check=graph_styles_check,
+        ),
+        Page(
+            slug="graph-keep",
+            title="Graph update keep",
+            summary=(
+                '`Graph(update="keep")` keeps the position of every id a replaced graph already had '
+                "and places only new ids near their neighbours; `transition_ms` fades them in."
+            ),
+            build=graph_keep_page,
+            covers=(),
+            docs="graph.md",
+            adr=(53,),
+            check=graph_keep_check,
         ),
         Page(
             slug="timeline",

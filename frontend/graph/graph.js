@@ -5,7 +5,7 @@
 // drawn in full (labels, edges); the rest are batched dots. No dependency; the layout is in layout.js
 // and the spatial index in spatial.js, and both run under Node too. Output:
 // dist-graph/graph.js (copied to src/indah/static/).
-import { createSimulation, run, bounds, hashString, LAYOUT_LIMIT } from "./layout.js";
+import { createSimulation, run, bounds, hashString, keepPositions, LAYOUT_LIMIT } from "./layout.js";
 import { buildGrid, nearest } from "./spatial.js";
 import { resolveColor, onThemeChange } from "../src/colors.js";
 
@@ -445,8 +445,57 @@ export function createGraph(el, { onSelect, onHover } = {}) {
     if (!raf) raf = requestAnimationFrame(frame);
   }
 
+  // update="keep" and transition_ms (ADR-0053). The old picture is read before it is replaced: the
+  // position of each id, and the opacity of each node and the opacity and width of each edge by its
+  // endpoints. A kept id is placed where it was; the transition then eases those styles (a new
+  // element fades in) by rewriting the style columns each frame, and ends on the real values.
+  const edgeKey = (d, k) => `${d.ids[d.s[k]]}\u0000${d.ids[d.t[k]]}`;
+  function snapshot() {
+    const pos = new Map();
+    const op = new Map();
+    const eo = new Map();
+    const ew = new Map();
+    for (let i = 0; i < g.n; i++) {
+      pos.set(g.ids[i], [sim.x[i], sim.y[i]]);
+      op.set(g.ids[i], nodeAlpha(i));
+    }
+    for (let k = 0; k < g.s.length; k++) {
+      eo.set(edgeKey(g, k), g.eOpacity?.[k] ?? null);
+      ew.set(edgeKey(g, k), g.eWidth?.[k] ?? null);
+    }
+    return { pos, op, eo, ew };
+  }
+  let tween = 0;
+  function ease(from, ms) {
+    cancelAnimationFrame(tween);
+    const target = { op: g.opacity, eo: g.eOpacity, ew: g.eWidth };
+    const t0 = performance.now();
+    const mix = (a, b, f) => (a == null && b == null ? null : (a ?? 1) + ((b ?? 1) - (a ?? 1)) * f);
+    const tick = (now) => {
+      const f = Math.min(1, (now - t0) / ms);
+      const e = f * f * (3 - 2 * f);
+      g.opacity = f === 1 ? target.op : Array.from({ length: g.n }, (_, i) => mix(from.op.get(g.ids[i]) ?? 0, target.op?.[i] ?? 1, e));
+      const edge = (name, base, was, dflt) =>
+        (g[name] = f === 1 ? base : Array.from(g.s, (_, k) => {
+          const key = edgeKey(g, k);
+          const a = was.has(key) ? was.get(key) : 0; // an edge not drawn before fades in
+          return mix(a ?? dflt, base?.[k] ?? dflt, e);
+        }));
+      edge("eOpacity", target.eo, from.eo, 0.35);
+      edge("eWidth", target.ew, from.ew, 1);
+      buildBatches();
+      draw();
+      if (f < 1) tween = requestAnimationFrame(tick);
+    };
+    tick(t0);
+  }
+
   function setData(data) {
+    const keepView = touched ? [view, true] : null;
+    const before = g && sim && data.update === "keep" ? snapshot() : null;
+    const fade = data.transitionMs > 0 && g && sim && !matchMedia("(prefers-reduced-motion: reduce)").matches ? (before ?? snapshot()) : null;
     g = decode(data);
+    if (before) g.given = keepPositions(before.pos, g.ids, g.s, g.t);
     resolveTheme();
     buildBatches();
     const seed = hashString(`${g.n}:${g.s.length}:${g.ids[0] ?? ""}:${g.ids[g.n - 1] ?? ""}`);
@@ -487,8 +536,10 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       },
     };
     if (sim.done) finish();
-    fit();
+    if (before && keepView) [view, touched] = keepView; // a kept layout keeps the viewer's pan and zoom
+    else fit();
     schedule();
+    if (fade) ease(fade, data.transitionMs);
   }
 
   // Pan with a drag, zoom with the wheel or two fingers.
