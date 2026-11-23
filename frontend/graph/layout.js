@@ -75,6 +75,62 @@ export function initialPositions(n, group, nGroups, seed, idSeeds) {
   return { x, y, gx, gy };
 }
 
+// layout="layered" (IND-264): a top-to-bottom layout for a DAG, no simulation. Layers are the longest
+// path from a root (Kahn's order; when only a cycle is left, the first node in list order is forced
+// out, so its back edge is ignored), and each layer is ordered by the mean place of its neighbours
+// in the layers either side, swept down and up a few times to cut crossings.
+export function layeredPositions(n, s, t) {
+  const out = Array.from({ length: n }, () => []);
+  const inn = Array.from({ length: n }, () => []);
+  const indeg = new Int32Array(n);
+  for (let e = 0; e < s.length; e++) {
+    if (s[e] === t[e]) continue;
+    out[s[e]].push(t[e]);
+    inn[t[e]].push(s[e]);
+    indeg[t[e]]++;
+  }
+  const layer = new Int32Array(n);
+  const done = new Uint8Array(n);
+  const queue = [];
+  for (let i = 0; i < n; i++) if (indeg[i] === 0) queue.push(i);
+  let from = 0;
+  let head = 0;
+  for (let placed = 0; placed < n; placed++) {
+    if (head >= queue.length) {
+      while (done[from]) from++; // only a cycle is left: force its first node out
+      queue.push(from);
+    }
+    const v = queue[head++];
+    done[v] = 1;
+    for (const u of inn[v]) if (done[u]) layer[v] = Math.max(layer[v], layer[u] + 1);
+    for (const w of out[v]) if (!done[w] && --indeg[w] === 0) queue.push(w);
+  }
+  const rows = [];
+  for (let i = 0; i < n; i++) (rows[layer[i]] ??= []).push(i);
+  const place = new Float64Array(n);
+  const spread = () => rows.forEach((r) => r.forEach((v, j) => (place[v] = j)));
+  spread();
+  const neighbours = (v, lay) => [...out[v], ...inn[v]].filter((u) => layer[u] === lay);
+  const order = (r, lay) => {
+    const key = new Map(r.map((v) => {
+      const nb = neighbours(v, lay);
+      return [v, nb.length ? nb.reduce((a, u) => a + place[u], 0) / nb.length : place[v]];
+    }));
+    r.sort((a, b) => key.get(a) - key.get(b) || a - b);
+    r.forEach((v, j) => (place[v] = j));
+  };
+  for (let sweep = 0; sweep < 4; sweep++) {
+    for (let l = 1; l < rows.length; l++) order(rows[l], l - 1);
+    for (let l = rows.length - 2; l >= 0; l--) order(rows[l], l + 1);
+  }
+  const x = new Float64Array(n);
+  const y = new Float64Array(n);
+  for (let l = 0; l < rows.length; l++) {
+    rows[l].forEach((v, j) => [x[v], y[v]] = [(j - (rows[l].length - 1) / 2) * 90, l * 64]);
+  }
+  return { x, y, gx: new Float64Array(1), gy: new Float64Array(1) };
+}
+
 // update="keep" (ADR-0053): positions for a replaced graph. `prev` maps id -> [x, y]. A known id
 // keeps its place; a new id starts at the mean of its already placed neighbours (new ones settle in
 // passes, so a chain hangs off the old graph), with a hash-seeded offset so siblings do not stack,

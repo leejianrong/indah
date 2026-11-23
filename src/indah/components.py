@@ -2924,9 +2924,11 @@ GRAPH_MAX_NODES = 20_000  # the hard ceiling for max_nodes (ADR-0048)
 GRAPH_MAX_EDGES = 60_000
 _GRAPH_NODE_KEYS = {
     "id", "label", "group", "size", "color", "x", "y", "ring", "opacity", "label_style",
+    "shape", "dash",
 }  # fmt: skip
 _GRAPH_EDGE_KEYS = {"source", "target", "id", "label", "color", "dash", "opacity", "width"}
 _GRAPH_LABEL_STYLES = ("strike", "bold")
+_GRAPH_SHAPES = ("circle", "square", "diamond")
 
 
 def _graph_style(key: str, value: Any, what: str) -> Any:
@@ -2937,6 +2939,10 @@ def _graph_style(key: str, value: Any, what: str) -> Any:
         return _number(value, f"{what} width", 0.25, 12)
     if key == "ring":
         return True if value is True else _color(value, "node ring")
+    if key == "shape":
+        if value not in _GRAPH_SHAPES:
+            raise ValueError(f"node shape must be one of {_GRAPH_SHAPES}, got {value!r}")
+        return value
     if key == "label_style":
         if value not in _GRAPH_LABEL_STYLES:
             raise ValueError(f"label_style must be one of {_GRAPH_LABEL_STYLES}, got {value!r}")
@@ -2952,7 +2958,7 @@ def _graph_style(key: str, value: Any, what: str) -> Any:
         )
     ):
         return list(value)
-    raise ValueError(f"edge dash must be True or [dash, gap] in pixels, got {value!r}")
+    raise ValueError(f"{what} dash must be True or [dash, gap] in pixels, got {value!r}")
 
 
 def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> dict[str, Any]:
@@ -2968,7 +2974,19 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
     index: dict[str, int] = {}
     cols: dict[str, list[Any]] = {
         k: []
-        for k in ("label", "group", "size", "color", "x", "y", "ring", "opacity", "label_style")
+        for k in (
+            "label",
+            "group",
+            "size",
+            "color",
+            "x",
+            "y",
+            "ring",
+            "opacity",
+            "label_style",
+            "shape",
+            "dash",
+        )
     }
     used: set[str] = set()
     ids: list[str] = []
@@ -2993,7 +3011,7 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
             if value is not None:
                 if key == "color":
                     value = _color(value, "node color")
-                elif key in ("ring", "opacity", "label_style"):
+                elif key in ("ring", "opacity", "label_style", "shape", "dash"):
                     value = _graph_style(key, value, "node")
                 elif key == "group":
                     value = str(value)
@@ -3184,6 +3202,13 @@ class Graph(Component):
     sliders share, so a hosted app on ``Rate(per_second=5, burst=30)`` keeps working controls. A
     viewer cannot set it to a string that is not a node id.
 
+    **Direction and layers** (IND-264). ``directed=True`` draws an arrowhead at each edge's target.
+    A node dict also takes ``shape`` (``"circle"``, ``"square"`` or ``"diamond"``) and ``dash``
+    (``True`` or ``[dash, gap]``, a dashed outline with a faint fill, so a state does not rest on
+    colour alone). ``layout="layered"`` lays the graph out top to bottom for a DAG: a node sits one
+    layer below its deepest parent (a cycle is broken at its first node in list order) and each
+    layer is ordered to cut crossings. No simulation runs, so a big DAG is placed at once.
+
     **Styles** (ADR-0053). A node dict takes ``ring`` (``True`` for the text colour, or a colour),
     ``opacity`` (0 to 1) and ``label_style`` (``"strike"`` or ``"bold"``); an edge dict takes
     ``dash`` (``True``, or ``[dash, gap]`` in pixels), ``opacity`` and ``width``. Each is drawn the
@@ -3217,7 +3242,8 @@ class Graph(Component):
         edges: Source = None,
         *,
         height: int | str = 480,
-        layout: Literal["auto", "stable", "given"] = "auto",
+        layout: Literal["auto", "stable", "layered", "given"] = "auto",
+        directed: bool = False,
         update: Literal["relayout", "keep"] = "relayout",
         transition_ms: int = 0,
         legend: bool = True,
@@ -3234,8 +3260,10 @@ class Graph(Component):
         super().__init__()
         if frame is not None and frames is None:
             raise ValueError("Graph frame= needs frames=")
-        if layout not in ("auto", "stable", "given"):
-            raise ValueError(f"Graph layout must be 'auto', 'stable' or 'given', got {layout!r}")
+        if layout not in ("auto", "stable", "layered", "given"):
+            raise ValueError(
+                f"Graph layout must be 'auto', 'stable', 'layered' or 'given', got {layout!r}"
+            )
         if update not in ("relayout", "keep"):
             raise ValueError(f"Graph update must be 'relayout' or 'keep', got {update!r}")
         if (
@@ -3254,6 +3282,7 @@ class Graph(Component):
             )
         self._height = _plot_height(height)
         self._layout = layout
+        self._directed = bool(directed)
         self._update = update
         self._transition_ms = transition_ms
         self._legend = bool(legend)
@@ -3312,6 +3341,8 @@ class Graph(Component):
 
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {"height": self._height, "layout": self._layout}
+        if self._directed:
+            props["directed"] = True
         if self._update == "keep":
             props["update"] = "keep"
         if self._transition_ms:

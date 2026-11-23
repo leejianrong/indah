@@ -1217,6 +1217,61 @@ def graph_frames_check(pw) -> None:
     assert len([p for p in posts if '"event":"frame"' in p]) == 1, posts
 
 
+_DAG = [
+    ("raw", "square", None), ("clean", None, None), ("features", None, None),
+    ("labels", "square", None), ("train", None, None), ("eval", None, True),
+    ("report", "diamond", True),
+]  # fmt: skip
+_DAG_EDGES = [
+    ("raw", "clean"), ("clean", "features"), ("clean", "labels"), ("features", "train"),
+    ("labels", "train"), ("train", "eval"), ("features", "eval"), ("eval", "report"),
+]  # fmt: skip
+
+
+def graph_dag_page(ctx: indah.Context) -> indah.Component:
+    nodes = []
+    for name, shape, dashed in _DAG:
+        node: dict = {"id": name, "label": name, "size": 9}
+        if shape:
+            node["shape"] = shape
+        if dashed:
+            node["dash"] = True  # not built yet
+        nodes.append(node)
+    return indah.Graph(
+        nodes,
+        _DAG_EDGES,
+        layout="layered",
+        directed=True,
+        height=380,
+        legend=False,
+        label="A data pipeline",
+    )
+
+
+def graph_dag_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    stage = page.locator('.graph-stage[data-settled="true"]')
+    expect(stage).to_be_visible(timeout=30_000)
+    ys = page.evaluate(
+        "(ids) => Object.fromEntries(ids.map((i) => [i, document.querySelector('.graph-stage').__graph.screenOf(i)[1]]))",
+        [name for name, _, _ in _DAG],
+    )
+    for a, b in _DAG_EDGES:
+        assert ys[a] < ys[b], (a, b, ys)  # every edge points down the page
+    assert page.evaluate("document.querySelector('.graph-stage').__graph.directed") is True
+    # Arrowheads are drawn: the canvas has ink beside the line, so just check it is not blank.
+    assert (
+        page.evaluate(
+            "() => { const c = document.querySelector('.graph-stage canvas'); const d ="
+            " c.getContext('2d').getImageData(0, 0, c.width, c.height).data;"
+            " let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; }"
+        )
+        > 500
+    )
+
+
 def graph_styles_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -1799,6 +1854,19 @@ CHAPTER = Chapter(
             covers=("ChoiceCards",),
             docs="components.md",
             check=choice_cards_check,
+        ),
+        Page(
+            slug="graph-dag",
+            title="Graph DAG: arrows, shapes and layers",
+            summary=(
+                "`directed=True` draws arrowheads, a node takes `shape` and a dashed outline, and "
+                '`layout="layered"` places a DAG top to bottom with no simulation.'
+            ),
+            build=graph_dag_page,
+            covers=(),
+            docs="graph.md",
+            adr=(48,),
+            check=graph_dag_check,
         ),
         Page(
             slug="graph-styles",

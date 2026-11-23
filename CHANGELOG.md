@@ -12,6 +12,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Graph(directed=True, layout="layered")` and node `shape` / `dash` (IND-264): an arrowhead at each edge's
+  target; a top-to-bottom layout for a DAG (longest-path layers, a cycle broken at its first node,
+  crossings reduced by a few barycentre sweeps, no simulation); a node `shape` (`"circle"`, `"square"`,
+  `"diamond"`) and a dashed outline with a faint fill, so a state does not rest on colour. All opt-in. The
+  lazy graph module grows by about 2.3 KB raw. Studio page `media/graph-dag`. With update=keep, frames and this, the lazy graph module is 23.1 KB raw / 9.6 KB
+  gzip, so its limits rose to 25,000 and 10,300 (and Python source to 690,000).
 - `Spans(spans, layout=, unit=, selected=, view=)` (IND-268): nested labelled intervals as a flame chart, an
   icicle chart or a timeline. Python decides each span's row (from containment or an explicit `depth`; for a
   timeline from its `lane` or a first-fit packing) and checks every span (finite numbers, end not before
