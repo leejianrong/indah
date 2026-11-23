@@ -20,8 +20,9 @@
   import "uplot/dist/uPlot.min.css";
   import { untrack } from "svelte";
   import { resolveColor, onThemeChange } from "./colors.js";
+  import { postEvent } from "./api.js";
 
-  let { props } = $props();
+  let { props, nodeId } = $props();
   let el = $state();
   let u = null;
 
@@ -386,9 +387,52 @@
         draw: [drawOverlays],
         // Until the pointer is over the plot the legend would read "Value: --"; hide the
         // placeholders and show values only while hovering (IND-227).
-        setCursor: [(self) => el && el.classList.toggle("hovering", self.cursor.idx != null)],
+        setCursor: [(self) => el && el.classList.toggle("hovering", self.cursor.idx != null), hover],
       },
     };
+  }
+
+  // Hover and click (IND-266): the point under the cursor is the data row nearest in x and, of the
+  // series that have a value there, the one nearest in y. Python reads the value from its own data,
+  // so only the row and the series go on the wire. Hover is a trailing 250 ms debounce that posts
+  // only a change (null when the pointer leaves); a click that was not a drag posts at once.
+  const HOVER_MS = 250;
+  let hoverTimer = 0;
+  let hoverWant = null;
+  let hoverSent = null;
+  const key = (p) => (p ? `${p.index}:${p.series}` : "");
+  function pointAt(self) {
+    const i = self.cursor.idx;
+    if (i == null || self.cursor.top == null) return null;
+    let best = null;
+    let gap = Infinity;
+    for (let k = 1; k < self.data.length; k++) {
+      const v = self.data[k][i];
+      if (v == null) continue;
+      const d = Math.abs(self.valToPos(v, "y") - self.cursor.top);
+      if (d < gap) [best, gap] = [k - 1, d];
+    }
+    return best == null ? null : { index: i, series: best };
+  }
+  function hover(self) {
+    if (!props.hoverable) return;
+    hoverWant = pointAt(self);
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      if (key(hoverWant) === key(hoverSent)) return;
+      hoverSent = hoverWant;
+      postEvent(nodeId, "hover", hoverWant ?? { index: null });
+    }, HOVER_MS);
+  }
+  function listenClicks(self) {
+    let down = null;
+    self.over.addEventListener("pointerdown", (e) => (down = [e.clientX, e.clientY]));
+    self.over.addEventListener("pointerup", (e) => {
+      const moved = down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4;
+      down = null;
+      const p = !moved && props.clickable ? pointAt(self) : null;
+      if (p) postEvent(nodeId, "click", p);
+    });
   }
 
   function build() {
@@ -399,10 +443,13 @@
     ySeries().forEach((s, i) => {
       if (s.box > 0) u.root.querySelectorAll(".u-legend .u-series")[i + 1]?.style.setProperty("display", "none");
     });
+    listenClicks(u);
     el.__uplot = u; // expose the instance for debugging / e2e introspection
   }
 
   function destroy() {
+    clearTimeout(hoverTimer);
+    hoverSent = null;
     if (u) {
       u.destroy();
       u = null;
