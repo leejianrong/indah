@@ -12,6 +12,12 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Sparkline`, `TickStrip`, and `Stat(delta_good=, tone=, spark=)` (IND-263): a tiny trend line with no axes
+  and a row of pass/fail ticks (a failed tick is taller, so it does not rest on colour; the screen reader
+  hears the counts). Both bind from a table cell as render-spec components (`"sparkline"` with `values`
+  and `tone`, `"ticks"` with `states`), with `spark_values()` and `tick_states()` for the row field. `Stat`
+  colours the delta by `delta_good` instead of its sign, colours the value by `tone`, and draws a `spark`.
+  Studio page `data/sparklines`.
 - `Chart(hovered=, clicked=)` (IND-266): two `Signal`s that report the point or bar under the pointer as
   `{"series", "index", "x", "y"}`. Hover is a trailing 250 ms debounce and goes back to `None` when the
   pointer leaves; a click posts at once and is not cleared by leaving. Python reads the value from its own

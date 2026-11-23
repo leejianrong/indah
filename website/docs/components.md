@@ -135,7 +135,8 @@ pieces out once at a design size, say 1920 by 1080, and indah scales the whole t
 | `DataFrame` | a pandas frame, a `{columns, rows}` dict, or record dicts |
 | `Table` | an interactive table: sort, page, and select |
 | `Pie` | a pie chart with one slice lit: pulled out and glowing while the rest dim |
-| `Stat` | a metric / KPI card: a big value with a label and optional delta |
+| `Stat` | a metric / KPI card: a big value with a label and optional delta; `delta_good=`, `tone=` and `spark=` for a metric where down is good, a coloured value and a small trend |
+| `Sparkline`, `TickStrip` | a tiny trend line, and a row of pass/fail ticks; both bind from a table cell |
 | `BarStrip` | a small activity strip: one bar per interval (calls per minute), optionally stacked, with a tooltip per bar |
 | `InfoTip` | a small focusable info icon that shows a short note on hover, focus or tap |
 | `JsonTree` | a collapsible, searchable JSON viewer |
@@ -317,6 +318,26 @@ Table(
 A `Diff` draws its own changed characters; to show shaded text beside one, put a `Marked` in the other pane
 of a `Row` or `SplitPane`. `marked_runs` returns a list that a List item or a table row carries as it is
 (other lists and dicts in an item field are shown as text).
+
+### Sparklines and tick strips
+
+`Sparkline(values)` is a trend line with no axes (`None` is a gap; `tone=` or `color=` sets the line, `fill=True`
+shades under it). `TickStrip(states)` is a row of ticks, one per run: `"ok"`, `"warn"`, `"err"` or `"neutral"`
+(`True` is ok, `False` is err). A failed tick is taller than an ok one, so it never rests on colour alone, and a
+screen reader hears the counts. Both take a list, a `Signal` or a function.
+
+`Stat(..., spark=values)` draws a sparkline under the value, `tone=` colours the value, and `delta_good=True`
+colours the delta green whatever its sign (for a cost, a drop is good).
+
+In a table cell, keep `spark_values(...)` or `tick_states(...)` in the row field (they keep at most 500 and 200
+points) and name the component in a cell column:
+
+```python
+Col("trend", kind="cell", render={"component": "sparkline", "bind": {"values": "trend"}})
+Col("history", kind="cell", render={"component": "ticks", "bind": {"states": "history"}})
+```
+
+<indah-live page="data/sparklines"></indah-live>
 
 ### Steps
 

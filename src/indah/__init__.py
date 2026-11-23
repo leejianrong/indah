@@ -83,6 +83,7 @@ from .components import (
     Skeleton,
     Slider,
     Spacer,
+    Sparkline,
     Spinner,
     SplitPane,
     Stat,
@@ -95,12 +96,15 @@ from .components import (
     Text,
     TextArea,
     TextInput,
+    TickStrip,
     Timeline,
     Upload,
     UploadedFile,
     chart_rows,
     marked_runs,
+    spark_values,
     steps_items,
+    tick_states,
 )
 from .context import ConnectionInfo, Context
 from .custom import CustomComponent, custom, register_component
@@ -205,7 +209,9 @@ __all__ = [
     "DataFrame",
     "Table",
     "TableQuery",
+    "Sparkline",
     "Stat",
+    "TickStrip",
     "StreamText",
     "Progress",
     "Spinner",
@@ -256,7 +262,9 @@ __all__ = [
     # custom components (R7)
     "chart_rows",
     "marked_runs",
+    "spark_values",
     "steps_items",
+    "tick_states",
     "register_component",
     "custom",
     "CustomComponent",
