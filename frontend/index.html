@@ -886,6 +886,20 @@
       .tick-ok { background: var(--ok); opacity: 1; }
       .tick-warn { background: var(--warn); opacity: 1; height: 80%; }
       .tick-err { background: var(--err); opacity: 1; height: 100%; }
+      .spans { display: flex; flex-direction: column; gap: 2px; }
+      .spans-plot { position: relative; width: 100%; }
+      .span { position: absolute; box-sizing: border-box; height: 22px; padding: 0 5px; border: 1px solid var(--surface); border-radius: 3px; color: var(--surface); font-family: inherit; font-weight: 600; font-size: 0.72rem; line-height: 20px; text-align: left; overflow: hidden; cursor: pointer; background: var(--primary); }
+      .span.inert { cursor: default; }
+      .span-text { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .span-c1 { background: var(--ok); }
+      .span-c2 { background: var(--warn); }
+      .span-c3 { background: var(--info, #3457d5); }
+      .span-c4 { background: var(--err); }
+      .span-c5 { background: var(--muted); }
+      .span:hover { filter: brightness(1.12); }
+      .span:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
+      .span.picked { outline: 2px solid var(--text); outline-offset: 0; z-index: 1; }
+      .spans-axis { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
       .stat-help { font-size: 0.78rem; color: var(--muted); }
       /* Plain Text roles (ADR-0040). Body is the default; readout is the old large figure. */
       .text { font-size: 0.95rem; font-weight: 400; line-height: 1.55; white-space: pre-line; }
