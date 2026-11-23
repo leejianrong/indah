@@ -52,18 +52,86 @@
           // spanGaps: a staircase holds its value across a row where this series has no point.
           return { ...base, spanGaps: true, paths: uPlot.paths.stepped({ align }), points: { show: props.points ?? false } };
         }
+        if (o.kind === "box") {
+          // Five columns, drawn together by drawBoxes; the series itself paints nothing.
+          return { ...base, paths: () => null, points: { show: false } };
+        }
         if (o.kind === "bars") {
-          return {
-            ...base,
-            width: 0,
-            fill: stroke,
-            paths: uPlot.paths.bars({ size: [0.55, 60] }),
-            points: { show: false },
-          };
+          const out = { ...base, width: 0, fill: stroke, paths: uPlot.paths.bars({ size: [0.55, 60] }), points: { show: false } };
+          if (props.stack || props.orientation === "horizontal") out.paths = stackedBars(i);
+          // The legend and the hover read the series' own value, not the running total.
+          if (props.stack) out.value = (_u, _v, _si, idx) => raw?.[i + 1]?.[idx] ?? "--";
+          return out;
         }
         return { ...base, points: { show: props.points ?? false } };
       }),
     ];
+  }
+
+  // Bars (IND-265): a bar runs from the total of the bars before it (stacked) or from zero, to its
+  // own value, drawn as one path; sideways, the x scale is the vertical one, so the rect swaps axes.
+  const barIndexes = () => ySeries().flatMap((s, i) => (s.kind === "bars" ? [i] : []));
+  let raw = null; // the unstacked columns, for the legend
+  function stackedBars(i) {
+    return (self, si, i0, i1) => {
+      const xs = self.data[0];
+      const ys = self.data[si];
+      const before = barIndexes().filter((k) => k < i).pop();
+      const sideways = props.orientation === "horizontal";
+      let gap = Infinity;
+      for (let k = i0 + 1; k <= i1; k++) gap = Math.min(gap, Math.abs(self.valToPos(xs[k], "x", true) - self.valToPos(xs[k - 1], "x", true)));
+      const size = Math.min(isFinite(gap) ? gap * 0.55 : 60, 60 * uPlot.pxRatio);
+      const fill = new Path2D();
+      for (let k = i0; k <= i1; k++) {
+        if (ys[k] == null) continue;
+        const c = self.valToPos(xs[k], "x", true);
+        const a = self.valToPos(props.stack && before != null ? (self.data[before + 1][k] ?? 0) : 0, "y", true);
+        const b = self.valToPos(ys[k], "y", true);
+        if (sideways) fill.rect(Math.min(a, b), c - size / 2, Math.abs(b - a), size);
+        else fill.rect(c - size / 2, Math.min(a, b), size, Math.abs(b - a));
+      }
+      return { stroke: null, fill, clip: null, band: null, gaps: null };
+    };
+  }
+
+  // A box series (five columns: min, q1, median, q3, max) is drawn over the plot: a whisker from
+  // min to max, a box from q1 to q3 and a line at the median.
+  function drawBoxes(self, ctx, dpr) {
+    ySeries().forEach((s, i) => {
+      if (s.box !== 0) return;
+      const xs = self.data[0];
+      const col = (k, r) => self.data[i + 1 + k][r];
+      let gap = Infinity;
+      for (let r = 1; r < xs.length; r++) gap = Math.min(gap, Math.abs(self.valToPos(xs[r], "x", true) - self.valToPos(xs[r - 1], "x", true)));
+      const half = Math.min(isFinite(gap) ? gap * 0.25 : 20 * dpr, 30 * dpr);
+      const color = resolveColor(el, s.stroke || PALETTE[i % PALETTE.length]);
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 1.5 * dpr;
+      for (let r = 0; r < xs.length; r++) {
+        if ([0, 1, 2, 3, 4].some((k) => col(k, r) == null)) continue;
+        const x = self.valToPos(xs[r], "x", true);
+        const [lo, q1, mid, q3, hi] = [0, 1, 2, 3, 4].map((k) => self.valToPos(col(k, r), "y", true));
+        ctx.beginPath();
+        ctx.moveTo(x, lo);
+        ctx.lineTo(x, hi);
+        ctx.moveTo(x - half / 2, lo);
+        ctx.lineTo(x + half / 2, lo);
+        ctx.moveTo(x - half / 2, hi);
+        ctx.lineTo(x + half / 2, hi);
+        ctx.stroke();
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(x - half, Math.min(q1, q3), 2 * half, Math.abs(q3 - q1));
+        ctx.globalAlpha = 1;
+        ctx.strokeRect(x - half, Math.min(q1, q3), 2 * half, Math.abs(q3 - q1));
+        ctx.lineWidth = 2.5 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(x - half, mid);
+        ctx.lineTo(x + half, mid);
+        ctx.stroke();
+        ctx.lineWidth = 1.5 * dpr;
+      }
+    });
   }
 
   // Rows [[x, y0, y1], ...] -> uPlot's columnar [[x...], [y0...], [y1...]].
@@ -78,6 +146,15 @@
         let v = row?.[i] ?? null;
         if (v != null && v <= 0 && (i === 0 ? logX : logY)) v = null;
         cols[i].push(v);
+      }
+    }
+    raw = null;
+    if (props.stack) {
+      raw = cols.map((c) => c.slice());
+      let run = null;
+      for (const k of barIndexes()) {
+        if (run) cols[k + 1] = cols[k + 1].map((v, r) => (v == null ? null : v + (run[r] ?? 0)));
+        run = cols[k + 1];
       }
     }
     return cols;
@@ -104,6 +181,7 @@
     ctx.rect(left, top, width, height);
     ctx.clip();
     drawBands(self, ctx, dpr);
+    drawBoxes(self, ctx, dpr);
     if (props.shadeAfter && props.playhead != null) {
       // Dim everything after the playhead (the part of the run not played yet).
       const edge = Math.min(Math.max(self.valToPos(props.playhead, "x", true), left), left + width);
@@ -262,10 +340,14 @@
     if (props.xScale === "category") x.range = () => [-0.5, Math.max(0, (props.xCategories?.length ?? 1) - 0.5)];
     if (props.xScale === "log") Object.assign(x, { distr: 3, log: 10 });
     if (props.xRange && props.xScale !== "category") x.range = () => [props.xRange[0], props.xRange[1]];
+    const sideways = props.orientation === "horizontal";
+    if (sideways) Object.assign(x, { ori: 1, dir: -1 }); // categories run down the page, first at the top
     const scales = { x };
     const y = props.yScale === "log" ? { distr: 3, log: 10 } : {};
+    if (sideways) y.ori = 0;
     if (props.yRange) y.range = () => [props.yRange[0], props.yRange[1]];
-    if (props.yScale === "log" || props.yRange) scales.y = y;
+    else if (props.stack || sideways) y.range = (_u, lo, hi) => [Math.min(0, lo), hi + (hi - Math.min(0, lo)) * 0.05 || 1];
+    if (props.yScale === "log" || props.yRange || props.stack || sideways) scales.y = y;
     return {
       width: (el && el.clientWidth) || 400,
       height: plotHeight(),
@@ -278,7 +360,8 @@
       axes: [
         {
           ...axis,
-          ...(props.xLabel ? { label: props.xLabel } : { size: 30 }),
+          ...(sideways ? { side: 3, size: 90, space: 22 } : {}),
+          ...(props.xLabel ? { label: props.xLabel } : sideways ? {} : { size: 30 }),
           ...(props.xScale === "log" ? { ...logAxis, grid: { ...axis.grid, filter: decades }, ticks: { ...axis.ticks, filter: decades } } : {}),
           ...(props.xScale === "category"
             ? {
@@ -292,13 +375,14 @@
         },
         {
           ...axis,
+          ...(sideways ? { side: 2 } : {}),
           ...(props.yLabel ? { label: props.yLabel } : {}),
           ...(props.yScale === "log" ? { ...logAxis, grid: { ...axis.grid, filter: decades }, ticks: { ...axis.ticks, filter: decades } } : {}),
         },
       ],
       padding: [8, 8, 0, 0],
       legend: legendOptions(),
-      cursor: { drag: { x: true, y: false } }, // drag-to-zoom on x
+      cursor: { drag: { x: !sideways, y: false } }, // drag-to-zoom on x
       hooks: {
         draw: [drawOverlays],
         // Until the pointer is over the plot the legend would read "Value: --"; hide the
@@ -355,6 +439,10 @@
     destroy();
     if (!el) return;
     u = new uPlot(options(), columnar(), el);
+    // A box series is five columns but one entry in the legend: hide the other four.
+    ySeries().forEach((s, i) => {
+      if (s.box > 0) u.root.querySelectorAll(".u-legend .u-series")[i + 1]?.style.setProperty("display", "none");
+    });
     listenClicks(u);
     el.__uplot = u; // expose the instance for debugging / e2e introspection
   }
@@ -389,6 +477,8 @@
       props.yScale,
       props.xInteger,
       props.shadeAfter,
+      props.stack,
+      props.orientation,
       props.highlightColor,
       props.legend,
     ]);

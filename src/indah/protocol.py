@@ -130,6 +130,8 @@ SPEC_COMPONENTS: dict[str, frozenset[str]] = {
     "marked": frozenset({"runs"}),
     "steps": frozenset({"items", "orientation", "size"}),
     "infotip": frozenset({"text"}),
+    "sparkline": frozenset({"values", "tone"}),
+    "ticks": frozenset({"states"}),
 }
 
 

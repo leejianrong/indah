@@ -1934,7 +1934,8 @@ def _figure_src(value: Any) -> str:
     return _image_src(value)
 
 
-_SERIES_KINDS = ("line", "step", "scatter", "bars")
+_SERIES_KINDS = ("line", "step", "scatter", "bars", "box")
+_BOX_PARTS = ("", " q1", " median", " q3", " max")
 _SCALES = ("linear", "log")
 _COLOR_OK = re.compile(r"[A-Za-z0-9 #%.,()\-_/]{1,80}")
 
@@ -1989,6 +1990,45 @@ def _normalise_series(spec: Any) -> dict[str, Any]:
             raise ValueError("series dash must be a list of one to four lengths, in px")
         out["dash"] = [_number(d, "series dash", 0, 100) for d in dash]
     return out
+
+
+def _expand_series(spec: Any) -> list[dict[str, Any]]:
+    """A box series draws five numbers a row (min, q1, median, q3, max), so it takes five data
+    columns: it goes to the wire as five series that share a colour, tagged ``box`` 0 to 4."""
+    one = _normalise_series(spec)
+    if one.get("kind") != "box":
+        return [one]
+    label = one["label"]
+    return [
+        {**one, "label": label + part if part else label, "box": k}
+        for k, part in enumerate(_BOX_PARTS)
+    ]
+
+
+def box_rows(samples: dict[str, Any]) -> list[list[Any]]:
+    """Summarise raw samples into the rows a box series takes, for a category axis.
+
+    ``box_rows({"fast": [1, 2, 3, 4, 5]})`` gives ``[["fast", 1, 2, 3, 4, 5]]``: the label, then the
+    minimum, first quartile, median, third quartile and maximum (quartiles by linear
+    interpolation). The whiskers are the minimum and maximum, not a fence, so no point is hidden.
+    """
+    rows: list[list[Any]] = []
+    for name, values in samples.items():
+        nums = sorted(float(v) for v in values)
+        if not nums:
+            raise ValueError(f"box_rows: {name!r} has no samples")
+        if not all(math.isfinite(v) for v in nums):
+            raise ValueError(f"box_rows: samples in {name!r} must be finite numbers")
+
+        def at(q: float, nums: list[float] = nums) -> float:
+            pos = q * (len(nums) - 1)
+            lo = int(pos)
+            hi = min(lo + 1, len(nums) - 1)
+            return nums[lo] + (nums[hi] - nums[lo]) * (pos - lo)
+
+        stats = [nums[0], at(0.25), at(0.5), at(0.75), nums[-1]]
+        rows.append([str(name), *(int(v) if v == int(v) else v for v in stats)])
+    return rows
 
 
 def _axis_range(value: Any, name: str) -> list[float] | None:
@@ -2212,6 +2252,13 @@ class Chart(Component):
     ``playhead_label`` (a string, signal or callable) writes a short label beside the playhead
     line (IND-274).
 
+    Bars (IND-265): ``stack=True`` stacks the ``kind="bars"`` series on one another; the legend
+    still reads each series' own value. ``orientation="horizontal"`` draws the bars sideways, first
+    category at the top, for long labels and funnels; it needs ``x_scale="category"``, bars only,
+    and takes no rules, bands, markers, playhead or highlight. A ``kind="box"`` series draws a box
+    and whiskers from five columns (min, q1, median, q3, max); :func:`box_rows` makes those rows
+    from raw samples.
+
     ``hovered`` and ``clicked`` (a ``Signal[dict | None]`` each, IND-266) report the point or bar
     under the pointer as ``{"series", "index", "x", "y"}`` (``index`` is the row in the data; ``x``
     is the label on a category axis). Hover is debounced to about 250 ms and goes back to ``None``
@@ -2255,11 +2302,18 @@ class Chart(Component):
         highlight: Source = None,
         highlight_color: str | None = None,
         legend: str = "auto",
+        stack: bool = False,
+        orientation: str = "vertical",
         hovered: Signal[dict[str, Any] | None] | None = None,
         clicked: Signal[dict[str, Any] | None] | None = None,
     ) -> None:
         super().__init__()
         self._hovered, self._clicked = hovered, clicked
+        if orientation not in ("vertical", "horizontal"):
+            raise ValueError(
+                f"Chart orientation must be 'vertical' or 'horizontal', got {orientation!r}"
+            )
+        self._stack, self._orientation = bool(stack), orientation
         if legend not in ("auto", "labels", "off"):
             raise ValueError(f"Chart legend must be 'auto', 'labels' or 'off', got {legend!r}")
         self._legend = legend
@@ -2279,7 +2333,21 @@ class Chart(Component):
         self._reactive = data is not None
         self._data = data
         self._buffer: list[list[Any]] = []
-        self._series = [_normalise_series(s) for s in (series or [])]
+        self._series = [wire for s in (series or []) for wire in _expand_series(s)]
+        bars = [s for s in self._series if s.get("kind") == "bars"]
+        if self._stack and not bars:
+            raise ValueError("Chart stack=True needs at least one kind='bars' series")
+        if orientation == "horizontal":
+            if x_scale != "category":
+                raise ValueError("a horizontal Chart needs x_scale='category'")
+            if len(bars) != len(self._series):
+                raise ValueError("a horizontal Chart takes only kind='bars' series")
+            for name, value in (
+                ("rules", rules), ("bands", bands), ("markers", markers), ("playhead", playhead),
+                ("highlight", highlight),
+            ):  # fmt: skip
+                if value is not None:
+                    raise ValueError(f"a horizontal Chart does not take {name}")
         self._x_range = _axis_range(x_range, "x_range")
         self._y_range = _axis_range(y_range, "y_range")
         for name, source in (("playhead", playhead), ("highlight", highlight)):
@@ -2320,6 +2388,10 @@ class Chart(Component):
         }
         if self._legend != "auto":
             props["legend"] = self._legend
+        if self._stack:
+            props["stack"] = True
+        if self._orientation == "horizontal":
+            props["orientation"] = "horizontal"
         if self._hovered is not None:
             props["hoverable"] = True  # the shell posts hover events only when something listens
         if self._clicked is not None:
@@ -3989,19 +4061,34 @@ class Stat(Component):
     The tile dashboards pair with a ``Table``. ``value`` and ``delta`` are sources
     (signal / callable / plain); the shell colours the delta green when it does not
     start with ``-`` and red when it does (so pass e.g. ``"+2.4%"`` / ``"-1.1%"``).
+    ``delta_good`` (a bool or a source of one, IND-263) overrides that for a metric where down is
+    good: ``True`` colours the delta green and ``False`` red, whatever its sign. ``tone`` (``ok``,
+    ``warn``, ``err``, ``info`` or ``neutral``, or a source) colours the value, and ``spark`` (a
+    list of numbers, or a source) draws a small :class:`Sparkline` under it.
     Display only; no new protocol capability.
     """
 
     type = "stat"
 
     def __init__(
-        self, value: Source, *, label: str = "", delta: Source = None, help: str = ""
+        self,
+        value: Source,
+        *,
+        label: str = "",
+        delta: Source = None,
+        help: str = "",
+        delta_good: Source = None,
+        tone: Source = None,
+        spark: Source = None,
     ) -> None:
         super().__init__()
         self._value = value
         self._label = label
         self._delta = delta
         self._help = help
+        self._delta_good, self._tone, self._spark = delta_good, tone, spark
+        if not _is_source(tone):
+            _tone(tone)
 
     def static_props(self) -> dict[str, Any]:
         return {"label": self._label, "help": self._help}
@@ -4010,6 +4097,14 @@ class Stat(Component):
         props: dict[str, Callable[[], Any]] = {"value": lambda: str(_read(self._value))}
         if self._delta is not None:
             props["delta"] = lambda: None if _read(self._delta) is None else str(_read(self._delta))
+        if self._delta_good is not None:
+            props["deltaGood"] = lambda: (
+                None if _read(self._delta_good) is None else bool(_read(self._delta_good))
+            )
+        if self._tone is not None:
+            props["tone"] = lambda: _tone(_read(self._tone))
+        if self._spark is not None:
+            props["spark"] = lambda: list(spark_values(_read(self._spark)))
         return props
 
 
@@ -4021,6 +4116,122 @@ class Runs(list):  # type: ignore[type-arg]
 class StepItems(Runs):
     """What :func:`steps_items` returns: a list of ``[label, state, detail]`` that a List item or a
     table row carries as nested data, like :class:`Runs`."""
+
+
+SPARK_MAX_POINTS = 500
+TICK_MAX = 200
+TICK_STATES = ("ok", "warn", "err", "neutral")
+
+
+class SparkValues(Runs):
+    """What :func:`spark_values` returns: numbers (``None`` for a gap) that a table row carries as
+    nested data, like :class:`Runs`."""
+
+
+class TickStates(Runs):
+    """What :func:`tick_states` returns: a list of tick states that a table row carries as nested
+    data, like :class:`Runs`."""
+
+
+def spark_values(values: Any = ()) -> SparkValues:
+    """Normalise the points of a :class:`Sparkline` (IND-263): finite numbers, with ``None`` (and
+    NaN or infinity, which are not JSON) for a gap. A trend is its recent past, so only the last
+    ``SPARK_MAX_POINTS`` are kept. Use this to build the field of a table row that a render spec
+    binds to ``{"component": "sparkline", "bind": {"values": "trend"}}``."""
+    out = SparkValues()
+    for v in list(values or ())[-SPARK_MAX_POINTS:]:
+        if v is None:
+            out.append(None)
+        elif isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"a sparkline point is a number or None, got {v!r}")
+        else:
+            out.append(v if math.isfinite(v) else None)
+    return out
+
+
+def tick_states(states: Any = ()) -> TickStates:
+    """Normalise the ticks of a :class:`TickStrip` (IND-263): ``"ok"``, ``"warn"``, ``"err"`` or
+    ``"neutral"``; ``True`` is ``ok``, ``False`` is ``err`` and ``None`` is ``neutral``. Only the
+    last ``TICK_MAX`` are kept. Bind it from a table cell with ``{"component": "ticks", "bind":
+    {"states": "history"}}``."""
+    out = TickStates()
+    for v in list(states or ())[-TICK_MAX:]:
+        v = "ok" if v is True else "err" if v is False else "neutral" if v is None else v
+        if v not in TICK_STATES:
+            raise ValueError(f"a tick state must be one of {TICK_STATES}, True, False or None")
+        out.append(v)
+    return out
+
+
+def _tone(value: Any) -> str | None:
+    if value is not None and value not in _TONES:
+        raise ValueError(f"tone must be one of {sorted(_TONES)}, got {value!r}")
+    return value
+
+
+class Sparkline(Component):
+    """A tiny trend line with no axes (IND-263): ``values`` is a list of numbers (``None`` is a
+    gap), or a ``Signal`` or function returning one. ``tone`` (``ok``, ``warn``, ``err``, ``info``
+    or ``neutral``) or ``color`` sets the line; ``fill=True`` shades under it; ``height`` is in
+    pixels (4 to 120). ``label`` names it for a screen reader, which also hears the first, last,
+    lowest and highest values. In a table cell, bind it from a render spec:
+    ``{"component": "sparkline", "bind": {"values": "trend"}}`` with the field set by
+    :func:`spark_values`."""
+
+    type = "sparkline"
+
+    def __init__(
+        self,
+        values: Source,
+        *,
+        tone: str | None = None,
+        color: str | None = None,
+        fill: bool = False,
+        height: int = 24,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._values = values
+        self._tone = _tone(tone)
+        self._color = _color(color, "sparkline color") if color else None
+        if isinstance(height, bool) or not isinstance(height, int) or not 4 <= height <= 120:
+            raise ValueError(f"Sparkline height must be 4 to 120 pixels, got {height!r}")
+        self._fill, self._height, self._label = bool(fill), height, label
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"height": self._height}
+        if self._tone:
+            props["tone"] = self._tone
+        if self._color:
+            props["color"] = self._color
+        if self._fill:
+            props["fill"] = True
+        if self._label:
+            props["label"] = self._label
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"values": lambda: list(spark_values(_read(self._values)))}
+
+
+class TickStrip(Component):
+    """A row of small coloured ticks, one per run (IND-263): ``states`` is a list of ``"ok"``,
+    ``"warn"``, ``"err"`` or ``"neutral"`` (``True`` is ok, ``False`` is err), or a source of one.
+    The colour is never the only signal: a failed tick is taller, and the screen reader hears the
+    counts. In a table cell: ``{"component": "ticks", "bind": {"states": "history"}}`` with the
+    field set by :func:`tick_states`."""
+
+    type = "ticks"
+
+    def __init__(self, states: Source, *, label: str = "") -> None:
+        super().__init__()
+        self._states, self._label = states, label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label} if self._label else {}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"states": lambda: list(tick_states(_read(self._states)))}
 
 
 def _json_safe(value: Any) -> Any:

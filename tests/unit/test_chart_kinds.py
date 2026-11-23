@@ -320,3 +320,61 @@ def test_category_scale_needs_data_and_a_linear_look():
         indah.Chart(series=["n"], x_scale="category")  # streaming has no fixed labels
     with pytest.raises(ValueError):
         indah.Chart([["a", 1]], series=["n"], x_scale="category", x_integer=True)
+
+
+# -- stacked and horizontal bars, box series (IND-265) ------------------------------------------
+
+BARS = [{"label": "a", "kind": "bars"}, {"label": "b", "kind": "bars"}]
+
+
+@pytest.mark.unit
+def test_stack_and_orientation_are_off_by_default_and_sent_when_set():
+    plain = indah.Chart([["x", 1, 2]], series=BARS, x_scale="category").to_json()["props"]
+    assert "stack" not in plain and "orientation" not in plain
+    props = indah.Chart(
+        [["x", 1, 2]], series=BARS, x_scale="category", stack=True, orientation="horizontal"
+    ).to_json()["props"]
+    assert props["stack"] is True and props["orientation"] == "horizontal"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"stack": True, "series": ["line"]},  # nothing to stack
+        {"orientation": "diagonal", "series": BARS},
+        {"orientation": "horizontal", "series": BARS},  # needs a category x axis
+        {"orientation": "horizontal", "series": ["line"], "x_scale": "category"},  # bars only
+        {"orientation": "horizontal", "series": BARS, "x_scale": "category", "rules": [{"y": 1}]},
+        {"orientation": "horizontal", "series": BARS, "x_scale": "category", "playhead": 1},
+    ],
+)
+def test_bad_stack_and_orientation_are_refused(kwargs):
+    kwargs.setdefault("data", [["x", 1, 2]])
+    with pytest.raises(ValueError):
+        indah.Chart(**kwargs)
+
+
+@pytest.mark.unit
+def test_a_box_series_takes_five_columns_and_hides_four_legend_rows():
+    chart = indah.Chart(
+        [["a", 1, 2, 3, 4, 5]],
+        series=[{"label": "latency", "kind": "box", "stroke": "var(--primary)"}],
+        x_scale="category",
+    )
+    series = chart.to_json()["props"]["series"]
+    assert [s["box"] for s in series] == [0, 1, 2, 3, 4]
+    assert all(s["kind"] == "box" and s["stroke"] == "var(--primary)" for s in series)
+    assert series[0]["label"] == "latency" and series[2]["label"] == "latency median"
+
+
+@pytest.mark.unit
+def test_box_rows_summarise_samples_into_five_numbers():
+    rows = indah.box_rows({"fast": [1, 2, 3, 4, 5], "slow": [10, 20, 30, 40, 100]})
+    assert rows[0] == ["fast", 1, 2, 3, 4, 5]
+    assert rows[1] == ["slow", 10, 20, 30, 40, 100]
+    assert indah.box_rows({"one": [7]}) == [["one", 7, 7, 7, 7, 7]]
+    with pytest.raises(ValueError, match="no samples"):
+        indah.box_rows({"none": []})
+    with pytest.raises(ValueError, match="finite"):
+        indah.box_rows({"bad": [1, float("nan")]})

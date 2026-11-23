@@ -634,6 +634,87 @@ def steps(ctx: indah.Context) -> indah.Component:
     )
 
 
+def sparklines(ctx: indah.Context) -> indah.Component:
+    runs = {
+        "adder": ([12, 11, 11, 9, 8, 8, 7], ["ok", "ok", "ok", "ok", "ok", "warn", "ok"]),
+        "qft": ([40, 42, 41, 45, 51, 58, 60], ["ok", "ok", "err", "ok", "err", "err", "err"]),
+        "grover": ([90, 88, None, 70, 64, 60, 59], ["ok", True, "neutral", "ok", "ok", "ok", "ok"]),
+    }
+    rows = [
+        {"name": n, "trend": indah.spark_values(v), "history": indah.tick_states(h)}
+        for n, (v, h) in runs.items()
+    ]
+    cost = indah.Signal([5, 6, 6, 8, 7, 9])
+    return indah.Column(
+        children=[
+            indah.Row(
+                children=[
+                    indah.Stat(
+                        "59",
+                        label="Grover cost",
+                        delta="-31",
+                        delta_good=True,
+                        tone="ok",
+                        spark=[90, 88, 80, 70, 64, 60, 59],
+                    ),
+                    indah.Stat(
+                        "60",
+                        label="QFT cost",
+                        delta="+20",
+                        delta_good=False,
+                        tone="err",
+                        spark=[40, 42, 41, 45, 51, 58, 60],
+                    ),
+                    indah.Stat(lambda: str(cost.value[-1]), label="Live", spark=cost),
+                ]
+            ),
+            indah.Button("Add a point", lambda: cost.set([*cost.value, cost.value[-1] + 1])),
+            indah.Table(
+                columns=[
+                    indah.Col("name"),
+                    indah.Col(
+                        "trend",
+                        title="Cost",
+                        kind="cell",
+                        render={"component": "sparkline", "bind": {"values": "trend"}},
+                    ),
+                    indah.Col(
+                        "history",
+                        title="Last runs",
+                        kind="cell",
+                        render={"component": "ticks", "bind": {"states": "history"}},
+                    ),
+                ],
+                rows=rows,
+                key="name",
+            ),
+            indah.Sparkline([3, 1, 4, 1, 5, 9, 2, 6], fill=True, tone="info", label="Pi digits"),
+            indah.TickStrip(["ok", "ok", "warn", "err", "ok"], label="Standalone"),
+        ]
+    )
+
+
+def sparklines_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator("td svg.spark")).to_have_count(3)
+    expect(page.locator("td .ticks")).to_have_count(3)
+    expect(page.locator(".stat svg.spark")).to_have_count(3)
+    # delta_good colours a falling cost green, and a rising one red, whatever the sign.
+    expect(page.locator(".stat-delta").nth(0)).not_to_have_class("stat-delta down")
+    expect(page.locator(".stat-delta").nth(1)).to_have_class("stat-delta down")
+    # A tick strip is read by the counts, and the line is named for a screen reader.
+    expect(page.locator("td .ticks").nth(1)).to_have_attribute(
+        "aria-label", "Recent runs: 3 ok, 0 warning, 4 failed"
+    )
+    expect(page.locator("td svg.spark").nth(2)).to_have_attribute(
+        "aria-label", "Trend: from 90 to 59, lowest 59, highest 90"
+    )
+    page.get_by_role("button", name="Add a point").click()
+    expect(page.locator(".stat svg.spark").nth(2).locator("polyline")).to_have_count(1)
+
+
 def steps_check(pw) -> None:
     from playwright.sync_api import expect
 
@@ -934,6 +1015,30 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(16,),
             check=marked_check,
+        ),
+        Page(
+            slug="sparklines",
+            title="Sparklines and tick strips",
+            summary=(
+                "`Sparkline` is a trend line with no axes and `TickStrip` a row of pass/fail ticks "
+                "(a failed one is taller, so it reads without colour). Both bind from a table cell "
+                'with `{"component": "sparkline"}` or `"ticks"`, and `Stat` takes `delta_good`, '
+                "`tone` and `spark`."
+            ),
+            build=sparklines,
+            covers=(
+                "Sparkline",
+                "TickStrip",
+                "spark_values",
+                "tick_states",
+                "Stat",
+                "Table",
+                "Col",
+                "Row",
+            ),
+            docs="components.md",
+            adr=(16,),
+            check=sparklines_check,
         ),
         Page(
             slug="steps",

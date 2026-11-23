@@ -7,11 +7,13 @@
   import MarkedRuns from "./MarkedRuns.svelte";
   import StepsCell from "./StepsCell.svelte";
   import InfoTip from "./InfoTip.svelte";
+  import Sparkline from "./Sparkline.svelte";
+  import TickStrip from "./TickStrip.svelte";
 
   // Built-in components a spec may name instead of a tag ({component: "marked", bind: {...}}),
   // a leaf that takes its props from the node or the List item / table row. Keep in step with
   // SPEC_COMPONENTS in protocol.py.
-  const registry = { marked: MarkedRuns, steps: StepsCell, infotip: InfoTip };
+  const registry = { marked: MarkedRuns, steps: StepsCell, infotip: InfoTip, sparkline: Sparkline, ticks: TickStrip };
 
   // `row` is {key, index} when the spec renders one row of a keyed List; it rides along
   // on every event so the server knows which row the event came from.
