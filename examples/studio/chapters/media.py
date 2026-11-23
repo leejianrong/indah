@@ -480,6 +480,66 @@ def chart_events_check(pw) -> None:
     expect(page.get_by_text("Selected: shor")).to_be_visible()
 
 
+def chart_bars(ctx: indah.Context) -> indah.Component:
+    stages = [["adder", 30, 50, 40], ["qft", 90, 120, 100], ["grover", 160, 210, 170]]
+    funnel = [["submitted", 1200], ["compiled", 940], ["optimised", 610], ["verified", 280]]
+    spread = indah.box_rows(
+        {
+            "fast": [8, 9, 9, 10, 11, 12, 14],
+            "steady": [20, 22, 25, 26, 30, 31, 40],
+            "slow": [30, 55, 60, 75, 90, 120],
+        }
+    )
+    return indah.Column(
+        children=[
+            indah.Chart(
+                stages,
+                series=[
+                    {"label": "parse", "kind": "bars"},
+                    {"label": "route", "kind": "bars"},
+                    {"label": "emit", "kind": "bars"},
+                ],
+                title="Stage time per circuit (stacked)",
+                x_scale="category",
+                stack=True,
+                height=240,
+            ),
+            indah.Chart(
+                funnel,
+                series=[{"label": "circuits", "kind": "bars", "stroke": "var(--primary)"}],
+                title="Funnel (horizontal)",
+                x_scale="category",
+                orientation="horizontal",
+                height=220,
+            ),
+            indah.Chart(
+                spread,
+                series=[{"label": "latency", "kind": "box", "stroke": "var(--primary)"}],
+                title="Latency spread (box)",
+                x_scale="category",
+                height=240,
+            ),
+        ]
+    )
+
+
+def chart_bars_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".u-over")).to_have_count(3, timeout=15_000)
+    plots = page.evaluate(
+        "() => [...document.querySelectorAll('.u-over')].map((o) => { const u = o.closest('.chart, div')"
+        " ; return o.getBoundingClientRect().width; })"
+    )
+    assert all(w > 100 for w in plots)
+    # Stacked: the top series' data are running totals, so its value is the sum of the three.
+    totals = page.evaluate("document.querySelectorAll('.uplot')[0].parentElement.__uplot.data[3]")
+    assert totals == [120, 310, 540], totals
+    # A box series is one legend entry, not five.
+    expect(page.locator(".uplot").nth(2).locator(".u-series:visible")).to_have_count(1)  # latency
+
+
 def chart_axes(ctx: indah.Context) -> indah.Component:
     import datetime
 
@@ -1538,6 +1598,20 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(18,),
             check=chart_events_check,
+        ),
+        Page(
+            slug="chart-bars",
+            title="Stacked, horizontal and box charts",
+            summary=(
+                '`stack=True` stacks bar series, `orientation="horizontal"` draws them sideways for '
+                'funnels, and a `kind="box"` series draws box and whiskers from five numbers '
+                "(`box_rows` makes them from samples)."
+            ),
+            build=chart_bars,
+            covers=("box_rows",),
+            docs="components.md",
+            adr=(49,),
+            check=chart_bars_check,
         ),
         Page(
             slug="chart-axes",

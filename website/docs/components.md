@@ -166,6 +166,9 @@ A `step` series draws a staircase (`"align": "before"` holds each value up to it
 
 <indah-live page="media/chart-steps"></indah-live>
 
+`stack=True` stacks the `kind="bars"` series on one another (the legend still reads each series' own value). `orientation="horizontal"` draws bars sideways, first category at the top, which suits long labels and funnels; it needs `x_scale="category"` and bars only, and takes no rules, bands, markers, playhead or highlight. A `kind="box"` series draws a box and whiskers from five columns (min, q1, median, q3, max); `indah.box_rows({"fast": [8, 9, 12], "slow": [30, 60, 120]})` makes those rows from raw samples (whiskers run to the minimum and maximum, so no sample is hidden):
+
+<indah-live page="media/chart-bars"></indah-live>
 Bind `hovered=` and `clicked=` (each a `Signal`) to drive other components from the chart. The value is `{"series": "gates", "index": 3, "x": "shor", "y": 880}` (`index` is the row in the data, `x` the label on a category axis) or `None`. Hover is debounced to about 250 ms and returns to `None` when the pointer leaves; a click is not cleared. The value is read from your data in Python, so a viewer cannot set a point that is not there. Here a click on a bar selects a table row:
 
 <indah-live page="media/chart-events"></indah-live>

@@ -98,6 +98,7 @@ from .components import (
     Timeline,
     Upload,
     UploadedFile,
+    box_rows,
     chart_rows,
     marked_runs,
     steps_items,
@@ -254,6 +255,7 @@ __all__ = [
     "Empty",
     "Expander",
     # custom components (R7)
+    "box_rows",
     "chart_rows",
     "marked_runs",
     "steps_items",

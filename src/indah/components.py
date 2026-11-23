@@ -1933,7 +1933,8 @@ def _figure_src(value: Any) -> str:
     return _image_src(value)
 
 
-_SERIES_KINDS = ("line", "step", "scatter", "bars")
+_SERIES_KINDS = ("line", "step", "scatter", "bars", "box")
+_BOX_PARTS = ("", " q1", " median", " q3", " max")
 _SCALES = ("linear", "log")
 _COLOR_OK = re.compile(r"[A-Za-z0-9 #%.,()\-_/]{1,80}")
 
@@ -1988,6 +1989,45 @@ def _normalise_series(spec: Any) -> dict[str, Any]:
             raise ValueError("series dash must be a list of one to four lengths, in px")
         out["dash"] = [_number(d, "series dash", 0, 100) for d in dash]
     return out
+
+
+def _expand_series(spec: Any) -> list[dict[str, Any]]:
+    """A box series draws five numbers a row (min, q1, median, q3, max), so it takes five data
+    columns: it goes to the wire as five series that share a colour, tagged ``box`` 0 to 4."""
+    one = _normalise_series(spec)
+    if one.get("kind") != "box":
+        return [one]
+    label = one["label"]
+    return [
+        {**one, "label": label + part if part else label, "box": k}
+        for k, part in enumerate(_BOX_PARTS)
+    ]
+
+
+def box_rows(samples: dict[str, Any]) -> list[list[Any]]:
+    """Summarise raw samples into the rows a box series takes, for a category axis.
+
+    ``box_rows({"fast": [1, 2, 3, 4, 5]})`` gives ``[["fast", 1, 2, 3, 4, 5]]``: the label, then the
+    minimum, first quartile, median, third quartile and maximum (quartiles by linear
+    interpolation). The whiskers are the minimum and maximum, not a fence, so no point is hidden.
+    """
+    rows: list[list[Any]] = []
+    for name, values in samples.items():
+        nums = sorted(float(v) for v in values)
+        if not nums:
+            raise ValueError(f"box_rows: {name!r} has no samples")
+        if not all(math.isfinite(v) for v in nums):
+            raise ValueError(f"box_rows: samples in {name!r} must be finite numbers")
+
+        def at(q: float, nums: list[float] = nums) -> float:
+            pos = q * (len(nums) - 1)
+            lo = int(pos)
+            hi = min(lo + 1, len(nums) - 1)
+            return nums[lo] + (nums[hi] - nums[lo]) * (pos - lo)
+
+        stats = [nums[0], at(0.25), at(0.5), at(0.75), nums[-1]]
+        rows.append([str(name), *(int(v) if v == int(v) else v for v in stats)])
+    return rows
 
 
 def _axis_range(value: Any, name: str) -> list[float] | None:
@@ -2211,6 +2251,13 @@ class Chart(Component):
     ``playhead_label`` (a string, signal or callable) writes a short label beside the playhead
     line (IND-274).
 
+    Bars (IND-265): ``stack=True`` stacks the ``kind="bars"`` series on one another; the legend
+    still reads each series' own value. ``orientation="horizontal"`` draws the bars sideways, first
+    category at the top, for long labels and funnels; it needs ``x_scale="category"``, bars only,
+    and takes no rules, bands, markers, playhead or highlight. A ``kind="box"`` series draws a box
+    and whiskers from five columns (min, q1, median, q3, max); :func:`box_rows` makes those rows
+    from raw samples.
+
     ``hovered`` and ``clicked`` (a ``Signal[dict | None]`` each, IND-266) report the point or bar
     under the pointer as ``{"series", "index", "x", "y"}`` (``index`` is the row in the data; ``x``
     is the label on a category axis). Hover is debounced to about 250 ms and goes back to ``None``
@@ -2254,11 +2301,18 @@ class Chart(Component):
         highlight: Source = None,
         highlight_color: str | None = None,
         legend: str = "auto",
+        stack: bool = False,
+        orientation: str = "vertical",
         hovered: Signal[dict[str, Any] | None] | None = None,
         clicked: Signal[dict[str, Any] | None] | None = None,
     ) -> None:
         super().__init__()
         self._hovered, self._clicked = hovered, clicked
+        if orientation not in ("vertical", "horizontal"):
+            raise ValueError(
+                f"Chart orientation must be 'vertical' or 'horizontal', got {orientation!r}"
+            )
+        self._stack, self._orientation = bool(stack), orientation
         if legend not in ("auto", "labels", "off"):
             raise ValueError(f"Chart legend must be 'auto', 'labels' or 'off', got {legend!r}")
         self._legend = legend
@@ -2278,7 +2332,21 @@ class Chart(Component):
         self._reactive = data is not None
         self._data = data
         self._buffer: list[list[Any]] = []
-        self._series = [_normalise_series(s) for s in (series or [])]
+        self._series = [wire for s in (series or []) for wire in _expand_series(s)]
+        bars = [s for s in self._series if s.get("kind") == "bars"]
+        if self._stack and not bars:
+            raise ValueError("Chart stack=True needs at least one kind='bars' series")
+        if orientation == "horizontal":
+            if x_scale != "category":
+                raise ValueError("a horizontal Chart needs x_scale='category'")
+            if len(bars) != len(self._series):
+                raise ValueError("a horizontal Chart takes only kind='bars' series")
+            for name, value in (
+                ("rules", rules), ("bands", bands), ("markers", markers), ("playhead", playhead),
+                ("highlight", highlight),
+            ):  # fmt: skip
+                if value is not None:
+                    raise ValueError(f"a horizontal Chart does not take {name}")
         self._x_range = _axis_range(x_range, "x_range")
         self._y_range = _axis_range(y_range, "y_range")
         for name, source in (("playhead", playhead), ("highlight", highlight)):
@@ -2319,6 +2387,10 @@ class Chart(Component):
         }
         if self._legend != "auto":
             props["legend"] = self._legend
+        if self._stack:
+            props["stack"] = True
+        if self._orientation == "horizontal":
+            props["orientation"] = "horizontal"
         if self._hovered is not None:
             props["hoverable"] = True  # the shell posts hover events only when something listens
         if self._clicked is not None:
