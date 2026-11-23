@@ -44,3 +44,7 @@ export const now = readable(Date.now(), (set) => {
 // [{keys, label}]. The `?` help overlay lists them all; helpOpen toggles it.
 export const shortcutRegistry = writable(new Map());
 export const helpOpen = writable(false);
+
+// Graph id -> {set(frame, report)}: lets a linked Timeline step a Graph's frames in the browser
+// (ADR-0053), so playing them posts no events. A store, so a Timeline sees a Graph that mounts later.
+export const frameLinks = writable(new Map());
