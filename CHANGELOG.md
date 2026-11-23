@@ -12,6 +12,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Sparkline`, `TickStrip`, and `Stat(delta_good=, tone=, spark=)` (IND-263): a tiny trend line with no axes
+  and a row of pass/fail ticks (a failed tick is taller, so it does not rest on colour; the screen reader
+  hears the counts). Both bind from a table cell as render-spec components (`"sparkline"` with `values`
+  and `tone`, `"ticks"` with `states`), with `spark_values()` and `tick_states()` for the row field. `Stat`
+  colours the delta by `delta_good` instead of its sign, colours the value by `tone`, and draws a `spark`.
+  Studio page `data/sparklines`. The shell grew by about 3 KB with the chart bars (IND-265), hover and
+  click (IND-266) and these, so the size budgets rose to 510,000 raw for the shell and 645,000 for the wheel (the sdist's to 1,920,000).
 - `Chart` stacked and horizontal bars and a box series (IND-265): `stack=True` stacks `kind="bars"` series
   (the legend still shows each series' own value); `orientation="horizontal"` draws bars sideways, first
   category on top (category axis and bars only, no overlays); `kind="box"` draws a box and whiskers from

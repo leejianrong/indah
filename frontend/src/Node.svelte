@@ -23,6 +23,8 @@
   import Choice from "./Choice.svelte";
   import BarStrip from "./BarStrip.svelte";
   import InfoTip from "./InfoTip.svelte";
+  import Sparkline from "./Sparkline.svelte";
+  import TickStrip from "./TickStrip.svelte";
   import Menu from "./Menu.svelte";
   import CommandPalette from "./CommandPalette.svelte";
 
@@ -547,6 +549,10 @@
   </div>
 {:else if node.type === "barstrip"}
   <BarStrip {node} {props} />
+{:else if node.type === "sparkline"}
+  <Sparkline values={props.values ?? []} tone={props.tone} color={props.color} fill={props.fill} height={props.height} label={props.label} />
+{:else if node.type === "ticks"}
+  <TickStrip states={props.states ?? []} label={props.label} />
 {:else if node.type === "infotip"}
   <InfoTip text={props.text ?? ""} label={props.label} />
 {:else if node.type === "spinner"}
@@ -930,10 +936,12 @@
 {:else if node.type === "stat"}
   <div class="stat">
     {#if props.label}<span class="stat-label">{props.label}</span>{/if}
-    <span class="stat-value">{props.value ?? ""}</span>
+    <span class={`stat-value ${props.tone ? "tone-" + props.tone : ""}`}>{props.value ?? ""}</span>
     {#if props.delta != null}
-      <span class="stat-delta" class:down={String(props.delta).startsWith("-")}>{props.delta}</span>
+      <!-- delta_good decides the colour when given; otherwise a leading minus is bad -->
+      <span class="stat-delta" class:down={props.deltaGood != null ? !props.deltaGood : String(props.delta).startsWith("-")}>{props.delta}</span>
     {/if}
+    {#if props.spark?.length}<Sparkline values={props.spark} tone={props.tone} height={22} label={props.label} />{/if}
     {#if props.help}<span class="stat-help">{props.help}</span>{/if}
   </div>
 {:else if node.type === "dataframe"}
