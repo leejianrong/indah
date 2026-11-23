@@ -5,7 +5,7 @@
 // drawn in full (labels, edges); the rest are batched dots. No dependency; the layout is in layout.js
 // and the spatial index in spatial.js, and both run under Node too. Output:
 // dist-graph/graph.js (copied to src/indah/static/).
-import { createSimulation, run, bounds, hashString, LAYOUT_LIMIT } from "./layout.js";
+import { createSimulation, run, bounds, hashString, layeredPositions, LAYOUT_LIMIT } from "./layout.js";
 import { buildGrid, nearest } from "./spatial.js";
 import { resolveColor, onThemeChange } from "../src/colors.js";
 
@@ -71,6 +71,7 @@ export function decode(data) {
     // Styles (ADR-0053): optional columns, null where a node or edge has none.
     ring: cols.ring ?? null, opacity: cols.opacity ?? null, labelStyle: cols.labelStyle ?? null,
     eDash: e.dash ?? null, eOpacity: e.opacity ?? null, eWidth: e.width ?? null,
+    shape: cols.shape ?? null, nDash: cols.dash ?? null, directed: !!data.directed,
   };
 }
 
@@ -130,7 +131,7 @@ export function createGraph(el, { onSelect, onHover } = {}) {
   let styledEdgeFlag = new Uint8Array(0);
   function buildStyled() {
     styledNodes = [];
-    for (let i = 0; i < g.n; i++) if (g.ring?.[i] != null || g.opacity?.[i] != null) styledNodes.push(i);
+    for (let i = 0; i < g.n; i++) if (g.ring?.[i] != null || g.opacity?.[i] != null || g.shape?.[i] != null || g.nDash?.[i] != null) styledNodes.push(i);
     styledEdges = [];
     for (let e = 0; e < g.s.length; e++) {
       if (g.eDash?.[e] != null || g.eOpacity?.[e] != null || g.eWidth?.[e] != null) styledEdges.push(e);
@@ -151,6 +152,19 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       byColor.get(c).push(i);
     }
     batches = [...byColor].map(([color, nodes]) => ({ color, nodes: Int32Array.from(nodes) }));
+  }
+
+  // The path of a node's outline: a circle, or a square or diamond with the same area-ish reach.
+  function outline(px, py, r, shape) {
+    ctx.beginPath();
+    if (shape === "square") ctx.rect(px - r * 0.9, py - r * 0.9, r * 1.8, r * 1.8);
+    else if (shape === "diamond") {
+      ctx.moveTo(px, py - r * 1.25);
+      ctx.lineTo(px + r * 1.25, py);
+      ctx.lineTo(px, py + r * 1.25);
+      ctx.lineTo(px - r * 1.25, py);
+      ctx.closePath();
+    } else ctx.arc(px, py, r, 0, Math.PI * 2);
   }
 
   function radius(i) {
@@ -302,6 +316,35 @@ export function createGraph(el, { onSelect, onHover } = {}) {
     }
     ctx.setLineDash([]);
 
+    // Arrowheads (directed graphs): a small filled triangle at the target end of each drawn edge,
+    // pulled back by the target's radius, in the edge's own opacity.
+    if (g.directed) {
+      const size = Math.min(9, Math.max(4, 5 * Math.sqrt(k)));
+      ctx.fillStyle = theme.edge;
+      for (let e = 0; e < g.s.length; e++) {
+        const a = g.s[e];
+        const b = g.t[e];
+        if (a === b || !(everything || (inWin[a] && inWin[b]))) continue;
+        const ax = x[a] * k + tx;
+        const ay = y[a] * k + ty;
+        const bx = x[b] * k + tx;
+        const by = y[b] * k + ty;
+        if (bx < -20 || by < -20 || bx > w + 20 || by > h + 20) continue;
+        const len = Math.hypot(bx - ax, by - ay) || 1;
+        const ux = (bx - ax) / len;
+        const uy = (by - ay) / len;
+        const back = radius(b) * Math.min(1.6, Math.max(0.5, Math.sqrt(k))) + 1;
+        const tipx = bx - ux * back;
+        const tipy = by - uy * back;
+        ctx.globalAlpha = (g.eOpacity?.[e] ?? (dim ? 0.2 : 0.6)) * (dim ? 0.5 : 1);
+        ctx.beginPath();
+        ctx.moveTo(tipx, tipy);
+        ctx.lineTo(tipx - ux * size - uy * size * 0.45, tipy - uy * size + ux * size * 0.45);
+        ctx.lineTo(tipx - ux * size + uy * size * 0.45, tipy - uy * size - ux * size * 0.45);
+        ctx.fill();
+      }
+    }
+
     // A selected node draws every edge it has, so it never looks isolated.
     const strokeEdges = (list, color, width) => {
       ctx.strokeStyle = color;
@@ -351,9 +394,19 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       const r = near ? radius(i) * Math.min(1.6, Math.max(0.5, Math.sqrt(k))) : 1.6;
       ctx.globalAlpha = nodeAlpha(i) * (dim ? 0.4 : near ? 1 : 0.8);
       ctx.fillStyle = nodeColor(i);
-      ctx.beginPath();
-      ctx.arc(px, py, r, 0, Math.PI * 2);
+      const dash = g.nDash?.[i]; // a dashed outline over a faint fill: state that does not rest on colour
+      if (dash != null && near) ctx.globalAlpha *= 0.3;
+      outline(px, py, r, near ? g.shape?.[i] : null);
       ctx.fill();
+      if (dash != null && near) {
+        ctx.globalAlpha = nodeAlpha(i);
+        ctx.strokeStyle = ctx.fillStyle;
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash(dash === true ? [3, 2.5] : dash);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = nodeAlpha(i) * (dim ? 0.4 : 1);
+      }
       const ringColor = g.ring?.[i];
       if (ringColor != null) {
         ctx.globalAlpha = Math.max(0.5, nodeAlpha(i));
@@ -447,6 +500,7 @@ export function createGraph(el, { onSelect, onHover } = {}) {
 
   function setData(data) {
     g = decode(data);
+    if (data.layout === "layered") g.given = layeredPositions(g.n, g.s, g.t); // placed at once, no simulation
     resolveTheme();
     buildBatches();
     const seed = hashString(`${g.n}:${g.s.length}:${g.ids[0] ?? ""}:${g.ids[g.n - 1] ?? ""}`);
@@ -467,6 +521,7 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       nodes: g.n,
       edges: g.s.length,
       groups: g.groups.length,
+      directed: g.directed,
       settled: false,
       laidOut: !g.given && g.n <= LAYOUT_LIMIT,
       // For tests and debugging: is this node drawn in full right now?

@@ -12,6 +12,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Graph(directed=True, layout="layered")` and node `shape` / `dash` (IND-264): an arrowhead at each edge's
+  target; a top-to-bottom layout for a DAG (longest-path layers, a cycle broken at its first node,
+  crossings reduced by a few barycentre sweeps, no simulation); a node `shape` (`"circle"`, `"square"`,
+  `"diamond"`) and a dashed outline with a faint fill, so a state does not rest on colour. All opt-in. The
+  lazy graph module grows by about 2.3 KB raw. Studio page `media/graph-dag`.
 - `Graph` element styles and `layout="stable"` (IND-278, ADR-0053 part 2): a node takes `ring`
   (`True` or a colour), `opacity` and `label_style` (`"strike"` or `"bold"`); an edge takes `dash`
   (`True` or `[dash, gap]`), `opacity` and `width`. All are drawn the same inside and outside the focus

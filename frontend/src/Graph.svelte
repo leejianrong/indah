@@ -32,7 +32,7 @@
     if (!force && props.nodes === loadedNodes && props.edges === loadedEdges) return;
     loadedNodes = props.nodes;
     loadedEdges = props.edges;
-    ctl.setData({ nodes: props.nodes, edges: props.edges, layout: props.layout });
+    ctl.setData({ nodes: props.nodes, edges: props.edges, layout: props.layout, directed: props.directed });
     options();
     ctl.resize();
     legend = ctl.legend();
@@ -98,6 +98,7 @@
     void props.nodes;
     void props.edges;
     void props.layout;
+    void props.directed;
     untrack(load);
   });
 

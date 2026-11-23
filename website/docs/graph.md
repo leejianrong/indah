@@ -99,6 +99,27 @@ edges = [{"source": "a", "target": "b", "dash": True}]
 indah.Graph(nodes, edges, layout="stable")
 ```
 
+## Draw a DAG
+
+For a pipeline or a lineage, pass `directed=True` for an arrowhead at each edge's target and
+`layout="layered"` to lay it out top to bottom with no simulation. A node can also take a `shape`
+(`"circle"`, `"square"` or `"diamond"`) and `dash` (a dashed outline with a faint fill), so a state such
+as "not built yet" does not rest on colour alone.
+
+```python
+nodes = [
+    {"id": "raw", "shape": "square"},
+    "clean",
+    {"id": "report", "shape": "diamond", "dash": True},
+]
+indah.Graph(nodes, [("raw", "clean"), ("clean", "report")], layout="layered", directed=True)
+```
+
+A node sits one layer below its deepest parent. A cycle is broken at its first node in list order, and
+each layer is ordered to cut crossings. A node far outside the focus window is still a dot.
+
+<indah-live page="media/graph-dag"></indah-live>
+
 ## Use the keyboard
 
 Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clears the selection.
@@ -107,14 +128,15 @@ Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clear
 
 | Argument | Meaning |
 |----------|---------|
-| `nodes` | ids, or dicts with `id` and optional `label`, `group`, `size`, `color`, `x`, `y`, `ring`, `opacity`, `label_style` |
+| `nodes` | ids, or dicts with `id` and optional `label`, `group`, `size`, `color`, `x`, `y`, `ring`, `opacity`, `label_style`, `shape`, `dash` |
 | `edges` | `(source, target)` pairs, or dicts with `source`, `target` and optional `id`, `label`, `color`, `dash`, `opacity`, `width` |
 | `selected` | a `Signal[str \| None]`, two-way |
 | `hovered` | a `Signal[str \| None]`, one-way: the node under the pointer (debounced about 250 ms) |
 | `focus` | a node id, signal or callable: centre on it |
 | `focus_size` | nodes drawn in full (default 300, at most 5,000); may be a signal |
 | `highlight` | `{"nodes": [...], "edges": [...]}`; may be a signal |
-| `layout` | `"auto"` (default), `"stable"` (seeded from ids and edges only) or `"given"`, which needs `x` and `y` on every node |
+| `layout` | `"auto"` (default), `"stable"` (seeded from ids and edges only), `"layered"` (a DAG, top to bottom) or `"given"`, which needs `x` and `y` on every node |
+| `directed` | draw an arrowhead at each edge's target (default `False`) |
 | `height` | pixels, or `"fill"` |
 | `legend` | show the group colours (default `True`) |
 | `max_nodes` | most nodes allowed (default 10,000; ceiling 20,000) |

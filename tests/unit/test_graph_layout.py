@@ -97,3 +97,30 @@ def test_a_stable_layout_ignores_group_and_node_order():
     assert result["startGroup"] < 1e-9  # the group a node is in does not place it
     assert result["startOrder"] < 1e-9  # nor does its position in the list
     assert result["endGroup"] < 1e-6  # so settling the same graph gives the same picture
+
+
+def _layered(ids, edges):
+    return run_probe("layered_probe.mjs", {"ids": ids, "edges": edges})
+
+
+def test_layered_puts_a_node_one_layer_below_its_deepest_parent():
+    ids = ["a", "b", "c", "d", "e", "lone"]
+    r = _layered(ids, [["a", "b"], ["a", "c"], ["b", "d"], ["c", "d"], ["a", "d"], ["d", "e"]])
+    y = r["y"]
+    assert y["a"] < y["b"] == y["c"] < y["d"] < y["e"]  # d follows its deepest parent, not a
+    assert y["lone"] == y["a"]  # a node with no edges is a root
+    assert r["x"]["b"] != r["x"]["c"]  # siblings do not stack
+    assert r["deterministic"]
+
+
+def test_layered_breaks_a_cycle_and_still_places_every_node():
+    r = _layered(["a", "b", "c"], [["a", "b"], ["b", "c"], ["c", "a"]])
+    assert r["y"]["a"] < r["y"]["b"] < r["y"]["c"]  # broken at the first node in list order
+
+
+def test_layered_orders_a_layer_to_avoid_a_crossing():
+    # Without ordering, y1 sits left of x1 while its child sits right of x1's child: a crossing.
+    ids = ["x", "y", "x1", "y1"]
+    r = _layered(ids, [["x", "y1"], ["y", "x1"]])
+    left_first = r["x"]["x"] < r["x"]["y"]
+    assert (r["x"]["y1"] < r["x"]["x1"]) == left_first
