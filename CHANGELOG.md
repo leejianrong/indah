@@ -12,6 +12,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Chart` stacked and horizontal bars and a box series (IND-265): `stack=True` stacks `kind="bars"` series
+  (the legend still shows each series' own value); `orientation="horizontal"` draws bars sideways, first
+  category on top (category axis and bars only, no overlays); `kind="box"` draws a box and whiskers from
+  five columns, and `indah.box_rows(samples)` summarises raw samples into those rows. Time and category
+  axes were already in (IND-269, IND-273). Studio page `media/chart-bars`.
 - `Graph(update="keep", transition_ms=)` (IND-278 second half, ADR-0053): a replaced graph keeps the
   position of every id it already had and the viewer's pan and zoom; new ids are placed near their placed
   neighbours. `transition_ms` (0 to 2,000, off under `prefers-reduced-motion`) fades new nodes in and eases

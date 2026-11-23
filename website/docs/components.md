@@ -166,6 +166,10 @@ A `step` series draws a staircase (`"align": "before"` holds each value up to it
 
 <indah-live page="media/chart-steps"></indah-live>
 
+`stack=True` stacks the `kind="bars"` series on one another (the legend still reads each series' own value). `orientation="horizontal"` draws bars sideways, first category at the top, which suits long labels and funnels; it needs `x_scale="category"` and bars only, and takes no rules, bands, markers, playhead or highlight. A `kind="box"` series draws a box and whiskers from five columns (min, q1, median, q3, max); `indah.box_rows({"fast": [8, 9, 12], "slow": [30, 60, 120]})` makes those rows from raw samples (whiskers run to the minimum and maximum, so no sample is hidden):
+
+<indah-live page="media/chart-bars"></indah-live>
+
 <indah-live page="media/heatmap"></indah-live>
 
 A heatmap can take its own colour stops, leave a cell with no value blank, label rows and runs of columns, and spotlight one cell:

@@ -322,7 +322,7 @@ def test_category_scale_needs_data_and_a_linear_look():
         indah.Chart([["a", 1]], series=["n"], x_scale="category", x_integer=True)
 
 
-# -- stacked and horizontal bars, box series (IND-265) -----------------------------------------------
+# -- stacked and horizontal bars, box series (IND-265) ------------------------------------------
 
 BARS = [{"label": "a", "kind": "bars"}, {"label": "b", "kind": "bars"}]
 
