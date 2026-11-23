@@ -17,7 +17,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   hears the counts). Both bind from a table cell as render-spec components (`"sparkline"` with `values`
   and `tone`, `"ticks"` with `states`), with `spark_values()` and `tick_states()` for the row field. `Stat`
   colours the delta by `delta_good` instead of its sign, colours the value by `tone`, and draws a `spark`.
-  Studio page `data/sparklines`.
+  Studio page `data/sparklines`. The shell grew by about 3 KB with the chart bars (IND-265), hover and
+  click (IND-266) and these, so the size budgets rose to 510,000 raw for the shell and 645,000 for the wheel.
+- `Graph(frames=, frame=)` and `Timeline(link=graph)` (IND-280, ADR-0053 part 3): a base graph plus a few
+  style patches per frame (`nodes`, `edges`, `hide`), applied in the browser. A linked `Timeline` steps the
+  frames locally, so playing sends no events; the index is reported once on a pause, at the end or on a
+  manual step. At most 400 frames and 60,000 patch entries; unknown ids and bad styles raise `ValueError`.
+  Studio page `media/graph-frames`.
 - `Chart(hovered=, clicked=)` (IND-266): two `Signal`s that report the point or bar under the pointer as
   `{"series", "index", "x", "y"}`. Hover is a trailing 250 ms debounce and goes back to `None` when the
   pointer leaves; a click posts at once and is not cleared by leaving. Python reads the value from its own
