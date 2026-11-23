@@ -11,6 +11,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-24
+
+Time and graphs. A `Timeline` steps through irregular moments and can drive a `Graph`'s frames, a `Graph` gains element styles, a stable layout, keep-on-update, arrows and a layered layout for a DAG, and `Chart` gains hover and click signals, stacked and horizontal bars and a box series. `Sparkline`, `TickStrip`, `Svg`, `Spans` and `ChoiceCards` are new components. Everything is opt-in and additive, so `protocol_version` stays 1 (ADR-0053 is still Proposed; its open questions do not block this release).
+
 ### Added
 - `Graph(directed=True, layout="layered")` and node `shape` / `dash` (IND-264): an arrowhead at each edge's
   target; a top-to-bottom layout for a DAG (longest-path layers, a cycle broken at its first node,
@@ -122,6 +126,19 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   playhead, threshold or highlight tore the plot down and drew it again (losing a zoom); it now
   rebuilds only when the series, labels, ranges, scales, height or legend change, and repaints
   the overlay otherwise.
+
+### Upgrading
+- A `Slider` whose `min` or `max` is live now clamps its value signal when the range moves past it (IND-276).
+  0.15.x left the signal alone. A fixed range behaves as before.
+- Nothing else changes for existing apps: every new option defaults to the old behaviour, including
+  `layout="auto"` for `Graph`.
+
+### Known limitations
+- `Graph(update="keep")` does not ease positions: kept ids do not move and new ones appear already placed.
+- `Chart(orientation="horizontal")` supports a category axis and bars only, with no overlays.
+- `Spans` is drawn in the shell with plain elements, so it is fine to about 5,000 spans and not beyond.
+- `Timeline` play is capped at 4 steps a second; `layout="stable"` is opt-in, not the default. Both are
+  open questions in ADR-0053.
 
 ## [0.15.0] - 2026-11-16
 
