@@ -2200,6 +2200,12 @@ class Chart(Component):
     ``playhead_label`` (a string, signal or callable) writes a short label beside the playhead
     line (IND-274).
 
+    ``hovered`` and ``clicked`` (a ``Signal[dict | None]`` each, IND-266) report the point or bar
+    under the pointer as ``{"series", "index", "x", "y"}`` (``index`` is the row in the data; ``x``
+    is the label on a category axis). Hover is debounced to about 250 ms and goes back to ``None``
+    when the pointer leaves the plot; a click is not cleared. Both share the event rate bucket, and
+    the value is read from the data in Python, so a viewer cannot set a point that is not there.
+
     Example (a streaming loss curve fed from a training loop, ADR-0009)::
 
         chart = Chart(series=["loss"], title="Training loss", x_label="step")
@@ -2237,8 +2243,11 @@ class Chart(Component):
         highlight: Source = None,
         highlight_color: str | None = None,
         legend: str = "auto",
+        hovered: Signal[dict[str, Any] | None] | None = None,
+        clicked: Signal[dict[str, Any] | None] | None = None,
     ) -> None:
         super().__init__()
+        self._hovered, self._clicked = hovered, clicked
         if legend not in ("auto", "labels", "off"):
             raise ValueError(f"Chart legend must be 'auto', 'labels' or 'off', got {legend!r}")
         self._legend = legend
@@ -2299,6 +2308,10 @@ class Chart(Component):
         }
         if self._legend != "auto":
             props["legend"] = self._legend
+        if self._hovered is not None:
+            props["hoverable"] = True  # the shell posts hover events only when something listens
+        if self._clicked is not None:
+            props["clickable"] = True
         if self._x_range:
             props["xRange"] = self._x_range
         if self._y_range:
@@ -2356,6 +2369,33 @@ class Chart(Component):
         if _is_source(self._playhead_label):
             props["playheadLabel"] = lambda: str(_read(self._playhead_label) or "")[:40]
         return props
+
+    def _point(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """The point the viewer is on, read from the data and not from the payload: the wire only
+        names a row and a series, and one the data does not have is refused."""
+        i, k = payload.get("index"), payload.get("series")
+        if any(isinstance(v, bool) or not isinstance(v, int) for v in (i, k)):
+            return None
+        rows = self._rows(_read(self._data)) if self._reactive else self._buffer
+        if not (0 <= i < len(rows) and 0 <= k < len(self._series)) or len(rows[i]) <= k + 1:
+            return None
+        x = rows[i][0]
+        if self._scales["x"] == "category":
+            x = _categories(_read(self._data))[int(x)]
+        return {"series": self._series[k]["label"], "index": i, "x": x, "y": rows[i][k + 1]}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        target = {"hover": self._hovered, "click": self._clicked}.get(event)
+        if target is None:
+            return False
+        if event == "hover" and "index" in payload and payload["index"] is None:
+            target.set(None)  # the pointer left the plot
+            return True
+        point = self._point(payload)
+        if point is None:
+            return False
+        target.set(point)
+        return True
 
     # -- streaming API (only when data= is unset) ----------------------------
 

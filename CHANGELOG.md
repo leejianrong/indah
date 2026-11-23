@@ -12,6 +12,11 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- `Chart(hovered=, clicked=)` (IND-266): two `Signal`s that report the point or bar under the pointer as
+  `{"series", "index", "x", "y"}`. Hover is a trailing 250 ms debounce and goes back to `None` when the
+  pointer leaves; a click posts at once and is not cleared by leaving. Python reads the value from its own
+  data, so only a row and a series index go on the wire and an index the data does not have is refused.
+  Nothing is posted unless a signal is bound. Studio page `media/chart-events` (a click selects a table row).
 - `Graph` element styles and `layout="stable"` (IND-278, ADR-0053 part 2): a node takes `ring`
   (`True` or a colour), `opacity` and `label_style` (`"strike"` or `"bold"`); an edge takes `dash`
   (`True` or `[dash, gap]`), `opacity` and `width`. All are drawn the same inside and outside the focus

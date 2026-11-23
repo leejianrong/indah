@@ -166,6 +166,10 @@ A `step` series draws a staircase (`"align": "before"` holds each value up to it
 
 <indah-live page="media/chart-steps"></indah-live>
 
+Bind `hovered=` and `clicked=` (each a `Signal`) to drive other components from the chart. The value is `{"series": "gates", "index": 3, "x": "shor", "y": 880}` (`index` is the row in the data, `x` the label on a category axis) or `None`. Hover is debounced to about 250 ms and returns to `None` when the pointer leaves; a click is not cleared. The value is read from your data in Python, so a viewer cannot set a point that is not there. Here a click on a bar selects a table row:
+
+<indah-live page="media/chart-events"></indah-live>
+
 <indah-live page="media/heatmap"></indah-live>
 
 A heatmap can take its own colour stops, leave a cell with no value blank, label rows and runs of columns, and spotlight one cell:
