@@ -36,6 +36,7 @@ from .protocol import RenderSpec
 from .reactive import Computed, Signal, computed, effect
 from .routes import compile_route, match_routes, normalize_path
 from .stream import Stream
+from .svg import parse_svg
 
 if TYPE_CHECKING:
     from .context import Context
@@ -1358,7 +1359,9 @@ class Timeline(Component):
     ``Rate(per_second=5)`` keeps working controls), and stops at the last point. ``playing`` is an
     optional ``Signal[bool]`` that follows play and pause and can start it from Python.
     ``disabled=`` locks it. The wire carries the point's index, and Python refuses one out of
-    range.
+    range. ``link=graph`` (a ``Graph`` with one frame per point) couples the two in the browser:
+    while playing, the timeline steps the graph's frame locally and posts nothing; it reports the
+    index once on pause, at the end and on any manual step.
     """
 
     lockable = True
@@ -1374,6 +1377,7 @@ class Timeline(Component):
         unit: str = "",
         playing: Signal[bool] | None = None,
         speed: float = 1,
+        link: Graph | None = None,
         label: str = "",
     ) -> None:
         super().__init__()
@@ -1399,6 +1403,12 @@ class Timeline(Component):
                 raise ValueError("Timeline density is one non-negative number per point")
         if speed not in _TIMELINE_SPEEDS:
             raise ValueError(f"Timeline speed must be one of {_TIMELINE_SPEEDS}, got {speed!r}")
+        if link is not None:
+            if not isinstance(link, Graph):
+                raise ValueError("Timeline link= takes a Graph")
+            if link._frames is None or len(link._frames) != len(points):
+                raise ValueError("a linked Graph needs one of its frames= for each Timeline point")
+        self._link = link
         self._value, self._points, self._playing, self._speed = value, points, playing, speed
         self._labels = [str(x) for x in (labels if labels is not None else points)]
         self._density = None if density is None else [float(d) for d in density]
@@ -1412,6 +1422,8 @@ class Timeline(Component):
             props["unit"] = self._unit
         if self._label:
             props["label"] = self._label
+        if self._link is not None and self._link.id:
+            props["link"] = self._link.id
         return props
 
     def _index(self) -> int:
@@ -1922,7 +1934,8 @@ def _figure_src(value: Any) -> str:
     return _image_src(value)
 
 
-_SERIES_KINDS = ("line", "step", "scatter", "bars")
+_SERIES_KINDS = ("line", "step", "scatter", "bars", "box")
+_BOX_PARTS = ("", " q1", " median", " q3", " max")
 _SCALES = ("linear", "log")
 _COLOR_OK = re.compile(r"[A-Za-z0-9 #%.,()\-_/]{1,80}")
 
@@ -1977,6 +1990,45 @@ def _normalise_series(spec: Any) -> dict[str, Any]:
             raise ValueError("series dash must be a list of one to four lengths, in px")
         out["dash"] = [_number(d, "series dash", 0, 100) for d in dash]
     return out
+
+
+def _expand_series(spec: Any) -> list[dict[str, Any]]:
+    """A box series draws five numbers a row (min, q1, median, q3, max), so it takes five data
+    columns: it goes to the wire as five series that share a colour, tagged ``box`` 0 to 4."""
+    one = _normalise_series(spec)
+    if one.get("kind") != "box":
+        return [one]
+    label = one["label"]
+    return [
+        {**one, "label": label + part if part else label, "box": k}
+        for k, part in enumerate(_BOX_PARTS)
+    ]
+
+
+def box_rows(samples: dict[str, Any]) -> list[list[Any]]:
+    """Summarise raw samples into the rows a box series takes, for a category axis.
+
+    ``box_rows({"fast": [1, 2, 3, 4, 5]})`` gives ``[["fast", 1, 2, 3, 4, 5]]``: the label, then the
+    minimum, first quartile, median, third quartile and maximum (quartiles by linear
+    interpolation). The whiskers are the minimum and maximum, not a fence, so no point is hidden.
+    """
+    rows: list[list[Any]] = []
+    for name, values in samples.items():
+        nums = sorted(float(v) for v in values)
+        if not nums:
+            raise ValueError(f"box_rows: {name!r} has no samples")
+        if not all(math.isfinite(v) for v in nums):
+            raise ValueError(f"box_rows: samples in {name!r} must be finite numbers")
+
+        def at(q: float, nums: list[float] = nums) -> float:
+            pos = q * (len(nums) - 1)
+            lo = int(pos)
+            hi = min(lo + 1, len(nums) - 1)
+            return nums[lo] + (nums[hi] - nums[lo]) * (pos - lo)
+
+        stats = [nums[0], at(0.25), at(0.5), at(0.75), nums[-1]]
+        rows.append([str(name), *(int(v) if v == int(v) else v for v in stats)])
+    return rows
 
 
 def _axis_range(value: Any, name: str) -> list[float] | None:
@@ -2200,6 +2252,19 @@ class Chart(Component):
     ``playhead_label`` (a string, signal or callable) writes a short label beside the playhead
     line (IND-274).
 
+    Bars (IND-265): ``stack=True`` stacks the ``kind="bars"`` series on one another; the legend
+    still reads each series' own value. ``orientation="horizontal"`` draws the bars sideways, first
+    category at the top, for long labels and funnels; it needs ``x_scale="category"``, bars only,
+    and takes no rules, bands, markers, playhead or highlight. A ``kind="box"`` series draws a box
+    and whiskers from five columns (min, q1, median, q3, max); :func:`box_rows` makes those rows
+    from raw samples.
+
+    ``hovered`` and ``clicked`` (a ``Signal[dict | None]`` each, IND-266) report the point or bar
+    under the pointer as ``{"series", "index", "x", "y"}`` (``index`` is the row in the data; ``x``
+    is the label on a category axis). Hover is debounced to about 250 ms and goes back to ``None``
+    when the pointer leaves the plot; a click is not cleared. Both share the event rate bucket, and
+    the value is read from the data in Python, so a viewer cannot set a point that is not there.
+
     Example (a streaming loss curve fed from a training loop, ADR-0009)::
 
         chart = Chart(series=["loss"], title="Training loss", x_label="step")
@@ -2237,8 +2302,18 @@ class Chart(Component):
         highlight: Source = None,
         highlight_color: str | None = None,
         legend: str = "auto",
+        stack: bool = False,
+        orientation: str = "vertical",
+        hovered: Signal[dict[str, Any] | None] | None = None,
+        clicked: Signal[dict[str, Any] | None] | None = None,
     ) -> None:
         super().__init__()
+        self._hovered, self._clicked = hovered, clicked
+        if orientation not in ("vertical", "horizontal"):
+            raise ValueError(
+                f"Chart orientation must be 'vertical' or 'horizontal', got {orientation!r}"
+            )
+        self._stack, self._orientation = bool(stack), orientation
         if legend not in ("auto", "labels", "off"):
             raise ValueError(f"Chart legend must be 'auto', 'labels' or 'off', got {legend!r}")
         self._legend = legend
@@ -2258,7 +2333,21 @@ class Chart(Component):
         self._reactive = data is not None
         self._data = data
         self._buffer: list[list[Any]] = []
-        self._series = [_normalise_series(s) for s in (series or [])]
+        self._series = [wire for s in (series or []) for wire in _expand_series(s)]
+        bars = [s for s in self._series if s.get("kind") == "bars"]
+        if self._stack and not bars:
+            raise ValueError("Chart stack=True needs at least one kind='bars' series")
+        if orientation == "horizontal":
+            if x_scale != "category":
+                raise ValueError("a horizontal Chart needs x_scale='category'")
+            if len(bars) != len(self._series):
+                raise ValueError("a horizontal Chart takes only kind='bars' series")
+            for name, value in (
+                ("rules", rules), ("bands", bands), ("markers", markers), ("playhead", playhead),
+                ("highlight", highlight),
+            ):  # fmt: skip
+                if value is not None:
+                    raise ValueError(f"a horizontal Chart does not take {name}")
         self._x_range = _axis_range(x_range, "x_range")
         self._y_range = _axis_range(y_range, "y_range")
         for name, source in (("playhead", playhead), ("highlight", highlight)):
@@ -2299,6 +2388,14 @@ class Chart(Component):
         }
         if self._legend != "auto":
             props["legend"] = self._legend
+        if self._stack:
+            props["stack"] = True
+        if self._orientation == "horizontal":
+            props["orientation"] = "horizontal"
+        if self._hovered is not None:
+            props["hoverable"] = True  # the shell posts hover events only when something listens
+        if self._clicked is not None:
+            props["clickable"] = True
         if self._x_range:
             props["xRange"] = self._x_range
         if self._y_range:
@@ -2356,6 +2453,33 @@ class Chart(Component):
         if _is_source(self._playhead_label):
             props["playheadLabel"] = lambda: str(_read(self._playhead_label) or "")[:40]
         return props
+
+    def _point(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """The point the viewer is on, read from the data and not from the payload: the wire only
+        names a row and a series, and one the data does not have is refused."""
+        i, k = payload.get("index"), payload.get("series")
+        if any(isinstance(v, bool) or not isinstance(v, int) for v in (i, k)):
+            return None
+        rows = self._rows(_read(self._data)) if self._reactive else self._buffer
+        if not (0 <= i < len(rows) and 0 <= k < len(self._series)) or len(rows[i]) <= k + 1:
+            return None
+        x = rows[i][0]
+        if self._scales["x"] == "category":
+            x = _categories(_read(self._data))[int(x)]
+        return {"series": self._series[k]["label"], "index": i, "x": x, "y": rows[i][k + 1]}
+
+    def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        target = {"hover": self._hovered, "click": self._clicked}.get(event)
+        if target is None:
+            return False
+        if event == "hover" and "index" in payload and payload["index"] is None:
+            target.set(None)  # the pointer left the plot
+            return True
+        point = self._point(payload)
+        if point is None:
+            return False
+        target.set(point)
+        return True
 
     # -- streaming API (only when data= is unset) ----------------------------
 
@@ -2954,6 +3078,59 @@ def _graph_columns(nodes: Any, edges: Any, *, layout: str, max_nodes: int) -> di
     return {"nodes": out_nodes, "edges": out_edges}
 
 
+GRAPH_MAX_FRAMES = 400
+_GRAPH_NODE_PATCH = ("ring", "opacity", "label_style")
+_GRAPH_EDGE_PATCH = ("dash", "opacity", "width")
+
+
+def _graph_frames(frames: Any, columns: dict[str, Any]) -> list[dict[str, Any]]:
+    """The wire form of ``Graph(frames=)`` (ADR-0053): per frame, style patches for nodes and edges
+    by id plus ids to hide. Every unknown id or bad style raises here, as ``highlight`` does."""
+    frames = list(frames)
+    if not 1 <= len(frames) <= GRAPH_MAX_FRAMES:
+        raise ValueError(f"a Graph takes 1 to {GRAPH_MAX_FRAMES} frames, got {len(frames)}")
+    node_ids = set(columns["nodes"]["id"])
+    edge_ids = {i for i in columns["edges"].get("id", []) if i is not None}
+    out: list[dict[str, Any]] = []
+    entries = 0
+    for k, frame in enumerate(frames):
+        if not isinstance(frame, dict) or set(frame) - {"nodes", "edges", "hide"}:
+            raise ValueError(f"frame {k} must be a dict with 'nodes', 'edges' and/or 'hide'")
+        wire: dict[str, Any] = {}
+        for part, known, keys, what in (
+            ("nodes", node_ids, _GRAPH_NODE_PATCH, "node"),
+            ("edges", edge_ids, _GRAPH_EDGE_PATCH, "edge"),
+        ):
+            patch = frame.get(part) or {}
+            if not isinstance(patch, dict):
+                raise ValueError(f"frame {k} '{part}' must map ids to style dicts")
+            checked: dict[str, Any] = {}
+            for ident, style in patch.items():
+                if ident not in known:
+                    hint = "; give edges an 'id' to style them" if what == "edge" else ""
+                    raise ValueError(f"frame {k} names unknown {what} {ident!r}{hint}")
+                if not isinstance(style, dict) or set(style) - set(keys):
+                    raise ValueError(f"frame {k} {what} {ident!r} takes only {list(keys)}")
+                checked[ident] = {
+                    ("labelStyle" if key == "label_style" else key): _graph_style(key, v, what)
+                    for key, v in style.items()
+                }
+            if checked:
+                wire[part] = checked
+                entries += len(checked)
+        hide = list(frame.get("hide") or [])
+        for ident in hide:
+            if ident not in node_ids and ident not in edge_ids:
+                raise ValueError(f"frame {k} hides unknown id {ident!r}")
+        if hide:
+            wire["hide"] = [str(i) for i in hide]
+            entries += len(hide)
+        out.append(wire)
+    if entries > GRAPH_MAX_EDGES:
+        raise ValueError(f"the frames of a Graph hold at most {GRAPH_MAX_EDGES:,} entries in all")
+    return out
+
+
 GRAPH_MAX_FOCUS = 5_000  # the most nodes drawn in full at once (ADR-0048)
 
 
@@ -3041,6 +3218,18 @@ class Graph(Component):
     so changing a style, a group or the list order does not move a node (``"auto"``, the default,
     still clusters by group).
 
+    **Frames** (ADR-0053). ``frames`` is a list of up to 400 patches, each ``{"nodes": {id: style},
+    "edges": {id: style}, "hide": [ids]}`` (the style dicts of the element styles above; an edge
+    needs an ``id`` to be patched; ``hide`` takes node or edge ids and draws them at opacity 0,
+    their place kept). A frame is the base graph plus only its own patches, so any frame can be
+    shown directly; all frames together hold at most 60,000 entries. The browser applies a frame
+    locally, so ``frame`` (a ``Signal[int]``, two way) moves without sending a graph, and
+    ``Timeline(..., link=graph)`` plays the frames with no events at all.
+    ``update="keep"`` makes a replaced graph keep the position of every id it already had; only
+    new ids are placed, near their neighbours (the default, ``"relayout"``, lays the new graph out
+    afresh). ``transition_ms`` (0 to 2000) eases opacity and edge width changes, and fades new
+    nodes in, between updates; it is off under ``prefers-reduced-motion``.
+
     Replace ``nodes`` and ``edges`` together, inside ``indah.batch(...)``, when both are signals:
     set one at a time, an edge can briefly name a node that is not there yet and raises.
     """
@@ -3055,6 +3244,8 @@ class Graph(Component):
         height: int | str = 480,
         layout: Literal["auto", "stable", "layered", "given"] = "auto",
         directed: bool = False,
+        update: Literal["relayout", "keep"] = "relayout",
+        transition_ms: int = 0,
         legend: bool = True,
         max_nodes: int = GRAPH_DEFAULT_MAX_NODES,
         focus_size: Source = 300,
@@ -3062,13 +3253,25 @@ class Graph(Component):
         selected: Signal[str | None] | None = None,
         focus: Source = None,
         hovered: Signal[str | None] | None = None,
+        frames: list[dict[str, Any]] | None = None,
+        frame: Signal[int] | None = None,
         label: str = "",
     ) -> None:
         super().__init__()
+        if frame is not None and frames is None:
+            raise ValueError("Graph frame= needs frames=")
         if layout not in ("auto", "stable", "layered", "given"):
             raise ValueError(
                 f"Graph layout must be 'auto', 'stable', 'layered' or 'given', got {layout!r}"
             )
+        if update not in ("relayout", "keep"):
+            raise ValueError(f"Graph update must be 'relayout' or 'keep', got {update!r}")
+        if (
+            isinstance(transition_ms, bool)
+            or not isinstance(transition_ms, int)
+            or not (0 <= transition_ms <= 2000)
+        ):
+            raise ValueError(f"transition_ms must be an int from 0 to 2000, got {transition_ms!r}")
         if (
             isinstance(max_nodes, bool)
             or not isinstance(max_nodes, int)
@@ -3079,7 +3282,8 @@ class Graph(Component):
             )
         self._height = _plot_height(height)
         self._layout = layout
-        self._directed = bool(directed)
+        self._update = update
+        self._transition_ms = transition_ms
         self._legend = bool(legend)
         self._label = label
         self._focus_size = focus_size
@@ -3102,6 +3306,10 @@ class Graph(Component):
         else:
             self._columns = None
             self._static = build()
+        self._frames = None if frames is None else _graph_frames(frames, self._cols())
+        self._frame = frame
+        if frame is not None and not self._frame_ok(frame.peek()):
+            raise ValueError(f"the Graph frame {frame.peek()!r} is not one of its frames")
         if highlight is not None and not _is_source(highlight):
             _graph_highlight(highlight, self._cols())  # a typo fails here, at build time
         if selected is not None:
@@ -3110,6 +3318,14 @@ class Graph(Component):
             self._known(focus)
         if hovered is not None:
             self._known(hovered.value)
+
+    def _frame_ok(self, i: Any) -> bool:
+        return (
+            self._frames is not None
+            and isinstance(i, int)
+            and not isinstance(i, bool)
+            and 0 <= i < len(self._frames)
+        )
 
     def _known(self, node: Any) -> str | None:
         """``node`` if it is a node id of this graph, ``None`` for none; else a ``ValueError``."""
@@ -3124,8 +3340,10 @@ class Graph(Component):
 
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {"height": self._height, "layout": self._layout}
-        if self._directed:
-            props["directed"] = True
+        if self._update == "keep":
+            props["update"] = "keep"
+        if self._transition_ms:
+            props["transitionMs"] = self._transition_ms
         if not self._legend:
             props["legend"] = False
         if self._label:
@@ -3136,6 +3354,8 @@ class Graph(Component):
             props["hoverable"] = True  # likewise hover: unbound, no posts
         if self._focus is not None and not _is_source(self._focus):
             props["focus"] = self._focus
+        if self._frames is not None:
+            props["frames"] = self._frames
         if not _is_source(self._focus_size):
             props["focusSize"] = self._focus_size
         if self._highlight is not None and not _is_source(self._highlight):
@@ -3158,6 +3378,8 @@ class Graph(Component):
             props["selected"] = lambda: self._known(self._selected.value)
         if _is_source(self._focus):
             props["focus"] = lambda: self._known(_read(self._focus))
+        if self._frame is not None:
+            props["frame"] = lambda: self._frame.value if self._frame_ok(self._frame.value) else 0
         return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
@@ -3166,6 +3388,9 @@ class Graph(Component):
             if node is None or (isinstance(node, str) and node in set(self._cols()["nodes"]["id"])):
                 self._selected.set(node)
                 return True
+        if event == "frame" and self._frame is not None and self._frame_ok(payload.get("index")):
+            self._frame.set(payload["index"])
+            return True
         if event == "hover" and self._hovered is not None and "id" in payload:
             node = payload["id"]
             if node is None or (isinstance(node, str) and node in set(self._cols()["nodes"]["id"])):
@@ -3820,25 +4045,78 @@ def _to_records(source: Any, key: str | None) -> list[dict[str, Any]]:
     return out
 
 
+class Svg(Component):
+    """An inline SVG drawing, sanitised (IND-275): for a generated flame chart or a diagram.
+
+    ``markup`` is SVG text, or a ``Signal`` or function returning it (the drawing is replaced when
+    it changes). It is parsed and checked in Python: only drawing elements (``svg``, ``g``,
+    ``defs``, ``path``, ``rect``, ``circle``, ``ellipse``, ``line``, ``polyline``, ``polygon``,
+    ``text``, ``tspan``, ``title``, ``desc``, gradients, ``stop``, ``clipPath``) and geometry and
+    presentation attributes are kept; a script, event handler, ``style`` or ``class`` attribute,
+    link, image, ``use`` or any reference outside the drawing raises ``ValueError``, and so does
+    a drawing over 200 KB, 5,000 elements or 32 levels. The shell builds the elements itself, so
+    it works under the strict CSP. A colour may be a CSS colour or ``var(--token)`` (and
+    ``currentColor`` is the text colour), so a drawing follows the light and dark themes.
+    ``label`` names it for a screen reader (required); ``decorative=True`` hides it from one
+    instead. It scales to the width of its container and keeps its ``viewBox`` shape.
+    """
+
+    type = "svg"
+
+    def __init__(self, markup: Source, *, label: str = "", decorative: bool = False) -> None:
+        super().__init__()
+        if not label and not decorative:
+            raise ValueError("Svg needs a label for a screen reader, or decorative=True")
+        self._markup, self._label, self._decorative = markup, label, bool(decorative)
+        if not _is_source(markup):
+            parse_svg(markup)  # a bad drawing fails at build time
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        if self._label:
+            props["label"] = self._label
+        if self._decorative:
+            props["decorative"] = True
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"tree": lambda: parse_svg(_read(self._markup))}
+
+
 class Stat(Component):
     """A metric / KPI card (ADR-0021): a big value with a label and optional delta.
 
     The tile dashboards pair with a ``Table``. ``value`` and ``delta`` are sources
     (signal / callable / plain); the shell colours the delta green when it does not
     start with ``-`` and red when it does (so pass e.g. ``"+2.4%"`` / ``"-1.1%"``).
+    ``delta_good`` (a bool or a source of one, IND-263) overrides that for a metric where down is
+    good: ``True`` colours the delta green and ``False`` red, whatever its sign. ``tone`` (``ok``,
+    ``warn``, ``err``, ``info`` or ``neutral``, or a source) colours the value, and ``spark`` (a
+    list of numbers, or a source) draws a small :class:`Sparkline` under it.
     Display only; no new protocol capability.
     """
 
     type = "stat"
 
     def __init__(
-        self, value: Source, *, label: str = "", delta: Source = None, help: str = ""
+        self,
+        value: Source,
+        *,
+        label: str = "",
+        delta: Source = None,
+        help: str = "",
+        delta_good: Source = None,
+        tone: Source = None,
+        spark: Source = None,
     ) -> None:
         super().__init__()
         self._value = value
         self._label = label
         self._delta = delta
         self._help = help
+        self._delta_good, self._tone, self._spark = delta_good, tone, spark
+        if not _is_source(tone):
+            _tone(tone)
 
     def static_props(self) -> dict[str, Any]:
         return {"label": self._label, "help": self._help}
@@ -3847,6 +4125,14 @@ class Stat(Component):
         props: dict[str, Callable[[], Any]] = {"value": lambda: str(_read(self._value))}
         if self._delta is not None:
             props["delta"] = lambda: None if _read(self._delta) is None else str(_read(self._delta))
+        if self._delta_good is not None:
+            props["deltaGood"] = lambda: (
+                None if _read(self._delta_good) is None else bool(_read(self._delta_good))
+            )
+        if self._tone is not None:
+            props["tone"] = lambda: _tone(_read(self._tone))
+        if self._spark is not None:
+            props["spark"] = lambda: list(spark_values(_read(self._spark)))
         return props
 
 
@@ -3858,6 +4144,122 @@ class Runs(list):  # type: ignore[type-arg]
 class StepItems(Runs):
     """What :func:`steps_items` returns: a list of ``[label, state, detail]`` that a List item or a
     table row carries as nested data, like :class:`Runs`."""
+
+
+SPARK_MAX_POINTS = 500
+TICK_MAX = 200
+TICK_STATES = ("ok", "warn", "err", "neutral")
+
+
+class SparkValues(Runs):
+    """What :func:`spark_values` returns: numbers (``None`` for a gap) that a table row carries as
+    nested data, like :class:`Runs`."""
+
+
+class TickStates(Runs):
+    """What :func:`tick_states` returns: a list of tick states that a table row carries as nested
+    data, like :class:`Runs`."""
+
+
+def spark_values(values: Any = ()) -> SparkValues:
+    """Normalise the points of a :class:`Sparkline` (IND-263): finite numbers, with ``None`` (and
+    NaN or infinity, which are not JSON) for a gap. A trend is its recent past, so only the last
+    ``SPARK_MAX_POINTS`` are kept. Use this to build the field of a table row that a render spec
+    binds to ``{"component": "sparkline", "bind": {"values": "trend"}}``."""
+    out = SparkValues()
+    for v in list(values or ())[-SPARK_MAX_POINTS:]:
+        if v is None:
+            out.append(None)
+        elif isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"a sparkline point is a number or None, got {v!r}")
+        else:
+            out.append(v if math.isfinite(v) else None)
+    return out
+
+
+def tick_states(states: Any = ()) -> TickStates:
+    """Normalise the ticks of a :class:`TickStrip` (IND-263): ``"ok"``, ``"warn"``, ``"err"`` or
+    ``"neutral"``; ``True`` is ``ok``, ``False`` is ``err`` and ``None`` is ``neutral``. Only the
+    last ``TICK_MAX`` are kept. Bind it from a table cell with ``{"component": "ticks", "bind":
+    {"states": "history"}}``."""
+    out = TickStates()
+    for v in list(states or ())[-TICK_MAX:]:
+        v = "ok" if v is True else "err" if v is False else "neutral" if v is None else v
+        if v not in TICK_STATES:
+            raise ValueError(f"a tick state must be one of {TICK_STATES}, True, False or None")
+        out.append(v)
+    return out
+
+
+def _tone(value: Any) -> str | None:
+    if value is not None and value not in _TONES:
+        raise ValueError(f"tone must be one of {sorted(_TONES)}, got {value!r}")
+    return value
+
+
+class Sparkline(Component):
+    """A tiny trend line with no axes (IND-263): ``values`` is a list of numbers (``None`` is a
+    gap), or a ``Signal`` or function returning one. ``tone`` (``ok``, ``warn``, ``err``, ``info``
+    or ``neutral``) or ``color`` sets the line; ``fill=True`` shades under it; ``height`` is in
+    pixels (4 to 120). ``label`` names it for a screen reader, which also hears the first, last,
+    lowest and highest values. In a table cell, bind it from a render spec:
+    ``{"component": "sparkline", "bind": {"values": "trend"}}`` with the field set by
+    :func:`spark_values`."""
+
+    type = "sparkline"
+
+    def __init__(
+        self,
+        values: Source,
+        *,
+        tone: str | None = None,
+        color: str | None = None,
+        fill: bool = False,
+        height: int = 24,
+        label: str = "",
+    ) -> None:
+        super().__init__()
+        self._values = values
+        self._tone = _tone(tone)
+        self._color = _color(color, "sparkline color") if color else None
+        if isinstance(height, bool) or not isinstance(height, int) or not 4 <= height <= 120:
+            raise ValueError(f"Sparkline height must be 4 to 120 pixels, got {height!r}")
+        self._fill, self._height, self._label = bool(fill), height, label
+
+    def static_props(self) -> dict[str, Any]:
+        props: dict[str, Any] = {"height": self._height}
+        if self._tone:
+            props["tone"] = self._tone
+        if self._color:
+            props["color"] = self._color
+        if self._fill:
+            props["fill"] = True
+        if self._label:
+            props["label"] = self._label
+        return props
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"values": lambda: list(spark_values(_read(self._values)))}
+
+
+class TickStrip(Component):
+    """A row of small coloured ticks, one per run (IND-263): ``states`` is a list of ``"ok"``,
+    ``"warn"``, ``"err"`` or ``"neutral"`` (``True`` is ok, ``False`` is err), or a source of one.
+    The colour is never the only signal: a failed tick is taller, and the screen reader hears the
+    counts. In a table cell: ``{"component": "ticks", "bind": {"states": "history"}}`` with the
+    field set by :func:`tick_states`."""
+
+    type = "ticks"
+
+    def __init__(self, states: Source, *, label: str = "") -> None:
+        super().__init__()
+        self._states, self._label = states, label
+
+    def static_props(self) -> dict[str, Any]:
+        return {"label": self._label} if self._label else {}
+
+    def reactive_props(self) -> dict[str, Callable[[], Any]]:
+        return {"states": lambda: list(tick_states(_read(self._states)))}
 
 
 def _json_safe(value: Any) -> Any:

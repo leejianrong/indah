@@ -414,6 +414,193 @@ def chart_steps(ctx: indah.Context) -> indah.Component:
     )
 
 
+_BENCH = [["adder", 120], ["qft", 310], ["grover", 540], ["shor", 880], ["vqe", 260]]
+
+
+def chart_events(ctx: indah.Context) -> indah.Component:
+    clicked = indah.Signal(None)
+    hovered = indah.Signal(None)
+    picked = indah.Signal(None)
+
+    def follow() -> None:
+        if clicked.value is not None:
+            picked.set(clicked.value["index"])
+
+    indah.effect(follow)  # a click on a bar selects that table row
+    return indah.Column(
+        children=[
+            indah.Chart(
+                _BENCH,
+                series=[{"label": "gates", "kind": "bars", "stroke": "var(--primary)"}],
+                title="Gates per benchmark",
+                x_scale="category",
+                hovered=hovered,
+                clicked=clicked,
+                height=240,
+            ),
+            indah.Text(
+                lambda: (
+                    "Hover a bar."
+                    if hovered.value is None
+                    else f"Over {hovered.value['x']}: {hovered.value['y']} gates"
+                ),
+                variant="caption",
+            ),
+            indah.Table(
+                [{"benchmark": b, "gates": g} for b, g in _BENCH],
+                selected=picked,
+                label="Benchmarks",
+            ),
+            indah.Text(
+                lambda: (
+                    "Click a bar."
+                    if picked.value is None
+                    else f"Selected: {_BENCH[picked.value][0]}"
+                )
+            ),
+        ]
+    )
+
+
+def chart_events_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    plot = page.locator(".u-over").first
+    expect(plot).to_be_visible(timeout=15_000)
+    box = plot.bounding_box()
+    assert box is not None
+    # The fourth of five bars, "shor", sits at 70 percent of the plot's width.
+    x, y = box["x"] + box["width"] * 0.7, box["y"] + box["height"] * 0.7
+    page.mouse.move(x, y)
+    expect(page.get_by_text("Over shor: 880 gates")).to_be_visible()
+    page.mouse.move(box["x"] + box["width"] + 40, box["y"] + box["height"] + 40)
+    expect(page.get_by_text("Hover a bar.")).to_be_visible()  # leaving clears it
+    page.mouse.click(x, y)
+    expect(page.get_by_text("Selected: shor")).to_be_visible()
+
+
+def chart_bars(ctx: indah.Context) -> indah.Component:
+    stages = [["adder", 30, 50, 40], ["qft", 90, 120, 100], ["grover", 160, 210, 170]]
+    funnel = [["submitted", 1200], ["compiled", 940], ["optimised", 610], ["verified", 280]]
+    spread = indah.box_rows(
+        {
+            "fast": [8, 9, 9, 10, 11, 12, 14],
+            "steady": [20, 22, 25, 26, 30, 31, 40],
+            "slow": [30, 55, 60, 75, 90, 120],
+        }
+    )
+    return indah.Column(
+        children=[
+            indah.Chart(
+                stages,
+                series=[
+                    {"label": "parse", "kind": "bars"},
+                    {"label": "route", "kind": "bars"},
+                    {"label": "emit", "kind": "bars"},
+                ],
+                title="Stage time per circuit (stacked)",
+                x_scale="category",
+                stack=True,
+                height=240,
+            ),
+            indah.Chart(
+                funnel,
+                series=[{"label": "circuits", "kind": "bars", "stroke": "var(--primary)"}],
+                title="Funnel (horizontal)",
+                x_scale="category",
+                orientation="horizontal",
+                height=220,
+            ),
+            indah.Chart(
+                spread,
+                series=[{"label": "latency", "kind": "box", "stroke": "var(--primary)"}],
+                title="Latency spread (box)",
+                x_scale="category",
+                height=240,
+            ),
+        ]
+    )
+
+
+def chart_bars_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator(".u-over")).to_have_count(3, timeout=15_000)
+    plots = page.evaluate(
+        "() => [...document.querySelectorAll('.u-over')].map((o) => { const u = o.closest('.chart, div')"
+        " ; return o.getBoundingClientRect().width; })"
+    )
+    assert all(w > 100 for w in plots)
+    # Stacked: the top series' data are running totals, so its value is the sum of the three.
+    totals = page.evaluate("document.querySelectorAll('.uplot')[0].parentElement.__uplot.data[3]")
+    assert totals == [120, 310, 540], totals
+    # A box series is one legend entry, not five.
+    expect(page.locator(".uplot").nth(2).locator(".u-series:visible")).to_have_count(1)  # latency
+
+
+def _flame_svg(depth_pick: int | None = None) -> str:
+    """A flame chart drawn as SVG text: nested spans as stacked bars, in theme colours."""
+    spans = [  # (name, start, end, depth)
+        ("compile", 0, 100, 0), ("parse", 0, 18, 1), ("route", 18, 70, 1), ("emit", 70, 100, 1),
+        ("swap search", 18, 50, 2), ("layout", 50, 70, 2), ("score", 18, 30, 3), ("prune", 30, 50, 3),
+    ]  # fmt: skip
+    colours = ["var(--primary)", "var(--ok)", "var(--warn)", "var(--text)"]
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 110">']
+    for name, a, b, d in spans:
+        x, w, y = a * 4, (b - a) * 4, 4 + d * 26
+        hot = depth_pick == d
+        out.append(
+            f'<rect x="{x}" y="{y}" width="{w - 1}" height="24" rx="3" '
+            f'fill="{colours[d]}" fill-opacity="{1 if hot else 0.55}" '
+            f'stroke="var(--surface)"><title>{name}: {b - a} ms</title></rect>'
+        )
+        if w > 40:
+            out.append(
+                f'<text x="{x + 6}" y="{y + 16}" font-size="11" fill="var(--surface)">{name}</text>'
+            )
+    out.append("</svg>")
+    return "".join(out)
+
+
+def svg_page(ctx: indah.Context) -> indah.Component:
+    level = indah.Signal(0)
+    return indah.Column(
+        children=[
+            indah.Svg(lambda: _flame_svg(level.value), label="Flame chart of a compile run"),
+            indah.Slider(level, min=0, max=3, step=1, label="Highlight depth", show_value=True),
+        ]
+    )
+
+
+def svg_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    svg = page.locator("svg.svg-drawing")
+    expect(svg).to_have_attribute("aria-label", "Flame chart of a compile run")
+    expect(svg.locator("rect")).to_have_count(8)
+    expect(svg.locator("text")).to_have_count(8)
+    # A theme colour reaches the drawing: var(--primary) resolves, it is not the default black.
+    fill = page.evaluate("getComputedStyle(document.querySelector('svg.svg-drawing rect')).fill")
+    assert fill not in ("", "rgb(0, 0, 0)", "none"), fill
+    # No markup was parsed: the drawing has no script and no style attribute anywhere.
+    assert (
+        page.evaluate(
+            "document.querySelectorAll('svg.svg-drawing [style], svg.svg-drawing script').length"
+        )
+        == 0
+    )
+    before = page.locator("svg.svg-drawing rect").nth(1).get_attribute("fill-opacity")
+    slider = page.get_by_role("slider")
+    slider.focus()
+    slider.press("ArrowRight")
+    expect(page.locator("svg.svg-drawing rect").nth(1)).not_to_have_attribute(
+        "fill-opacity", before
+    )  # redrawn in place
+
+
 def chart_axes(ctx: indah.Context) -> indah.Component:
     import datetime
 
@@ -841,6 +1028,121 @@ def graph_styles_page(ctx: indah.Context) -> indah.Component:
             indah.Text(lambda: f"Year {year.value}", variant="caption"),
         ]
     )
+
+
+def _grown(size: int) -> tuple[list[dict], list[dict]]:
+    nodes = [{"id": f"k{i}", "label": f"k{i}", "group": "a" if i % 2 else "b"} for i in range(size)]
+    edges = [{"source": f"k{i}", "target": f"k{(i * 5 + 2) % size}"} for i in range(size)]
+    edges += [{"source": f"k{i}", "target": f"k{i + 1}"} for i in range(size - 1)]
+    return nodes, [e for e in edges if e["source"] != e["target"]]
+
+
+def graph_keep_page(ctx: indah.Context) -> indah.Component:
+    size = indah.Signal(20)
+    grown = indah.computed(lambda: _grown(size.value))
+    return indah.Column(
+        children=[
+            indah.Graph(
+                lambda: grown.value[0],
+                lambda: grown.value[1],
+                update="keep",
+                transition_ms=300,
+                height=380,
+                label="A graph that grows",
+            ),
+            indah.Button("Add 10 nodes", on_click=lambda: size.set(size.value + 10)),
+            indah.Text(lambda: f"{size.value} nodes", variant="caption"),
+        ]
+    )
+
+
+def graph_keep_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator('.graph-stage[data-settled="true"]')).to_be_visible(timeout=30_000)
+    ids = [f"k{i}" for i in range(20)]
+    # World coordinates: the view re-fits to the larger graph, so screen positions may shift.
+    read = (
+        "(ids) => { const g = document.querySelector('.graph-stage').__graph; const v = g.view();"
+        " return Object.fromEntries(ids.map((i) => { const [x, y] = g.screenOf(i);"
+        " return [i, [Math.round((x - v.tx) / v.k * 100), Math.round((y - v.ty) / v.k * 100)]]; })); }"
+    )
+    before = page.evaluate(read, ids)
+    page.get_by_role("button", name="Add 10 nodes").click()
+    expect(page.get_by_text("30 nodes")).to_be_visible()
+    page.wait_for_function("document.querySelector('.graph-stage').__graph.nodes === 30")
+    page.wait_for_timeout(500)
+    assert page.evaluate(read, ids) == before  # every id it already had stayed put
+
+
+def _world_frames() -> tuple[list[dict], list[dict], list[dict]]:
+    """The world as one base graph and a frame of style patches per year (ADR-0053)."""
+    nodes = [{"id": name, "label": name} for name, _, _ in _WORLD]
+    edges = [
+        {"source": a, "target": b, "id": f"e{k}"} for k, (a, b) in enumerate(_WORLD_EDGES) if a != b
+    ]
+    frames = []
+    for year in range(2000, 2005):
+        patch: dict = {"nodes": {}, "edges": {}}
+        gone = {name for name, _, ended in _WORLD if ended < year}
+        for name, born, ended in _WORLD:
+            if born > year:
+                patch["nodes"][name] = {"opacity": 0.25}
+            elif ended < year:
+                patch["nodes"][name] = {"opacity": 0.55, "label_style": "strike"}
+            elif born == year:
+                patch["nodes"][name] = {"ring": True}
+        for e in edges:
+            if e["source"] in gone or e["target"] in gone:
+                patch["edges"][e["id"]] = {"dash": True, "opacity": 0.8}
+        frames.append(patch)
+    return nodes, edges, frames
+
+
+def graph_frames_page(ctx: indah.Context) -> indah.Component:
+    nodes, edges, frames = _world_frames()
+    frame = indah.Signal(0)
+    year = indah.Signal(2000)
+    graph = indah.Graph(
+        nodes,
+        edges,
+        frames=frames,
+        frame=frame,
+        layout="stable",
+        focus_size=6,
+        height=380,
+        label="A world by year",
+    )
+    return indah.Column(
+        children=[
+            graph,
+            indah.Timeline(year, list(range(2000, 2005)), unit="year", link=graph, speed=4),
+            indah.Text(lambda: f"frame {frame.value}", variant="caption"),
+        ]
+    )
+
+
+def graph_frames_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    expect(page.locator('.graph-stage[data-settled="true"]')).to_be_visible(timeout=30_000)
+    # Count the events by wrapping fetch in the page: the Pyodide runtime answers /api/event
+    # in the page, so a network listener would see nothing there.
+    page.evaluate(
+        "() => { window.__posts = []; const f = window.fetch;"
+        " window.fetch = (u, o) => { if (String(u).includes('api/event')) window.__posts.push(o.body);"
+        " return f(u, o); }; }"
+    )
+    page.get_by_role("button", name="Play").click()
+    expect(page.locator(".timeline-now")).to_have_text("2004", timeout=6000)
+    expect(page.get_by_text("frame 4", exact=True)).to_be_visible()  # reported once, at the end
+    assert page.evaluate("document.querySelector('.graph-stage').__graph.frame") == 4  # drawn too
+    posts = page.evaluate("window.__posts")
+    inputs = [p for p in posts if '"event":"input"' in p]
+    assert len(inputs) == 1, posts  # four steps played, one input sent
+    assert len([p for p in posts if '"event":"frame"' in p]) == 1, posts
 
 
 _DAG = [
@@ -1401,6 +1703,47 @@ CHAPTER = Chapter(
             check=chart_category_check,
         ),
         Page(
+            slug="chart-events",
+            title="Chart hover and click",
+            summary=(
+                "`Chart(hovered=, clicked=)` report the point or bar under the pointer as signals: "
+                "hover is debounced, a click selects a table row here."
+            ),
+            build=chart_events,
+            covers=(),
+            docs="components.md",
+            adr=(18,),
+            check=chart_events_check,
+        ),
+        Page(
+            slug="chart-bars",
+            title="Stacked, horizontal and box charts",
+            summary=(
+                '`stack=True` stacks bar series, `orientation="horizontal"` draws them sideways for '
+                'funnels, and a `kind="box"` series draws box and whiskers from five numbers '
+                "(`box_rows` makes them from samples)."
+            ),
+            build=chart_bars,
+            covers=("box_rows",),
+            docs="components.md",
+            adr=(49,),
+            check=chart_bars_check,
+        ),
+        Page(
+            slug="svg",
+            title="Inline SVG",
+            summary=(
+                "`Svg(markup)` draws generated SVG, such as a flame chart, safely: Python keeps only "
+                "drawing elements and attributes and sends a tree, so no script, event handler or "
+                "outside reference can arrive. Colours may be `var(--token)`, so it follows the theme."
+            ),
+            build=svg_page,
+            covers=("Svg",),
+            docs="components.md",
+            adr=(12,),
+            check=svg_check,
+        ),
+        Page(
             slug="chart-axes",
             title="Time axis, whole-number ticks and a labelled playhead",
             summary=(
@@ -1453,6 +1796,33 @@ CHAPTER = Chapter(
             docs="graph.md",
             adr=(53,),
             check=graph_styles_check,
+        ),
+        Page(
+            slug="graph-keep",
+            title="Graph update keep",
+            summary=(
+                '`Graph(update="keep")` keeps the position of every id a replaced graph already had '
+                "and places only new ids near their neighbours; `transition_ms` fades them in."
+            ),
+            build=graph_keep_page,
+            covers=(),
+            docs="graph.md",
+            adr=(53,),
+            check=graph_keep_check,
+        ),
+        Page(
+            slug="graph-frames",
+            title="Graph frames",
+            summary=(
+                "`Graph(frames=[...], frame=Signal)` is a base graph plus a few style patches per "
+                "frame, applied in the browser. `Timeline(link=graph)` plays them with no events: "
+                "the index is reported once, at the end."
+            ),
+            build=graph_frames_page,
+            covers=(),
+            docs="graph.md",
+            adr=(53,),
+            check=graph_frames_check,
         ),
         Page(
             slug="timeline",

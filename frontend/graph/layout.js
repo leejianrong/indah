@@ -129,6 +129,53 @@ export function layeredPositions(n, s, t) {
     rows[l].forEach((v, j) => [x[v], y[v]] = [(j - (rows[l].length - 1) / 2) * 90, l * 64]);
   }
   return { x, y, gx: new Float64Array(1), gy: new Float64Array(1) };
+// update="keep" (ADR-0053): positions for a replaced graph. `prev` maps id -> [x, y]. A known id
+// keeps its place; a new id starts at the mean of its already placed neighbours (new ones settle in
+// passes, so a chain hangs off the old graph), with a hash-seeded offset so siblings do not stack,
+// and a new id with no placed neighbour at the centre of the old ones. Returns {x, y, fresh}.
+export function keepPositions(prev, ids, s, t) {
+  const n = ids.length;
+  const x = new Float64Array(n);
+  const y = new Float64Array(n);
+  const fresh = new Uint8Array(n);
+  const placed = new Uint8Array(n);
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < n; i++) {
+    const p = prev.get(ids[i]);
+    if (p) [x[i], y[i], placed[i]] = [p[0], p[1], 1];
+    else fresh[i] = 1;
+  }
+  for (const p of prev.values()) [cx, cy] = [cx + p[0] / prev.size, cy + p[1] / prev.size];
+  for (let pass = 0; pass < 8; pass++) {
+    const sx = new Float64Array(n);
+    const sy = new Float64Array(n);
+    const w = new Int32Array(n);
+    for (let e = 0; e < s.length; e++) {
+      for (const [a, b] of [[s[e], t[e]], [t[e], s[e]]]) {
+        if (fresh[a] && placed[b]) [sx[a], sy[a], w[a]] = [sx[a] + x[b], sy[a] + y[b], w[a] + 1];
+      }
+    }
+    let any = false;
+    for (let i = 0; i < n; i++) {
+      if (!fresh[i] || placed[i] || !w[i]) continue;
+      const r = mulberry32(hashString(ids[i]));
+      const a = r() * Math.PI * 2;
+      x[i] = sx[i] / w[i] + LINK_DISTANCE * 0.5 * Math.cos(a);
+      y[i] = sy[i] / w[i] + LINK_DISTANCE * 0.5 * Math.sin(a);
+      any = true;
+      placed[i] = 2; // placed this pass: a neighbour only from the next one
+    }
+    for (let i = 0; i < n; i++) if (placed[i] === 2) placed[i] = 1;
+    if (!any) break;
+  }
+  for (let i = 0; i < n; i++) {
+    if (placed[i]) continue;
+    const r = mulberry32(hashString(ids[i]));
+    const a = r() * Math.PI * 2;
+    [x[i], y[i]] = [cx + LINK_DISTANCE * Math.cos(a), cy + LINK_DISTANCE * Math.sin(a)];
+  }
+  return { x, y, fresh, gx: new Float64Array(1), gy: new Float64Array(1) };
 }
 
 // A Barnes-Hut quadtree in typed arrays, rebuilt every step without allocating objects.

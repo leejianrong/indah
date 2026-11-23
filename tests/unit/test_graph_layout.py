@@ -124,3 +124,18 @@ def test_layered_orders_a_layer_to_avoid_a_crossing():
     r = _layered(ids, [["x", "y1"], ["y", "x1"]])
     left_first = r["x"]["x"] < r["x"]["y"]
     assert (r["x"]["y1"] < r["x"]["x1"]) == left_first
+def test_update_keep_preserves_known_ids_and_places_new_ones_near_neighbours():
+    payload = {
+        "ids": ["a", "b", "c", "d", "e"],
+        "prev": [["a", 100.0, 100.0], ["b", 140.0, 100.0], ["gone", 9.0, 9.0]],
+        "edges": [["a", "c"], ["b", "c"], ["c", "d"]],  # c hangs off a and b; d off c; e is alone
+    }
+    r = run_probe("keep_probe.mjs", payload)
+    pos = r["pos"]
+    assert pos["a"] == [100.0, 100.0] and pos["b"] == [140.0, 100.0]  # not moved by a pixel
+    assert r["isNew"] == [0, 0, 1, 1, 1]
+    cx, cy = 120.0, 100.0  # the mean of a and b
+    assert ((pos["c"][0] - cx) ** 2 + (pos["c"][1] - cy) ** 2) ** 0.5 < 40
+    assert ((pos["d"][0] - pos["c"][0]) ** 2 + (pos["d"][1] - pos["c"][1]) ** 2) ** 0.5 < 40
+    assert ((pos["e"][0] - cx) ** 2 + (pos["e"][1] - cy) ** 2) ** 0.5 < 80  # centre of the old ones
+    assert run_probe("keep_probe.mjs", payload) == r  # deterministic

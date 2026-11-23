@@ -4,6 +4,7 @@
   // assistive technology work for free; density draws as small bars behind it. Play is a browser
   // timer that posts one `input` per step (at most 4 a second, so the shared event bucket survives).
   import { postEvent } from "./api.js";
+  import { frameLinks } from "./stores.js";
 
   let { id, props } = $props();
 
@@ -46,12 +47,24 @@
   const isEvent = (i) => (density[i] ?? 0) > 0;
   const peak = $derived(Math.max(1, ...density));
 
+  // With `link` (a Graph id) the timeline steps that graph's frames here in the browser: while
+  // playing nothing is posted, and the index goes to Python once on a manual step, a pause or the end.
+  const link = $derived($frameLinks.get(props.link));
+  $effect(() => link?.set(cur, false)); // a graph that mounts later, or a change from the server
+  function show(next) {
+    cur = next;
+    link?.set(next, false);
+  }
+  function commit() {
+    postEvent(id, "input", { index: cur });
+    link?.set(cur, true);
+  }
   function go(i) {
     if (off || n === 0) return;
     const next = Math.min(Math.max(i, 0), n - 1);
     if (next === cur) return;
-    cur = next;
-    postEvent(id, "input", { index: next });
+    show(next);
+    commit();
   }
   function jumpEvent(dir) {
     for (let i = cur + dir; i >= 0 && i < n; i += dir) {
@@ -63,13 +76,15 @@
     if (on && cur >= n - 1) go(0); // play from the end starts again from the start
     playing = on;
     postEvent(id, "play", { playing: on });
+    if (!on && link) commit();
   }
 
   $effect(() => {
     if (!playing) return;
     const timer = setInterval(() => {
       if (cur >= n - 1) return setPlaying(false);
-      go(cur + 1);
+      if (link) show(cur + 1);
+      else go(cur + 1);
       if (cur >= n - 1) setPlaying(false);
     }, 1000 / speed);
     return () => clearInterval(timer);

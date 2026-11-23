@@ -17,6 +17,41 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   crossings reduced by a few barycentre sweeps, no simulation); a node `shape` (`"circle"`, `"square"`,
   `"diamond"`) and a dashed outline with a faint fill, so a state does not rest on colour. All opt-in. The
   lazy graph module grows by about 2.3 KB raw. Studio page `media/graph-dag`.
+- `Svg(markup, label=)` (IND-275): an inline SVG drawing for generated flame charts and diagrams. Python
+  parses it with an allowlist (drawing elements and geometry and presentation attributes only; no script,
+  event handler, style, class, link, image, `use`, DOCTYPE or outside reference; at most 200 KB, 5,000
+  elements and 32 levels) and sends a tree that the shell builds with `createElementNS`, so nothing is
+  parsed in the browser and it holds under the strict CSP. Colours may be `var(--token)`; ids are
+  prefixed per drawing. A label (or `decorative=True`) is required. Studio page `media/svg`. The wheel budget
+  rose to 645,000 and the shell's to 510,000 (see the chart bars and sparklines).
+- `Sparkline`, `TickStrip`, and `Stat(delta_good=, tone=, spark=)` (IND-263): a tiny trend line with no axes
+  and a row of pass/fail ticks (a failed tick is taller, so it does not rest on colour; the screen reader
+  hears the counts). Both bind from a table cell as render-spec components (`"sparkline"` with `values`
+  and `tone`, `"ticks"` with `states`), with `spark_values()` and `tick_states()` for the row field. `Stat`
+  colours the delta by `delta_good` instead of its sign, colours the value by `tone`, and draws a `spark`.
+  Studio page `data/sparklines`. The shell grew by about 3 KB with the chart bars (IND-265), hover and
+  click (IND-266) and these, so the size budgets rose to 510,000 raw for the shell and 645,000 for the wheel (the sdist's to 1,920,000).
+- `Chart` stacked and horizontal bars and a box series (IND-265): `stack=True` stacks `kind="bars"` series
+  (the legend still shows each series' own value); `orientation="horizontal"` draws bars sideways, first
+  category on top (category axis and bars only, no overlays); `kind="box"` draws a box and whiskers from
+  five columns, and `indah.box_rows(samples)` summarises raw samples into those rows. Time and category
+  axes were already in (IND-269, IND-273). Studio page `media/chart-bars`. The shell grew past two budgets (hover and click, bars), so they rose to
+  510,000 raw for the shell and 645,000 for the wheel.
+- `Graph(frames=, frame=)` and `Timeline(link=graph)` (IND-280, ADR-0053 part 3): a base graph plus a few
+  style patches per frame (`nodes`, `edges`, `hide`), applied in the browser. A linked `Timeline` steps the
+  frames locally, so playing sends no events; the index is reported once on a pause, at the end or on a
+  manual step. At most 400 frames and 60,000 patch entries; unknown ids and bad styles raise `ValueError`.
+  Studio page `media/graph-frames`.
+- `Chart(hovered=, clicked=)` (IND-266): two `Signal`s that report the point or bar under the pointer as
+  `{"series", "index", "x", "y"}`. Hover is a trailing 250 ms debounce and goes back to `None` when the
+  pointer leaves; a click posts at once and is not cleared by leaving. Python reads the value from its own
+  data, so only a row and a series index go on the wire and an index the data does not have is refused.
+  Nothing is posted unless a signal is bound. Studio page `media/chart-events` (a click selects a table row).
+- `Graph(update="keep", transition_ms=)` (IND-278 second half, ADR-0053): a replaced graph keeps the
+  position of every id it already had and the viewer's pan and zoom; new ids are placed near their placed
+  neighbours. `transition_ms` (0 to 2,000, off under `prefers-reduced-motion`) fades new nodes in and eases
+  opacity and edge width changes. Position easing is not included: kept ids do not move and new ones appear
+  already placed. Studio page `media/graph-keep`.
 - `Graph` element styles and `layout="stable"` (IND-278, ADR-0053 part 2): a node takes `ring`
   (`True` or a colour), `opacity` and `label_style` (`"strike"` or `"bold"`); an edge takes `dash`
   (`True` or `[dash, gap]`), `opacity` and `width`. All are drawn the same inside and outside the focus

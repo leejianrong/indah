@@ -5,7 +5,7 @@
 // drawn in full (labels, edges); the rest are batched dots. No dependency; the layout is in layout.js
 // and the spatial index in spatial.js, and both run under Node too. Output:
 // dist-graph/graph.js (copied to src/indah/static/).
-import { createSimulation, run, bounds, hashString, layeredPositions, LAYOUT_LIMIT } from "./layout.js";
+import { createSimulation, run, bounds, hashString, keepPositions, layeredPositions, LAYOUT_LIMIT } from "./layout.js";
 import { buildGrid, nearest } from "./spatial.js";
 import { resolveColor, onThemeChange } from "../src/colors.js";
 
@@ -498,9 +498,58 @@ export function createGraph(el, { onSelect, onHover } = {}) {
     if (!raf) raf = requestAnimationFrame(frame);
   }
 
+  // update="keep" and transition_ms (ADR-0053). The old picture is read before it is replaced: the
+  // position of each id, and the opacity of each node and the opacity and width of each edge by its
+  // endpoints. A kept id is placed where it was; the transition then eases those styles (a new
+  // element fades in) by rewriting the style columns each frame, and ends on the real values.
+  const edgeKey = (d, k) => `${d.ids[d.s[k]]}\u0000${d.ids[d.t[k]]}`;
+  function snapshot() {
+    const pos = new Map();
+    const op = new Map();
+    const eo = new Map();
+    const ew = new Map();
+    for (let i = 0; i < g.n; i++) {
+      pos.set(g.ids[i], [sim.x[i], sim.y[i]]);
+      op.set(g.ids[i], nodeAlpha(i));
+    }
+    for (let k = 0; k < g.s.length; k++) {
+      eo.set(edgeKey(g, k), g.eOpacity?.[k] ?? null);
+      ew.set(edgeKey(g, k), g.eWidth?.[k] ?? null);
+    }
+    return { pos, op, eo, ew };
+  }
+  let tween = 0;
+  function ease(from, ms) {
+    cancelAnimationFrame(tween);
+    const target = { op: g.opacity, eo: g.eOpacity, ew: g.eWidth };
+    const t0 = performance.now();
+    const mix = (a, b, f) => (a == null && b == null ? null : (a ?? 1) + ((b ?? 1) - (a ?? 1)) * f);
+    const tick = (now) => {
+      const f = Math.min(1, (now - t0) / ms);
+      const e = f * f * (3 - 2 * f);
+      g.opacity = f === 1 ? target.op : Array.from({ length: g.n }, (_, i) => mix(from.op.get(g.ids[i]) ?? 0, target.op?.[i] ?? 1, e));
+      const edge = (name, base, was, dflt) =>
+        (g[name] = f === 1 ? base : Array.from(g.s, (_, k) => {
+          const key = edgeKey(g, k);
+          const a = was.has(key) ? was.get(key) : 0; // an edge not drawn before fades in
+          return mix(a ?? dflt, base?.[k] ?? dflt, e);
+        }));
+      edge("eOpacity", target.eo, from.eo, 0.35);
+      edge("eWidth", target.ew, from.ew, 1);
+      buildBatches();
+      draw();
+      if (f < 1) tween = requestAnimationFrame(tick);
+    };
+    tick(t0);
+  }
+
   function setData(data) {
+    const keepView = touched ? [view, true] : null;
+    const before = g && sim && data.update === "keep" ? snapshot() : null;
+    const fade = data.transitionMs > 0 && g && sim && !matchMedia("(prefers-reduced-motion: reduce)").matches ? (before ?? snapshot()) : null;
     g = decode(data);
     if (data.layout === "layered") g.given = layeredPositions(g.n, g.s, g.t); // placed at once, no simulation
+    if (before) g.given = keepPositions(before.pos, g.ids, g.s, g.t);
     resolveTheme();
     buildBatches();
     const seed = hashString(`${g.n}:${g.s.length}:${g.ids[0] ?? ""}:${g.ids[g.n - 1] ?? ""}`);
@@ -542,8 +591,47 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       },
     };
     if (sim.done) finish();
-    fit();
+    if (before && keepView) [view, touched] = keepView; // a kept layout keeps the viewer's pan and zoom
+    else fit();
     schedule();
+    base = null; // a new graph has new base styles; show the current frame over them
+    if (frames) applyFrame(frameAt);
+    if (fade) ease(fade, data.transitionMs);
+  }
+
+  // Frames (ADR-0053): a frame is the base style columns plus only its own patches, applied here in
+  // the browser so stepping through them sends nothing. Hidden ids, and the edges of a hidden node,
+  // are drawn at opacity 0 and keep their place.
+  let frames = null;
+  let frameAt = 0;
+  let base = null;
+  function applyFrame(i) {
+    if (!g || !frames) return;
+    frameAt = i;
+    el.__graph.frame = i; // for tests
+    base ??= { opacity: g.opacity, ring: g.ring, labelStyle: g.labelStyle, eDash: g.eDash, eOpacity: g.eOpacity, eWidth: g.eWidth };
+    const cols = {};
+    const col = (name, len) => (cols[name] ??= Array.from({ length: len }, (_, k) => base[name]?.[k] ?? null));
+    const f = frames[i] ?? {};
+    const eIndex = new Map((g.edgeIds ?? []).map((id, k) => [id, k]));
+    for (const [id, st] of Object.entries(f.nodes ?? {})) {
+      const k = g.idIndex.get(id);
+      if (k !== undefined) for (const [key, v] of Object.entries(st)) col(key, g.n)[k] = v;
+    }
+    for (const [id, st] of Object.entries(f.edges ?? {})) {
+      const k = eIndex.get(id);
+      if (k !== undefined) for (const [key, v] of Object.entries(st)) col({ dash: "eDash", opacity: "eOpacity", width: "eWidth" }[key], g.s.length)[k] = v;
+    }
+    for (const id of f.hide ?? []) {
+      const k = g.idIndex.get(id);
+      if (k !== undefined) {
+        col("opacity", g.n)[k] = 0;
+        for (let j = g.adjStart[k]; j < g.adjStart[k + 1]; j++) col("eOpacity", g.s.length)[g.adjEdge[j]] = 0;
+      } else if (eIndex.has(id)) col("eOpacity", g.s.length)[eIndex.get(id)] = 0;
+    }
+    Object.assign(g, base, cols);
+    buildBatches();
+    draw();
   }
 
   // Pan with a drag, zoom with the wheel or two fingers.
@@ -736,6 +824,13 @@ export function createGraph(el, { onSelect, onHover } = {}) {
       if (!g || g.groups.length === 0 || (g.groups.length === 1 && g.groups[0] === "")) return [];
       return g.groups.map((name, i) => ({ group: name, color: groupColor(i) }));
     },
+    // The frame list from Python and the frame to show; a new list or index acts, a repeat does not.
+    setFrames(list, index) {
+      if (list !== frames) [frames, base] = [list, null];
+      else if (index === frameAt) return;
+      applyFrame(index);
+    },
+    setFrame: applyFrame,
     destroy() {
       if (raf) cancelAnimationFrame(raf);
       offTheme();
