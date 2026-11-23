@@ -18,6 +18,14 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   `"diamond"`) and a dashed outline with a faint fill, so a state does not rest on colour. All opt-in. The
   lazy graph module grows by about 2.3 KB raw. Studio page `media/graph-dag`. With update=keep, frames and this, the lazy graph module is 23.1 KB raw / 9.6 KB
   gzip, so its limits rose to 25,000 and 10,300 (and Python source to 690,000).
+- `Spans(spans, layout=, unit=, selected=, view=)` (IND-268): nested labelled intervals as a flame chart, an
+  icicle chart or a timeline. Python decides each span's row (from containment or an explicit `depth`; for a
+  timeline from its `lane` or a first-fit packing) and checks every span (finite numbers, end not before
+  start, unique ids, theme-safe colours, at most 5,000). A click selects a span through a two-way signal,
+  `view=` zooms, and every span is a button named by its label, length and place. It is drawn in the shell
+  with plain elements, not in a lazily loaded module (that would have cost a sixth build target for no gain
+  at this size). Studio page `media/spans`. The Python source budget rose to 690,000 (Svg, Spans and the
+  sparkline helpers).
 - `Svg(markup, label=)` (IND-275): an inline SVG drawing for generated flame charts and diagrams. Python
   parses it with an allowlist (drawing elements and geometry and presentation attributes only; no script,
   event handler, style, class, link, image, `use`, DOCTYPE or outside reference; at most 200 KB, 5,000

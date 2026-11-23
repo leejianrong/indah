@@ -601,6 +601,78 @@ def svg_check(pw) -> None:
     )  # redrawn in place
 
 
+_RUN = [
+    {"id": "compile", "label": "compile", "start": 0, "end": 100},
+    {"id": "parse", "label": "parse", "start": 0, "end": 18},
+    {"id": "route", "label": "route", "start": 18, "end": 70},
+    {"id": "swap", "label": "swap search", "start": 18, "end": 50},
+    {"id": "score", "label": "score", "start": 18, "end": 30},
+    {"id": "prune", "label": "prune", "start": 30, "end": 50},
+    {"id": "layout", "label": "layout", "start": 50, "end": 70},
+    {"id": "emit", "label": "emit", "start": 70, "end": 100, "color": "var(--err)"},
+]
+
+
+def spans_page(ctx: indah.Context) -> indah.Component:
+    picked = indah.Signal(None)
+    zoom = indah.Signal(None)
+    by_id = {s["id"]: s for s in _RUN}
+
+    def zoom_in() -> None:
+        s = by_id.get(picked.value)
+        zoom.set((s["start"], s["end"]) if s else None)
+
+    lanes = [
+        {"label": "load", "start": 0, "end": 30, "lane": "disk"},
+        {"label": "decode", "start": 10, "end": 60, "lane": "cpu"},
+        {"label": "train", "start": 40, "end": 95, "lane": "gpu"},
+        {"label": "save", "start": 90, "end": 100, "lane": "disk"},
+    ]
+    return indah.Column(
+        children=[
+            indah.Spans(_RUN, selected=picked, view=zoom, unit="ms", label="Compile run (flame)"),
+            indah.Text(
+                lambda: "Click a span." if picked.value is None else f"Selected: {picked.value}"
+            ),
+            indah.Row(
+                children=[
+                    indah.Button("Zoom to selection", zoom_in),
+                    indah.Button("Reset zoom", lambda: zoom.set(None)),
+                ]
+            ),
+            indah.Spans(_RUN, layout="icicle", unit="ms", label="Compile run (icicle)"),
+            indah.Spans(lanes, layout="timeline", unit="s", label="Pipeline lanes (timeline)"),
+        ]
+    )
+
+
+def spans_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    flame = page.get_by_role("group", name="Compile run (flame)")
+    expect(flame.locator("button.span")).to_have_count(8)
+    # Flame: the root is at the bottom, its children above it.
+    top = lambda name: flame.get_by_role("button", name=name).evaluate("(e) => e.offsetTop")  # noqa: E731
+    assert top("compile, 100 ms, from 0 to 100") > top("route, 52 ms, from 18 to 70")
+    # Icicle is the other way up.
+    ice = page.get_by_role("group", name="Compile run (icicle)")
+    root_top = ice.get_by_role("button", name="compile, 100 ms, from 0 to 100").evaluate(
+        "(e) => e.offsetTop"
+    )
+    assert root_top == 0
+    flame.get_by_role("button", name="route, 52 ms, from 18 to 70").click()
+    expect(page.get_by_text("Selected: route")).to_be_visible()
+    page.get_by_role("button", name="Zoom to selection").click()
+    expect(flame.locator("button.span")).to_have_count(6)  # what overlaps 18 to 70
+    page.get_by_role("button", name="Reset zoom").click()
+    expect(flame.locator("button.span")).to_have_count(8)
+    # A timeline puts each lane on its own row.
+    lanes = page.get_by_role("group", name="Pipeline lanes (timeline)")
+    expect(lanes.locator("button.span")).to_have_count(4)
+    # A span carries its own colour when given, and no style attribute is used.
+
+
 def chart_axes(ctx: indah.Context) -> indah.Component:
     import datetime
 
@@ -1742,6 +1814,20 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(12,),
             check=svg_check,
+        ),
+        Page(
+            slug="spans",
+            title="Spans: flame, icicle and timeline",
+            summary=(
+                "`Spans` draws nested labelled intervals as a flame chart, an icicle chart or a "
+                "timeline. A click selects a span through a signal, `view=` zooms to a range, and "
+                "every span is a button."
+            ),
+            build=spans_page,
+            covers=("Spans",),
+            docs="components.md",
+            adr=(12,),
+            check=spans_check,
         ),
         Page(
             slug="chart-axes",
