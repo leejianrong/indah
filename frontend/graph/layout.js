@@ -129,6 +129,8 @@ export function layeredPositions(n, s, t) {
     rows[l].forEach((v, j) => [x[v], y[v]] = [(j - (rows[l].length - 1) / 2) * 90, l * 64]);
   }
   return { x, y, gx: new Float64Array(1), gy: new Float64Array(1) };
+}
+
 // update="keep" (ADR-0053): positions for a replaced graph. `prev` maps id -> [x, y]. A known id
 // keeps its place; a new id starts at the mean of its already placed neighbours (new ones settle in
 // passes, so a chain hangs off the old graph), with a hash-seeded offset so siblings do not stack,

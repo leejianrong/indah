@@ -9,9 +9,9 @@
   "editor_gzip_bytes": 155000,
   "map_raw_bytes": 174000,
   "map_gzip_bytes": 50000,
-  "graph_raw_bytes": 21000,
-  "graph_gzip_bytes": 8800,
-  "python_source_bytes": 660000,
+  "graph_raw_bytes": 25000,
+  "graph_gzip_bytes": 10300,
+  "python_source_bytes": 690000,
   "direct_dependencies": 5,
   "base_install_distributions": 14
 }

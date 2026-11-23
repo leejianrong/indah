@@ -377,24 +377,6 @@ def test_layout_stable_is_accepted_and_sent():
         Graph(["a"], layout="radial")
 
 
-# -- directed edges, node shapes and the layered layout (IND-264) ---------------------------------
-
-
-@pytest.mark.unit
-def test_directed_and_layered_are_sent_and_off_by_default():
-    base = Graph(["a"]).static_props()
-    assert "directed" not in base and base["layout"] == "auto"
-    props = Graph(["a"], directed=True, layout="layered").static_props()
-    assert props["directed"] is True and props["layout"] == "layered"
-
-
-@pytest.mark.unit
-def test_node_shape_and_dash_ride_as_optional_columns():
-    nodes = [{"id": "a", "shape": "square", "dash": True}, {"id": "b", "dash": [4, 2]}, "c"]
-    cols = Graph(nodes).static_props()["nodes"]
-    assert cols["shape"] == ["square", None, None]
-    assert cols["dash"] == [True, [4, 2], None]
-    assert set(Graph(["a"]).static_props()["nodes"]) == {"id"}
 # -- frames (IND-280, ADR-0053 part 3) -------------------------------------------------------------
 
 _FN = ["a", "b", "c"]
@@ -434,12 +416,6 @@ def test_frames_go_to_the_wire_with_wire_names_and_frame_follows_a_signal():
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    "node",
-    [{"id": "a", "shape": "star"}, {"id": "a", "dash": "yes"}, {"id": "a", "dash": [0, 3]}],
-)
-def test_a_bad_node_shape_or_dash_is_refused(node):
-    with pytest.raises(ValueError):
-        Graph([node])
     "frames",
     [
         [{"nodes": {"zz": {"ring": True}}}],  # unknown node
@@ -511,3 +487,33 @@ def test_transition_ms_is_an_int_from_0_to_2000(bad):
 def test_update_must_be_relayout_or_keep():
     with pytest.raises(ValueError, match="'relayout' or 'keep'"):
         Graph(["a"], update="morph")
+
+
+# -- directed edges, node shapes and the layered layout (IND-264) ---------------------------------
+
+
+@pytest.mark.unit
+def test_directed_and_layered_are_sent_and_off_by_default():
+    base = Graph(["a"]).static_props()
+    assert "directed" not in base and base["layout"] == "auto"
+    props = Graph(["a"], directed=True, layout="layered").static_props()
+    assert props["directed"] is True and props["layout"] == "layered"
+
+
+@pytest.mark.unit
+def test_node_shape_and_dash_ride_as_optional_columns():
+    nodes = [{"id": "a", "shape": "square", "dash": True}, {"id": "b", "dash": [4, 2]}, "c"]
+    cols = Graph(nodes).static_props()["nodes"]
+    assert cols["shape"] == ["square", None, None]
+    assert cols["dash"] == [True, [4, 2], None]
+    assert set(Graph(["a"]).static_props()["nodes"]) == {"id"}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "node",
+    [{"id": "a", "shape": "star"}, {"id": "a", "dash": "yes"}, {"id": "a", "dash": [0, 3]}],
+)
+def test_a_bad_node_shape_or_dash_is_refused(node):
+    with pytest.raises(ValueError):
+        Graph([node])

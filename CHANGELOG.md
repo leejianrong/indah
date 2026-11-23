@@ -16,7 +16,8 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
   target; a top-to-bottom layout for a DAG (longest-path layers, a cycle broken at its first node,
   crossings reduced by a few barycentre sweeps, no simulation); a node `shape` (`"circle"`, `"square"`,
   `"diamond"`) and a dashed outline with a faint fill, so a state does not rest on colour. All opt-in. The
-  lazy graph module grows by about 2.3 KB raw. Studio page `media/graph-dag`.
+  lazy graph module grows by about 2.3 KB raw. Studio page `media/graph-dag`. With update=keep, frames and this, the lazy graph module is 23.1 KB raw / 9.6 KB
+  gzip, so its limits rose to 25,000 and 10,300 (and Python source to 690,000).
 - `Svg(markup, label=)` (IND-275): an inline SVG drawing for generated flame charts and diagrams. Python
   parses it with an allowlist (drawing elements and geometry and presentation attributes only; no script,
   event handler, style, class, link, image, `use`, DOCTYPE or outside reference; at most 200 KB, 5,000

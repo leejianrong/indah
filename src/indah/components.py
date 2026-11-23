@@ -3282,6 +3282,7 @@ class Graph(Component):
             )
         self._height = _plot_height(height)
         self._layout = layout
+        self._directed = bool(directed)
         self._update = update
         self._transition_ms = transition_ms
         self._legend = bool(legend)
@@ -3340,6 +3341,8 @@ class Graph(Component):
 
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {"height": self._height, "layout": self._layout}
+        if self._directed:
+            props["directed"] = True
         if self._update == "keep":
             props["update"] = "keep"
         if self._transition_ms:

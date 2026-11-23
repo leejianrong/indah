@@ -124,6 +124,8 @@ def test_layered_orders_a_layer_to_avoid_a_crossing():
     r = _layered(ids, [["x", "y1"], ["y", "x1"]])
     left_first = r["x"]["x"] < r["x"]["y"]
     assert (r["x"]["y1"] < r["x"]["x1"]) == left_first
+
+
 def test_update_keep_preserves_known_ids_and_places_new_ones_near_neighbours():
     payload = {
         "ids": ["a", "b", "c", "d", "e"],
