@@ -3016,6 +3016,11 @@ class Graph(Component):
     so changing a style, a group or the list order does not move a node (``"auto"``, the default,
     still clusters by group).
 
+    ``update="keep"`` makes a replaced graph keep the position of every id it already had; only
+    new ids are placed, near their neighbours (the default, ``"relayout"``, lays the new graph out
+    afresh). ``transition_ms`` (0 to 2000) eases opacity and edge width changes, and fades new
+    nodes in, between updates; it is off under ``prefers-reduced-motion``.
+
     Replace ``nodes`` and ``edges`` together, inside ``indah.batch(...)``, when both are signals:
     set one at a time, an edge can briefly name a node that is not there yet and raises.
     """
@@ -3029,6 +3034,8 @@ class Graph(Component):
         *,
         height: int | str = 480,
         layout: Literal["auto", "stable", "given"] = "auto",
+        update: Literal["relayout", "keep"] = "relayout",
+        transition_ms: int = 0,
         legend: bool = True,
         max_nodes: int = GRAPH_DEFAULT_MAX_NODES,
         focus_size: Source = 300,
@@ -3041,6 +3048,14 @@ class Graph(Component):
         super().__init__()
         if layout not in ("auto", "stable", "given"):
             raise ValueError(f"Graph layout must be 'auto', 'stable' or 'given', got {layout!r}")
+        if update not in ("relayout", "keep"):
+            raise ValueError(f"Graph update must be 'relayout' or 'keep', got {update!r}")
+        if (
+            isinstance(transition_ms, bool)
+            or not isinstance(transition_ms, int)
+            or not (0 <= transition_ms <= 2000)
+        ):
+            raise ValueError(f"transition_ms must be an int from 0 to 2000, got {transition_ms!r}")
         if (
             isinstance(max_nodes, bool)
             or not isinstance(max_nodes, int)
@@ -3051,6 +3066,8 @@ class Graph(Component):
             )
         self._height = _plot_height(height)
         self._layout = layout
+        self._update = update
+        self._transition_ms = transition_ms
         self._legend = bool(legend)
         self._label = label
         self._focus_size = focus_size
@@ -3095,6 +3112,10 @@ class Graph(Component):
 
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {"height": self._height, "layout": self._layout}
+        if self._update == "keep":
+            props["update"] = "keep"
+        if self._transition_ms:
+            props["transitionMs"] = self._transition_ms
         if not self._legend:
             props["legend"] = False
         if self._label:

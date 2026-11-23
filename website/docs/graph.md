@@ -99,6 +99,17 @@ edges = [{"source": "a", "target": "b", "dash": True}]
 indah.Graph(nodes, edges, layout="stable")
 ```
 
+## Keep positions when the graph changes
+
+By default a replaced graph is laid out afresh. Pass `update="keep"` and every id the graph already had
+stays exactly where it was (and the viewer's pan and zoom are kept); only new ids are placed, near the
+neighbours they are linked to. Add `transition_ms` (0 to 2,000) to fade new nodes in and ease opacity and
+edge width changes; it does nothing under `prefers-reduced-motion`.
+
+```python
+indah.Graph(lambda: grown.value[0], lambda: grown.value[1], update="keep", transition_ms=300)
+```
+
 ## Use the keyboard
 
 Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clears the selection.
@@ -115,6 +126,8 @@ Press Tab to focus the graph. Arrow keys pan, `+` and `-` zoom, and Escape clear
 | `focus_size` | nodes drawn in full (default 300, at most 5,000); may be a signal |
 | `highlight` | `{"nodes": [...], "edges": [...]}`; may be a signal |
 | `layout` | `"auto"` (default), `"stable"` (seeded from ids and edges only) or `"given"`, which needs `x` and `y` on every node |
+| `update` | `"relayout"` (default) or `"keep"`: a replaced graph keeps the position of every id it already had |
+| `transition_ms` | 0 (default) to 2,000: ease opacity and edge width changes, fade new nodes in |
 | `height` | pixels, or `"fill"` |
 | `legend` | show the group colours (default `True`) |
 | `max_nodes` | most nodes allowed (default 10,000; ceiling 20,000) |
