@@ -889,7 +889,7 @@
 {:else if node.type === "chart"}
   <div class="field" class:fill={props.height === "fill"}>
     {#if props.label}<span class="stream-label">{props.label}</span>{/if}
-    <Chart {props} />
+    <Chart {props} nodeId={node.id} />
   </div>
 {:else if node.type === "heatmap"}
   <div class="field" class:fill={props.height === "fill"}>

@@ -414,6 +414,72 @@ def chart_steps(ctx: indah.Context) -> indah.Component:
     )
 
 
+_BENCH = [["adder", 120], ["qft", 310], ["grover", 540], ["shor", 880], ["vqe", 260]]
+
+
+def chart_events(ctx: indah.Context) -> indah.Component:
+    clicked = indah.Signal(None)
+    hovered = indah.Signal(None)
+    picked = indah.Signal(None)
+
+    def follow() -> None:
+        if clicked.value is not None:
+            picked.set(clicked.value["index"])
+
+    indah.effect(follow)  # a click on a bar selects that table row
+    return indah.Column(
+        children=[
+            indah.Chart(
+                _BENCH,
+                series=[{"label": "gates", "kind": "bars", "stroke": "var(--primary)"}],
+                title="Gates per benchmark",
+                x_scale="category",
+                hovered=hovered,
+                clicked=clicked,
+                height=240,
+            ),
+            indah.Text(
+                lambda: (
+                    "Hover a bar."
+                    if hovered.value is None
+                    else f"Over {hovered.value['x']}: {hovered.value['y']} gates"
+                ),
+                variant="caption",
+            ),
+            indah.Table(
+                [{"benchmark": b, "gates": g} for b, g in _BENCH],
+                selected=picked,
+                label="Benchmarks",
+            ),
+            indah.Text(
+                lambda: (
+                    "Click a bar."
+                    if picked.value is None
+                    else f"Selected: {_BENCH[picked.value][0]}"
+                )
+            ),
+        ]
+    )
+
+
+def chart_events_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    plot = page.locator(".u-over").first
+    expect(plot).to_be_visible(timeout=15_000)
+    box = plot.bounding_box()
+    assert box is not None
+    # The fourth of five bars, "shor", sits at 70 percent of the plot's width.
+    x, y = box["x"] + box["width"] * 0.7, box["y"] + box["height"] * 0.7
+    page.mouse.move(x, y)
+    expect(page.get_by_text("Over shor: 880 gates")).to_be_visible()
+    page.mouse.move(box["x"] + box["width"] + 40, box["y"] + box["height"] + 40)
+    expect(page.get_by_text("Hover a bar.")).to_be_visible()  # leaving clears it
+    page.mouse.click(x, y)
+    expect(page.get_by_text("Selected: shor")).to_be_visible()
+
+
 def chart_axes(ctx: indah.Context) -> indah.Component:
     import datetime
 
@@ -1390,6 +1456,19 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(49,),
             check=chart_category_check,
+        ),
+        Page(
+            slug="chart-events",
+            title="Chart hover and click",
+            summary=(
+                "`Chart(hovered=, clicked=)` report the point or bar under the pointer as signals: "
+                "hover is debounced, a click selects a table row here."
+            ),
+            build=chart_events,
+            covers=(),
+            docs="components.md",
+            adr=(18,),
+            check=chart_events_check,
         ),
         Page(
             slug="chart-axes",
