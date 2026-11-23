@@ -895,22 +895,21 @@ def graph_frames_check(pw) -> None:
 
     page = pw.page
     expect(page.locator('.graph-stage[data-settled="true"]')).to_be_visible(timeout=30_000)
-    posts: list[str] = []
-    page.on(
-        "request",
-        lambda r: (
-            posts.append(r.post_data or "")
-            if r.method == "POST" and "/api/event" in r.url
-            else None
-        ),
+    # Count the events by wrapping fetch in the page: the Pyodide runtime answers /api/event
+    # in the page, so a network listener would see nothing there.
+    page.evaluate(
+        "() => { window.__posts = []; const f = window.fetch;"
+        " window.fetch = (u, o) => { if (String(u).includes('api/event')) window.__posts.push(o.body);"
+        " return f(u, o); }; }"
     )
     page.get_by_role("button", name="Play").click()
     expect(page.locator(".timeline-now")).to_have_text("2004", timeout=6000)
     expect(page.get_by_text("frame 4", exact=True)).to_be_visible()  # reported once, at the end
     assert page.evaluate("document.querySelector('.graph-stage').__graph.frame") == 4  # drawn too
-    inputs = [p for p in posts if '"input"' in p]
-    assert len(inputs) == 1, posts  # four steps played, one event sent
-    assert len([p for p in posts if '"frame"' in p]) == 1, posts
+    posts = page.evaluate("window.__posts")
+    inputs = [p for p in posts if '"event":"input"' in p]
+    assert len(inputs) == 1, posts  # four steps played, one input sent
+    assert len([p for p in posts if '"event":"frame"' in p]) == 1, posts
 
 
 def graph_styles_check(pw) -> None:
