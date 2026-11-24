@@ -49,6 +49,7 @@ DEMOS = [
     ("sorting", "sorting", "sort"),
     ("automaton", "automaton", "play"),
     ("segment", "segment", "segment"),
+    ("llm-compare", "llm_compare", None),
 ]
 
 TALL_VIEWPORT = {"width": 1350, "height": 960}  # whole audio-analysis app; scaled to 900x640

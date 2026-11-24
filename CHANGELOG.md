@@ -12,6 +12,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- **Compare language models** gallery demo (IND-81, `examples/llm_compare.py`): tick models and pick a metric
+  and the page redraws a horizontal bar chart, grouped benchmark bars, a price-against-score scatter, a box
+  series for run-to-run spread, three `Stat` cards and a `Table`. The figures are illustrative, for made-up
+  models, and nothing is fetched.
 - **Click to segment** gallery demo (IND-56, `examples/segment.py`): click a spot or drag a box on a sample
   or uploaded picture and a colour-based region grower returns the region as an `ImageOverlay` mask. No
   model, so nothing to download; the picture is shrunk to 320 px first. It uses the new draw mode.

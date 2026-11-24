@@ -237,3 +237,15 @@ module = "segment"
 thumbnail = "segment.png"
 tags = ["images", "interactive"]
 added = "2026-11-24"
+
+[[app]]
+slug = "llm-compare"
+title = "Compare language models"
+emoji = "⚖️"
+blurb = "Price, speed and scores for six made-up models: bars, a price-against-score scatter and run-to-run spread."
+author = "indah"
+kind = "hosted"
+module = "llm_compare"
+thumbnail = "llm-compare.png"
+tags = ["charts", "llm"]
+added = "2026-11-24"
