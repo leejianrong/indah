@@ -50,6 +50,7 @@ DEMOS = [
     ("automaton", "automaton", "play"),
     ("segment", "segment", "segment"),
     ("llm-compare", "llm_compare", None),
+    ("rag-chat", "rag_chat", "ask"),
 ]
 
 TALL_VIEWPORT = {"width": 1350, "height": 960}  # whole audio-analysis app; scaled to 900x640
@@ -98,6 +99,9 @@ def _nudge(page, kind: str | None) -> None:
             box = page.locator(".overlay-wrap img").bounding_box()
             page.mouse.click(box["x"] + box["width"] * 0.28, box["y"] + box["height"] * 0.38)
             page.wait_for_timeout(900)  # the region grows and the mask arrives
+        elif kind == "ask":
+            page.get_by_role("button", name="How do updates reach the browser?").click(timeout=2000)
+            page.wait_for_timeout(2500)  # the answer streams in and the sources appear
         elif kind == "play":
             page.get_by_role("button", name="Play").click(timeout=2000)
             page.wait_for_timeout(3500)  # a few dozen generations of the R-pentomino
