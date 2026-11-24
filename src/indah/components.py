@@ -1748,6 +1748,16 @@ def _to_masks(value: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _to_size(value: Any) -> list[int]:
+    if (
+        not isinstance(value, (list, tuple))
+        or len(value) != 2
+        or any(isinstance(v, bool) or not isinstance(v, (int, float)) or v < 1 for v in value)
+    ):
+        raise ValueError("size is (width, height) in pixels, both above zero")
+    return [int(value[0]), int(value[1])]
+
+
 _DRAW_MODES = ("box", "point")
 _MIN_DRAW = 2.0  # a drag shorter than this (raster px) is a slip, not a box
 
@@ -1820,6 +1830,7 @@ class ImageOverlay(Component):
     picture, and ``shapes`` takes rectangles and polygons in those pixels (see ``_to_shapes``:
     stroke, dash, fill, a hover ``label``). Shapes you mark ``pick`` can be clicked: ``on_pick(id)``
     runs with the shape's id (an id that is not a current pickable shape is ignored), and
+    ``size`` may be a Signal (or a callable) when the picture changes, for example after an upload.
     ``selected`` (an id, or a Signal of one) draws that shape thicker. ``view=[x, y, w, h]``
     (raster pixels, reactive) shows only that region, filled to the width: a close-up of a seam.
     Turn layers on and off by filtering the list you pass.
@@ -1860,7 +1871,7 @@ class ImageOverlay(Component):
         masks: Source = None,
         alt: str = "",
         label_mode: Literal["always", "hover"] = "always",
-        size: tuple[int, int] | None = None,
+        size: Source = None,
         shapes: Source = None,
         selected: Source = None,
         view: Source = None,
@@ -1875,8 +1886,8 @@ class ImageOverlay(Component):
         self._masks = masks
         self._alt = alt
         self._label_mode = label_mode
-        if size is not None and (len(size) != 2 or min(size) < 1):
-            raise ValueError("size is (width, height) in pixels, both above zero")
+        if size is not None and not callable(size) and not isinstance(size, Signal):
+            _to_size(size)  # fail early on a fixed size; a reactive one is checked as it is read
         if (shapes is not None or view is not None or draw is not None) and size is None:
             raise ValueError("shapes, view and draw are in raster pixels: pass size=(w, h)")
         self._size = size
@@ -1889,9 +1900,15 @@ class ImageOverlay(Component):
 
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {"alt": self._alt, "labelMode": self._label_mode}
-        if self._size is not None:
-            props["size"] = [int(self._size[0]), int(self._size[1])]
+        if self._size is not None and not self._size_is_reactive():
+            props["size"] = _to_size(self._size)
         return props
+
+    def _size_is_reactive(self) -> bool:
+        return callable(self._size) or isinstance(self._size, Signal)
+
+    def _size_now(self) -> list[int] | None:
+        return None if self._size is None else _to_size(_read(self._size))
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
         if event == "draw" and self._on_draw is not None:
@@ -1913,7 +1930,8 @@ class ImageOverlay(Component):
         the picture; ``None`` when drawing is off or the event is not what the mode expects."""
         mode = _read(self._draw)
         kind = payload.get("kind")
-        if mode not in _DRAW_MODES or kind != mode or self._size is None:
+        size = self._size_now()
+        if mode not in _DRAW_MODES or kind != mode or size is None:
             return None
         key = "box" if kind == "box" else "point"
         raw = payload.get(key)
@@ -1925,7 +1943,7 @@ class ImageOverlay(Component):
             for v in raw
         ):
             return None
-        w, h = self._size
+        w, h = size
         xs = [min(max(float(v), 0.0), float(w)) for v in raw[0::2]]
         ys = [min(max(float(v), 0.0), float(h)) for v in raw[1::2]]
         if kind == "point":
@@ -1942,6 +1960,8 @@ class ImageOverlay(Component):
             "points": lambda: _to_points(_read(self._points)),
             "masks": lambda: _to_masks(_read(self._masks)),
         }
+        if self._size_is_reactive():
+            props["size"] = lambda: self._size_now()
         if self._shapes is not None:
             props["shapes"] = lambda: _to_shapes(_read(self._shapes))
         if self._selected is not None:

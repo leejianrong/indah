@@ -198,3 +198,22 @@ def test_draw_mode_is_reactive_and_a_drawn_box_reaches_on_draw():
     assert len(drawn) == 2
     plain = ImageOverlay("x", size=(10, 10))
     assert plain.handle("draw", {"kind": "point", "point": [1, 1]}) is False
+
+
+@pytest.mark.unit
+def test_size_can_be_reactive_for_a_picture_that_changes():
+    size: Signal[tuple[int, int]] = Signal((100, 50))
+    drawn = []
+    ov = ImageOverlay("x", size=size, draw="point", on_draw=drawn.append)
+    session, hub = _session(ov)
+    assert session.snapshot()["children"][0]["props"]["size"] == [100, 50]
+
+    size.set((40, 20))
+    _, msg = hub.history()[-1]
+    assert msg["changes"][0] == {"target": ov.id, "props": {"size": [40, 20]}}
+
+    ov.handle("draw", {"kind": "point", "point": [90, 90]})  # clamped to the new picture
+    assert drawn == [{"kind": "point", "point": [40.0, 20.0]}]
+    with pytest.raises(ValueError, match="size"):
+        size.set((0, 5))
+        ov.reactive_props()["size"]()

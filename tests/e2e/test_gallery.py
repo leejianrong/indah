@@ -45,6 +45,7 @@ SLUGS = [
     "sorting",
     "automaton",
     "yolox-traffic",
+    "segment",
 ]
 # A demo that fetches map tiles or fonts from a third party may log a blocked request on a
 # machine with no network; only a live-site run treats that as a failure.
