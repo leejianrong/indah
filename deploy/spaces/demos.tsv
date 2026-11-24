@@ -22,3 +22,4 @@ yolox-traffic	yolox_traffic.py	Real-time detection on a traffic clip	🚦	onnxru
 segment	segment.py	Click to segment	🎯	numpy pillow
 llm-compare	llm_compare.py	Compare language models	⚖️	-
 rag-chat	rag_chat.py	Ask the documents	📚	-
+support-desk	support_desk.py	Support desk	🎫	-

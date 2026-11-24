@@ -177,6 +177,7 @@ script ([ADR-0023](docs/adr/0023-demo-hosting.md)).
 | Click to segment | [Open](https://indah-demos.fly.dev/segment/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/segment.ipynb) | [`segment.py`](examples/segment.py) |
 | Compare language models | [Open](https://indah-demos.fly.dev/llm-compare/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/llm-compare.ipynb) | [`llm_compare.py`](examples/llm_compare.py) |
 | Ask the documents | [Open](https://indah-demos.fly.dev/rag-chat/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/rag-chat.ipynb) | [`rag_chat.py`](examples/rag_chat.py) |
+| Support desk | [Open](https://indah-demos.fly.dev/support-desk/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/support-desk.ipynb) | [`support_desk.py`](examples/support_desk.py) |
 
 Also: [`examples/starter_components.py`](examples/starter_components.py) (a ~20-line
 tour of the component set) and [`examples/demo.ipynb`](examples/demo.ipynb) (the

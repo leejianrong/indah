@@ -261,3 +261,15 @@ module = "rag_chat"
 thumbnail = "rag-chat.png"
 tags = ["llm", "text"]
 added = "2026-11-25"
+
+[[app]]
+slug = "support-desk"
+title = "Support desk"
+emoji = "🎫"
+blurb = "A small internal tool with real pages: inbox, ticket, reports and settings, each with its own address."
+author = "indah"
+kind = "hosted"
+module = "support_desk"
+thumbnail = "support-desk.png"
+tags = ["routing", "dashboard"]
+added = "2026-11-25"

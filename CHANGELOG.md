@@ -12,6 +12,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- **Support desk** gallery demo (IND-66, `examples/support_desk.py`): a small internal tool with an inbox,
+  a ticket page, reports and settings, each at its own address (`Router`, `Link`, `ctx.params`,
+  `ctx.navigate`, `spa=True`). One ticket list is read by every page, so an edit shows up everywhere at
+  once. The tickets are made up and live in the visitor's session only.
 - **Ask the documents** gallery demo (IND-57, `examples/rag_chat.py`): chat with bundled notes or uploaded
   `.txt` / `.md` files. BM25 retrieval picks the best passages and an answer is the best-matching sentences
   copied out of them, each followed by a `[n]` citation, with the cited passages in a Sources panel. No
