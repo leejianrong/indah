@@ -159,6 +159,7 @@
   class:zoomed={scale > 1}
   class:dragging
   class:drawing={draw}
+  data-draw={draw}
   style={cropStyle}
   bind:this={wrapEl}
   onwheel={handleWheel}

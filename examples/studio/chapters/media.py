@@ -1543,6 +1543,9 @@ def annotate_check(pw) -> None:
     shape = page.locator(".ov-shapes rect:not(.ov-rubber)")
     expect(shape).to_have_count(1)
     page.get_by_label("Point").check()
+    expect(page.locator('.overlay-wrap[data-draw="point"]')).to_have_count(
+        1
+    )  # the mode round-trips
     page.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] * 0.3)
     expect(page.get_by_text("2 annotations")).to_be_visible()
     expect(page.locator(".ov-shapes circle")).to_have_count(1)
