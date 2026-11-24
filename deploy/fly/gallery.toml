@@ -249,3 +249,15 @@ module = "llm_compare"
 thumbnail = "llm-compare.png"
 tags = ["charts", "llm"]
 added = "2026-11-24"
+
+[[app]]
+slug = "rag-chat"
+title = "Ask the documents"
+emoji = "📚"
+blurb = "Chat with notes or your own files; every sentence of an answer cites the passage it came from. No language model."
+author = "indah"
+kind = "hosted"
+module = "rag_chat"
+thumbnail = "rag-chat.png"
+tags = ["llm", "text"]
+added = "2026-11-25"

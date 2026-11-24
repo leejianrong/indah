@@ -12,6 +12,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- **Ask the documents** gallery demo (IND-57, `examples/rag_chat.py`): chat with bundled notes or uploaded
+  `.txt` / `.md` files. BM25 retrieval picks the best passages and an answer is the best-matching sentences
+  copied out of them, each followed by a `[n]` citation, with the cited passages in a Sources panel. No
+  language model, so it can only say what the documents say. Uploads are limited by type, size and count.
 - **Compare language models** gallery demo (IND-81, `examples/llm_compare.py`): tick models and pick a metric
   and the page redraws a horizontal bar chart, grouped benchmark bars, a price-against-score scatter, a box
   series for run-to-run spread, three `Stat` cards and a `Table`. The figures are illustrative, for made-up
