@@ -51,6 +51,7 @@ DEMOS = [
     ("segment", "segment", "segment"),
     ("llm-compare", "llm_compare", None),
     ("rag-chat", "rag_chat", "ask"),
+    ("support-desk", "support_desk", None),
 ]
 
 TALL_VIEWPORT = {"width": 1350, "height": 960}  # whole audio-analysis app; scaled to 900x640
