@@ -417,7 +417,7 @@ and `color` (a box also an optional `score`); `masks` are overlay images
 so streaming a model's per-frame output is a `props` update over the existing `patch`
 op - no new op, no version bump.
 
-With `size` set, `imageoverlay` also takes `shapes` in raster pixels: a `box` (`[x1, y1, x2, y2]`), a
+With `size` set (a reactive prop when the picture can change), `imageoverlay` also takes `shapes` in raster pixels: a `box` (`[x1, y1, x2, y2]`), a
 polygon (`points`) or a dot (`point: [x, y]`). A reactive `draw` prop (`"box"`, `"point"`, absent when
 off) turns on drawing: a drag makes a box and a click a point, and the shell sends a **`draw`** event
 `{kind: "box", box: [x1, y1, x2, y2]}` or `{kind: "point", point: [x, y]}` in raster pixels. The server

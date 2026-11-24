@@ -12,6 +12,10 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- **Click to segment** gallery demo (IND-56, `examples/segment.py`): click a spot or drag a box on a sample
+  or uploaded picture and a colour-based region grower returns the region as an `ImageOverlay` mask. No
+  model, so nothing to download; the picture is shrunk to 320 px first. It uses the new draw mode.
+- `ImageOverlay(size=)` may now be a Signal or callable, for a picture whose pixel size changes (an upload).
 - `ImageOverlay(draw="box"|"point", on_draw=)` (IND-71, ADR-0020 step 2): the user drags a box or clicks
   a point on the picture and `on_draw` gets `{"kind", "box"|"point"}` in raster pixels, clamped into the
   picture with corners ordered (a drag under 2 px is dropped). `draw` is reactive (`None` is off). indah

@@ -225,3 +225,15 @@ thumbnail = "yolox-traffic.png"
 source_url = "https://github.com/leejianrong/indah/blob/main/examples/yolox_traffic.py"
 tags = ["images", "video", "model"]
 added = "2026-11-03"
+
+[[app]]
+slug = "segment"
+title = "Click to segment"
+emoji = "🎯"
+blurb = "Click a spot or drag a box on a picture and the region around it lights up. A colour-based region grower, no model."
+author = "indah"
+kind = "hosted"
+module = "segment"
+thumbnail = "segment.png"
+tags = ["images", "interactive"]
+added = "2026-11-24"
