@@ -20,3 +20,4 @@ expenses	expenses.py	Expense tracker	🧾	-
 automaton	automaton.py	Cellular automata	🧬	-
 yolox-traffic	yolox_traffic.py	Real-time detection on a traffic clip	🚦	onnxruntime pillow huggingface_hub numpy
 segment	segment.py	Click to segment	🎯	numpy pillow
+llm-compare	llm_compare.py	Compare language models	⚖️	-

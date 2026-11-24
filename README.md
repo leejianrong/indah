@@ -175,6 +175,7 @@ script ([ADR-0023](docs/adr/0023-demo-hosting.md)).
 | Sorting visualiser | [Open](https://indah-demos.fly.dev/sorting/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/sorting.ipynb) | [`sorting.py`](examples/sorting.py) |
 | Cellular automata | [Open](https://indah-demos.fly.dev/automaton/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/automaton.ipynb) | [`automaton.py`](examples/automaton.py) |
 | Click to segment | [Open](https://indah-demos.fly.dev/segment/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/segment.ipynb) | [`segment.py`](examples/segment.py) |
+| Compare language models | [Open](https://indah-demos.fly.dev/llm-compare/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/leejianrong/indah/blob/main/examples/colab/llm-compare.ipynb) | [`llm_compare.py`](examples/llm_compare.py) |
 
 Also: [`examples/starter_components.py`](examples/starter_components.py) (a ~20-line
 tour of the component set) and [`examples/demo.ipynb`](examples/demo.ipynb) (the
