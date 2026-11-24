@@ -1748,12 +1748,14 @@ def _to_masks(value: Any) -> list[dict[str, Any]]:
     return out
 
 
-_SHAPE_KINDS = ("rect", "polygon")
+_DRAW_MODES = ("box", "point")
+_MIN_DRAW = 2.0  # a drag shorter than this (raster px) is a slip, not a box
 
 
 def _to_shapes(value: Any) -> list[dict[str, Any]]:
     """``ImageOverlay`` shapes in raster pixels -> wire dicts. A shape is ``{"id", "box":
-    [x1, y1, x2, y2]}`` (a rectangle) or ``{"id", "points": [[x, y], ...]}`` (a polygon), with
+    [x1, y1, x2, y2]}`` (a rectangle), ``{"id", "points": [[x, y], ...]}`` (a polygon) or
+    ``{"id", "point": [x, y]}`` (a dot, sized to the picture), with
     optional ``stroke``, ``width`` (px), ``dash`` (``[dash, gap]`` px), ``fill``, ``opacity`` (the
     fill's, 0 to 1), ``label`` (hover text) and ``pick`` (clicking it fires ``on_pick``)."""
     out: list[dict[str, Any]] = []
@@ -1775,8 +1777,13 @@ def _to_shapes(value: Any) -> list[dict[str, Any]]:
             ):
                 raise ValueError(f"shape {item['id']!r}: points is a list of at least 3 [x, y]")
             item["points"] = [[_num(p[0]), _num(p[1])] for p in pts]
+        elif "point" in sh:
+            pt = sh["point"]
+            if not isinstance(pt, (list, tuple)) or len(pt) != 2:
+                raise ValueError(f"shape {item['id']!r}: point is [x, y]")
+            item["point"] = [float(_number(v, "shape point", -1e9, 1e9)) for v in pt]
         else:
-            raise ValueError(f"shape {item['id']!r} needs 'box' or 'points'")
+            raise ValueError(f"shape {item['id']!r} needs 'box', 'points' or 'point'")
         for key in ("stroke", "fill"):
             if sh.get(key):
                 item[key] = _color(sh[key], f"shape {key}")
@@ -1817,14 +1824,20 @@ class ImageOverlay(Component):
     (raster pixels, reactive) shows only that region, filled to the width: a close-up of a seam.
     Turn layers on and off by filtering the list you pass.
 
+    **Drawing (ADR-0020 step 2).** ``draw="box"`` or ``"point"`` (or a Signal of one, ``None`` is
+    off) lets the user drag a rectangle or click a spot; ``on_draw(shape)`` runs with
+    ``{"kind": "box", "box": [x1, y1, x2, y2]}`` or ``{"kind": "point", "point": [x, y]}`` in raster
+    pixels, clamped into the picture, corners ordered, a slip of under 2 px dropped. indah keeps no
+    list of what was drawn: the app owns it and shows it back through ``shapes`` (a ``point`` shape
+    is a dot), so undo, delete and labels are plain Python.
+
     The base image is a ``source`` (URL / ``data:`` URI / PNG ``bytes``, like
     ``Image``). ``boxes``, ``points``, and ``masks`` are reactive sources whose
     coordinates are **fractions of the image** (``[0, 1]``), so they line up at any
     rendered size. Because they are ordinary reactive props, streaming a model's
     output per frame is a prop update over the existing ``patch`` op - no
     ``protocol_version`` bump. Display only (the model produces the shapes; the shell
-    draws them); interactive annotation - the user *drawing* boxes - is the ADR-0020
-    step-two follow-up.
+    draws them); to let the user draw boxes and points, see ``draw`` above.
 
     - ``boxes``: ``{x, y, w, h, label?, color?, score?}`` (or an ``(x, y, w, h)`` tuple).
     - ``points``: ``{x, y, label?, color?}`` (or an ``(x, y)`` tuple).
@@ -1852,6 +1865,8 @@ class ImageOverlay(Component):
         selected: Source = None,
         view: Source = None,
         on_pick: Callable[[str], Any] | None = None,
+        draw: Source = None,
+        on_draw: Callable[[dict[str, Any]], Any] | None = None,
     ) -> None:
         super().__init__()
         self._source = source
@@ -1862,13 +1877,15 @@ class ImageOverlay(Component):
         self._label_mode = label_mode
         if size is not None and (len(size) != 2 or min(size) < 1):
             raise ValueError("size is (width, height) in pixels, both above zero")
-        if (shapes is not None or view is not None) and size is None:
-            raise ValueError("shapes and view are in raster pixels: pass size=(width, height)")
+        if (shapes is not None or view is not None or draw is not None) and size is None:
+            raise ValueError("shapes, view and draw are in raster pixels: pass size=(w, h)")
         self._size = size
         self._shapes = shapes
         self._selected = selected
         self._view = view
         self._on_pick = on_pick
+        self._draw = draw
+        self._on_draw = on_draw
 
     def static_props(self) -> dict[str, Any]:
         props: dict[str, Any] = {"alt": self._alt, "labelMode": self._label_mode}
@@ -1877,6 +1894,12 @@ class ImageOverlay(Component):
         return props
 
     def handle(self, event: str, payload: dict[str, Any]) -> bool | Any:
+        if event == "draw" and self._on_draw is not None:
+            shape = self._drawn(payload)
+            if shape is None:
+                return True  # off, a stale mode, junk or a slip of the pointer: ignored
+            result = self._on_draw(shape)
+            return result if inspect.iscoroutine(result) else True
         if event != "pick" or self._on_pick is None:
             return False
         ident = payload.get("id")
@@ -1884,6 +1907,33 @@ class ImageOverlay(Component):
             return True  # a click that raced a change of shapes: ignored, not an error
         result = self._on_pick(ident)
         return result if inspect.iscoroutine(result) else True
+
+    def _drawn(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """A ``draw`` event -> the shape handed to ``on_draw``, in raster pixels and clamped into
+        the picture; ``None`` when drawing is off or the event is not what the mode expects."""
+        mode = _read(self._draw)
+        kind = payload.get("kind")
+        if mode not in _DRAW_MODES or kind != mode or self._size is None:
+            return None
+        key = "box" if kind == "box" else "point"
+        raw = payload.get(key)
+        want = 4 if kind == "box" else 2
+        if not isinstance(raw, (list, tuple)) or len(raw) != want:
+            return None
+        if any(
+            isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+            for v in raw
+        ):
+            return None
+        w, h = self._size
+        xs = [min(max(float(v), 0.0), float(w)) for v in raw[0::2]]
+        ys = [min(max(float(v), 0.0), float(h)) for v in raw[1::2]]
+        if kind == "point":
+            return {"kind": "point", "point": [xs[0], ys[0]]}
+        x1, x2, y1, y2 = min(xs), max(xs), min(ys), max(ys)
+        if x2 - x1 < _MIN_DRAW or y2 - y1 < _MIN_DRAW:
+            return None
+        return {"kind": "box", "box": [x1, y1, x2, y2]}
 
     def reactive_props(self) -> dict[str, Callable[[], Any]]:
         props: dict[str, Callable[[], Any]] = {
@@ -1898,7 +1948,15 @@ class ImageOverlay(Component):
             props["selected"] = lambda: None if (v := _read(self._selected)) is None else str(v)
         if self._view is not None:
             props["view"] = lambda: _to_view(_read(self._view))
+        if self._draw is not None:
+            props["draw"] = self._draw_mode
         return props
+
+    def _draw_mode(self) -> str | None:
+        mode = _read(self._draw)
+        if mode is not None and mode not in _DRAW_MODES:
+            raise ValueError(f"draw is 'box', 'point' or None, got {mode!r}")
+        return mode
 
 
 class Plot(Component):

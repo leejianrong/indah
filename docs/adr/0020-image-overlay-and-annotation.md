@@ -1,6 +1,6 @@
 # ADR-0020: Image overlay and annotation (boxes, masks, keypoints)
 
-- Status: Accepted (step 1 built; step 2 deferred)
+- Status: Accepted (steps 1 and 2 built)
 - Date: 2026-09-16 (accepted + step-1 built same day, KAN-1464)
 - Deciders: Jian (owner)
 
@@ -67,3 +67,16 @@ binary, so this is unrelated to the Tier 1 live-video boundary (ADR-0017).
 - `imageoverlay` in `BUILTIN_TYPES`; documented in `docs/protocol.md`; guarded by unit
   tests + a browser e2e (boxes render at fractional positions, a streamed detection
   appears live).
+
+## As built (step 2, IND-71)
+
+- **`ImageOverlay(draw=, on_draw=)`**: `draw` is `"box"`, `"point"` or `None` (a value or a Signal) and
+  needs `size`, because a drawn shape is in raster pixels like `shapes` (ADR-0052). A drag sends a
+  `draw` event `{kind: "box", box}`, a click `{kind: "point", point}`; Python clamps into the picture,
+  orders the corners, drops a drag under 2 px and ignores an event that does not match the current
+  mode, then calls `on_draw(shape)`.
+- **No list in indah.** The app keeps what was drawn and shows it back through `shapes` (a new
+  `point` shape draws a dot), so undo, delete, relabel and export are plain Python. A drawn shape never
+  appears by itself.
+- **No new op, no version bump**: one new event name on an existing component and one new shape key.
+- Pointer only: a drag has no keyboard form, so an app that needs one offers number inputs beside it.

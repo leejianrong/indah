@@ -11,6 +11,13 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+- `ImageOverlay(draw="box"|"point", on_draw=)` (IND-71, ADR-0020 step 2): the user drags a box or clicks
+  a point on the picture and `on_draw` gets `{"kind", "box"|"point"}` in raster pixels, clamped into the
+  picture with corners ordered (a drag under 2 px is dropped). `draw` is reactive (`None` is off). indah
+  keeps no list: the app shows what was drawn back through `shapes`, which now also takes a `point` dot.
+  Needs `size=`. Additive, `protocol_version` stays 1. Studio page `media/annotate`.
+
 ## [0.16.0] - 2026-11-24
 
 Time and graphs. A `Timeline` steps through irregular moments and can drive a `Graph`'s frames, a `Graph` gains element styles, a stable layout, keep-on-update, arrows and a layered layout for a DAG, and `Chart` gains hover and click signals, stacked and horizontal bars and a box series. `Sparkline`, `TickStrip`, `Svg`, `Spans` and `ChoiceCards` are new components. Everything is opt-in and additive, so `protocol_version` stays 1 (ADR-0053 is still Proposed; its open questions do not block this release).
