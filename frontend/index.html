@@ -636,6 +636,8 @@
       }
       .overlay-wrap.zoomed { cursor: grab; }
       .overlay-wrap.dragging { cursor: grabbing; }
+      .overlay-wrap.drawing { cursor: crosshair; user-select: none; }
+      .overlay-wrap.drawing .ov-shapes .ov-pick { pointer-events: none; }
       .ov-content { display: inline-block; }
       .overlay-wrap .image { width: 100%; }
       .ov-reset-btn {

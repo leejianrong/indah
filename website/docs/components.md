@@ -14,7 +14,7 @@ set shipped so far.
 | `Marked` | text with shaded spans (the part that is ignored or flagged): `Marked(text, marks=[(start, end, tone)])` |
 | `Steps` | a timeline of steps, vertical or horizontal, or a stepper with `on_select=`: `Steps(items, orientation=)`; each step is `done`, `current`, `skipped`, `off` or `pending` |
 | `Image` | a URL, `data:` URI, or raw PNG bytes |
-| `ImageOverlay` | an image with vector overlays: boxes, masks and keypoints in fractions, plus rectangles and polygons in raster pixels that can be picked, and a cropped view |
+| `ImageOverlay` | an image with vector overlays: boxes, masks and keypoints in fractions, plus rectangles and polygons in raster pixels that can be picked, a cropped view, and drawing boxes and points with `draw=` and `on_draw=` |
 | `Audio` | a URL, `data:` URI, or raw audio bytes, played with native browser controls |
 
 <details>

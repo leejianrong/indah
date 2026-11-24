@@ -135,3 +135,66 @@ def test_pick_runs_only_for_a_current_pickable_shape():
     assert ov.handle("pick", {"id": "zz"}) is True
     assert picked == ["t0"]
     assert ImageOverlay("x").handle("pick", {"id": "t0"}) is False
+
+
+@pytest.mark.unit
+def test_point_shape_is_validated_and_sent():
+    ov = ImageOverlay(
+        "x", size=(10, 10), shapes=[{"id": "p", "point": [3, 4], "stroke": "#f00", "label": "eye"}]
+    )
+    Session(Column(children=[ov]))
+    assert ov.to_json()["props"]["shapes"] == [
+        {"id": "p", "point": [3.0, 4.0], "stroke": "#f00", "label": "eye"}
+    ]
+    for bad in ({"id": "p", "point": [1]}, {"id": "p", "point": ["a", 2]}):
+        with pytest.raises(ValueError):
+            ImageOverlay("x", size=(10, 10), shapes=[bad]).reactive_props()["shapes"]()
+
+
+@pytest.mark.unit
+def test_draw_needs_a_size_and_a_known_mode():
+    with pytest.raises(ValueError, match="size"):
+        ImageOverlay("x", draw="box")
+    with pytest.raises(ValueError, match="draw"):
+        ImageOverlay("x", size=(10, 10), draw="circle").reactive_props()["draw"]()
+    ov = ImageOverlay("x", size=(10, 10))
+    Session(Column(children=[ov]))
+    assert "draw" not in ov.to_json()["props"]
+
+
+@pytest.mark.unit
+def test_draw_mode_is_reactive_and_a_drawn_box_reaches_on_draw():
+    mode: Signal[str | None] = Signal("box")
+    drawn = []
+    ov = ImageOverlay("x", size=(100, 50), draw=mode, on_draw=drawn.append)
+    session, hub = _session(ov)
+    assert session.snapshot()["children"][0]["props"]["draw"] == "box"
+
+    # corners in any order are normalised and clamped into the picture
+    assert ov.handle("draw", {"kind": "box", "box": [60, 40, -5, 10]}) is True
+    assert drawn == [{"kind": "box", "box": [0.0, 10.0, 60.0, 40.0]}]
+
+    # a slip of a drag (under 2 px either way) is not a box
+    assert ov.handle("draw", {"kind": "box", "box": [10, 10, 11, 30]}) is True
+    assert len(drawn) == 1
+
+    # a point event while in box mode, junk and non-finite numbers are ignored
+    for bad in (
+        {"kind": "point", "point": [5, 5]},
+        {"kind": "box", "box": [1, 2, 3]},
+        {"kind": "box", "box": [0, 0, "a", 9]},
+        {"kind": "box", "box": [0, 0, float("nan"), 9]},
+        {"kind": "bogus"},
+    ):
+        assert ov.handle("draw", bad) is True
+    assert len(drawn) == 1
+
+    mode.set("point")
+    assert ov.handle("draw", {"kind": "point", "point": [120, -3]}) is True
+    assert drawn[-1] == {"kind": "point", "point": [100.0, 0.0]}
+
+    mode.set(None)  # drawing switched off: a late event is ignored
+    assert ov.handle("draw", {"kind": "point", "point": [1, 1]}) is True
+    assert len(drawn) == 2
+    plain = ImageOverlay("x", size=(10, 10))
+    assert plain.handle("draw", {"kind": "point", "point": [1, 1]}) is False

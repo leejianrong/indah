@@ -1492,6 +1492,66 @@ def overlay_check(pw) -> None:
     expect(page.locator(".ov-shapes rect")).to_have_count(0)
 
 
+def annotate_page(ctx: indah.Context) -> indah.Component:
+    """Draw boxes and points on a picture. indah hands each drawn shape to Python; the app keeps
+    the list and shows it back as shapes, so undo and clear are ordinary signal updates."""
+    mode = indah.Signal("box")
+    drawn: indah.Signal[list[dict]] = indah.Signal([])
+
+    def on_draw(shape: dict) -> None:
+        n = len(drawn.value) + 1
+        item = {"id": f"a{n}", "label": f"{shape['kind']} {n}", "stroke": "#e8590c"}
+        item["box" if shape["kind"] == "box" else "point"] = shape[shape["kind"]]
+        drawn.set([*drawn.value, item])
+
+    return indah.Column(
+        children=[
+            indah.Radio(
+                mode, options=[("box", "Box"), ("point", "Point"), ("off", "Off")], label="Tool"
+            ),
+            indah.ImageOverlay(
+                scene_png(),
+                size=(160, 120),
+                shapes=drawn,
+                draw=lambda: None if mode.value == "off" else mode.value,
+                on_draw=on_draw,
+                alt="annotate me",
+            ),
+            indah.Text(lambda: f"{len(drawn.value)} annotations"),
+            indah.Row(
+                children=[
+                    indah.Button("Undo", on_click=lambda: drawn.set(drawn.value[:-1])),
+                    indah.Button("Clear", on_click=lambda: drawn.set([])),
+                ]
+            ),
+        ]
+    )
+
+
+def annotate_check(pw) -> None:
+    from playwright.sync_api import expect
+
+    page = pw.page
+    wrap = page.locator(".overlay-wrap.drawing")
+    expect(wrap).to_have_count(1)
+    box = wrap.locator("img").bounding_box()
+    page.mouse.move(box["x"] + box["width"] * 0.2, box["y"] + box["height"] * 0.2)
+    page.mouse.down()
+    page.mouse.move(box["x"] + box["width"] * 0.6, box["y"] + box["height"] * 0.7, steps=4)
+    page.mouse.up()
+    expect(page.get_by_text("1 annotations")).to_be_visible()
+    shape = page.locator(".ov-shapes rect:not(.ov-rubber)")
+    expect(shape).to_have_count(1)
+    page.get_by_label("Point").check()
+    page.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] * 0.3)
+    expect(page.get_by_text("2 annotations")).to_be_visible()
+    expect(page.locator(".ov-shapes circle")).to_have_count(1)
+    page.get_by_role("button", name="Undo").click()
+    expect(page.get_by_text("1 annotations")).to_be_visible()
+    page.get_by_label("Off").check()
+    expect(page.locator(".overlay-wrap.drawing")).to_have_count(0)
+
+
 # ---- audio ------------------------------------------------------------------------------------
 
 
@@ -2055,6 +2115,16 @@ CHAPTER = Chapter(
             docs="components.md",
             adr=(20, 52),
             check=overlay_check,
+        ),
+        Page(
+            slug="annotate",
+            title="Image annotation",
+            summary="Drag a box or click a point on a picture; each one reaches Python, which keeps the list and shows it back.",
+            build=annotate_page,
+            covers=("ImageOverlay", "Radio"),
+            docs="components.md",
+            adr=(20,),
+            check=annotate_check,
         ),
         Page(
             slug="audio",

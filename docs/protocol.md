@@ -360,7 +360,7 @@ stays 1.
 | `directupload` | input | `label`, `accept`; reactive `target` | `pick` `{filename, size, content_type}`; the app answers by setting `target` `{id, url, headers}`; the shell PUTs the file to `url` itself, then sends `done` `{filename, size, ok, status, error}` |
 | `download` | display | `label`, `href`, `filename` | — (a link to `GET /api/file/...`) |
 | `image` | display | `src`, `alt` | — |
-| `imageoverlay` | display | `src`, `alt`, `boxes:[{x,y,w,h,label?,color?,score?}]`, `points:[{x,y,label?,color?}]`, `masks:[{src,opacity}]` (coords in `[0,1]`) | — |
+| `imageoverlay` | display | `src`, `alt`, `boxes:[{x,y,w,h,label?,color?,score?}]`, `points:[{x,y,label?,color?}]`, `masks:[{src,opacity}]` (coords in `[0,1]`); with `size`: `shapes`, `selected`, `view`, `draw` | `pick` `{id}`; `draw` `{kind, box\|point}` |
 | `audio` | display | `src` (a URL or `data:` URI) | — |
 | `chart` | display | `data:[[x,y0,...],...]`, `series:[{label,stroke?,kind?,width?,dash?,alpha?,size?}]`, `title`, `xLabel`, `yLabel`, `height` (px or `"fill"`), `points`, `label`; optional `xRange`, `yRange` (`[low, high]`), `playhead`, `highlight` (an x value; reactive), `shadeAfter`, `highlightColor`, `rules:[{y|x,label?,color?,dash?}]`, `bands:[{x0,x1|y0,y1,label?,color?,alpha?}]`, `markers:[{x,y,label?,color?}]`, `xScale` / `yScale` (`"log"`; absent = linear), series `kind` also `step` with `align` (`"before"`; absent = after), `legend` (`labels` / `off`; absent = auto) | — (grows via `append` patches) |
 | `heatmap` | display | `z:[[...],...]` (column-major), `colormap`, `zmin`, `zmax`, `title`, `xLabel`, `yLabel`, `height` (px or `"fill"`), `label`; `colormap` may also be a list of colour stops; optional `nullColor`, `origin` (`top`; absent = bottom), `rowLabels`, `colGroups:[{start,end,label}]`, `markX`, `markY` (reactive), `markColor` | — (grows via `append` patches) |
@@ -415,8 +415,15 @@ percentage of the displayed image). `boxes` and `points` carry an optional `labe
 and `color` (a box also an optional `score`); `masks` are overlay images
 (`{src, opacity}`) drawn over the base image. The shapes are ordinary reactive props,
 so streaming a model's per-frame output is a `props` update over the existing `patch`
-op - no new op, no version bump. It is display-only; interactive annotation (the user
-*drawing* shapes) is a planned follow-up (ADR-0020).
+op - no new op, no version bump.
+
+With `size` set, `imageoverlay` also takes `shapes` in raster pixels: a `box` (`[x1, y1, x2, y2]`), a
+polygon (`points`) or a dot (`point: [x, y]`). A reactive `draw` prop (`"box"`, `"point"`, absent when
+off) turns on drawing: a drag makes a box and a click a point, and the shell sends a **`draw`** event
+`{kind: "box", box: [x1, y1, x2, y2]}` or `{kind: "point", point: [x, y]}` in raster pixels. The server
+clamps the numbers into the picture, orders the corners, drops a drag under 2 px and ignores an event
+that does not match the current mode; the app keeps the list and shows it back through `shapes`.
+Additive: no new op, no version bump (ADR-0020 step 2).
 
 `map` is a client-side Leaflet map (G5): the shell fetches raster tiles from
 `tileUrl` directly in the **viewer's browser**, not through indah's server. `center`/
