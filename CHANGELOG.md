@@ -11,6 +11,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-25
+
+Image work and demos. `ImageOverlay` gains a draw mode (drag a box or click a point) and a reactive `size`, and four new gallery demos use them: click-to-segment, a language-model comparison, a RAG chat with citations and a multi-page support desk. Everything is additive, so `protocol_version` stays 1.
+
+### Known limitations
+- The segmentation demo uses a colour-based region grower, not a neural model.
+- The language-model comparison uses illustrative figures for made-up models.
+- The RAG demo has no language model: answers are sentences copied from the best-matching passages.
+- ADR-0053 (Timeline, graph styles, frames) is still Proposed; its open questions do not block this release.
+
 ### Added
 - **Support desk** gallery demo (IND-66, `examples/support_desk.py`): a small internal tool with an inbox,
   a ticket page, reports and settings, each at its own address (`Router`, `Link`, `ctx.params`,
