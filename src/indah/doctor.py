@@ -301,6 +301,7 @@ def collect_facts(request: Request, state: Any = None) -> dict[str, Any]:
             "route_hint": getattr(getattr(state, "route_hint", None), "transport", None) or "off",
             "rate_limit": bool(limits and limits.rate),
             "stream_cap_per_address": getattr(limits, "max_streams_per_ip", None),
+            "limits_shared": _shared_limits_facts(getattr(state, "shared_limits", None)),
             "security_headers": bool(getattr(state, "security_headers", False)),
             "proxy_warning_issued": bool(getattr(state, "proxy_warning_issued", False)),
             "environment_variables_used": list(getattr(state, "env_used", ()) or ()),
@@ -308,6 +309,25 @@ def collect_facts(request: Request, state: Any = None) -> dict[str, Any]:
     }
     facts["warnings"] = diagnose(facts)
     return facts
+
+
+def _shared_text(facts: dict[str, Any] | None) -> str:
+    if facts is None:
+        return "off (per process)"
+    state = "ok" if facts["available"] else "unavailable, using per-process limits"
+    return f"redis: {state}, {facts['failures']} failures"
+
+
+def _shared_limits_facts(shared: Any) -> dict[str, Any] | None:
+    """``None`` when limits are per process; else how shared limits are doing (never the URL)."""
+    if shared is None:
+        return None
+    return {
+        "backend": "redis",
+        "available": shared.available(),
+        "failures": shared.failures,
+        "shared_calls": shared.shared_calls,
+    }
 
 
 def _version() -> str:
@@ -559,6 +579,7 @@ request.</p></header>
                 ("route hint", st["route_hint"]),
                 ("rate limit", st["rate_limit"]),
                 ("streams per address", st["stream_cap_per_address"]),
+                ("shared limits", _shared_text(st["limits_shared"])),
                 ("security headers", st["security_headers"]),
                 ("proxy warning logged", st["proxy_warning_issued"]),
                 ("INDAH_* variables used", st["environment_variables_used"]),

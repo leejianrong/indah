@@ -140,7 +140,7 @@ indah.create_app(
 | `max_upload_mb` | `413` |
 | `max_sessions`, `session_idle_seconds` | the least recently used or idle session is dropped |
 
-Limits are per process, so several replicas multiply them: the gateway's limit is the global one.
+Limits are per process, so several replicas multiply them: the gateway's limit is the global one, or turn on [shared limits](hosting-scale.md#shared-rate-limits) to keep the counters in Redis.
 The address is the socket peer after `trusted_proxies`, never a raw `X-Forwarded-For`.
 
 `security_headers=True` adds `X-Content-Type-Options: nosniff`, `Referrer-Policy:

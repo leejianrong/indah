@@ -90,6 +90,8 @@ dev = [
     # Redis is opt-in (mark `redis`, INDAH_TEST_REDIS_URL).
     "redis>=5",
     "fakeredis>=2.23",
+    # fakeredis runs Lua through this; the shared rate-limit bucket (IND-213) is a Lua script.
+    "lupa>=2",
     # The live media route (ADR-0045) is tested in-process, and needs this to build.
     "websockets>=12",
 ]

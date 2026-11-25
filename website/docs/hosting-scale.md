@@ -226,6 +226,33 @@ value, and it needs a shell change. The `StateStore` interface admits such a sto
 
 <indah-live page="live/persist"></indah-live>
 
+## Shared rate limits
+
+`Limits` (rate limits and the per-address stream cap) count in one process, so N replicas give a visitor N
+times the budget. If the gateway cannot hold the global limit, keep the counters in Redis instead:
+
+```bash
+pip install "indah[redis]"
+export INDAH_LIMITS_SHARED=redis
+export INDAH_REDIS_URL=rediss://user:password@redis.internal:6379/0
+```
+
+or `create_app(limits=Limits.public(), limits_shared="redis")`. A token bucket per route and address, and a
+count of open streams per address, then live in Redis and every replica draws from them.
+
+- **It is opt-in, and it costs a Redis round trip** (about a millisecond inside a cluster) on every request
+  that a rate rule covers, and one per stream open. Without it nothing changes.
+- **Redis down never refuses a visitor.** Each call has a 250 ms timeout; on a failure indah uses the
+  per-process limit for that request, stops asking Redis for 5 seconds, and logs one warning a minute.
+- **Redis 5 or later.** The bucket is one Lua script, so it is atomic and uses Redis's own clock.
+- **A crashed replica frees its stream slots** after 60 seconds; a live one renews them.
+- **Keys** start with `<state_namespace>:limits:`. An ACL user needs `EVAL`, `ZADD`, `ZREM`, `ZCARD`,
+  `ZREMRANGEBYSCORE`, `ZSCORE`, `HMGET`, `HSET`, `PEXPIRE` and `PING` on them.
+- **The doctor** (`/_indah/doctor`) shows `shared limits` as `ok`, or unavailable with the failure count.
+
+The address that is counted is still the one `trusted_proxies` resolves ([Behind a proxy](hosting-network.md)),
+so every replica must trust the same proxies.
+
 ## Topic and Stream with several replicas
 
 A `Topic` and a `Stream` live in one process: a producer feeds the tabs of **its own** replica only. With

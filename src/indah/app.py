@@ -613,6 +613,7 @@ def create_app(
     metrics: str | bool | None = UNSET,
     state_store: StateStore | str | None = UNSET,
     state_namespace: str = UNSET,
+    limits_shared: Any = UNSET,
     persist_ttl: float = UNSET,
     persist_max_bytes: int = UNSET,
     live: bool | Live = False,
@@ -780,6 +781,9 @@ def create_app(
     what a tab's session saves, so a rebuilt session starts from it (ADR-0043). Pass a
     :class:`~indah.state.StateStore`, or ``"memory"`` or ``"sqlite:///state.db"``. Keys include
     ``state_namespace`` (default ``indah``): give apps that share one store different ones.
+    ``limits_shared`` (``"redis"``, a ``SharedLimits``, or ``INDAH_LIMITS_SHARED=redis``) keeps the
+    ``limits`` rate buckets and stream cap in Redis so replicas share one budget (IND-213; opt-in,
+    one Redis round trip per limited request; falls back to per-process limits if Redis fails).
     ``persist_ttl`` (default 24 hours, ``INDAH_PERSIST_TTL``) is how long a value lives after its
     last write, and ``persist_max_bytes`` (default 16384, ``INDAH_PERSIST_MAX_BYTES``) the largest
     single value saved.
@@ -819,6 +823,7 @@ def create_app(
     drain_seconds = env.number("INDAH_DRAIN_SECONDS", drain_seconds, DEFAULT_DRAIN_SECONDS)
     state_store = env.state_store(state_store)
     state_namespace = env.namespace(state_namespace)
+    shared_limits = env.limits_shared(limits_shared, state_namespace)
     persist_ttl = env.number("INDAH_PERSIST_TTL", persist_ttl, DEFAULT_TTL, positive=True)
     persist_max_bytes = env.whole_number(
         "INDAH_PERSIST_MAX_BYTES", persist_max_bytes, DEFAULT_MAX_BYTES
@@ -931,7 +936,7 @@ def create_app(
             )
         )
     if limits.rate:
-        middleware.append(Middleware(RateLimitMiddleware, rates=limits.rate))
+        middleware.append(Middleware(RateLimitMiddleware, rates=limits.rate, shared=shared_limits))
     if secure:
         middleware.append(
             Middleware(OriginGuard, allowed_origins=normalize_origins(allowed_origins))
@@ -947,6 +952,8 @@ def create_app(
         finally:
             if restore is not None:
                 restore()
+            if shared_limits is not None:
+                await shared_limits.close()
 
     font_files = theme.font_files if theme is not None else {}
     app = Starlette(
@@ -1024,7 +1031,8 @@ def create_app(
     app.state.csp_connect_hosts = tuple(csp_connect_hosts)
     app.state.allow_sid_in_url = allow_sid_in_url
     app.state.csp_violations = deque(maxlen=100)
-    app.state.stream_limiter = StreamLimiter(limits.max_streams_per_ip)
+    app.state.shared_limits = shared_limits
+    app.state.stream_limiter = StreamLimiter(limits.max_streams_per_ip, shared_limits)
     app.state.live = live_options
     app.state.live_limiter = StreamLimiter(
         live_options.max_sockets_per_address if live_options else None
@@ -1866,7 +1874,8 @@ async def _stream(request: Request) -> Response:
     back exactly once: on any refusal, when the stream ends, or if building it raises."""
     limiter: StreamLimiter = request.app.state.stream_limiter
     address = peer_address(request.scope)
-    if not limiter.acquire(address):
+    allowed, member = await limiter.open(address)
+    if not allowed:
         return _denied(429, "too many streams")
     freed = False
 
@@ -1874,7 +1883,7 @@ async def _stream(request: Request) -> Response:
         nonlocal freed
         if not freed:
             freed = True
-            limiter.release(address)
+            limiter.close(address, member)
 
     try:
         response = await _open_stream(request, release)
