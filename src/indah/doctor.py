@@ -311,6 +311,16 @@ def collect_facts(request: Request, state: Any = None) -> dict[str, Any]:
     return facts
 
 
+def _peers_text(facts: dict[str, Any] | None) -> str:
+    if facts is None:
+        return "off"
+    return (
+        f"on, {facts['peers_resolved']} peers, {facts['forwarded']} forwarded "
+        f"({facts['ok']} ok, {facts['failed']} failed), {facts['received']} received, "
+        f"{facts['refused']} refused"
+    )
+
+
 def _shared_text(facts: dict[str, Any] | None) -> str:
     if facts is None:
         return "off (per process)"
@@ -580,6 +590,7 @@ request.</p></header>
                 ("rate limit", st["rate_limit"]),
                 ("streams per address", st["stream_cap_per_address"]),
                 ("shared limits", _shared_text(st["limits_shared"])),
+                ("peer forwarding", _peers_text(st.get("peer_forwarding"))),
                 ("security headers", st["security_headers"]),
                 ("proxy warning logged", st["proxy_warning_issued"]),
                 ("INDAH_* variables used", st["environment_variables_used"]),
@@ -616,6 +627,33 @@ async def _add_store_health(facts: dict[str, Any], store: Any) -> None:
         )
 
 
+async def _add_peer_facts(facts: dict[str, Any], peers: Any) -> None:
+    """Peer forwarding (IND-209): how many peers resolve and what the forwards did. Never the key,
+    a hint or an address."""
+    if peers is None:
+        facts["settings"]["peer_forwarding"] = None
+        return
+    count = await peers.peer_count()
+    facts["settings"]["peer_forwarding"] = {
+        "peers_resolved": count,
+        "timeout_seconds": peers.timeout,
+        **peers.stats,
+    }
+    if count is None:
+        facts["warnings"].append(
+            _warn(
+                f"INDAH_PEERS ({peers.peers!r}) does not resolve; forwarding still works from hints"
+            )
+        )
+    if peers.stats["refused"]:
+        facts["warnings"].append(
+            _warn(
+                f"{peers.stats['refused']} forwards were refused. Check that every replica has "
+                "the same INDAH_CLUSTER_SECRET and a correct clock."
+            )
+        )
+
+
 async def handler(request: Request) -> Response:
     """``GET /_indah/doctor``: gated; ``404`` for everyone else."""
     state = request.app.state
@@ -624,6 +662,7 @@ async def handler(request: Request) -> Response:
         return _nothing()
     facts = collect_facts(request, state)
     await _add_store_health(facts, getattr(state, "state_store", None))
+    await _add_peer_facts(facts, getattr(state, "peers", None))
     headers = {
         "Cache-Control": "no-store",
         "X-Robots-Tag": "noindex, nofollow",

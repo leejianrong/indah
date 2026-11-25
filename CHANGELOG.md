@@ -12,6 +12,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 ## [Unreleased]
 
 ### Added
+- **Peer forwarding for Kubernetes without cookie affinity** (IND-209, ADR-0043 Tier C): with
+  `INDAH_PEERS` and `INDAH_CLUSTER_SECRET` (or `create_app(peers=PeerConfig(...), cluster_secret=)`) `init`
+  carries a signed route hint (`transport: "peers"`), the shell sends it back as `X-Indah-Route`, and a pod
+  that receives an event or upload for another pod passes it on with one signed `POST /_indah/forward`. The
+  owner runs it as the principal the receiving pod authenticated and publishes to its own stream, so no
+  session state moves. The hint holds only a private address and this app's port; a forward is signed over
+  a timestamp, a nonce, the body and the caller, accepted within 30 seconds and once. Rate limits count at
+  the receiver. A failure is `409 owner_unreachable` (2 s, no retry) and the tab reconnects. The audit record
+  gains `forwarded_by`; the doctor page shows peers and forward counts. Off by default, no new dependency.
+  Not forwarded: file downloads. `protocol_version` stays 1. Docs: `hosting-scale`. The size budgets rose for it (Python source to 725,000, wheel to 672,000, sdist to 1,985,000): the forwarder is 14.5 KB of source, and shared limits had used the last of the room.
 - **Shared rate limits across replicas** (IND-213, ADR-0043): `create_app(limits_shared="redis")` or
   `INDAH_LIMITS_SHARED=redis` (with `INDAH_REDIS_URL`, `indah[redis]`) keeps the `Limits` token buckets and
   the per-address stream cap in Redis, so N replicas give a visitor one budget, not N. Opt-in: it costs one

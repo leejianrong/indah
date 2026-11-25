@@ -30,6 +30,7 @@ class AuditEvent:
     event: str  # "click", "input", "upload", ...
     payload_keys: tuple[str, ...]
     payload: Mapping[str, Any] | None = None  # only with audit_payloads=True, never if sensitive
+    forwarded_by: str | None = None  # the node that received this event and sent it on (IND-209)
 
 
 AuditHook = Callable[[AuditEvent], Any]
@@ -47,6 +48,7 @@ def emit(
     payload: Mapping[str, Any],
     include_payload: bool,
     sensitive: bool,
+    forwarded_by: str | None = None,
 ) -> None:
     """Build and deliver one event. Never raises."""
     if hook is None:
@@ -60,6 +62,7 @@ def emit(
             event=event,
             payload_keys=tuple(sorted(str(k) for k in payload)),
             payload=dict(payload) if include_payload and not sensitive else None,
+            forwarded_by=forwarded_by,
         )
         result = hook(item)
         if inspect.isawaitable(result):
