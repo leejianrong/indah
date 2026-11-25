@@ -32,6 +32,16 @@ IND-74 (WebSocket for live media): its ADR must show that the frames are the sam
 transport is a negotiated upgrade. If it needs a mandatory handshake or a change to an existing field,
 that is a v2 and the release becomes 0.10.0 with a bump, decided by the owner.
 
+## Status after 0.17.0 (2026-11-25)
+
+The table above stops at 0.12.0. Since then 0.13.0 to 0.16.0 shipped (see `CHANGELOG.md`), and **0.17.0
+"image work and demos"** shipped on 2026-11-25: IND-71 (`ImageOverlay` draw mode), IND-56 (click to
+segment), IND-81 (compare language models), IND-57 (ask the documents), IND-66 (support desk) and IND-194
+(the gallery plan, already in `docs/GALLERY-APPS-NEXT.md`). The "Later" row's IND-57, 81 and 66 are done.
+
+Next is **0.18.0 "hosting at scale"**: IND-209 (peer forwarder for k8s without affinity) and IND-213
+(shared rate limits across replicas through the backplane). The epic IND-E34 is not started.
+
 ## Decisions (owner, 2026-10-22)
 
 1. Redeploy the Fly gallery when ready (IND-167). Needs `fly auth login` on the machine that deploys.
