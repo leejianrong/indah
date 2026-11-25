@@ -538,3 +538,32 @@ built now because: the shell would need to keep the values, send them on `init` 
 untrusted input anyway; the values are per browser and cannot be shared with a second device; and the
 two stores that exist cover the owner's cases (SQLite for one replica, Redis for several, IND-210). It stays
 a candidate if a deployment must restore with no service at all.
+
+## Amendment (2026-11-25, IND-209): what was built for the Kubernetes forwarder
+
+Built as designed (`src/indah/forward.py`, `app.py` `_forward_if_needed` and `_forward`), with these differences,
+each chosen for the code as it is:
+
+- **A nonce is part of the forward signature**, sent as `X-Indah-Forward-Nonce`. Without it two identical
+  clicks in the same second produced the same signature, and the replay cache refused the second (found by
+  the rate-limit test). The replay cache keeps signatures for 60 seconds.
+- **The forward carries a `kind` (`event` or `upload`) and the content type**, both inside the signature,
+  and the owner runs the ordinary `_event` or `_upload` on a request rebuilt from the verified body, so the
+  two paths cannot drift. The principal reaches it through the request scope (`indah_forwarded`), which a
+  client cannot set.
+- **Uploads are buffered, not streamed**: the receiver reads the body up to `max_upload_mb` plus 64 KB of
+  form framing, then forwards it. No second parse.
+- **No HTTP client dependency**: `HttpForwarder` is one `POST` over an `asyncio` socket (`Connection:
+  close`, no redirects, no retry, one timeout for the whole call). It reads to EOF (a first version used a
+  single `read`, which returned an empty body when the reply arrived in two packets; found by the
+  real-socket test).
+- **`INDAH_PEERS` is not an allow-list.** A rollout adds pods faster than DNS shows them, so refusing a
+  hint whose address is not (yet) in the list would 409 a brand-new owner's tabs. The signature, the
+  private-address rule and the port are the guard; `INDAH_PEERS` turns the feature on and feeds the doctor's
+  peer count.
+- **File downloads are not forwarded** (`api/file` GET): left as a known limitation, documented. Tier A
+  affinity or one replica serves them.
+- **The shell needed no change**: it already stored `route` and sent `X-Indah-Route` for any transport, and
+  already re-opened the stream on `409 owner_unreachable` (IND-197). `protocol_version` stays 1.
+- Not yet run on a real cluster: the tests use two in-process apps (a loopback forwarder) and two real
+  servers on `127.0.0.1` and `127.0.0.2`. IND-206's k3s check should add a Cloudflare Tunnel run.

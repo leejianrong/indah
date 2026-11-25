@@ -12,7 +12,7 @@ A kustomize base for an indah app, with one overlay per ingress, written for k3s
 | `base/service.yaml`, `base/pdb.yaml` | a ClusterIP Service and a PodDisruptionBudget (`maxUnavailable: 1`) |
 | `overlays/traefik/` | the sticky cookie, for k3s's default ingress |
 | `overlays/ingress-nginx/` | cookie affinity for ingress-nginx |
-| `overlays/plain/` | any ingress, no affinity |
+| `overlays/plain/` | any ingress, no affinity (add [peer forwarding](hosting-scale.md#kubernetes-without-cookie-affinity) for several replicas) |
 
 ## Deploy on k3s
 

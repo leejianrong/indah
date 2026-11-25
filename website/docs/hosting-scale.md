@@ -226,6 +226,53 @@ value, and it needs a shell change. The `StateStore` interface admits such a sto
 
 <indah-live page="live/persist"></indah-live>
 
+## Kubernetes without cookie affinity
+
+If your ingress can pin a browser to a pod (Traefik, ingress-nginx), use that: it needs no indah setting.
+When it cannot (a Cloudflare Tunnel pointing at a ClusterIP Service, or any proxy that balances each
+request), turn on **peer forwarding**. The pod that holds a tab's stream tells the tab who it is, the tab
+sends that back with each event, and a pod that receives an event for someone else passes it on over the
+cluster network. Nothing is shared and no Redis is needed.
+
+```yaml
+env:
+  - name: INDAH_PEERS                 # a headless Service that lists the pods (for the doctor page)
+    value: indah-app-headless
+  - name: INDAH_PEER_PORT             # the port the app listens on, the same on every pod
+    value: "7860"
+  - name: INDAH_ADVERTISE_ADDRESS     # this pod's IP, from the downward API
+    valueFrom: { fieldRef: { fieldPath: status.podIP } }
+  - name: INDAH_CLUSTER_SECRET        # the same on every replica; never the app's secret=
+    valueFrom: { secretKeyRef: { name: indah-secrets, key: INDAH_CLUSTER_SECRET } }
+```
+
+Or `create_app(cluster_secret=..., peers=PeerConfig(peers="indah-app-headless", port=7860))`.
+
+- **The secret is required and separate.** `INDAH_CLUSTER_SECRET` is never taken from `secret=`, so one
+  secret does not do two jobs. Without it (or without `INDAH_PEERS`) nothing is turned on and
+  `/_indah/forward` does not exist.
+- **Only the shell is a routing client.** indah's own page sends the hint. A third-party client that
+  talks to the wire protocol directly still works on one pod or behind cookie affinity.
+- **What is checked.** A hint is signed and carries a private or link-local address and this app's port,
+  so a forged one cannot make a pod connect anywhere else. A forward is signed over a timestamp, a
+  one-time nonce, the body and the caller, is accepted within 30 seconds and only once, and the owner
+  runs the event as the caller the receiving pod just authenticated: a role revoked a second ago
+  fails at the owner too. The audit record gains `forwarded_by`. Restrict `/_indah/forward` to the
+  replicas with a NetworkPolicy as well.
+- **Rate limits count at the receiving pod only** (the owner does not count a forward again). With
+  several replicas use [shared limits](#shared-rate-limits) for one budget.
+- **Failure is loud and not retried.** An owner that cannot be reached in `INDAH_FORWARD_TIMEOUT`
+  (2 seconds) gives `409 owner_unreachable`; the tab opens a new stream, which a live pod answers, and
+  `ctx.persist` restores its state. An owner whose tab has already moved answers `409` as well, so a
+  click is never silently lost.
+- **Not forwarded yet:** file downloads. A download link must be opened on the pod that made it (it needs
+  cookie affinity, or one replica); a misrouted link answers `404`.
+- **The doctor** shows the peers resolved and the forwarded, ok, failed, received and refused counts. A
+  rising `refused` means a secret or clock mismatch.
+
+The pods need to reach each other on the app's port (a NetworkPolicy that allows pod to pod traffic on it).
+Both secrets and timestamps matter: keep NTP running on the nodes.
+
 ## Shared rate limits
 
 `Limits` (rate limits and the per-address stream cap) count in one process, so N replicas give a visitor N

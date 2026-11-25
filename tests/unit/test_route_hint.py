@@ -57,7 +57,7 @@ def test_fly_mode_without_a_machine_id_is_an_error():
 
 
 @pytest.mark.unit
-def test_peers_is_not_built_yet_and_junk_is_refused():
+def test_peers_without_forwarding_set_up_and_junk_are_refused():
     with pytest.raises(ValueError, match="peers"):
         resolve_route_hint(mode="peers", environ=FLY)
     with pytest.raises(ValueError, match="INDAH_ROUTE_HINT"):

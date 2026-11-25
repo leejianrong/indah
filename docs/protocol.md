@@ -97,7 +97,7 @@ The UI is a tree of nodes. A node is:
 
 | Type | Shape | When |
 |------|-------|------|
-| `init` | `{"v","type":"init","root":<node>}`, plus `"chrome":{"title","favicon"}` when the session has changed them (see `chrome`), plus `"route":{"hint","node","transport"}` when the route hint is on (see "Route hint") | On connect, or a resume that fell back to a full snapshot. It can also arrive mid-stream (with an SSE id): an `async def` session factory that outlived `factory_timeout` showed a `skeleton` first, and this `init` replaces the whole tree with the real one (IND-153). The shell already handles a second `init` |
+| `init` | `{"v","type":"init","root":<node>}`, plus `"chrome":{"title","favicon"}` when the session has changed them (see `chrome`), plus `"route":{"hint","node","transport"}` (`transport` is `"fly"` or `"peers"`) when the route hint is on (see "Route hint") | On connect, or a resume that fell back to a full snapshot. It can also arrive mid-stream (with an SSE id): an `async def` session factory that outlived `factory_timeout` showed a `skeleton` first, and this `init` replaces the whole tree with the real one (IND-153). The shell already handles a second `init` |
 | `patch` | `{"v","type":"patch","changes":[<change>,...]}` | Granular updates to existing nodes |
 | `error` | `{"v","type":"error","message":"..."}` | A handler failed; the shell shows a toast |
 | `navigate` | `{"v","type":"navigate","path","replace"}` | `ctx.navigate(...)`: the shell pushes (or, with `replace`, rewrites) its history entry to the in-app `path`. An older shell ignores it |
@@ -204,10 +204,20 @@ obeys. The client keeps the latest hint in memory; each `init` replaces it, and 
 `route` clears it. A file URL the server mints carries `?r=<hint>`; a GET for it that reaches a
 machine that does not hold the session is answered with `fly-replay: instance=<hint>` (status
 `409`, so it is loud where there is no Fly Proxy to replay it) and never replayed twice. The
-server ignores `X-Indah-Route` itself: it does not forward.
+server ignores `X-Indah-Route` itself unless peer forwarding is on (below).
 
-A client that gets `409` `owner_unreachable` (reserved for the Kubernetes forwarder, not sent yet),
-`409` `unknown_session`, or, when it sent `fly-force-instance-id`, a `400` that is not indah's own
+**Peer forwarding (Kubernetes without cookie affinity, IND-209).** With `INDAH_PEERS` and
+`INDAH_CLUSTER_SECRET` set, `transport` is `"peers"` and `hint` is an opaque signed string (base64url
+characters and one `.`, a few dozen to about 150 bytes) naming the pod that holds the stream. The client
+treats it exactly like the Fly hint: it sends it back as `X-Indah-Route` on every event and upload and
+need not understand it. A pod that receives an event whose hint names another pod forwards it over one
+HTTP call (`POST /_indah/forward`, server to server, signed with the cluster secret) and returns the
+owner's reply unchanged, so the client sees the same `{"ok": true}`, `403`, `400` or `409` as for a local
+event. A hint that is bad, expired or names the receiver is ignored, and the event is handled locally.
+`POST /_indah/forward` is not part of the browser contract.
+
+A client that gets `409` `owner_unreachable` (the receiving pod could not reach the owner within two
+seconds, or the owner answered nothing; it never retries), `409` `unknown_session`, or, when it sent `fly-force-instance-id`, a `400` that is not indah's own
 JSON (Fly's answer for a machine that no longer exists) should open `api/stream` again for a fresh
 `init`; the shell does, once every few seconds. Everything here is additive: an older shell ignores
 `route` and sends no hint, which behaves as before. `protocol_version` stays 1.

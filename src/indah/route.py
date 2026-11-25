@@ -12,8 +12,9 @@ plain machine id and not a capability (a client can only choose its own machine 
 from the wrong one), so nothing is signed with the secret yet; it is the explicit switch the
 Kubernetes forwarder (IND-209) will also need.
 
-``INDAH_ROUTE_HINT`` is ``auto`` (the default: ``fly`` when ``FLY_MACHINE_ID`` is set, else off),
-``fly`` or ``off``. ``peers`` is reserved for the Kubernetes forwarder and is refused for now.
+``INDAH_ROUTE_HINT`` is ``auto`` (the default: ``fly`` when ``FLY_MACHINE_ID`` is set, ``peers``
+when peer forwarding is configured, else off), ``fly``, ``peers`` or ``off``. ``peers`` is the
+Kubernetes forwarder (``indah.forward``, IND-209): the hint is signed and names this pod's address.
 """
 
 from __future__ import annotations
@@ -40,11 +41,28 @@ class RouteHint:
         return {"hint": self.hint, "node": node, "transport": self.transport}
 
 
+class PeerRouteHint:
+    """The ``peers`` hint: signed afresh each time, so ``hint`` is never older than it is read."""
+
+    transport = "peers"
+
+    def __init__(self, peers: Any) -> None:
+        self._peers = peers
+
+    @property
+    def hint(self) -> str:
+        return str(self._peers.hint())
+
+    def wire(self, node: str) -> dict[str, Any]:
+        return {"hint": self.hint, "node": node, "transport": self.transport}
+
+
 def resolve_route_hint(
     mode: str | None = None,
     cluster_secret: str | None = None,
     environ: Mapping[str, str] | None = None,
-) -> RouteHint | None:
+    peers: Any = None,
+) -> RouteHint | PeerRouteHint | None:
     """The hint for this process, or ``None`` when it is off (see the module docstring).
 
     ``mode`` and ``cluster_secret`` are the ``create_app`` arguments; ``None`` means not given, so
@@ -58,14 +76,15 @@ def resolve_route_hint(
         source = "route_hint="
     if mode not in _MODES:
         raise ValueError(f"{source} must be one of {', '.join(_MODES)}, got {mode!r}")
-    if mode == "peers":
-        raise ValueError(
-            f"{source} 'peers' needs the Kubernetes forwarder, which is not built yet; "
-            "use 'fly' on Fly, or put a cookie-affinity ingress in front on Kubernetes"
-        )
     if mode == "off":
         return None
     machine = (env.get("FLY_MACHINE_ID") or "").strip()
+    if mode == "peers" or (mode == "auto" and not machine and peers is not None):
+        if peers is None:
+            raise ValueError(
+                f"{source} 'peers' needs INDAH_PEERS and INDAH_CLUSTER_SECRET (peer forwarding)"
+            )
+        return PeerRouteHint(peers)
     if mode == "auto" and not machine:
         return None
     if mode == "fly" and not machine:

@@ -14,11 +14,13 @@ from __future__ import annotations
 import asyncio
 import functools
 import hashlib
+import hmac
 import json
 import logging
 import math
 import os
 import re
+import secrets
 import time
 import urllib.parse
 from collections import deque
@@ -111,6 +113,15 @@ from .doctor import handler as _doctor
 from .drain import Drain, chain_sigterm
 from .env import Environment, detect_environment
 from .envconfig import UNSET, EnvConfig
+from .forward import (
+    FORWARD_PATH,
+    FORWARD_WINDOW,
+    PeerConfig,
+    forward_signature,
+    principal_blob,
+    principal_from_blob,
+    resolve_peers,
+)
 from .guard import OriginGuard, normalize_origins, origin_allowed
 from .hardening import (
     Limits,
@@ -609,6 +620,7 @@ def create_app(
     node_header: bool = UNSET,
     cluster_secret: str | None = None,
     route_hint: str | None = None,
+    peers: PeerConfig | str | None = None,
     doctor: str | bool | None = UNSET,
     metrics: str | bool | None = UNSET,
     state_store: StateStore | str | None = UNSET,
@@ -832,7 +844,8 @@ def create_app(
     live_options = _live_options(live)
     node_header = env.boolean("INDAH_NODE_HEADER", node_header, False)
     node = resolve_node()
-    route = resolve_route_hint(route_hint, cluster_secret)
+    peer_forwarding = resolve_peers(peers, cluster_secret)
+    route = resolve_route_hint(route_hint, cluster_secret, peers=peer_forwarding)
     if route is None and route_hint == "fly":
         logger.warning(
             "route_hint='fly' is set but there is no cluster secret, so the route hint is off. "
@@ -966,6 +979,7 @@ def create_app(
             *([Route("/api/session", _session, methods=["POST"])] if secure else []),
             Route("/api/stream", _stream, methods=["GET"]),
             Route("/api/event", _event, methods=["POST"]),
+            *([Route(FORWARD_PATH, _forward, methods=["POST"])] if peer_forwarding else []),
             Route("/api/upload", _upload, methods=["POST"]),
             *([WebSocketRoute("/api/live", _live)] if live_options is not None else []),
             *(
@@ -1007,6 +1021,7 @@ def create_app(
     app.state.compress = compress
     app.state.node = node
     app.state.route_hint = route
+    app.state.peers = peer_forwarding if route is not None and route.transport == "peers" else None
     if route is not None:
         if isinstance(store, SharedSessionStore):
             store.handle.session.route_hint = route.hint
@@ -1577,6 +1592,7 @@ def _audit(
         payload=payload,
         include_payload=state.audit_payloads,
         sensitive=bool(component is not None and component.sensitive),
+        forwarded_by=(request.scope.get("indah_forwarded") or (None, None))[1],
     )
 
 
@@ -1608,7 +1624,10 @@ async def _open_session(
     ``409`` tells a caller nothing about anyone else's sessions."""
     state = request.app.state
     store: SessionStore = state.store
-    principal: Principal | None = await authenticate(request, state.auth)
+    forwarded = request.scope.get("indah_forwarded")  # set by _forward, never by a client
+    principal: Principal | None = (
+        forwarded[0] if forwarded else await authenticate(request, state.auth)
+    )
     if state.secure:
         if principal is None:
             return None, _denied(401, "unauthenticated"), None
@@ -2048,9 +2067,15 @@ async def _event(request: Request) -> JSONResponse:
     if not event.sid and not request.app.state.secure:
         if not isinstance(request.app.state.store, SharedSessionStore):
             return _denied(400, "session id required")
+    sent_on = await _forward_if_needed(request, "event", body)
+    if sent_on is not None:
+        return sent_on
     handle, denied, principal = await _open_session(request, event.sid, create=False)
     if handle is None:
         return denied
+    if request.scope.get("indah_forwarded") and handle.hub.subscriber_count == 0:
+        # the tab's stream is not here any more (it reconnected elsewhere): say so, no lost click
+        return JSONResponse({"ok": False, "error": "unknown_session"}, status_code=409)
     hub = handle.hub
     session = handle.session
     # The handler runs as *this request's* principal (re-authenticated just now), so a guard
@@ -2083,6 +2108,13 @@ async def _upload(request: Request) -> JSONResponse:
     than the server cap is rejected with 413 rather than buffered.
     """
     max_bytes: int = request.app.state.max_upload_bytes
+    peers = request.app.state.peers
+    if peers is not None and not request.scope.get("indah_forwarded"):
+        if peers.target(request.headers.get("x-indah-route", "")) is not None:
+            raw = await _read_capped(request, max_bytes + _MULTIPART_OVERHEAD)
+            if raw is None:
+                return JSONResponse({"ok": False, "error": "file too large"}, status_code=413)
+            return await _forward_if_needed(request, "upload", raw) or _denied(400, "bad route")
     try:
         async with request.form(max_part_size=max_bytes) as form:
             component_id = form.get("component")
@@ -2126,6 +2158,120 @@ async def _upload(request: Request) -> JSONResponse:
 
     _publish_result(handle.hub, result)
     return JSONResponse({"ok": True, "files": [f.filename for f in files]})
+
+
+_MULTIPART_OVERHEAD = 64 * 1024  # form framing around the largest allowed file
+
+
+async def _forward_if_needed(request: Request, kind: str, body: bytes) -> Response | None:
+    """Send this event or upload to the pod that holds the tab's stream (IND-209), or ``None``.
+
+    ``None`` means handle it here: forwarding is off, the request already is a forward, or the hint
+    is absent, bad or names this pod. The caller is authenticated first (a forward carries that
+    fresh principal) and the rate limit already ran in the middleware: it counts at the receiver
+    only. One attempt, a short timeout, no retry: an event is not idempotent."""
+    state = request.app.state
+    peers = state.peers
+    if peers is None or request.scope.get("indah_forwarded"):
+        return None
+    target = peers.target(request.headers.get("x-indah-route", ""))
+    if target is None:
+        return None
+    principal = await authenticate(request, state.auth)
+    if state.secure and principal is None:
+        return _denied(401, "unauthenticated")
+    blob = principal_blob(principal)
+    stamp, nonce = str(int(time.time())), secrets.token_hex(8)
+    content_type = request.headers.get("content-type", "")
+    signature = forward_signature(
+        peers.key,
+        timestamp=stamp,
+        nonce=nonce,
+        sender=state.node,
+        kind=kind,
+        content_type=content_type,
+        body=body,
+        blob=blob,
+    )
+    headers = {
+        "Content-Type": content_type,
+        "X-Indah-Forward-Ts": stamp,
+        "X-Indah-Forward-Nonce": nonce,
+        "X-Indah-Forward-Sender": state.node,
+        "X-Indah-Forward-Kind": kind,
+        "X-Indah-Forward-Principal": blob,
+        "X-Indah-Forward-Sig": signature,
+    }
+    peers.stats["forwarded"] += 1
+    try:
+        status, reply = await peers.forwarder.forward(*target, FORWARD_PATH, headers, body)
+    except (OSError, ValueError, asyncio.TimeoutError):
+        peers.stats["failed"] += 1
+        return JSONResponse({"ok": False, "error": "owner_unreachable"}, status_code=409)
+    peers.stats["ok" if status < 500 else "failed"] += 1
+    return Response(reply, status_code=status, media_type="application/json")
+
+
+async def _forward(request: Request) -> Response:
+    """``POST /_indah/forward``: run an event another pod received, as the principal it carries.
+
+    Only mounted with a cluster secret and peers. It never serves a browser: the signature stands
+    in for the origin check. It verifies the MAC, the 30 second window and that the signature is
+    new, then runs the ordinary event or upload path with the sender's principal. The rate limit
+    is not applied here (the receiver already counted it) and the audit record names the sender."""
+    state = request.app.state
+    peers = state.peers
+
+    def refused() -> Response:
+        peers.stats["refused"] += 1
+        return _denied(403, "forbidden")
+
+    h = request.headers
+    stamp, signature = h.get("x-indah-forward-ts"), h.get("x-indah-forward-sig")
+    sender, kind = h.get("x-indah-forward-sender"), h.get("x-indah-forward-kind")
+    nonce, blob = h.get("x-indah-forward-nonce"), h.get("x-indah-forward-principal", "")
+    if not stamp or not signature or not sender or not nonce or kind not in ("event", "upload"):
+        return refused()
+    cap = max(state.max_event_bytes, state.max_upload_bytes) + _MULTIPART_OVERHEAD
+    body = await _read_capped(request, cap)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "event too large"}, status_code=413)
+    try:
+        fresh = abs(time.time() - int(stamp)) <= FORWARD_WINDOW
+    except ValueError:
+        return refused()
+    expected = forward_signature(
+        peers.key,
+        timestamp=stamp,
+        nonce=nonce,
+        sender=sender,
+        kind=kind,
+        content_type=h.get("content-type", ""),
+        body=body,
+        blob=blob,
+    )
+    if not fresh or not hmac.compare_digest(signature, expected) or peers.replay.seen(signature):
+        return refused()
+    try:
+        principal = principal_from_blob(blob)
+    except (ValueError, KeyError, TypeError):
+        return refused()
+    if principal is not None and principal.expired:
+        return refused()
+    peers.stats["received"] += 1
+    scope = dict(request.scope)
+    scope["indah_forwarded"] = (principal, sender)
+    sent = False
+
+    async def receive() -> Any:
+        nonlocal sent
+        if not sent:
+            sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return {"type": "http.disconnect"}
+
+    inner = Request(scope, receive)
+    return await (_event(inner) if kind == "event" else _upload(inner))
 
 
 def _replay_file(request: Request) -> Response | None:
