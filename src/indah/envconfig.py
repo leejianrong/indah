@@ -17,6 +17,8 @@ names the variable. Secret values are never logged: the log names the variables 
 - ``INDAH_LIMITS`` -> ``limits=`` (a preset: ``public`` or ``none``)
 - ``INDAH_DRAIN_SECONDS`` -> ``drain_seconds=`` (seconds, 0 or more)
 - ``INDAH_FACTORY_TIMEOUT`` -> ``factory_timeout=`` (seconds, more than 0)
+- ``INDAH_LIMITS_SHARED`` -> ``limits_shared=`` (``redis`` keeps the rate limits and stream cap in
+  Redis, at ``INDAH_REDIS_URL``, so replicas share one budget; ``off`` is the default)
 - ``INDAH_STATE_STORE`` -> ``state_store=`` (``memory``, ``sqlite:///path``,
   ``redis://host:6379/0`` or ``redis`` with the URL in
   ``INDAH_REDIS_URL``; where ``ctx.persist`` keeps what it saves)
@@ -189,6 +191,25 @@ class EnvConfig:
                 raise ValueError("INDAH_STATE_STORE=redis needs the URL in INDAH_REDIS_URL")
             text = url
         return MemoryStateStore() if text is None else state_store_from_spec(text)
+
+    def limits_shared(self, arg: Any, namespace: str) -> Any:
+        """``limits_shared=`` (a ``SharedLimits``, or ``"redis"``), else INDAH_LIMITS_SHARED, else
+        ``None`` (per-process limits). ``redis`` reads the URL from INDAH_REDIS_URL (IND-213)."""
+        from .shared_limits import SharedLimits
+
+        if arg is not UNSET and arg is not None and not isinstance(arg, str):
+            return arg
+        text = arg if isinstance(arg, str) else None
+        if arg is UNSET:
+            text = self._take("INDAH_LIMITS_SHARED")
+        if text is None or text.strip().lower() in ("", "off", "local"):
+            return None
+        if text.strip().lower() != "redis":
+            raise ValueError(f"INDAH_LIMITS_SHARED must be 'redis' or 'off', got {text!r}")
+        url = self._take("INDAH_REDIS_URL")
+        if url is None:
+            raise ValueError("INDAH_LIMITS_SHARED=redis needs the URL in INDAH_REDIS_URL")
+        return SharedLimits(url, key_prefix=f"{namespace}:limits:")
 
     def namespace(self, arg: Any) -> str:
         if arg is not UNSET:

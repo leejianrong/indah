@@ -11,6 +11,16 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+### Added
+- **Shared rate limits across replicas** (IND-213, ADR-0043): `create_app(limits_shared="redis")` or
+  `INDAH_LIMITS_SHARED=redis` (with `INDAH_REDIS_URL`, `indah[redis]`) keeps the `Limits` token buckets and
+  the per-address stream cap in Redis, so N replicas give a visitor one budget, not N. Opt-in: it costs one
+  Redis round trip per limited request. A Redis failure falls back to the per-process limit for that request
+  (250 ms timeout, a 5 second pause before asking again, one warning a minute), so Redis being down never
+  refuses a visitor. The bucket is one Lua script on Redis's own clock (Redis 5 or later); a crashed
+  replica's stream slots expire after 60 seconds. The doctor page shows the state. Docs: `hosting-scale`.
+  The dev extra gains `lupa` (fakeredis needs it to run the script in tests).
+
 ## [0.17.0] - 2026-11-25
 
 Image work and demos. `ImageOverlay` gains a draw mode (drag a box or click a point) and a reactive `size`, and four new gallery demos use them: click-to-segment, a language-model comparison, a RAG chat with citations and a multi-page support desk. Everything is additive, so `protocol_version` stays 1.

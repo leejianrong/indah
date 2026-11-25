@@ -17,6 +17,7 @@ long-lived SSE response). The client address is the socket peer as ``ProxyHeader
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -134,8 +135,10 @@ class RateLimitMiddleware:
         clock: Callable[[], float] = time.monotonic,
         max_buckets: int = 10_000,
         prune_every: int = 256,
+        shared: Any = None,
     ) -> None:
         self.app = app
+        self.shared = shared  # a SharedLimits (IND-213), or None for per-process buckets only
         self.rates = dict(rates)
         self._client_ip = client_ip
         self._clock = clock
@@ -177,7 +180,12 @@ class RateLimitMiddleware:
         self._calls += 1
         if self._calls % self._prune_every == 0 and len(self._buckets) > self._max_buckets:
             self._prune()
-        wait = self._take((suffix, self._client_ip(scope)), rate)
+        address = self._client_ip(scope)
+        wait = None
+        if self.shared is not None:  # None back means Redis is out: use the local bucket
+            wait = await self.shared.take(f"{suffix}:{address}", rate.per_second, rate.burst)
+        if wait is None:
+            wait = self._take((suffix, address), rate)
         if wait:
             response = PlainTextResponse(
                 "Too many requests.",
@@ -193,11 +201,36 @@ class StreamLimiter:
     """Count open SSE streams per address; ``acquire`` is ``False`` at the cap.
 
     A token bucket cannot bound a stream (a held-open connection costs nothing per second), so
-    this is a plain count. ``cap=None`` never refuses."""
+    this is a plain count. ``cap=None`` never refuses.
 
-    def __init__(self, cap: int | None) -> None:
+    With ``shared`` (a ``SharedLimits``, IND-213) ``open`` also counts the address across replicas;
+    the local count still applies, and a Redis failure leaves only the local count."""
+
+    def __init__(self, cap: int | None, shared: Any = None) -> None:
         self.cap = cap
+        self.shared = shared
         self._open: dict[str, int] = {}
+        self._tasks: set[asyncio.Task[None]] = set()
+
+    async def open(self, address: str) -> tuple[bool, str | None]:
+        """``(allowed, member)``; hand ``member`` back to ``close``."""
+        if not self.acquire(address):
+            return False, None
+        if self.shared is None or self.cap is None:
+            return True, None
+        got = await self.shared.acquire(address, self.cap)
+        if got is False:
+            self.release(address)
+            return False, None
+        return True, got or None
+
+    def close(self, address: str, member: str | None) -> None:
+        """Give the slot back; the shared slot is returned in the background."""
+        self.release(address)
+        if member is not None and self.shared is not None:
+            task = asyncio.get_running_loop().create_task(self.shared.release(address, member))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
 
     def count(self, address: str) -> int:
         return self._open.get(address, 0)
