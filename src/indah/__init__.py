@@ -129,7 +129,7 @@ from .state import MemoryStateStore, SqliteStateStore, StateStore
 from .stream import Stream
 from .theme import Font, Theme
 
-__version__ = "0.17.0"
+__version__ = "0.18.0"
 
 __all__ = [
     "__version__",
