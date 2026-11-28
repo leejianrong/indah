@@ -11,6 +11,17 @@ Earlier releases (0.1.0 to 0.2.2) are described on the
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-28
+
+Hosting at scale. Two opt-in pieces for running several replicas: rate limits and stream caps shared through Redis, and peer forwarding so Kubernetes works without cookie affinity. Both are off by default, add no required dependency, and are additive, so `protocol_version` stays 1.
+
+### Known limitations
+- Peer forwarding has been tested with in-process apps and real loopback servers, not on a live cluster.
+- File downloads are not forwarded: a download link that reaches the wrong pod answers 404.
+- Shared limits have been tested against fakeredis (with Lua), not a live Redis.
+- ADR-0043 question 1 (what fronts the owner's cluster) is still open; where the ingress supports cookie affinity, that remains the simpler choice.
+- ADR-0053 (Timeline, graph styles, frames) is still Proposed.
+
 ### Added
 - **Peer forwarding for Kubernetes without cookie affinity** (IND-209, ADR-0043 Tier C): with
   `INDAH_PEERS` and `INDAH_CLUSTER_SECRET` (or `create_app(peers=PeerConfig(...), cluster_secret=)`) `init`
